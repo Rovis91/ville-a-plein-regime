@@ -104,9 +104,9 @@
         c += bl * bloom;
         c = (pow(max(c, 0.), vec3(gam)) - .5) * con + .5; c = mix(vec3(dot(c, vec3(.3, .59, .11))), c, sat) * teinte; // ombres, contraste, saturation, teinte : l'ambiance de la carte
         if (q > 0.) { vec2 g = v / px; c = floor(c * q + (b2(.5 * g) * .25 + b2(g) - .5) * tr + .5) / q; } // couleurs réduites et tramées, sur la grille de pixels du jeu
+        c *= 1. - vig * l * l;                      // vignette : sur l'image du jeu seulement, avant l'interface
         vec4 hd = texture2D(h, v); c = mix(c, hd.rgb, hd.a);
         c *= 1. - scan * mod(floor(v.y * res), 2.); // scanlines calées sur la grille
-        c *= 1. - vig * l * l;                      // vignette
         gl_FragColor = vec4(c, 1.);
       }`,
   });
