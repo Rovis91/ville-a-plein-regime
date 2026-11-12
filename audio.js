@@ -20,6 +20,13 @@
   let bigS = false, lastFill = -9, sortie = -1, grit = 0, curRoot = 33, lap = 1, lapN = -1; const was = {}; // lap : 0 premier tour (sobre), 1 normal, 2 dernier tour (le plus intense) ; // refrain en cours ; dernière relance ; parties qui jouaient à la mesure précédente
   let W = {}; const strip = {}; // ondes sur mesure ; tranches de mixage par partie (b basse, d nappe, c g accords, a arpège, l thème)
   let mix = 0, inten = 0, driftL = 0, drums = 0, fin = false, wasIn = false, wasNear = false, wasBoost = false, lastGas = 0;
+  // variantes à l'essai, choisies au banc d'écoute (SON.variante) ; les valeurs par défaut sont le jeu tel qu'il est. choc : 0 coup sourd, 1 tôle froissée,
+  // 2 saturé avec débris, 3 lourd · frott : 0 tôle, 1 meule, 2 raclement grave, 3 crissement · mus (réaction de la musique au choc) : 0 aucune,
+  // 1 étouffée + coup de basse, 2 coup de basse seul, 3 saturation, 4 bégaiement, 5 coupure sèche, 6 téléphone · vit (musique étouffée à basse
+  // vitesse) : 1 oui, 2 légèrement, 0 non · contact : frottement bref quand deux voitures se touchent
+  const FR = [1, 3, 1.4, 0.12]; // niveau de chaque variante de frottement, égalisé par mesure
+  const VAR = { choc: 0, frott: 0, mus: 1, vit: 1, contact: 0 };
+  let chocSat, rubT = 0, satT = 0, telT = 0; const scr = [];
   let eng, sq, scrubG, scrapeG, windG, ambBed, ambT = 2, inZone = false, uiF;
   const RK = () => 'vpr.radio' + (M.id === 'ville' ? '' : '.' + M.id); // dernière station écoutée, par carte
   let station = 0, S16 = 60 / ST[0].bpm / 4;
@@ -403,6 +410,14 @@
     ns.connect(b1); ns.connect(b2); sq = { g: sqG, b1, b2 };
     scrubG = gain(0, V.pneu); ns.connect(filt('lowpass', 160, 0.7, scrubG));
     scrapeG = gain(0, V.choc); ns.connect(filt('bandpass', 1700, 1.2, scrapeG)); ns.connect(filt('lowpass', 260, 0.7, gain(1.5, scrapeG))); // frottement contre le mur : tôle + grondement
+    // variantes de frottement : chacune sa chaîne, une seule ouverte à la fois
+    const hache = (f, depth, dest) => { const g = gain(1 - depth / 2, dest), l = AC.createOscillator(); l.type = 'square'; l.frequency.value = f; l.connect(gain(depth / 2, g.gain)); l.start(); return g; }; // hachage : rend le frottement rugueux
+    scr.length = 0; scr.push(scrapeG, gain(0, V.choc), gain(0, V.choc), gain(0, V.choc));
+    ns.connect(filt('bandpass', 2800, 6, hache(72, 0.9, gain(FR[1], scr[1])))); ns.connect(filt('highpass', 7000, 0.7, gain(0.15, scr[1]))); // meule : bande étroite hachée à 72 Hz + étincelles
+    ns.connect(filt('lowpass', 700, 0.7, hache(27, 0.8, gain(FR[2], scr[2])))); ns.connect(filt('bandpass', 320, 3, gain(FR[2], scr[2]))); // raclement grave, haché lentement
+    { const b = filt('bandpass', 2700, 3, hache(41, 0.5, gain(FR[3], scr[3]))); for (const f of [2350, 3120]) { const o = AC.createOscillator(); o.type = 'square'; o.frequency.value = f; o.connect(b); o.start(); } }
+    ns.connect(filt('highpass', 6000, 0.7, hache(13, 1, gain(0.4, scr[3])))); // crissement de métal + crépitement
+    chocSat = shaper(10, gain(0.5, V.choc));
     uiF = filt('lowpass', 3000, 0.5, V.ui);
     windG = gain(0, V.vent); ns.connect(filt('lowpass', 400, 0.5, windG));
     buildAmb(); retune(AC.currentTime + 0.1); tuneG.gain.value = lvl();
@@ -432,14 +447,34 @@
     dKick(t, k, KIT[st.kit] || KIT.k909); tone(st.b.p, hz(curRoot), t, 0.4, 0.5 * (P.lv || 1), strip.b.in);
     duckG.gain.cancelScheduledValues(t); duckG.gain.setValueAtTime(0.2, t); duckG.gain.linearRampToValueAtTime(1, t + 0.45);
   }
-  function choc(hit, t = AC.currentTime) { const v = Math.min(0.6, hit * 0.04); nz(t, 0.25, v, V.choc, 'lowpass', 400); nz(t, 0.07, v * 0.7, V.choc, 'bandpass', 1200, 0.8); } // coup sourd + claquement de tôle, pour qu'il s'entende sur de petits haut-parleurs
+  function choc(hit, t = AC.currentTime) { const v = Math.min(0.6, hit * 0.04), rnd = (a, b) => a + Math.random() * (b - a);
+    if (VAR.choc === 1) { // tôle froissée : coup, puis une grêle de claquements de tôle, et un peu de verre
+      nz(t, 0.2, v, V.choc, 'lowpass', 300); for (let i = 0; i < 7; i++) nz(t + rnd(0, 0.2), rnd(0.03, 0.07), v * rnd(0.5, 1), V.choc, 'bandpass', rnd(900, 3200), 2);
+      for (let i = 0; i < 4; i++) osc('sine', rnd(4000, 7000), t + rnd(0.08, 0.35), 0.05, v * 0.12, V.choc);
+    } else if (VAR.choc === 2) { // saturé : le choc écrête, glisse vers le grave, et des débris retombent
+      const f = nz(t, 0.3, v * 1.2, chocSat, 'bandpass', 1200, 0.7); f && f.frequency.exponentialRampToValueAtTime(200, t + 0.25);
+      const o = osc('sawtooth', 90, t, 0.25, v * 0.7, chocSat); o && o.frequency.exponentialRampToValueAtTime(40, t + 0.2);
+      for (let i = 0; i < 9; i++) nz(t + rnd(0.15, 0.8), 0.012, v * rnd(0.1, 0.3), V.choc, 'highpass', 3000);
+    } else if (VAR.choc === 3) { // lourd : gros coup de grave qui chute, et la carrosserie qui sonne
+      const o = osc('sine', 120, t, 0.5, v * 0.8, V.choc); o && o.frequency.exponentialRampToValueAtTime(35, t + 0.35); nz(t, 0.18, v, V.choc, 'lowpass', 500);
+      tone('fmMetal', 420, t, 0.5, v * 0.25, V.choc);
+    } else { nz(t, 0.25, v, V.choc, 'lowpass', 400); nz(t, 0.07, v * 0.7, V.choc, 'bandpass', 1200, 0.8); } // coup sourd + claquement de tôle
+  }
+  function reaction(v, t) { // ce que le choc fait à la musique, selon la variante
+    if (menu || !VAR.mus) return;
+    if (VAR.mus <= 3) coupMusique(v, t);
+    if (VAR.mus === 3) satT = 0.5; // saturation : la musique écrête une demi-seconde
+    if (VAR.mus === 6) telT = 0.7; // téléphone : plus de grave ni d'aigu pendant 0,7 s
+    if (VAR.mus === 4) { const g = tuneG.gain, l = lvl(); g.cancelScheduledValues(t); for (let i = 0; i < 6; i++) { g.setValueAtTime(l, t + i * S16); g.setValueAtTime(0, t + (i + 0.5) * S16); } g.setValueAtTime(l, t + 6 * S16); dKick(t, 0.9, KIT[ST[station].kit] || KIT.k909); } // bégaiement : six hachures d'une double-croche
+    if (VAR.mus === 5) { const g = tuneG.gain, l = lvl(); g.cancelScheduledValues(t); g.setValueAtTime(0, t); g.setValueAtTime(l, t + 0.2); crash(t + 0.2, 0.5); } // coupure sèche : 0,2 s de silence, puis la cymbale
+  }
   function boostFx(t = AC.currentTime) { const o = osc('sawtooth', 220, t, 0.5, 0.1, filt('lowpass', 3000, 0.5, V.choc)); o.frequency.exponentialRampToValueAtTime(880, t + 0.4); const w = nz(t, 0.6, 0.08, V.choc, 'bandpass', 500, 1.5); w.frequency.exponentialRampToValueAtTime(4000, t + 0.5); } // boost de sortie de glisse : sifflement + souffle
   function petarade(spool = 1, t = AC.currentTime) { nz(t, 0.25, 0.04 * spool, V.mot, 'bandpass', 1400, 1.5); for (let i = 0; i < 3; i++) nz(t + 0.08 + Math.random() * 0.4, 0.035, 0.12, V.mot, 'lowpass', 900); } // lever de pied à haut régime
   // e : état de la course pour cette image — { state, car, T, hot (0..1 dans le secteur chaud), tour / tours (tour en cours à partir de 0, nombre de tours ; 0 hors mode course), tun (0..1 dans le tunnel), amb (0..1 dans une zone d'ambiance), r (vitesse 0..1), sp, gas, hit, bump (choc entre voitures, m/s), up / down (rapport monté / descendu), rpm, load, spool, stun }
   function audioFrame(dt, e) {
     if (!AC) return;
     const { state, car, T, r, sp, gas, hit, up, rpm, load, spool, stun } = e, N = T.n, tun = e.tun || 0, CARD = M.car;
-    if (state === 'pause') { for (const p of [eng.out.gain, sq.g.gain, scrubG.gain, scrapeG.gain, windG.gain]) p.setTargetAtTime(0, AC.currentTime, 0.05); return; } // en pause : la radio continue, la voiture se tait
+    if (state === 'pause') { for (const p of [eng.out.gain, sq.g.gain, scrubG.gain, windG.gain, ...scr.map(g => g.gain)]) p.setTargetAtTime(0, AC.currentTime, 0.05); return; } // en pause : la radio continue, la voiture se tait
     const t = AC.currentTime, racing = state === 'race', k = (p, v, tc = 0.04) => p.setTargetAtTime(v, t, tc);
     if ((state === 'title') !== menu) { menu = !menu; retune(t + 0.05); tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.3); } // menu ↔ course : la boucle de menu laisse la place à la station
     // moteur (discret sous la musique) : coupure au passage de rapport, timbre selon la charge, turbo, pétarades au lever de pied
@@ -455,13 +490,14 @@
     k(sq.b1.frequency, fq, 0.05); k(sq.b2.frequency, fq * 1.52, 0.05); k(sq.g.gain, 0.22 * a, 0.2);
     k(scrubG.gain, 0.5 * clamp(slip / 12, 0, 1) * r, 0.08);
     k(windG.gain, 0.045 * clamp((r - 0.5) * 2, 0, 1) ** 2 * (1 - tun), 0.2); // vent : un souffle à haute vitesse seulement, loin sous le moteur, coupé en tunnel
-    k(scrapeG.gain, car.rub ? 0.05 + 0.1 * r : 0, 0.05);
-    if ((hit > 3 || e.bump > 0.3) && t - lastHit > 0.15) { lastHit = t; choc(Math.max(hit, e.bump > 0.3 ? 8 + e.bump * 2 : 0), t); if (racing) coupMusique(Math.max(hit, e.bump > 0.3 ? 8 : 0), t); } // entre voitures les vitesses d'impact sont faibles : plancher de volume, sinon on ne l'entend pas
+    rubT -= dt; if (VAR.contact && e.bump > 0.3) rubT = 0.35; // deux voitures qui se touchent frottent un instant
+    scr.forEach((g, i) => k(g.gain, i === VAR.frott && (car.rub || rubT > 0) ? 0.05 + 0.1 * r : 0, 0.05));
+    if ((hit > 3 || e.bump > 0.3) && t - lastHit > 0.15) { lastHit = t; choc(Math.max(hit, e.bump > 0.3 ? 8 + e.bump * 2 : 0), t); if (racing) reaction(Math.max(hit, e.bump > 0.3 ? 8 : 0), t); } // entre voitures les vitesses d'impact sont faibles : plancher de volume, sinon on ne l'entend pas
     // glisse (car.dd, car.driftT) : la tension monte en 1,5 s, palier quand le boost est acquis à 0,6 s ; sortie avec boost : tout s'ouvre d'un coup et le refrain joue tant que le boost dure ; glisse ratée : retour doux, sans effet
     const gl = racing && car.dd ? car.driftT || 0 : 0, vise = car.boost > 0 ? 0 : clamp(gl / 1.5, 0, 1);
     glisse = gl > 0.15; acquis = gl > 0.6; if (!glisse) acqDit = false; boostL = racing && car.boost > 0;
     if (car.boost > 0 && !wasBoost) { boostFx(t); boostPend = true; tens = 0; }
-    tens += (vise - tens) * Math.min(1, dt * (vise > tens ? 8 : 3)); k(hpF.frequency, 20 * 20 ** tens, 0.08); // passe-haut : de 20 à 400 Hz, le grave s'amincit sans disparaître
+    tens += (vise - tens) * Math.min(1, dt * (vise > tens ? 8 : 3)); telT -= dt; k(hpF.frequency, telT > 0 ? 1100 : 20 * 20 ** tens, telT > 0 ? 0.02 : 0.08); // passe-haut : de 20 à 400 Hz, le grave s'amincit sans disparaître
     wasBoost = car.boost > 0;
     // ambiance du lieu : seulement dans ses zones (e.amb, fondu fait par le jeu), jamais au menu ni en tunnel ; événements espacés au hasard, dans la zone
     const amb = state === 'title' ? 0 : (e.amb || 0) * (1 - tun);
@@ -481,9 +517,11 @@
     inten += (r - inten) * Math.min(1, dt * 2); driftL += ((car.drift ? 1 : 0) - driftL) * Math.min(1, dt * 6);
     // se faufiler le long d'un mur salit la musique : saturation qui monte à moins de 1,5 m du bord, entière quand la voiture frotte
     const mur = racing ? Math.max(car.rub ? 1 : 0, T.W ? 0.7 * clamp((Math.abs(car.d || 0) - (T.W - 1.5)) / 1.5, 0, 1) : 0) : 0;
+    satT -= dt; if (satT > 0) grit = 2.5; // variante : le choc sature la musique
     grit += (mur - grit) * Math.min(1, dt * (mur > grit ? 10 : 3)); k(gritWet.gain, 0.1 * grit, 0.03); k(gritDry.gain, 1 - 0.5 * grit, 0.03); // dosé par mesure : le timbre change, le niveau presque pas
     // la musique s'ouvre avec la vitesse ; un gros choc l'étouffe ; dans un tunnel elle est étouffée et réverbérée, et le moteur résonne
-    k(musF.frequency, stun > 0 ? 350 : Math.min(state === 'title' ? 7000 : 1500 * 12 ** Math.min(1, inten * 1.4 + mix), lerp(18000, 2500, tun)), 0.08);
+    const ouv = VAR.vit === 1 ? 1500 * 12 ** Math.min(1, inten * 1.4 + mix) : VAR.vit === 2 ? 5000 * 3.6 ** Math.min(1, inten * 1.4 + mix) : 18000; // filtre de vitesse : entier, léger, ou aucun
+    k(musF.frequency, stun > 0 && VAR.mus === 1 ? 350 : Math.min(state === 'title' ? 7000 : telT > 0 ? 3500 : ouv, lerp(18000, 2500, tun)), 0.08);
     k(musSend.gain, 0.7 * tun, 0.2); k(motSend.gain, 2.5 * tun, 0.2);
   }
 
@@ -495,6 +533,7 @@
     toggleMusic() { musicOn = !musicOn; if (AC) musicG.gain.value = musicOn ? 1 : 0; },
     volume(fam, v) { vol[fam] = v; if (V[fam]) V[fam].gain.value = v; },
     evenement: () => { ambT = 0; }, get live() { return live; },
+    variante(o) { Object.assign(VAR, o); return VAR; },
     clac: down => AC && clac(down), levier: down => AC && levier(down), choc: v => AC && choc(v), boost: () => AC && boostFx(), petarade: () => AC && petarade(),
     moniteur(v) { if (outG) outG.gain.value = OUT * v; }, get vu() { return vu; }, // gain d'écoute du banc : sans effet sur le jeu
     get vol() { return vol; }, get pret() { return pret; }, get stations() { return ST; },

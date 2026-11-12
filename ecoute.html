@@ -75,6 +75,15 @@
 <h2>Interface</h2>
 <div id="g-ui"></div>
 
+<h2>Essais : chocs, frottement et réaction de la musique</h2>
+<p>La station en cours tourne ; choisissez une variante dans chaque ligne, puis déclenchez un événement. La voiture ralentit après un choc, comme en jeu. Quand vous avez vos préférées, « Copier mon choix ».</p>
+<div id="essais"></div>
+<div id="evts">
+  <button data-ev="choc">Choc brut contre un mur</button><button data-ev="petit">Petit choc</button><button data-ev="frott">Frottement seul (1,5 s)</button>
+  <button data-ev="chocFrott">Choc puis frottement</button><button data-ev="voiture">Choc entre voitures</button><button data-ev="ralenti">Ralentir sans choc</button>
+</div>
+<button id="choix">Copier mon choix</button> <span id="choixTxt" style="color:#a8a8b4"></span>
+
 <h2>Tout ensemble, comme en course</h2>
 <p>Le mélange réel du jeu, sans amplification. Les curseurs règlent chaque famille ; dictez leurs valeurs pour qu'elles deviennent les réglages du jeu (1,00 = réglage actuel).</p>
 <div id="g-mix"></div>
@@ -139,15 +148,33 @@
     radio: ['ui', 'Changement de station', 'touche mécanique puis grésillement, sans la musique', ['ui'], 0, null, () => SON.setStation(SON.station + 1)],
     gliss: ['mus', 'Glisse puis boost', 'sur la station en cours, en boucle : 2,5 s de glisse (palier à 0,6 s), boost, retour', ['mus', 'pneu', 'choc'], 0, x => { const p = x % 9, g = p > 2 && p < 4.5; return Object.assign(musique(), { dd: g ? 1 : 0, driftT: g ? p - 2 : 0, drift: g, slide: g ? 0.8 : 0, boost: p >= 4.5 && p < 6 ? 1 : 0 }); }],
     glissR: ['mus', 'Glisse ratée', 'trop courte pour le boost (0,4 s) : la musique ne doit presque pas bouger', ['mus', 'pneu', 'choc'], 0, x => { const p = x % 5, g = p > 2 && p < 2.4; return Object.assign(musique(), { dd: g ? 1 : 0, driftT: g ? p - 2 : 0, drift: g, slide: g ? 0.6 : 0 }); }],
+    essai: ['ess', 'Essai de choc', '', ['mus', 'choc'], 0, x => essaiEtat()],
     tout: ['mix', 'Course complète', 'musique, moteur, pneus, vent, ambiance : le mélange du jeu', Object.keys(FAM), 0, x => Object.assign(musique(), { rpm: 0.55 + 0.4 * dents(x, 4), load: 1, gas: 1, spool: 0.8, amb: 1, slide: u.glisse ? u.slide : 0 })],
   };
+  // essais : un événement de course rejoué sur la musique (choc, frottement, contact), avec le ralentissement qui suit
+  const ESS = { choc: ['Bruit du choc', ['coup sourd (actuel)', 'tôle froissée', 'saturé, avec débris', 'lourd, carrosserie qui sonne']],
+    frott: ['Frottement', ['tôle (actuel)', 'meule', 'raclement grave', 'crissement et étincelles']],
+    mus: ['La musique au choc', ['ne réagit pas', 'étouffée + coup de basse (actuel)', 'coup de basse seul', 'saturation', 'bégaiement', 'coupure sèche puis cymbale', 'téléphone (ni grave ni aigu)']],
+    vit: ['La musique quand on ralentit', ['ne change pas', 'étouffée (actuel)', 'légèrement étouffée']],
+    contact: ['Entre voitures', ['choc seul (actuel)', 'choc + frottement bref']] };
+  const VR = { choc: 0, frott: 0, mus: 1, vit: 1, contact: 0 }; let ess = null;
+  function essais() { $('essais').innerHTML = Object.keys(ESS).map(k => '<p style="margin:6px 0 2px;color:#e8e8e4">' + ESS[k][0] + '</p>' + ESS[k][1].map((n, i) => '<button data-var="' + k + ':' + i + '" class="' + (VR[k] === i ? 'on' : '') + '">' + n + '</button>').join('')).join(''); if (son()) SON.variante(VR); }
+  function essaiEtat() { // x : secondes depuis l'événement
+    const o = musique(), x = ess ? SON.ac.currentTime - ess.t : 99, T = ess ? ess.type : '', dur = T === 'petit' || T === 'voiture' ? 1.5 : 3;
+    const frotte = (T === 'frott' && x < 1.5) || (T === 'chocFrott' && x > 0.05 && x < 1.3);
+    const creux = T === 'choc' || T === 'chocFrott' ? 0.3 : T === 'ralenti' ? 0.25 : T === 'petit' ? 0.65 : T === 'voiture' ? 0.7 : T === 'frott' ? 0.75 : 1; // la voiture ralentit puis reprend sa vitesse
+    o.r = x < dur ? u.vit * (creux + (1 - creux) * x / dur) : u.vit; o.sp = o.r * 80; o.rub = frotte ? 1 : o.rub;
+    if (ess && !ess.fait) { ess.fait = 1; o.hitV = T === 'choc' || T === 'chocFrott' ? 12 : T === 'petit' ? 5 : 0; o.bump = T === 'voiture' ? 2 : 0; }
+    o.stun = (T === 'choc' || T === 'chocFrott') && x < 0.7 ? 0.7 - x : 0;
+    return o;
+  }
   const musique = () => course({ r: u.vit, sp: u.vit * 80, plein: u.plein, drift: u.glisse, tun: u.tunnel ? 1 : 0, rub: u.mur ? 1 : 0, rpm: 0.2, load: 0, gas: 0 });
   // état complet envoyé à SON.frame
   function etat(sc, x) {
     const o = sc && sc[5] ? sc[5](x) : { state: 'pause' }, r = o.r || 0;
     return { state: o.state, tour: Math.max(0, u.tour), tours: u.tour < 0 ? 0 : 3, T: { h0: 500, h1: 700, n: 1000 }, hot: o.plein ? 1 : 0, tun: o.tun || 0, amb: o.amb || 0,
       car: { manual: !!o.manuel, dd: o.dd || 0, driftT: o.driftT || 0, vl: o.slide ? 4 + 14 * o.slide : 0, boost: o.boost || 0, idx: o.plein ? 600 : 0, dist: 1, drift: !!o.drift, rub: o.rub || 0 },
-      r, sp: o.sp || 0, gas: o.gas || 0, hit: pulse.hit ? 9 : 0, up: !!pulse.up, down: !!pulse.down, rpm: o.rpm || 0.2, load: o.load || 0, spool: o.spool || 0, stun: 0 };
+      r, sp: o.sp || 0, gas: o.gas || 0, hit: o.hitV || (pulse.hit ? 9 : 0), bump: o.bump || 0, up: !!pulse.up, down: !!pulse.down, rpm: o.rpm || 0.2, load: o.load || 0, spool: o.spool || 0, stun: o.stun || 0 };
   }
   const son = () => SON.ac && SON.live;
   setInterval(() => { if (!son()) return; SON.frame(1 / 60, etat(scene, SON.ac.currentTime - t0)); pulse.up = pulse.down = pulse.hit = 0; }, 16); // setInterval : continue fenêtre masquée
@@ -192,6 +219,8 @@
   }
   $('bilan').onclick = bilan; $('raz').onclick = () => { if (confirm('Effacer tous vos avis ?')) { AV = {}; garde(); avis(); } };
   document.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.var) { const [k, i] = b.dataset.var.split(':'); VR[k] = +i; essais(); return; }
+    if (b.dataset.ev) { if (!son()) return; if (scene !== SC.essai) jouer('essai'); SON.variante(VR); ess = { type: b.dataset.ev, t: SON.ac.currentTime }; return; }
     if (b.dataset.av) { const [id, i] = b.dataset.av.split(':'), c = CARTES.find(x => x.id === id); if (c !== M) { stop(); M = c; SON.carte(M); }
       u.plein = !!b.dataset.plein; $('plein').checked = u.plein; enEcoute = b.dataset.av; jouer(i === 'm' ? 'menu' : 'st' + i); boutons(); avis(); return; }
     if (b.dataset.v) { const k = b.dataset.v.slice(0, -2), v = +b.dataset.v.slice(-1); AV[k] = AV[k] || {}; AV[k].v = AV[k].v === v ? undefined : v; garde(); avis(); return; } if (b.dataset.sc) jouer(b.dataset.sc); else if (b.dataset.c) { stop(); M = CARTES.find(c => c.id === b.dataset.c); SON.carte(M); boutons(); } });
@@ -200,6 +229,7 @@
   $('chocMus').onclick = () => { pulse.hit = 1; }; $('tour').onchange = e => { u.tour = +e.target.value; };
   for (const id of ['plein', 'glisse', 'tunnel', 'mur', 'gaz']) $(id).onchange = e => { u[id] = e.target.checked; };
   for (const id of ['vit', 'rpm', 'slide']) { const el = $(id), out = el.nextElementSibling; (el.oninput = () => { u[id] = +el.value; out.textContent = (+el.value).toFixed(2).replace('.', ','); })(); }
+  $('choix').onclick = () => { const t = 'Mon choix — ' + Object.keys(ESS).map(k => ESS[k][0].toLowerCase() + ' : ' + ESS[k][1][VR[k]]).join(' ; '); $('choixTxt').textContent = t; if (navigator.clipboard) navigator.clipboard.writeText(t).catch(() => { }); };
   $('stop').onclick = () => { stop(); enEcoute = null; avis(); };
   $('go').onclick = () => { SON.init(); stop(); boutons(); $('voile').remove(); };
 
@@ -283,8 +313,8 @@
   }
   $('variete').onclick = variete;
   $('autotest').onclick = autotest; $('mesurer').onclick = () => lancer([M]); $('mesurerTout').onclick = () => lancer(CARTES);
-  window.__banc = { bilan, avis, lancer, mesurer, rendre, autotest, variete, profil, corr, jouer, stop, SC, u };
-  boutons(); volumes(); avis();
+  window.__banc = { VR, essais, bilan, avis, lancer, mesurer, rendre, autotest, variete, profil, corr, jouer, stop, SC, u };
+  boutons(); volumes(); avis(); essais();
 })();
 </script>
 </body>
