@@ -77,16 +77,34 @@
   const renderer = window.__rendu || (window.__rendu = new THREE.WebGLRenderer({ antialias: false })); // un seul pour toute la session : il garde les shaders d'une carte à l'autre
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.BasicShadowMap;
   document.body.prepend(renderer.domElement);
-  const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(70, 1, 0.5, 3000);
+  const scene = new THREE.Scene();
   const FOG_OUT = new THREE.Color(TH.fog), FOG_IN = new THREE.Color(TH.tun ? TH.tun.fog : TH.fog), WHITE = new THREE.Color(0xffffff);
   scene.fog = new THREE.Fog(TH.fog, TH.fogD[0], TH.fogD[1]);
-  const rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
-  if (ST && ST.aa > 1) rt.texture.minFilter = rt.texture.magFilter = THREE.LinearFilter; // suréchantillonnage : la cible est aa fois plus fine, la passe finale en fait la moyenne
-  // le HUD est dessiné sur un canvas 2D à la même résolution que le jeu, puis composé dans la passe finale : une seule grille de pixels
-  const hudC = document.createElement('canvas'), hg = hudC.getContext('2d'), hudT = new THREE.CanvasTexture(hudC);
-  hudT.minFilter = hudT.magFilter = THREE.NearestFilter;
+  // Une « vue » par joueur (une seule en solo) : tout ce qui est propre à une caméra. La scène, le renderer et le shader de la passe finale restent communs.
+  // Chaque image, la simulation avance une fois ; puis, pour chaque vue, vueFrame() pose la caméra, règle lumière, brouillard et pluie, dessine son HUD, la scène dans sa cible, et joue sa passe finale.
+  // Une vue de plus = un appel à nouvelleVue() (après la construction du décor : elle copie la liste des luminaires et le semis de pluie) ; libere() rend au GPU la cible et la texture de chacune.
+  const VUES = [], AA = ST ? ST.aa : 1;
+  const suit = (vu, c) => { vu.car = c; vu.cth = c.th; vu.carY = S[c.idx].y; vu.result = null; }; // la vue se cale derrière la voiture c : au départ, au retour au menu
+  const nouvelleVue = () => {
+    const rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    if (ST && ST.aa > 1) rt.texture.minFilter = rt.texture.magFilter = THREE.LinearFilter; // suréchantillonnage : la cible est aa fois plus fine, la passe finale en fait la moyenne
+    if (ST && ST.z) { rt.depthTexture = new THREE.DepthTexture(1, 1); rt.depthTexture.type = THREE.UnsignedIntType; }
+    // le HUD est dessiné sur un canvas 2D à la même résolution que le jeu, puis composé dans la passe finale : une seule grille de pixels
+    const hudC = document.createElement('canvas'), hudT = new THREE.CanvasTexture(hudC);
+    hudT.minFilter = hudT.magFilter = THREE.NearestFilter;
+    const vu = { cam: new THREE.PerspectiveCamera(70, 1, 0.5, 3000), rt, hudC, hg: hudC.getContext('2d'), hudT, w: 480, rw: 480, // w : largeur de la grille du HUD ; rw : celle de la cible (la même sans style)
+      car: null, cth: 0, carY: 0, pitch: 0, roll: 0, // voiture suivie ; cap de la caméra, hauteur, tangage et roulis lissés
+      lookA: 0, lookP: 0, lookT: 0, // caméra libre à la souris : angle autour de la voiture, hauteur en plus, délai avant retour
+      hit: 0, bump: 0, land: 0, stun: 0, nit: 0, lm: 0, // chocs de la voiture suivie pendant l'image ; secousse, fondu de nitro, fondu de tunnel
+      gear: 0, rpm: 0.3, load: 0, spool: 0, up: 0, peak: new Float32Array(EQN), // rapport et régime affichés (drivetrain), crêtes de la jauge
+      result: null, splitMsg: null, // bandeaux du HUD : tour bouclé, écart au secteur
+      lumIdx: -1, lums: LUMS.map(l => ({ l, d: 0 })), // luminaires triés par distance à la voiture suivie
+      rainP: rainP.slice(), splP: new Float32Array(SN * 3), splA: splA.slice(), splD: new Float32Array(SN) }; // gouttes (autour de la voiture) et impacts : mêmes tirages de départ pour toutes les vues, rnd n'est pas tiré
+    suit(vu, car); VUES.push(vu); resize(); return vu;
+  };
+  let hg = null; // contexte 2D du HUD en cours de dessin (celui de la vue), pour txt, panel, tag
   const post = new THREE.ShaderMaterial({
-    uniforms: { t: { value: rt.texture }, h: { value: hudT }, amt: { value: 0 }, ab: { value: 0 }, vig: { value: 0 }, res: { value: 270 }, bloom: { value: TH.bloom }, scan: { value: TH.scan }, px: { value: new THREE.Vector2(1 / 480, 1 / 270) } },
+    uniforms: { t: { value: null }, h: { value: null }, amt: { value: 0 }, ab: { value: 0 }, vig: { value: 0 }, res: { value: 270 }, bloom: { value: TH.bloom }, scan: { value: TH.scan }, px: { value: new THREE.Vector2(1 / 480, 1 / 270) } },
     vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0., 1.); }',
     fragmentShader: `uniform sampler2D t, h; uniform float amt, ab, vig, res, bloom, scan; uniform vec2 px; varying vec2 v;
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); } // matrice de Bayer 4×4, par récurrence
@@ -110,8 +128,7 @@
   const postScene = new THREE.Scene(), postCam = new THREE.Camera(), quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post);
   quad.frustumCulled = false; postScene.add(quad);
   if (ST) { // passe finale des styles : la scène telle quelle, l'effet du style, le HUD (toujours sur sa grille de 270 lignes), une vignette légère
-    if (ST.z) { rt.depthTexture = new THREE.DepthTexture(1, 1); rt.depthTexture.type = THREE.UnsignedIntType; }
-    Object.assign(post.uniforms, { dz: { value: rt.depthTexture }, ecr: { value: new THREE.Vector2(1, 1) }, pal: { value: PAL.map(c => new THREE.Color(c)) } });
+    Object.assign(post.uniforms, { dz: { value: null }, ecr: { value: new THREE.Vector2(1, 1) }, pal: { value: PAL.map(c => new THREE.Color(c)) } });
     post.fragmentShader = `uniform sampler2D t, h, dz; uniform float amt, vig; uniform vec2 px, ecr; uniform vec3 pal[5]; varying vec2 v;
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); }
       float bayer(vec2 q){ return b2(.5 * q) * .25 + b2(q) - .5; }
@@ -128,14 +145,16 @@
         gl_FragColor = vec4(c, 1.);
       }`;
   }
-  let HW = 480, RW = 480, RH = 270; const HH = 270; // HW × HH : grille du HUD ; RW × RH : cible de la scène (la même sans style)
+  let RH = 270; const HH = 270; // vu.w × HH : grille du HUD d'une vue ; vu.rw × RH : sa cible (la même sans style) ; toutes les vues ont les mêmes lignes
   const resize = () => {
-    HW = clamp(Math.round(HH * innerWidth / (innerHeight || 1)), 360, 960);
-    const OW = Math.round(innerWidth * devicePixelRatio), OH = Math.round(innerHeight * devicePixelRatio), aa = ST ? ST.aa : 1, k = ST ? (ST.h || OH) / HH * aa : 1; RW = Math.round(HW * k); RH = Math.round(HH * k);
-    if (ST) { renderer.setSize(OW, OH, false); post.uniforms.ecr.value.set(OW, OH); } else renderer.setSize(HW, HH, false);
-    rt.setSize(RW, RH); hudC.width = HW; hudC.height = HH; post.uniforms.px.value.set(aa / RW, aa / RH); cam.aspect = HW / HH; cam.updateProjectionMatrix();
+    const OW = Math.round(innerWidth * devicePixelRatio), OH = Math.round(innerHeight * devicePixelRatio), k = ST ? (ST.h || OH) / HH * AA : 1; RH = Math.round(HH * k);
+    for (const vu of VUES) { // une seule vue : elle prend tout l'écran
+      vu.w = clamp(Math.round(HH * innerWidth / (innerHeight || 1)), 360, 960); vu.rw = Math.round(vu.w * k);
+      vu.rt.setSize(vu.rw, RH); vu.hudC.width = vu.w; vu.hudC.height = HH; vu.cam.aspect = vu.w / HH; vu.cam.updateProjectionMatrix();
+    }
+    if (ST) { renderer.setSize(OW, OH, false); post.uniforms.ecr.value.set(OW, OH); } else if (VUES[0]) renderer.setSize(VUES[0].w, HH, false);
   };
-  addEventListener('resize', resize); resize();
+  addEventListener('resize', resize);
 
   const tex = (w, h, draw) => {
     const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'));
@@ -209,12 +228,12 @@
   // NL luminaires ponctuels (les plus proches le long de la piste + feux des voitures), le faisceau des phares à coupure nette,
   // l'ombre de la voiture par lancer de rayon sur sa boîte (elle balaie route et murs à chaque luminaire franchi),
   // et sur les surfaces brillantes (route mouillée, flaques = alpha de la texture, carrosserie) le reflet étiré de chaque source.
-  const LUMS = [], lum = (i, x, y, z, col, r, k = 1, tun = 0) => LUMS.push({ i, x, y, z, c: new THREE.Color(col).multiplyScalar(k), r, tun, d: 0 });
+  const LUMS = [], lum = (i, x, y, z, col, r, k = 1, tun = 0) => LUMS.push({ i, x, y, z, c: new THREE.Color(col).multiplyScalar(k), r, tun });
   const NUIT = TH.phares / 2.6; // force des feux de voiture : pleine de nuit, faible à l'aube et au couchant
   const SUNC = new THREE.Color(TH.sun[0]).multiplyScalar(TH.sun[1]);
   const LUX = { uLP: { value: Array.from({ length: NL }, () => new THREE.Vector4(0, 0, 0, 1)) }, uLC: { value: Array.from({ length: NL }, () => new THREE.Color(0)) },
     uHP: { value: new V3() }, uHD: { value: new V3(1, 0, 0) }, uHC: { value: new THREE.Color(0xfff2d0).multiplyScalar(TH.phares * 1.25 * LUM_GAIN) }, uBox: { value: new THREE.Matrix4() },
-    uSunD: { value: SD }, uCam: { value: cam.position }, uSunC: { value: new THREE.Color() }, uSky: { value: new THREE.Color() }, uN: { value: 0 }, uRes: { value: new THREE.Vector2() } };
+    uSunD: { value: SD }, uCam: { value: new V3() }, uSunC: { value: new THREE.Color() }, uSky: { value: new THREE.Color() }, uN: { value: 0 }, uRes: { value: new THREE.Vector2() } };
   const LU_V = `{ vec4 lw = vec4(transformed, 1.);
     #ifdef USE_INSTANCING
       lw = instanceMatrix * lw;
@@ -512,7 +531,7 @@
   const FLASH = new THREE.Color(0x8fa0ff), jit = a => (Math.random() - 0.5) * a;
   // effets visuels par image
   function fxFrame(dt, now, sp, inp, hit, fx, fz) {
-    const rx = -fz, rz = fx;
+    const rx = -fz, rz = fx, { carY, lm } = VUES[0]; // effets de la voiture du joueur : hauteur lissée et fondu de tunnel de sa vue
     for (const w of wheels) { w.sp.rotation.z -= car.vf * dt / w.r; if (w.st) w.st.rotation.y = -car.steer * 0.45; }
     brakeMat.color.setHex(inp.brake ? 0xff7080 : 0x8a1020);
     // traînées
@@ -545,13 +564,11 @@
     pGeo.attributes.position.needsUpdate = pGeo.attributes.color.needsUpdate = true;
     // éclairs : flash double sur le ciel, la brume et l'éclairage, puis le tonnerre
     if (TH.orage && (nextFlash -= dt) < 0) { nextFlash = 7 + Math.random() * 14; flashT = 0.36; if (lm < 0.5) SON.tonnerre(); }
-    flashT -= dt; const fl = flashT > 0 && lm < 0.5 ? ((flashT * 14 | 0) & 1 ? 1 : 0.3) : 0;
-    hemi.intensity = TH.hemi[2] * (1 - 0.75 * lm) + 3 * fl; sun.intensity = TH.sun[1] * (1 - lm); // en tunnel, ciel et astre s'effacent : il ne reste que les luminaires skyMat.color.multiplyScalar(1 + 2.5 * fl); scene.fog.color.lerp(FLASH, 0.45 * fl);
+    flashT -= dt; // (l'éclat de l'éclair sur le ciel est réglé par vue : vueFrame)
     // ville : enseignes qui clignotent, grésillent ou défilent ; écrans, hologrammes, projecteurs, trafic, balises
     signMats.forEach((m, i) => { m.color.setScalar(i % 3 === 0 ? ((now / 400 + i) & 1 ? 1 : 0.25) : i % 3 === 1 && Math.random() < 0.04 ? 0.3 : 1); if (i % 2) m.map.offset.x += dt * 0.12; });
     adMats.forEach((m, i) => { m.map.offset.x += dt * (0.2 + 0.1 * i); });
     holos.forEach((h, i) => { h.rotation.y += dt * 0.25; h.material.opacity = 0.45 + 0.2 * Math.sin(now * 0.004 + i) - (Math.random() < 0.05 ? 0.3 : 0); });
-    beams.forEach((b, i) => b.rotation.set(0, Math.atan2(cam.position.x - b.position.x, cam.position.z - b.position.z), Math.sin(now * 0.0004 * (i % 3 + 1) + i) * 0.5));
     for (let i = 0; i < MV; i++) {
       let x = mvP[i * 3] + mvV[i * 2] * dt, z = mvP[i * 3 + 2] + mvV[i * 2 + 1] * dt;
       mvP[i * 3] = x < -700 ? x + 1600 : x > 900 ? x - 1600 : x; mvP[i * 3 + 2] = z < -350 ? z + 1200 : z > 850 ? z - 1200 : z;
@@ -620,14 +637,14 @@
   scene.traverse(o => { if (o.isInstancedMesh) o.frustumCulled = false; if (o.material) eclaire(o.material); }); // r128 calcule le culling sur la géométrie de base, pas sur les instances
 
   // ---------- audio : voir audio.js (window.SON) ; ici seulement ce que le jeu et le HUD lisent ----------
-  let stun = 0, gear = 0, rpm = 0.3, load = 0, spool = 0, radioT = 0;
+  let radioT = 0;
   const zap = () => { SON.setStation(SON.station + 1); radioT = 2.5; };
   // boîte et régime : calculés même sans audio, la jauge du HUD s'en sert
-  function drivetrain(dt, r, gas) { // rapport et régime viennent de la physique (sim.js) ; ici on les lisse pour le son et la jauge
-    const up = Math.sign(car.gear - gear); gear = car.gear; // +1 rapport monté, -1 descendu
+  function drivetrain(vu, dt, gas) { // rapport et régime viennent de la physique (sim.js) ; ici on les lisse, par vue, pour le son et la jauge
+    const car = vu.car, up = Math.sign(car.gear - vu.gear); vu.gear = car.gear; // +1 rapport monté, -1 descendu
     let tgt = car.rpm / CARD.red;
     if (state === 'count' && gas) tgt = 0.8 + 0.05 * Math.sin(performance.now() / 22); // rupteur sur la grille
-    rpm += (tgt - rpm) * Math.min(1, dt * 14); load += ((car.shiftT > 0 ? 0 : gas) - load) * Math.min(1, dt * 12); spool += ((gas ? rpm : 0) - spool) * Math.min(1, dt * 2.5);
+    vu.rpm += (tgt - vu.rpm) * Math.min(1, dt * 14); vu.load += ((car.shiftT > 0 ? 0 : gas) - vu.load) * Math.min(1, dt * 12); vu.spool += ((gas ? vu.rpm : 0) - vu.spool) * Math.min(1, dt * 2.5);
     return up;
   }
 
@@ -646,9 +663,8 @@
   try { if (sessionStorage.getItem('vpr.menu')) { msel = 0; sessionStorage.removeItem('vpr.menu'); entrer(); } } catch (e) { } // on vient de changer de carte : on reste sur cette ligne, sans repasser par l'accueil (le navigateur garde en général le droit au son d'une page à l'autre ; sinon il revient à la touche suivante)
   for (const ev of ['mousedown', 'pointerup', 'touchend']) addEventListener(ev, () => { if (accueil) entrer(); else SON.init(); }); // un clic ou un appui valent une touche
   const fmt = t => `${t / 60 | 0}'${String(t % 60 | 0).padStart(2, '0')}"${String(t * 100 % 100 | 0).padStart(2, '0')}`;
-  let lookA = 0, lookP = 0, lookT = 0; // caméra libre à la souris : angle autour de la voiture, hauteur en plus, délai avant retour
-  addEventListener('mousemove', e => { if (state !== 'race' && state !== 'count') return; lookA = clamp(lookA + e.movementX * 0.006, -Math.PI, Math.PI); lookP = clamp(lookP + e.movementY * 0.03, -1, 5); lookT = 2.5; });
-  let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, cth = car.th, lm = 0, carY = S[car.idx].y, pitch = 0, roll = 0, nit = 0, result = null, manual = pref('vpr.boite', 'a') === 'm';
+  addEventListener('mousemove', e => { if (state !== 'race' && state !== 'count') return; const vu = VUES[0]; vu.lookA = clamp(vu.lookA + e.movementX * 0.006, -Math.PI, Math.PI); vu.lookP = clamp(vu.lookP + e.movementY * 0.03, -1, 5); vu.lookT = 2.5; }); // caméra libre à la souris : celle de la première vue (il n'y a qu'une souris)
+  let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, manual = pref('vpr.boite', 'a') === 'm';
   // secteurs (entrée et sortie de l'échangeur) et fantôme du record : [x, y, z, cap] à 20 Hz
   // mode : 'solo' (contre-la-montre à tours enchaînés), 'glisse' (deux tours, à points : le score est tenu par sim.js, voir GL), 'course' (3 tours contre les IA de sim.js) 'elim' (course à élimination : le dernier sort à chaque passage de ligne) ou 'tournee' (toutes les cartes à la suite, voir plus bas) ; race = la course en cours, sinon null
   const MODES = ['solo', 'glisse', 'course', 'elim', 'tournee'], AVEC_IA = ['course', 'elim', 'tournee'], enCourse = () => AVEC_IA.includes(mode);
@@ -658,7 +674,7 @@
   addEventListener('hashchange', () => location.reload()); // un lien collé dans l'onglet du jeu ne recharge pas la page tout seul
   let mode = DEFI ? 'solo' : MODES.find(m => pref('vpr7.mode', '') === JSON.stringify(m)) || 'solo', race = null, raceEnd = false; // le mode est mémorisé une fois pour toutes les cartes
   const vivantes = () => race.cars.filter(c => !c.out), partie = c => c.out && race.t - c.out > 5; // élimination : voitures encore en course ; voiture sortie depuis 5 s, qu'on ne montre plus
-  let si = 0, cur = [], bestSpl = store.get('splits'), ghost = store.get('ghost'), recG = [], splitMsg = null, lapN = 1, rLap = 0, rLapT = 0, prev = 'race', psel = 0;
+  let si = 0, cur = [], bestSpl = store.get('splits'), ghost = store.get('ghost'), recG = [], lapN = 1, rLap = 0, rLapT = 0, prev = 'race', psel = 0;
   const keys = {}, H = 1 / 120;
   let diff = clamp(+pref('vpr7.diff', 1) | 0, 0, DIFF.length - 1); // difficulté du mode course (DIFF de sim.js)
   // médailles du contre-la-montre : le tour lancé du pilote automatique sert de référence ; M.med = [bronze, argent, or] en multiples de ce temps
@@ -714,10 +730,10 @@
     if (mode === 'tournee' && CARTES[tnOu().manche] !== M) { // la manche se court sur une autre carte : on y va sans recharger, et la course part à l'arrivée (vpr.go)
       if (!cible) { cible = CARTES[tnOu().manche]; try { sessionStorage.setItem('vpr.go', 1); } catch (e) { } changeCarte(); } return; } // (tnFin reste en place le temps que la carte arrive : un second appui sur Entrée ne recompte pas la manche)
     tnFin = null; race = enCourse() ? newRace(T, 3, AI_LVL.map(l => l * DIFF[diff].k), DIFF[diff].el, { elim: mode === 'elim', grille: mode === 'tournee' && tournee(tnOu().pts).grille }) : null; raceEnd = false; glFin = null; lap0 = [0, 0, 0]; bestLap = 0;
-    car = race ? race.cars[0] : newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 3; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1; rLap = 0; rLapT = 0; result = null;
+    car = race ? race.cars[0] : newCar(T); car.manual = manual; for (const vu of VUES) { suit(vu, car); vu.gear = 0; vu.splitMsg = null; } hist.length = 0; si = 0; cur = []; recG = []; state = 'count'; count = 3; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1; rLap = 0; rLapT = 0;
   }
   function finish() { // tour bouclé : on l'enregistre, on affiche son temps 4 s, et le chrono repart aussitôt pour un tour lancé
-    const rec = !best || tRace < best; result = { rec, first: !best, diff: best ? tRace - best : 0, t: tRace, n: lapN, T: 5, b: bilan(), defi: DEFI && tRace - DEFI.t }; dernier = { t: tRace, trace: recG };
+    const rec = !best || tRace < best; VUES[0].result = { rec, first: !best, diff: best ? tRace - best : 0, t: tRace, n: lapN, T: 5, b: bilan(), defi: DEFI && tRace - DEFI.t }; dernier = { t: tRace, trace: recG };
     if (rec && AUTO) best = tRace; else if (rec) { // le pilote automatique (?auto) n'enregistre rien
       best = tRace; bestSpl = cur; ghost = recG; store.set('best', best); store.set('splits', cur); store.set('ghost', ghost); }
     if (fant > 1 && fant < 5 && tRace <= REF * MED[fant - 2]) choixF(fant < 4 ? fant + 1 : 1); // médaille visée battue : au fantôme de la suivante
@@ -735,7 +751,7 @@
     else if (psel === 6) lienDefi();
     else toMenu();
   }
-  function toMenu() { clos(); tnFin = null; state = 'title'; race = null; raceEnd = false; glFin = null; car = newCar(T); cth = car.th; carY = S[car.idx].y; tRace = 0; lapN = 1; result = null; hist.length = 0; msel = 3; }
+  function toMenu() { clos(); tnFin = null; state = 'title'; race = null; raceEnd = false; glFin = null; car = newCar(T); for (const vu of VUES) suit(vu, car); tRace = 0; lapN = 1; hist.length = 0; msel = 3; }
   // menu principal : 0 carte, 1 mode, 2 boîte, 3 démarrer ; d = -1 / +1 (gauche / droite ; Entrée vaut +1)
   let cible = null, cibleT = 0; // carte demandée au menu, pas encore construite
   function changeCarte() {
@@ -784,7 +800,7 @@
     }
     if (mode === 'tournee' && raceEnd) { if (e.code === 'Enter') { if (!tnFin) clos(); else if (tnFin.fini) toMenu(); else start(); } } // Tournée : arrivée, puis classement général, puis manche suivante (pas de « rejouer »)
     else if ((e.code === 'Enter' && raceEnd) || key === 'r') start();
-    if (key === 'g') { manual = !manual; car.manual = manual; car.gear = gear; setPref('vpr.boite', manual ? 'm' : 'a'); }
+    if (key === 'g') { manual = !manual; car.manual = manual; car.gear = VUES[0].gear; setPref('vpr.boite', manual ? 'm' : 'a'); }
     if (manual && (e.code === 'KeyE' || e.code === 'KeyQ')) car.gear = clamp(car.gear + (e.code === 'KeyE' ? 1 : -1), 0, CARD.ratios.length - 1); // physiquement A / E autour du Z en AZERTY
     if (key === 'f' && mode === 'solo') choixF((fant + 1) % FANT.length);
     if (key === 'l' && mode === 'solo') lienDefi();
@@ -866,7 +882,7 @@
     else { R(hg, C, x, y, w, 1); R(hg, C, x, y + h - 1, w, 1); } // deux traits
   };
   const tag = (s, cx, y, bg) => { hg.font = '8px ' + PS; const w = hg.measureText(s).width + 12; R(hg, bg, Math.round(cx - w / 2), y, w, 14); txt(s, cx, y + 3, 8, '#08080c', 'center'); };
-  const EQN = 20, EQR = 10, peak = new Float32Array(EQN), fft = new Uint8Array(32);
+  const EQN = 20, EQR = 10, fft = new Uint8Array(32);
   // minicarte : tracé dessiné une seule fois dans un canvas hors écran (x monde vers la droite, z vers le bas = vue de dessus non inversée)
   const MM = (() => {
     let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const s of S) { x0 = Math.min(x0, s.x); x1 = Math.max(x1, s.x); z0 = Math.min(z0, s.z); z1 = Math.max(z1, s.z); }
@@ -878,7 +894,8 @@
     R(g, RD, px(S[0].x) - 2, pz(S[0].z) - 2, 5, 5); // ligne de départ
     return { c, px, pz };
   })();
-  function drawHUD(dt, sp, r, warn) {
+  function drawHUD(vu, dt, sp, warn) { // le HUD d'une vue : sa voiture, sa caméra (étiquettes des adversaires), ses bandeaux, sur son canvas
+    const { car, cam, cth, rpm, load, peak, result, splitMsg, hudT, w: HW } = vu; hg = vu.hg;
     hg.clearRect(0, 0, HW, HH);
     const cx = HW / 2, blink = (performance.now() / 160 | 0) % 3 > 0;
     if (state === 'title' && accueil) { // écran d'accueil : la carte tourne derrière, on attend un geste
@@ -929,7 +946,7 @@
       for (let j = 0; j < EQR; j++) R(hg, j >= rows ? '#1c1c2c' : !on ? '#2a4a5a' : j > 7 || fr > 0.88 ? RD : j > 4 ? Y : C, 12 + i * 6, HH - 14 - j * 4, 5, 3);
       R(hg, '#ffffff', 12 + i * 6, HH - 14 - Math.min(EQR - 1, Math.round(peak[i] * EQR)) * 4, 5, 1);
     }
-    radioT -= dt; panel(HW - 126, 6, 120, 30); txt('RADIO ' + SON.fq, HW - 120, 11, 8, radioT > 0 && blink ? '#ffffff' : C); txt(SON.nom, HW - 120, 23, 8, Y);
+    panel(HW - 126, 6, 120, 30); txt('RADIO ' + SON.fq, HW - 120, 11, 8, radioT > 0 && blink ? '#ffffff' : C); txt(SON.nom, HW - 120, 23, 8, Y);
     if (state === 'race' || state === 'count') { // minicarte, sous la radio ; un point par voiture : dot(x, z, couleur)
       const mx = HW - 96, my = 46, dot = (x, z, c) => R(hg, c, mx + MM.px(x) - 1, my + MM.pz(z) - 1, 3, 3);
       panel(HW - 102, 40, 96, 68); hg.drawImage(MM.c, mx, my); // 96 de large : ne touche pas les bandeaux centraux même en 4:3 (HW = 360)
@@ -1002,7 +1019,7 @@
 
   // la lune suit la voiture, calée sur la grille de texels de l'ombre pour qu'elle ne fourmille pas
   const LR = new V3().crossVectors(new V3(0, 1, 0), SD).normalize(), LU = new V3().crossVectors(SD, LR), TX = 360 / 2048, tmp = new V3();
-  function sunFollow() {
+  function sunFollow(car) {
     tmp.set(car.x, 0, car.z);
     const a = Math.round(tmp.dot(LR) / TX) * TX, b = Math.round(tmp.dot(LU) / TX) * TX, c = tmp.dot(SD);
     sun.target.position.set(0, 0, 0).addScaledVector(LR, a).addScaledVector(LU, b).addScaledVector(SD, c);
@@ -1010,7 +1027,14 @@
   }
 
   const ROUGE = new THREE.Color(0xff1828), PHARE = new THREE.Color(0xfff2d0), NEONC = new THREE.Color(L.neon || 0), BOITE = new THREE.Matrix4().makeScale(ENCt.x / 2, ENCt.y / 2, ENCt.z / 2).setPosition(ENCc); // BOITE : englobe toute la caisse, pour l'ombre (un point dedans ou dessus n'est pas ombré)
-  let lumIdx = -1; const TRB = ST && ST.tremble * ST.aa || TREMBLE;
+  const TRB = ST && ST.tremble * ST.aa || TREMBLE;
+  // altitude continue le long de la piste : lue échantillon par échantillon, elle faisait sauter la voiture et la caméra à chaque pas, d'autant plus visible qu'on roule lentement
+  // (le calcul est dans sim.js : sol(), qui ajoute la hauteur de la paroi sur un mur roulable ; car.y est ce sol, ou la hauteur de vol)
+  const yAt = (c, k = 0) => sol(T, c, k);
+  // assiette [tangage, roulis] : au sol la voiture épouse la pente de la piste et celle de la paroi ; en l'air son nez suit sa trajectoire
+  const assiette = c => { const s = S[c.idx], ax = Math.cos(c.th), az = Math.sin(c.th), gn = pente(s, c.d);
+    return [c.air ? 0.7 * Math.atan2(c.vy, Math.max(5, Math.hypot(c.vx, c.vz))) : Math.atan(s.sl + gn * (s.tx * az - s.tz * ax)), -Math.atan(gn * (s.tx * ax + s.tz * az))]; };
+  nouvelleVue(); // la vue du joueur : le décor est construit, tous ses luminaires sont déclarés
   function frame(now) {
     const dt = state === 'pause' ? 0 : clamp((now - last) / 1000 || 0, 0, 0.1); last = Math.max(last, now); // en pause le temps s'arrête, l'image reste
     if (state === 'count') {
@@ -1022,11 +1046,11 @@
     FEUX.forEach((m, i) => m.color.setHex(goT > 0 ? 0x30ff60 : state === 'count' && shown && shown <= 3 - i ? 0xff2030 : 0x3a0810)); // décompte 3, 2, 1 : un feu de plus à chaque chiffre ; vert au GO
     padFrame(); const keyIn = input();
     const inp = state === 'race' ? (AUTO || raceEnd ? autopilot(car, T, 1, M.trafic && !race ? trafic(T, tTraf) : []) : keyIn) : { steer: 0, gas: 0, brake: 0, hand: false };
-    let hit = 0, bump = 0, land = 0;
+    for (const vu of VUES) vu.hit = vu.bump = vu.land = 0;
     for (acc += dt; acc >= H; acc -= H) {
       // en course, sim.js fait avancer tout le monde ; inp = null : l'IA conduit la voiture du joueur (?auto, ou une fois arrivé)
       if (race && state === 'race') stepRace(race, AUTO || raceEnd ? null : inp, H); else { step(car, inp, T, H); if (M.trafic && state === 'race') hitTrafic(car, T, tTraf); }
-      land = Math.max(land, car.land); bump = Math.max(bump, car.bump || 0); hit = Math.max(hit, car.hit, bump); // shortcut: un choc entre voitures réutilise les effets du choc mur (étincelles côté mur), à séparer si ça se voit
+      for (const vu of VUES) { const c = vu.car; vu.land = Math.max(vu.land, c.land); vu.bump = Math.max(vu.bump, c.bump || 0); vu.hit = Math.max(vu.hit, c.hit, vu.bump); } // chocs de l'image, par vue (sa secousse) ; shortcut: un choc entre voitures réutilise les effets du choc mur (étincelles côté mur), à séparer si ça se voit
       if (state === 'race' && !raceEnd) {
         tRace += H; tTraf += H;
         if (race) { if (car.fin || car.out) { raceEnd = true; tRace = car.fin || car.out; car.manual = false; SON.arrivee(car.pos); } } // (élimination : sortir, c'est avoir fini)
@@ -1034,21 +1058,23 @@
         else if (car.dist >= N) finish();
       }
     }
+    const J = VUES[0], { hit, bump, land } = J; // la voiture du joueur est celle de la première vue : ses chocs, sa hauteur et son régime lissés servent aux effets de la scène et au son
     const sp = Math.hypot(car.vx, car.vz), r = Math.min(1, sp / TOP), gas = state === 'count' ? keyIn.gas : inp.gas;
     const beat = SON.beat, pulse = SON.pulse; // battement calé sur le kick
-    if (hit > 8) stun = 0.7; if (land > 7) stun = Math.max(stun, Math.min(0.45, (land - 6) * 0.08)); stun -= dt; // une réception dure secoue aussi
-    const up = drivetrain(dt, r, gas);
+    // état lissé de chaque vue, avant de toucher à la scène : secousse, régime affiché, hauteur et assiette de la voiture suivie, cap de la caméra, fondus de nitro et de tunnel
+    for (const vu of VUES) { const c = vu.car, [tg, rl] = assiette(c);
+      if (vu.hit > 8) vu.stun = 0.7; if (vu.land > 7) vu.stun = Math.max(vu.stun, Math.min(0.45, (vu.land - 6) * 0.08)); vu.stun -= dt; // une réception dure secoue aussi
+      vu.up = drivetrain(vu, dt, gas);
+      vu.carY += (c.y - vu.carY) * Math.min(1, dt * 18); vu.pitch += (tg - vu.pitch) * Math.min(1, dt * 10); vu.roll += (rl - vu.roll) * Math.min(1, dt * 10);
+      if (state === 'title') vu.cth += dt * 0.22; else vu.cth += wrap(c.th - vu.cth) * Math.min(1, dt * 6); // au menu, la caméra tourne autour de la voiture pour montrer la carte
+      if ((vu.lookT -= dt) < 0) { const k = Math.exp(-dt * 5); vu.lookA *= k; vu.lookP *= k; } // souris immobile depuis 2,5 s : la caméra revient derrière la voiture
+      vu.nit = clamp(vu.nit + (c.boost > 0 ? dt / 0.7 : -dt / 1.1), 0, 1); // nitro : 0,7 s pour entrer, 1,1 s pour sortir
+      vu.lm += (zone(c.idx, 10) - vu.lm) * Math.min(1, dt * 8); // lumière : nuit néon ↔ échangeur en alarme rouge qui bat avec la musique
+    }
+    const { carY, pitch, roll, lm } = J;
 
-    // voiture (suit le relief) + caméra derrière : plus basse, plus proche et plus grand-angle avec la vitesse
-    const sc = S[car.idx], fx = Math.cos(car.th), fz = Math.sin(car.th);
-    // altitude continue le long de la piste : lue échantillon par échantillon, elle faisait sauter la voiture et la caméra à chaque pas, d'autant plus visible qu'on roule lentement
-    // (le calcul est dans sim.js : sol(), qui ajoute la hauteur de la paroi sur un mur roulable ; car.y est ce sol, ou la hauteur de vol)
-    const yAt = (c, k = 0) => sol(T, c, k);
-    // assiette [tangage, roulis] : au sol la voiture épouse la pente de la piste et celle de la paroi ; en l'air son nez suit sa trajectoire
-    const assiette = c => { const s = S[c.idx], ax = Math.cos(c.th), az = Math.sin(c.th), gn = pente(s, c.d);
-      return [c.air ? 0.7 * Math.atan2(c.vy, Math.max(5, Math.hypot(c.vx, c.vz))) : Math.atan(s.sl + gn * (s.tx * az - s.tz * ax)), -Math.atan(gn * (s.tx * ax + s.tz * az))]; };
-    const [tg, rl] = assiette(car), air = car.y - yAt(car); // air : hauteur au-dessus du sol
-    carY += (car.y - carY) * Math.min(1, dt * 18); pitch += (tg - pitch) * Math.min(1, dt * 10); roll += (rl - roll) * Math.min(1, dt * 10);
+    // la scène, une fois pour toutes les vues : les voitures (elles suivent le relief), les effets, le fantôme, le son
+    const fx = Math.cos(car.th), fz = Math.sin(car.th);
     carG.rotation.order = 'YZX'; // cap, puis tangage, puis roulis autour de l'axe de la voiture
     carG.position.set(car.x, carY, car.z); carG.rotation.set(roll, -car.th, pitch); body.rotation.x = car.steer * r * 0.07;
     opps.forEach((g, i) => {
@@ -1058,8 +1084,28 @@
     });
     if (land > 3) for (let i = 0; i < Math.min(14, land * 1.5); i++) { const sd = i & 1 ? 1 : -1, av = i & 2 ? 1.4 : -1.4; // réception : une bouffée de poussière chassée de chaque roue, vers l'extérieur
       emit(car.x + fx * av - fz * sd * 0.9, carY + 0.15, car.z + fz * av + fx * sd * 0.9, car.vx * 0.6 - fz * sd * (3 + Math.random() * 5), 0.5 + Math.random() * 2, car.vz * 0.6 + fx * sd * (3 + Math.random() * 5), 0.35, 0.2, 0.19, 0.17, -1); }
-    if (state === 'title') cth += dt * 0.22; else cth += wrap(car.th - cth) * Math.min(1, dt * 6); // au menu, la caméra tourne autour de la voiture pour montrer la carte
-    if ((lookT -= dt) < 0) { const k = Math.exp(-dt * 5); lookA *= k; lookP *= k; } // souris immobile depuis 2,5 s : la caméra revient derrière la voiture
+    if (TH.alarme) { carMat.emissive.setRGB(0.3 * lm, 0.01 * lm, 0.03 * lm); for (const m of tunMats) m.color.setScalar((m.userData.amb || 1) * (0.75 + 0.5 * pulse)); }
+    if (state === 'race' && race) { // course : même bandeau « tour + temps » qu'en contre-la-montre, avec la place (le dernier tour est couvert par le classement d'arrivée)
+      const ln = Math.floor(car.dist / N);
+      if (ln > rLap && ln <= race.laps) { const lt = (car.fin || race.t) - rLapT; bestLap = bestLap ? Math.min(bestLap, lt) : lt; if (ln < race.laps) J.result = { n: ln, t: lt, pos: car.pos, of: vivantes().length, T: 5, b: bilan() }; rLap = ln; rLapT = race.t; }
+    }
+    if (state === 'race' && mode === 'solo') {
+      while (recG.length / 4 <= tRace * 20) recG.push(+car.x.toFixed(2), +carY.toFixed(2), +car.z.toFixed(2), +car.th.toFixed(3));
+      if (si < 2 && car.dist >= T.sp[si]) { cur[si] = tRace; J.splitMsg = { i: si, t: tRace, d: bestSpl ? tRace - bestSpl[si] : null, T: 2.5 }; si++; }
+    }
+    const gi = tRace * 20, g0 = Math.floor(gi) * 4, gf = gi % 1, ghost = state === 'race' && mode === 'solo' && traceF();
+    ghostM.visible = !!ghost && g0 + 7 < ghost.length;
+    if (ghostM.visible) { ghostM.material.color.set(FANTC[fant]); ghostM.position.set(lerp(ghost[g0], ghost[g0 + 4], gf), lerp(ghost[g0 + 1], ghost[g0 + 5], gf) + ENCc.y, lerp(ghost[g0 + 2], ghost[g0 + 6], gf)); ghostM.rotation.y = -(ghost[g0 + 3] + wrap(ghost[g0 + 7] - ghost[g0 + 3]) * gf); }
+    fxFrame(dt, now, sp, inp, hit, fx, fz);
+    SON.frame(dt, { state, car, T, tour: race ? Math.min(race.laps - 1, Math.max(0, Math.floor(car.dist / N))) : 0, tours: race ? race.laps : 0, hot: hot(car.idx, 50), tun: lm, amb: ambAt(car.idx), r, sp, gas, hit, bump: Math.max(bump, land > 7 ? (land - 6) * 0.4 : 0), up: J.up > 0, down: J.up < 0, rpm: J.rpm, load: J.load, spool: J.spool, stun: J.stun, fini: raceEnd }); // fini : la radio s'efface derrière le tableau d'arrivée
+    if (state !== 'title') radioT -= dt; // l'annonce de la station clignote 2,5 s (une radio pour toutes les vues)
+    for (const vu of VUES) vueFrame(vu, dt, now, inp);
+  }
+  // Une vue : la caméra derrière sa voiture (plus basse, plus proche et plus grand-angle avec la vitesse), puis tout ce qui dans la scène dépend de qui regarde
+  // (ciel, lune et son ombre, brouillard, lumière dynamique, feux lointains, pluie), son HUD, la scène dans sa cible et la passe finale.
+  function vueFrame(vu, dt, now, inp) {
+    const { cam, car, carY, pitch, roll, lm, cth, stun, lookA, lookP, rainP, splP, splA, splD } = vu, pulse = SON.pulse;
+    const sp = Math.hypot(car.vx, car.vz), r = Math.min(1, sp / TOP), fx = Math.cos(car.th), fz = Math.sin(car.th), air = car.y - yAt(car); // air : hauteur au-dessus du sol
     const cx = Math.cos(cth + lookA), cz = Math.sin(cth + lookA), back = 6.4 - 1 * r; // caméra basse et proche : le sol défile en proportion inverse de sa hauteur, c'est ce qui donne la sensation de vitesse
     let px = car.x - cx * back, pz = car.z - cz * back;
     const s = S[(car.idx - 4 + N) % N], nx = -s.tz, nz = s.tx, d = (px - s.x) * nx + (pz - s.z) * nz, o = Math.abs(d) - (s.w - 0.8);
@@ -1069,23 +1115,23 @@
     const y0 = yAt(car), ySol = k => clamp(yAt(car, k), y0 - 2.5, y0 + 2.5) + air;
     cam.position.set(px + (Math.random() - 0.5) * shake, ySol(-3) + (M.camH || 3.2) + lookP - 0.5 * r + (Math.random() - 0.5) * shake, pz);
     cam.lookAt(car.x + cx * 10, ySol(5) + 1.1, car.z + cz * 10); cam.rotateZ(-0.6 * roll);
-    nit = clamp(nit + (car.boost > 0 ? dt / 0.7 : -dt / 1.1), 0, 1); const nitE = nit * nit * (3 - 2 * nit); // nitro : 0,7 s pour entrer, 1,1 s pour sortir, départ et arrivée en douceur (champ élargi et vignette)
-    cam.fov = 62 + 26 * r + 3 * car.slide + 6 * nitE; post.uniforms.vig.value = nitE;
-    const vue = window.__g.vue; // shortcut: debug console seulement, __g.vue = [angle° autour de la voiture, distance, hauteur] pour inspecter le modèle ; à remplacer par un vrai mode photo si on en veut un
-    if (vue) { const a = car.th + vue[0] * Math.PI / 180; cam.position.set(car.x + Math.cos(a) * vue[1], carY + vue[2], car.z + Math.sin(a) * vue[1]); cam.lookAt(car.x, carY + 0.7, car.z); cam.fov = 45; }
+    const nitE = vu.nit * vu.nit * (3 - 2 * vu.nit); // nitro : départ et arrivée en douceur (champ élargi et vignette)
+    cam.fov = 62 + 26 * r + 3 * car.slide + 6 * nitE;
+    const photo = window.__g.vue; // shortcut: debug console seulement, __g.vue = [angle° autour de la voiture, distance, hauteur] pour inspecter le modèle ; à remplacer par un vrai mode photo si on en veut un
+    if (photo) { const a = car.th + photo[0] * Math.PI / 180; cam.position.set(car.x + Math.cos(a) * photo[1], carY + photo[2], car.z + Math.sin(a) * photo[1]); cam.lookAt(car.x, carY + 0.7, car.z); cam.fov = 45; }
     cam.updateProjectionMatrix();
-    sky.position.copy(cam.position); sunDisc.position.copy(cam.position).addScaledVector(SD, 2000); sunFollow();
-
-    // lumière : nuit néon ↔ échangeur en alarme rouge qui bat avec la musique
-    lm += (zone(car.idx, 10) - lm) * Math.min(1, dt * 8);
+    sky.position.copy(cam.position); sunDisc.position.copy(cam.position).addScaledVector(SD, 2000); sunFollow(car);
+    // brouillard et ciel : nuit néon ↔ tunnel ; éclairs : flash double sur le ciel et l'éclairage (le tonnerre part de fxFrame)
     scene.fog.color.copy(FOG_OUT).lerp(FOG_IN, lm); scene.fog.near = lerp(TH.fogD[0], 15, lm); scene.fog.far = lerp(TH.fogD[1], 320, lm);
     skyMat.color.copy(WHITE).lerp(FOG_IN, lm);
-    if (TH.alarme) { carMat.emissive.setRGB(0.3 * lm, 0.01 * lm, 0.03 * lm); for (const m of tunMats) m.color.setScalar((m.userData.amb || 1) * (0.75 + 0.5 * pulse)); }
+    const fl = flashT > 0 && lm < 0.5 ? ((flashT * 14 | 0) & 1 ? 1 : 0.3) : 0;
+    hemi.intensity = TH.hemi[2] * (1 - 0.75 * lm) + 3 * fl; sun.intensity = TH.sun[1] * (1 - lm); // en tunnel, ciel et astre s'effacent : il ne reste que les luminaires skyMat.color.multiplyScalar(1 + 2.5 * fl); scene.fog.color.lerp(FLASH, 0.45 * fl);
+    beams.forEach((b, i) => b.rotation.set(0, Math.atan2(cam.position.x - b.position.x, cam.position.z - b.position.z), Math.sin(now * 0.0004 * (i % 3 + 1) + i) * 0.5)); // les faisceaux de projecteurs font face à la caméra
     // lumière dynamique : phares, boîte d'ombre de la voiture, reflets, puis la liste des luminaires
     const cp = Math.cos(pitch);
-    LUX.uHP.value.set(car.x + fx * 1.9, carY + 0.62, car.z + fz * 1.9); LUX.uHD.value.set(fx * cp, Math.sin(pitch), fz * cp);
-    carG.updateMatrixWorld(); LUX.uBox.value.copy(carG.matrixWorld).multiply(BOITE).invert();
-    LUX.uSunC.value.copy(SUNC).multiplyScalar(1 - lm); LUX.uSky.value.copy(scene.fog.color); LUX.uRes.value.set(TRB ? RW / 2 / TRB : 0, RH / 2 / TRB);
+    LUX.uCam.value = cam.position; LUX.uHP.value.set(car.x + fx * 1.9, carY + 0.62, car.z + fz * 1.9); LUX.uHD.value.set(fx * cp, Math.sin(pitch), fz * cp);
+    carG.updateMatrixWorld(); LUX.uBox.value.copy(carG.matrixWorld).multiply(BOITE).invert(); // carG : la voiture de la vue (la seule tant qu'il n'y a qu'un joueur)
+    LUX.uSunC.value.copy(SUNC).multiplyScalar(1 - lm); LUX.uSky.value.copy(scene.fog.color); LUX.uRes.value.set(TRB ? vu.rw / 2 / TRB : 0, RH / 2 / TRB);
     let nl = 0;
     const put = (x, y, z, c, r, k) => { if (nl < NL) { LUX.uLP.value[nl].set(x, y, z, r); LUX.uLC.value[nl++].copy(c).multiplyScalar(k * LUM_GAIN); } };
     put(car.x - fx * 4.4, carY + 0.35, car.z - fz * 4.4, ROUGE, 9, NUIT * (inp.brake ? 2.4 : 0.45)); // feux arrière : ils teintent ce qui suit, davantage au freinage
@@ -1101,9 +1147,9 @@
       put(c.x + ax * av, y + 0.8, c.z + az * av, PHARE, 14, 3 * NUIT); put(c.x - ax * ar, y + 0.7, c.z - az * ar, ROUGE, 9, 1.4 * NUIT);
     }
     // luminaires fixes : les plus proches le long de la piste (ceux de devant comptent double), fondus en bout de liste pour qu'aucun ne s'allume d'un coup
-    if (car.idx !== lumIdx) { lumIdx = car.idx; for (const l of LUMS) { let d = (l.i - car.idx + N) % N; if (d > N / 2) d -= N; l.d = d > 0 ? d * 0.5 : -d; } LUMS.sort((a, b) => a.d - b.d); } // le tri ne change que d'un échantillon de piste au suivant
-    const ns = NL - nl, dm = LUMS.length > ns ? LUMS[ns].d : 1e9;
-    for (let k = 0; k < ns && k < LUMS.length; k++) { const l = LUMS[k]; put(l.x, l.y, l.z, l.c, l.r, Math.min(1, (dm - l.d) / (dm * 0.3 + 0.01)) * (l.tun && TH.alarme ? 0.5 + pulse : 1)); }
+    if (car.idx !== vu.lumIdx) { vu.lumIdx = car.idx; for (const e of vu.lums) { let d = (e.l.i - car.idx + N) % N; if (d > N / 2) d -= N; e.d = d > 0 ? d * 0.5 : -d; } vu.lums.sort((a, b) => a.d - b.d); } // le tri ne change que d'un échantillon de piste au suivant
+    const LS = vu.lums, ns = NL - nl, dm = LS.length > ns ? LS[ns].d : 1e9;
+    for (let k = 0; k < ns && k < LS.length; k++) { const e = LS[k], l = e.l; put(l.x, l.y, l.z, l.c, l.r, Math.min(1, (dm - e.d) / (dm * 0.3 + 0.01)) * (l.tun && TH.alarme ? 0.5 + pulse : 1)); }
     LUX.uN.value = nl;
     // pluie : chaque goutte recule de la vitesse de la voiture, sa traînée s'étire d'autant
     const NG = TH.neige || 0, pl = (NG || pluieAt(car.idx)) * (1 - lm), gl = NG ? 0.2 : 1.9 * Math.max(1, 0.4 + 0.6 * pl), nr = Math.min(RN, Math.round(400 * pl ** 1.5)); rain.visible = pl > 0.02; splash.visible = !NG && rain.visible; // th.neige = force des flocons : les mêmes particules, qui tombent à 4 m/s, sans impact ni bruit de pluie
@@ -1120,36 +1166,24 @@
       if ((splA[i] += dt) > 0.14) { splA[i] -= 0.14; const j = 2 + Math.floor(alea() * 18), s = S[(car.idx + j) % N], l = (alea() * 2 - 1) * W; splP.set([s.x - s.tz * l, s.y + 0.06, s.z + s.tx * l], i * 3); splD[i] = 1 - j / 24; } // au loin, l'impact est plus pâle
       const f = (1 - splA[i] / 0.14) ** 2 * splD[i]; splC[i * 3] = 0.45 * f; splC[i * 3 + 1] = 0.6 * f; splC[i * 3 + 2] = 0.75 * f;
     }
+    splGeo.attributes.position.array = splP; // les impacts de cette vue : même tampon GPU, renvoyé avant chaque dessin
     splGeo.attributes.position.needsUpdate = splGeo.attributes.color.needsUpdate = true;
-
-    if (state === 'race' && race) { // course : même bandeau « tour + temps » qu'en contre-la-montre, avec la place (le dernier tour est couvert par le classement d'arrivée)
-      const ln = Math.floor(car.dist / N);
-      if (ln > rLap && ln <= race.laps) { const lt = (car.fin || race.t) - rLapT; bestLap = bestLap ? Math.min(bestLap, lt) : lt; if (ln < race.laps) result = { n: ln, t: lt, pos: car.pos, of: vivantes().length, T: 5, b: bilan() }; rLap = ln; rLapT = race.t; }
-    }
-    if (state === 'race' && mode === 'solo') {
-      while (recG.length / 4 <= tRace * 20) recG.push(+car.x.toFixed(2), +carY.toFixed(2), +car.z.toFixed(2), +car.th.toFixed(3));
-      if (si < 2 && car.dist >= T.sp[si]) { cur[si] = tRace; splitMsg = { i: si, t: tRace, d: bestSpl ? tRace - bestSpl[si] : null, T: 2.5 }; si++; }
-    }
-    const gi = tRace * 20, g0 = Math.floor(gi) * 4, gf = gi % 1, ghost = state === 'race' && mode === 'solo' && traceF();
-    ghostM.visible = !!ghost && g0 + 7 < ghost.length;
-    if (ghostM.visible) { ghostM.material.color.set(FANTC[fant]); ghostM.position.set(lerp(ghost[g0], ghost[g0 + 4], gf), lerp(ghost[g0 + 1], ghost[g0 + 5], gf) + ENCc.y, lerp(ghost[g0 + 2], ghost[g0 + 6], gf)); ghostM.rotation.y = -(ghost[g0 + 3] + wrap(ghost[g0 + 7] - ghost[g0 + 3]) * gf); }
-    fxFrame(dt, now, sp, inp, hit, fx, fz);
-    SON.frame(dt, { state, car, T, tour: race ? Math.min(race.laps - 1, Math.max(0, Math.floor(car.dist / N))) : 0, tours: race ? race.laps : 0, hot: hot(car.idx, 50), tun: lm, amb: ambAt(car.idx), r, sp, gas, hit, bump: Math.max(bump, land > 7 ? (land - 6) * 0.4 : 0), up: up > 0, down: up < 0, rpm, load, spool, stun, fini: raceEnd }); // fini : la radio s'efface derrière le tableau d'arrivée
 
     // alerte de virage serré, lue sur la courbure à venir
     let wk = 0;
     for (let j = 15; j < 35 + sp * 0.6; j++) { const k = S[(car.idx + j) % N].k; if (Math.abs(k) > Math.abs(wk)) wk = k; }
-    drawHUD(dt, sp, r, state === 'race' && sp > 30 && Math.abs(wk) > 0.011 ? Math.sign(wk) : 0);
+    drawHUD(vu, dt, sp, state === 'race' && sp > 30 && Math.abs(wk) > 0.011 ? Math.sign(wk) : 0);
+    const U = post.uniforms; U.t.value = vu.rt.texture; U.h.value = vu.hudT; if (U.dz) U.dz.value = vu.rt.depthTexture; U.px.value.set(AA / vu.rw, AA / RH); post.uniforms.vig.value = nitE; // la passe finale est commune : ses entrées sont celles de la vue
     // flou de vitesse : rien sous 55 % de la vitesse de pointe, léger au-delà, franc seulement pendant la nitro
     post.uniforms.amt.value = 0.35 * Math.max(0, (r - 0.55) / 0.45) ** 2; post.uniforms.ab.value = 0.002 + 0.004 * r + (stun > 0 ? stun * 0.06 : 0);
     if (!chaud) { // première image : tout est dessiné une fois sans tri de visibilité, pour que shaders, géométries et textures partent au GPU maintenant et non au premier passage en course (à-coups de 40 ms)
       chaud = true; const caches = [], tri = [];
       scene.traverse(o => { if (!o.visible) { caches.push(o); o.visible = true; } if (o.frustumCulled) { tri.push(o); o.frustumCulled = false; } });
-      renderer.setRenderTarget(rt); renderer.render(scene, cam);
+      renderer.setRenderTarget(vu.rt); renderer.render(scene, cam);
       for (const o of caches) o.visible = false; for (const o of tri) o.frustumCulled = true;
       if (avant && avant.libere) avant.libere(); avant = null; // l'ancienne carte peut maintenant rendre sa mémoire : la nouvelle tient les shaders communs (et on l'oublie, sinon chaque carte garderait toutes les précédentes)
     }
-    renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+    renderer.setRenderTarget(vu.rt); renderer.render(scene, cam); renderer.setRenderTarget(null); renderer.render(postScene, postCam);
   }
   let chaud = false;
   let raf = 0;
@@ -1159,9 +1193,9 @@
   const fin = () => { cancelAnimationFrame(raf); arret.abort(); clearTimeout(padNoteT); padNote.remove(); };
   const libere = () => {
     scene.traverse(o => { if (o.geometry) o.geometry.dispose(); for (const m of [].concat(o.material || [])) { for (const k of ['map', 'emissiveMap', 'alphaMap']) if (m[k]) m[k].dispose(); m.dispose(); } });
-    rt.dispose(); if (rt.depthTexture) rt.depthTexture.dispose(); hudT.dispose(); post.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
+    for (const vu of VUES) { vu.rt.dispose(); if (vu.rt.depthTexture) vu.rt.depthTexture.dispose(); vu.hudT.dispose(); } post.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
   };
   try { if (sessionStorage.getItem('vpr.go')) { sessionStorage.removeItem('vpr.go'); if (mode === 'tournee') start(); } } catch (e) { } // arrivée sur la carte d'une manche de Tournée : la course part tout de suite
-  window.__g = { frame, start, fin, libere, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return tnFin; }, get defi() { return { DEFI, defiErr, dernier }; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
+  window.__g = { frame, start, fin, libere, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return tnFin; }, get defi() { return { DEFI, defiErr, dernier }; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam: VUES[0].cam, vues: VUES, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
 })();
 if (/[?&]perf\b/.test(location.search)) import('./outils/perf.js').then(m => m.suite()); // banc de performance : voir outils/perf.js
