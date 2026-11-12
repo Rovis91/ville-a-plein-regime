@@ -68,8 +68,9 @@
 <div class="fam" id="fam"></div>
 
 <h2>Vérifications</h2>
+<p>« Variété » rend 16 s de chaque station et compare leurs spectres (26 bandes de 40 Hz à 16 kHz) : 1 = même couleur sonore. Critères : aucune paire d'une même carte au-dessus de 0,75 ; moins de 15 paires sur 105 au-dessus de 0,9.</p>
 <p>« Auto-test » joue chaque bouton une seconde et vérifie qu'un signal sort. « Mesurer » rend chaque son seul, hors ligne, au niveau réel du jeu (sans l'amplification du banc) : RMS et crête en dB (0 = écrêtage).</p>
-<button id="autotest">Auto-test des boutons</button><button id="mesurer">Mesurer la carte affichée</button><button id="mesurerTout">Mesurer les 5 cartes</button>
+<button id="autotest">Auto-test des boutons</button><button id="variete">Variété des stations</button><button id="mesurer">Mesurer la carte affichée</button><button id="mesurerTout">Mesurer les 5 cartes</button>
 <div id="mesures"></div>
 </main>
 <div id="voile"><button id="go">Allumer le son</button></div>
@@ -186,7 +187,8 @@
     pas(0); for (let t = 0.05; t < dur; t += 0.05) ctx.suspend(t).then(() => { pas(t); ctx.resume(); });
     const b = await ctx.startRendering(); let sum = 0, peak = 0, n = 0;
     for (let c = 0; c < 2; c++) { const x = b.getChannelData(c); for (let i = sr * 2; i < x.length; i++) { sum += x[i] * x[i]; peak = Math.max(peak, Math.abs(x[i])); n++; } } // les 2 premières secondes (attaques, filtres qui s'ouvrent) sont écartées
-    Object.assign(u, mem); return { carte: carte.id, source: titreDe(carte, id), fam: sc[3].length > 1 ? 'tout' : sc[3][0], rms: fmt(dB(Math.sqrt(sum / n))), crete: fmt(dB(peak)) };
+    Object.assign(u, mem); if (dur > 8) return b;
+    return { carte: carte.id, source: titreDe(carte, id), fam: sc[3].length > 1 ? 'tout' : sc[3][0], rms: fmt(dB(Math.sqrt(sum / n))), crete: fmt(dB(peak)) };
   }
   const titreDe = (c, id) => /^st\d$/.test(id) ? c.radio[+id[2]].genre.toLowerCase() : SC[id][1];
   async function mesurer(carte) {
@@ -204,8 +206,37 @@
     $('mesures').innerHTML = '<table><tr><th>carte</th><th>source</th><th>famille</th><th>RMS (dB)</th><th>crête (dB)</th></tr>' + L.map(l => `<tr><td>${l.carte}</td><td>${l.source}</td><td>${l.fam}</td><td>${l.rms}</td><td>${l.crete}</td></tr>`).join('') + '</table>';
     return L;
   }
+  // variété : profil d'énergie par bande de chaque station (rendu hors ligne), corrélation deux à deux, centre de gravité spectral
+  function fft(re, im) { const n = re.length; for (let i = 1, j = 0; i < n; i++) { let b = n >> 1; for (; j & b; b >>= 1) j ^= b; j ^= b; if (i < j) { let x = re[i]; re[i] = re[j]; re[j] = x; x = im[i]; im[i] = im[j]; im[j] = x; } }
+    for (let len = 2; len <= n; len <<= 1) { const a = -2 * Math.PI / len; for (let i = 0; i < n; i += len) for (let k = 0; k < len / 2; k++) { const c = Math.cos(a * k), d = Math.sin(a * k), p = i + k, q = p + len / 2, xr = re[q] * c - im[q] * d, xi = re[q] * d + im[q] * c; re[q] = re[p] - xr; im[q] = im[p] - xi; re[p] += xr; im[p] += xi; } } }
+  function profil(b) { // { bandes : 26 niveaux en dB, centre : centre de gravité en Hz }
+    const N = 4096, sr = b.sampleRate, L = b.getChannelData(0), Rr = b.getChannelData(1), P = new Float64Array(N / 2), re = new Float64Array(N), im = new Float64Array(N);
+    for (let o = sr * 2; o + N <= L.length; o += N / 2) { for (let i = 0; i < N; i++) { re[i] = (L[o + i] + Rr[o + i]) * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / N)); im[i] = 0; } fft(re, im); for (let i = 0; i < N / 2; i++) P[i] += re[i] * re[i] + im[i] * im[i]; }
+    const B = new Float64Array(26); let sf = 0, sp = 0;
+    for (let i = 1; i < N / 2; i++) { const f = i * sr / N; sf += f * P[i]; sp += P[i]; const k = Math.floor(26 * Math.log(f / 40) / Math.log(400)); if (k >= 0 && k < 26) B[k] += P[i]; }
+    const max = Math.max(...B); return { bandes: Array.from(B, v => Math.max(-70, 10 * Math.log10(v / max + 1e-12))), centre: sf / sp };
+  }
+  function corr(a, b) { const n = a.length, ma = a.reduce((x, y) => x + y) / n, mb = b.reduce((x, y) => x + y) / n; let sab = 0, sa = 0, sb = 0; for (let i = 0; i < n; i++) { sab += (a[i] - ma) * (b[i] - mb); sa += (a[i] - ma) ** 2; sb += (b[i] - mb) ** 2; } return sab / Math.sqrt(sa * sb); }
+  async function variete() {
+    stop(); $('mesures').textContent = 'Rendu des 15 stations…'; const m0 = M, snap = Object.entries(localStorage).filter(([k]) => k.startsWith('vpr.radio')), R = { stations: [], paires: [] };
+    for (const plein of [false, true]) { u.plein = plein; for (const c of CARTES) for (let i = 0; i < 3; i++) R.stations.push(Object.assign({ carte: c.id, genre: c.radio[i].genre.toLowerCase(), plein }, profil(await rendre(c, 'st' + i, 16)))); }
+    u.plein = $('plein').checked;
+    for (const k of Object.keys(localStorage)) if (k.startsWith('vpr.radio')) localStorage.removeItem(k); for (const [k, v] of snap) localStorage.setItem(k, v);
+    SON.carte(m0); SON.init(); stop(); boutons();
+    const res = {};
+    for (const plein of [false, true]) { const S = R.stations.filter(x => x.plein === plein), all = []; let haut = 0, pire = 0;
+      for (let i = 0; i < 15; i++) for (let j = i + 1; j < 15; j++) { const c = corr(S[i].bandes, S[j].bandes); all.push(c); if (c > 0.9) haut++; if (S[i].carte === S[j].carte) { pire = Math.max(pire, c); R.paires.push({ plein, carte: S[i].carte, a: S[i].genre, b: S[j].genre, c }); } }
+      all.sort((a, b) => a - b); res[plein ? 'plein' : 'leger'] = { au_dessus_de_0_9: haut, mediane: +all[52].toFixed(2), pire_meme_carte: +pire.toFixed(2), ok: haut < 15 && pire <= 0.75 }; }
+    R.resume = res; window.__variete = R;
+    const f = v => v.toFixed(2).replace('.', ','), tab = (titre, rows) => '<table><tr>' + titre.map(x => '<th>' + x + '</th>').join('') + '</tr>' + rows.map(r => '<tr>' + r.map(x => '<td' + (x === 'OK' ? ' class="ok"' : x === 'KO' ? ' class="ko"' : '') + '>' + x + '</td>').join('') + '</tr>').join('') + '</table>';
+    $('mesures').innerHTML = tab(['arrangement', 'paires > 0,9 (sur 105)', 'médiane', 'pire paire d\'une même carte', ''], ['leger', 'plein'].map(k => [k, res[k].au_dessus_de_0_9, f(res[k].mediane), f(res[k].pire_meme_carte), res[k].ok ? 'OK' : 'KO'])) +
+      '<br>' + tab(['carte', 'paire', 'corrélation léger', 'corrélation plein'], R.paires.filter(p => !p.plein).map(p => [p.carte, p.a + ' / ' + p.b, f(p.c), f(R.paires.find(q => q.plein && q.a === p.a && q.b === p.b).c)])) +
+      '<br>' + tab(['carte', 'station', 'centre de gravité léger (Hz)', 'plein (Hz)'], R.stations.filter(x => !x.plein).map(x => [x.carte, x.genre, Math.round(x.centre), Math.round(R.stations.find(y => y.plein && y.genre === x.genre).centre)]));
+    return R;
+  }
+  $('variete').onclick = variete;
   $('autotest').onclick = autotest; $('mesurer').onclick = () => lancer([M]); $('mesurerTout').onclick = () => lancer(CARTES);
-  window.__banc = { lancer, mesurer, rendre, autotest, jouer, stop, SC, u };
+  window.__banc = { lancer, mesurer, rendre, autotest, variete, profil, corr, jouer, stop, SC, u };
   boutons(); volumes();
 })();
 </script>

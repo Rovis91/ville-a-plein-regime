@@ -3,28 +3,30 @@
 // beep(f), crash(), stinger(rec), tonnerre() · lus par le jeu : station, nom, fq, genre, musicOn, beat, pulse, ana · banc d'écoute et mesure :
 // init(contexte hors ligne), pump(), pret, live, vol, stations, evenement(), moniteur(gain), vu, et les bruitages ponctuels clac(), choc(v),
 // boost(), petarade() · prises de test : ac, out, smp.
-// Chaîne : voix → (batterie | bus pompé → filtre balayé → saturation de bus) → coupure de station → musique oui/non → filtre de vitesse et de
-// tunnel → famille « mus » → master → compresseur. Familles réglables : mus, mot (moteur, boîte), pneu, vent, amb (lieu), choc (chocs, frottement, boost), ui (bips, jingle, radio).
+// Chaîne : timbres (PATCH) → tranche de la partie → (batterie (KIT) | bus pompé → filtre balayé → saturation de bus) → coupure de station →
+// couleur de la station (3 bandes) → musique oui/non → filtre de vitesse et de tunnel → famille « mus » → master → compresseur. Familles réglables : mus, mot (moteur, boîte), pneu, vent, amb (lieu), choc (chocs, frottement, boost), ui (bips, jingle, radio).
 (() => {
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const hz = m => 440 * 2 ** ((m - 69) / 12), R = -99; // R : silence dans un thème (voir mel() dans cartes.js)
+  const hz = m => 440 * 2 ** ((m - 69) / 12), R = -99, OUT = 0.56; // R : silence dans un thème (voir mel() dans cartes.js)
   let M = CARTE, ST = M.radio, TH = M.th;
-  let AC, live = true, timer, pret = Promise.resolve(), ana, master, musicG, tuneG, drumG, musF, padF, padG, duckG, swF, busDry, busDrv, arpIn, leadIn, acid, fuzz, kdrv, bsat, bclean, dly, dlyFb, rev, musSend, motSend, nbuf, outG, vu;
+  let AC, live = true, timer, pret = Promise.resolve(), ana, master, musicG, tuneG, drumG, musF, duckG, swF, busDry, busDrv, acid, fuzz, kdrv, bsat, dly, dlyFb, eqL, eqM, eqH, mrevG, drumRv, revIn, echoIn, choIn, mbuf, rev, musSend, motSend, nbuf, outG, vu;
   let t0 = 0, nextT = 0, stp = 0, musicOn = true, lastHit = 0, lastN = 0, lastB = 0, menu = true;
   const vol = { mus: 1, mot: 1, pneu: 1, vent: 1, amb: 1, choc: 1, ui: 1 }, V = {}; // volume par famille (banc d'écoute) et leurs nœuds
-  // état musical piloté par la course : mix = secteur chaud, inten = vitesse, driftL = glisse, drums/lead = sections
-  let mix = 0, inten = 0, driftL = 0, drums = 0, lead = false, wasIn = false, wasNear = false, wasBoost = false, lastGas = 0;
+  // état musical piloté par la course : mix = secteur chaud, inten = vitesse, driftL = glisse, drums = batterie, fin = dernier secteur
+  const MX = { b: 1, d: 1.6, c: 2, g: 2, a: 2, l: 1.6 }; // niveau de chaque tranche : le médium et l'aigu ne doivent pas disparaître sous la basse
+  let W = {}; const strip = {}; // ondes sur mesure ; tranches de mixage par partie (b basse, d nappe, c g accords, a arpège, l thème)
+  let mix = 0, inten = 0, driftL = 0, drums = 0, fin = false, wasIn = false, wasNear = false, wasBoost = false, lastGas = 0;
   let eng, sq, scrubG, scrapeG, windG, ambBed, ambT = 2, uiF;
   const RK = () => 'vpr.radio' + (M.id === 'ville' ? '' : '.' + M.id); // dernière station écoutée, par carte
   let station = 0, S16 = 60 / ST[0].bpm / 4;
 
   // musique de menu : une boucle calme par carte (accords de 4 mesures, nappe, arpège de cloches) ; aucune batterie
   const MENU = {
-    ville: { bpm: 72, v: 1.55, pad: 'saw', arp: '0...2...1...3...', CH: [[50, 57, 60, 65], [46, 53, 57, 62], [48, 55, 58, 63], [45, 52, 57, 61]] },
-    touge: { bpm: 80, v: 1.05, pad: 'ep', arp: '0.2...3...1.2...', CH: [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59]] },
+    ville: { bpm: 72, v: 1.55, pad: 'choir', arp: '0...2...1...3...', CH: [[50, 57, 60, 65], [46, 53, 57, 62], [48, 55, 58, 63], [45, 52, 57, 61]] },
+    touge: { bpm: 80, v: 1.05, pad: 'epFM', arp: '0.2...3...1.2...', CH: [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59]] },
     wangan: { bpm: 84, v: 1.84, pad: 'super', arp: '0.1.2.3.2.1.3.2.', CH: [[52, 59, 62, 66], [48, 55, 59, 64], [45, 52, 55, 59], [47, 54, 57, 62]] },
-    paris: { bpm: 90, v: 1.6, pad: 'str', arp: '..0..2..3..1..2.', CH: [[54, 57, 61, 64], [47, 51, 54, 57], [52, 56, 59, 63], [49, 52, 56, 59]] },
-    canal: { bpm: 76, v: 1.05, pad: 'ep', arp: '0.....2...3.....', CH: [[55, 58, 62, 65], [55, 58, 62, 65], [48, 51, 55, 58], [48, 51, 55, 58]] },
+    paris: { bpm: 90, v: 1.6, pad: 'strings', arp: '..0..2..3..1..2.', CH: [[54, 57, 61, 64], [47, 51, 54, 57], [52, 56, 59, 63], [49, 52, 56, 59]] },
+    canal: { bpm: 76, v: 1.05, pad: 'warm', arp: '0.....2...3.....', CH: [[55, 58, 62, 65], [55, 58, 62, 65], [48, 51, 55, 58], [48, 51, 55, 58]] },
   };
   // ambiance du lieu : lits de bruit filtré [type, fréquence, Q, niveau, vitesse et profondeur de la houle]
   const AMB = {
@@ -43,153 +45,238 @@
     if (vol < 0.002) return;
     const o = AC.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); o.detune.value = det; o.connect(env(dest, t, dur, vol)); o.start(t); o.stop(t + dur + 0.05); return o;
   }
-  function nz(t, dur, vol, dest, type, f, q = 1) {
+  function nz(t, dur, vol, dest, type, f, q = 1, buf = nbuf, a = 0.005) { // buf : bruit blanc, ou mbuf (métal des cymbales)
     if (vol < 0.002) return;
-    const s = AC.createBufferSource(), fl = filt(type, f, q, env(dest, t, dur, vol)); s.buffer = nbuf; s.loop = true; s.connect(fl); s.start(t, Math.random()); s.stop(t + dur + 0.05); return fl;
+    const s = AC.createBufferSource(), fl = filt(type, f, q, env(dest, t, dur, vol, a)); s.buffer = buf; s.loop = true; s.connect(fl); s.start(t, Math.random()); s.stop(t + dur + 0.05); return fl;
   }
-  // voix d'accord, d'arpège et de thème : formes d'onde, désaccords (cents), attaque (s), filtre [départ, fin, Q], bus fuzz, formants, cloche
-  const CV = {
-    saw: { o: ['sawtooth'], d: [-8, 8], lv: 0.055 }, sqr: { o: ['square'], d: [0] }, tri: { o: ['triangle'], d: [0], lv: 0.14 }, sine: { o: ['sine'], d: [0], lv: 0.12 },
-    super: { o: ['sawtooth'], d: [-17, -6, 6, 17], a: 0.02 }, // mur de dents de scie désaccordées (trance, house filtrée)
-    str: { o: ['sawtooth'], d: [-6, 6], a: 0.1, f: [900, 3500, 0.5], lv: 0.07 }, // cordes
-    ep: { o: ['sine', 'triangle'], d: [0], a: 0.004, bell: 2 }, bell: { o: ['sine'], d: [0], a: 0.002, bell: 3.01 }, // piano électrique, cloche
-    brass: { o: ['sawtooth'], d: [-5, 5], a: 0.03, f: [500, 4000, 2], lv: 0.07 }, org: { o: ['square'], d: [0, 1200], f: [1800, 1800, 0.7] },
-    gtr: { o: ['square'], d: [0], a: 0.002, f: [2600, 900, 4] }, pluck: { o: ['sawtooth'], d: [-7, 7], a: 0.002, f: [5000, 500, 3] }, // cocotte funk, pincé
-    pwr: { o: ['sawtooth'], d: [-4, 4], bus: 1 }, gtrl: { o: ['sawtooth'], d: [-5, 5], bus: 1, lv: 0.2 }, // guitare saturée : accords et solo
-    sq: { o: ['square', 'sawtooth'], d: [-6, 6], f: [4500, 2500, 1], lv: 0.05 }, ewi: { o: ['sawtooth'], d: [0], a: 0.02, f: [1200, 2800, 3], lv: 0.11 },
-    talk: { o: ['sawtooth'], d: [0], form: 1, lv: 0.3 }, // talkbox : deux formants qui glissent
+  // ---------- timbres ----------
+  // ondes sur mesure (au-delà de sinus, scie, carré, triangle) : amplitudes des harmoniques
+  function waves() {
+    const mk = h => { const re = new Float32Array(h.length + 1), im = new Float32Array(h.length + 1); h.forEach((a, i) => { im[i + 1] = a; }); return AC.createPeriodicWave(re, im); };
+    const H = (n, f) => Array.from({ length: n }, (_, i) => f(i + 1));
+    W = { pulse: mk(H(40, n => Math.sin(n * Math.PI * 0.12) / n * 2)), // impulsion étroite : clavinet, basse séquencée, guitare étouffée
+      organ: mk([1, 0.8, 0.5, 0.35, 0, 0.25, 0, 0.2]), // tirettes d'orgue
+      vox: mk(H(32, n => Math.exp(-((n - 4) ** 2) / 6) + 0.6 * Math.exp(-((n - 11) ** 2) / 10) + 0.3 / n)), // voyelle : chœur, voix hachée
+      reed: mk(H(24, n => (n % 2 ? 1 : 0.35) / n ** 0.8)), // anche : saxophone, contrôleur à vent
+      glass: mk([1, 0, 0, 0.5, 0, 0, 0.35, 0, 0, 0, 0.2]) }; // verre : partiels espacés
+  }
+  // Un timbre : o oscillateurs [onde, demi-tons, cents, niveau] · uni / sp unisson désaccordé · fm [rapport, indice, durée, reste] modulation de
+  // fréquence · a d s r enveloppe · flt [type, départ, fin, durée, Q, suit la note] · form formants de talkbox · nz bruit [type, f, Q, niveau, durée] ·
+  // vib [Hz, cents, retard] · gl glissé (s) · bus (sat, fuzz) · len tenue en pas · lv niveau · pan, rv réverbération, ec écho, ch chorus
+  const PATCH = {
+    // basses
+    bDark: { o: [['sawtooth', 0, -9], ['sawtooth', 0, 9], ['square', -12, 0, 0.7]], flt: ['lowpass', 2600, 300, 0.18, 6], d: 0.25, s: 0.5, bus: 'sat' }, // darksynth : scies saturées
+    bDist: { o: [['sawtooth'], ['square', 0, 9]], flt: ['lowpass', 900, 200, 0.2, 4], d: 0.2, s: 0.4, bus: 'fuzz', lv: 0.8 }, // écrêtée
+    bAcid: { o: [['sawtooth']], flt: ['lowpass', 3200, 250, 0.14, 16], d: 0.2, s: 0.3, gl: 0.05, bus: 'sat' }, // résonante façon TB-303
+    bFM: { o: [['sine'], ['sine', -12, 0, 0.6]], fm: [1, 3.5, 0.12, 0.2], d: 0.25, s: 0.3, lv: 1.3 }, // basse FM des années 80
+    bSlap: { o: [['pulse'], ['sawtooth', 0, 6, 0.5]], flt: ['lowpass', 5000, 500, 0.07, 6], nz: ['bandpass', 2500, 2, 0.25, 0.012], d: 0.2, s: 0.25, lv: 1.2 }, // claquée
+    bPick: { o: [['triangle'], ['pulse', 0, 0, 0.4]], flt: ['lowpass', 2200, 400, 0.1, 2], nz: ['bandpass', 1800, 2, 0.15, 0.01], d: 0.22, s: 0.35, lv: 1.4 }, // basse électrique au médiator
+    bMoog: { o: [['sawtooth'], ['triangle', 0, 5], ['sine', -12, 0, 0.5]], flt: ['lowpass', 700, 350, 0.2, 3], s: 0.8, gl: 0.07, len: 1, lv: 1.3 }, // ronde, à portamento
+    bReese: { o: [['sawtooth', 0, -24], ['sawtooth', 0, 24], ['sine', 0, 0, 0.9]], flt: ['lowpass', 600, 380, 1, 2], s: 1, r: 0.08, len: 1, lv: 1.2 }, // scies qui battent
+    bOff: { o: [['sawtooth', 0, -6], ['square', 0, 6]], flt: ['lowpass', 1800, 250, 0.1, 5], d: 0.12, s: 0.1, lv: 1.2 }, // pincée, à contretemps
+    bSeq: { o: [['pulse'], ['sine', 0, 0, 0.8]], flt: ['lowpass', 1500, 300, 0.08, 3], d: 0.1, s: 0.2, lv: 1.3 }, // impulsion séquencée
+    bFuzz: { o: [['sawtooth'], ['sawtooth', 7, 6, 0.7], ['square', 12, -5, 0.5]], s: 0.9, len: 1, bus: 'fuzz' }, // riff de guitare saturée
+    // claviers, nappes, accords
+    epFM: { o: [['sine'], ['triangle', 12, 0, 0.15]], fm: [1, 1.6, 0.35, 0.1], d: 0.9, s: 0.15, ch: 0.5, rv: 0.15, lv: 1.6 }, // piano électrique
+    dxEp: { o: [['sine'], ['sine', 12, 3, 0.3]], fm: [3, 1.2, 0.2, 0.1], d: 0.7, s: 0.1, ch: 0.4, rv: 0.2, pan: -0.25, lv: 1.5 }, // piano électrique FM brillant
+    organ: { o: [['organ']], a: 0.005, s: 1, r: 0.04, vib: [6, 6, 0], lv: 0.9 },
+    clav: { o: [['pulse']], flt: ['highpass', 500, 500, 1, 0.7], d: 0.15, s: 0.1, pan: 0.3, lv: 1.1 },
+    brass: { o: [['sawtooth', 0, -7], ['sawtooth', 0, 7], ['reed', 0, 0, 0.5]], a: 0.025, flt: ['lowpass', 600, 4500, 0.06, 2], d: 0.2, s: 0.7, rv: 0.15, lv: 1.1 }, // cuivres de synthé
+    strings: { o: [['sawtooth']], uni: 4, sp: 14, a: 0.12, s: 1, r: 0.25, flt: ['highpass', 300, 300, 1, 0.7], ch: 0.6, rv: 0.3 }, // ensemble de cordes
+    super: { o: [['sawtooth']], uni: 5, sp: 22, a: 0.01, d: 0.3, s: 0.8, r: 0.12, rv: 0.3 }, // mur de scies désaccordées
+    choir: { o: [['vox']], uni: 3, sp: 10, a: 0.25, s: 1, r: 0.4, rv: 0.5, lv: 1.4 },
+    glass: { o: [['glass']], fm: [2, 0.8, 1.5, 0.3], a: 0.15, s: 0.8, r: 0.5, rv: 0.5, ch: 0.4, lv: 1.3 },
+    warm: { o: [['triangle'], ['sawtooth', 0, 7, 0.3]], flt: ['lowpass', 1200, 1200, 1, 0.7], a: 0.3, s: 1, r: 0.4, rv: 0.2, lv: 1.3 },
+    stabM7: { o: [['sawtooth', 0, -8], ['square', 0, 8, 0.6]], flt: ['lowpass', 3500, 500, 0.2, 4], d: 0.25, ec: 0.45, rv: 0.2, lv: 1.3 }, // accord plaqué de Detroit
+    gtrMute: { o: [['pulse']], flt: ['bandpass', 1800, 1200, 0.05, 3], nz: ['bandpass', 3000, 2, 0.2, 0.008], d: 0.07, pan: 0.35, lv: 2 }, // cocotte de guitare funk
+    pwr: { o: [['sawtooth', 0, -4], ['sawtooth', 0, 4]], s: 0.9, bus: 'fuzz' }, // accords de puissance
+    pluck: { o: [['sawtooth', 0, -7], ['sawtooth', 0, 7]], flt: ['lowpass', 6000, 500, 0.12, 3], d: 0.15, ec: 0.4, rv: 0.15 },
+    pulseArp: { o: [['pulse']], d: 0.12, ec: 0.35, pan: -0.2 },
+    seqArp: { o: [['sawtooth']], flt: ['lowpass', 3000, 600, 0.1, 8], d: 0.12, ec: 0.3, pan: 0.2 },
+    bell: { o: [['sine']], fm: [3.01, 1.2, 0.3, 0.05], d: 0.9, ec: 0.4, rv: 0.3, lv: 1.2 },
+    fmMetal: { o: [['sine']], fm: [1.41, 4, 0.2, 0.3], d: 0.25, rv: 0.3, lv: 1.2 }, // métal inharmonique
+    // thèmes
+    ldSaw: { o: [['sawtooth', 0, -10], ['sawtooth', 0, 10]], flt: ['lowpass', 5000, 5000, 1, 0.7], s: 0.8, vib: [5.5, 8, 0.2], ec: 0.3, rv: 0.2, lv: 0.08 },
+    ldSync: { o: [['sawtooth'], ['square', 0, 5, 0.5]], flt: ['bandpass', 600, 3500, 0.25, 5], s: 0.8, vib: [6, 10, 0.15], ec: 0.25, rv: 0.15, lv: 0.2 }, // formant balayé, façon synchronisation
+    ldEwi: { o: [['reed']], a: 0.03, flt: ['lowpass', 1500, 3200, 0.1, 3], s: 0.9, vib: [5.5, 12, 0.15], gl: 0.04, rv: 0.25, ch: 0.3, lv: 0.14 }, // contrôleur à vent
+    ldSax: { o: [['reed'], ['sawtooth', 0, 4, 0.3]], flt: ['bandpass', 1300, 1500, 0.1, 1.5], nz: ['bandpass', 3000, 1, 0.08, 0.1], a: 0.04, s: 0.85, vib: [5, 14, 0.25], rv: 0.3, lv: 0.2 },
+    ldWhistle: { o: [['sine']], nz: ['bandpass', 4000, 3, 0.03, 0.2], a: 0.03, s: 0.9, gl: 0.09, vib: [5.5, 7, 0.2], ec: 0.35, rv: 0.3, lv: 0.12 }, // sifflement à portamento
+    ldTalk: { o: [['sawtooth']], form: 1, s: 0.9, gl: 0.05, lv: 0.3 }, // talkbox
+    ldGtr: { o: [['sawtooth', 0, -5], ['sawtooth', 0, 5]], s: 0.9, vib: [5.5, 16, 0.15], gl: 0.05, bus: 'fuzz', lv: 0.2 }, // guitare saturée
+    ldSiren: { o: [['triangle'], ['square', 0, 0, 0.3]], flt: ['lowpass', 3000, 3000, 1, 0.7], s: 1, gl: 0.15, ec: 0.3, lv: 0.1 },
+    ldVox: { o: [['vox']], uni: 2, sp: 8, a: 0.02, d: 0.2, s: 0.5, rv: 0.3, ec: 0.3, lv: 0.16 }, // voix hachée
+    ldTri: { o: [['triangle']], a: 0.02, s: 0.8, vib: [5, 8, 0.2], rv: 0.35, ec: 0.3, lv: 0.14 },
+    ldStr: { o: [['sawtooth']], uni: 3, sp: 12, a: 0.08, s: 1, r: 0.15, flt: ['highpass', 500, 500, 1, 0.7], ch: 0.5, rv: 0.3, lv: 0.07 },
   };
-  function voice(w, f, t, dur, vol, dest, sus = 0) { // sus : attaque lente et tenue (nappe) au lieu d'une décroissance
-    const P = CV[w] || CV.saw, n = P.o.length * P.d.length; vol *= Math.min(1, 2 / n); if (vol < 0.002) return;
-    let g; dest = P.bus ? fuzz : dest;
-    if (sus) { g = AC.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + sus); g.gain.setValueAtTime(vol, t + dur * 0.82); g.gain.linearRampToValueAtTime(0, t + dur); g.connect(dest); }
-    else g = env(dest, t, dur, vol, P.a);
+  function tone(pn, f, t, dur, vel, dest, from) { // from : fréquence de la note précédente, pour le glissé
+    const P = PATCH[pn]; if (!P || vel < 0.002) return [];
+    const a = P.a || 0.004, s = P.s || 0, r = P.r || 0.06, end = t + dur, fin = end + r * 2 + 0.05, g = AC.createGain();
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel, t + a); g.gain.setTargetAtTime(vel * s, t + a, (P.d || dur) / 3); g.gain.setTargetAtTime(0, end, r / 3);
+    dest = P.bus === 'fuzz' ? fuzz : P.bus === 'sat' ? bsat : dest; g.connect(dest);
     let d = g;
-    if (P.f) { d = filt('lowpass', P.f[0], P.f[2], g); d.frequency.setValueAtTime(P.f[0], t); d.frequency.exponentialRampToValueAtTime(P.f[1], t + (sus ? 0.3 : dur * 0.6)); }
-    if (P.form) { const a = filt('bandpass', 600, 6, g), b = filt('bandpass', 1900, 8, g); d = AC.createGain(); d.gain.value = 3; d.connect(a); d.connect(b);
-      a.frequency.setValueAtTime(600, t); a.frequency.linearRampToValueAtTime(1000, t + dur * 0.5); b.frequency.setValueAtTime(1900, t); b.frequency.linearRampToValueAtTime(2600, t + dur * 0.5); }
-    const os = [];
-    for (const type of P.o) for (const det of P.d) { const o = AC.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); o.detune.value = det; o.connect(d); o.start(t); o.stop(t + dur + 0.05); os.push(o); }
-    if (P.bell) osc('sine', f * P.bell, t, dur * 0.3, vol * 0.4, dest);
+    if (P.flt) { const [type, f0, f1, ft, q, kt] = P.flt, k = kt ? f : 1; d = filt(type, Math.min(18000, f0 * k), q, g); d.frequency.setValueAtTime(Math.min(18000, f0 * k), t); d.frequency.exponentialRampToValueAtTime(Math.min(18000, f1 * k), t + Math.min(ft, dur)); }
+    if (P.form) { const x = filt('bandpass', 600, 6, g), y = filt('bandpass', 1900, 8, g); d = AC.createGain(); d.gain.value = 3; d.connect(x); d.connect(y);
+      x.frequency.setValueAtTime(600, t); x.frequency.linearRampToValueAtTime(1000, t + dur * 0.5); y.frequency.setValueAtTime(1900, t); y.frequency.linearRampToValueAtTime(2600, t + dur * 0.5); }
+    let mod;
+    if (P.fm) { const m = AC.createOscillator(), dev = P.fm[1] * f * P.fm[0]; mod = AC.createGain(); m.frequency.setValueAtTime(f * P.fm[0], t);
+      mod.gain.setValueAtTime(dev, t); mod.gain.setTargetAtTime(dev * P.fm[3], t, P.fm[2] / 3); m.connect(mod); m.start(t); m.stop(fin); }
+    const os = [], U = P.uni || 1, lv = 1 / Math.sqrt(P.o.length * U);
+    for (const [w, semi = 0, cents = 0, olv = 1] of P.o) for (let u = 0; u < U; u++) {
+      const o = AC.createOscillator(), fo = f * 2 ** (semi / 12); if (W[w]) o.setPeriodicWave(W[w]); else o.type = w;
+      o.frequency.setValueAtTime(fo, t); o.detune.value = cents + (U > 1 ? (u / (U - 1) - 0.5) * 2 * P.sp : 0);
+      if (from && P.gl) { o.frequency.setValueAtTime(fo * from / f, t); o.frequency.exponentialRampToValueAtTime(fo, t + P.gl); }
+      if (mod) mod.connect(o.frequency);
+      o.connect(gain(olv * lv, d)); o.start(t); o.stop(fin); os.push(o);
+    }
+    if (P.vib) { const l = AC.createOscillator(), lg = AC.createGain(); l.frequency.value = P.vib[0]; lg.gain.setValueAtTime(0, t + P.vib[2]); lg.gain.linearRampToValueAtTime(P.vib[1], t + P.vib[2] + 0.12); l.connect(lg); for (const o of os) lg.connect(o.detune); l.start(t); l.stop(fin); }
+    if (P.nz) nz(t, P.nz[4], vel * P.nz[3], dest, P.nz[0], P.nz[1], P.nz[2]);
     return os;
   }
-  // basses : oscillateurs [forme, désaccord, intervalle], Q, k = ouverture du filtre, tenue du filtre, sub, bus
-  const BT = {
-    saw: { o: [['sawtooth', 0], ['square', 12]], q: 7, sub: 0.8 }, // scie + carré désaccordé + sub (darksynth, eurobeat, trance)
-    moog: { o: [['sawtooth', 0], ['triangle', 5]], q: 3, k: 0.5, hold: 1, sub: 0.6 }, // ronde et tenue, à glisser (g-funk)
-    reese: { o: [['sawtooth', -22], ['sawtooth', 22]], q: 2, k: 0.45, hold: 1, sub: 0.9 }, // scies désaccordées qui battent (drum and bass)
-    slap: { o: [['square', 0], ['sawtooth', 7]], q: 9, k: 2.2, fast: 1, sub: 0.3 }, // claquée (fusion, city pop, house filtrée)
-    acid: { o: [['sawtooth', 0]], q: 15, k: 1.3, sub: 0 }, // résonante façon TB-303 (big beat)
-    fuzz: { o: [['sawtooth', 0], ['sawtooth', 6, 7], ['square', -5, 12]], q: 1, k: 1.6, hold: 1, sub: 0.7, bus: 1 }, // riff de guitare saturée
-    dist: { o: [['sawtooth', 0], ['square', 9]], q: 4, k: 1.2, sub: 0.5, bus: 1 }, // scie écrêtée (électro saturée, techno industrielle)
-    sq: { o: [['square', 0]], q: 2, k: 0.6, sub: 0.6 }, // carré court séquencé (Detroit, électro-funk, disco)
+
+  // ---------- batteries ----------
+  // Un kit : smp sons de TR-808 enregistrés · grosse caisse kf→ke en ks s, tenue kd, clic kc (filtré à kcf), kdr saturée · caisse claire : tons sT
+  // (tenue sTd), bruit sN [type, f, Q] (tenue sNd), gate réverbération coupée net · charlestons : hM métalliques ou de bruit, hF passe-haut,
+  // hD / hO tenue fermé / ouvert · rate hauteur · crunch tout passe par la saturation · hum jeu humain (s) · fill relance · tom, tomD · room réverbération
+  const KIT = {
+    k808: { smp: 1, fill: 'roll', room: 0.03 },
+    k909: { kf: 210, ke: 46, ks: 0.055, kd: 0.34, kc: 0.5, sT: [185, 330], sTd: 0.08, sN: ['highpass', 2000, 0.7], sNd: 0.17, hM: 1, hF: 8500, hD: 0.04, hO: 0.24, fill: 'roll', room: 0.08 },
+    dur: { kf: 190, ke: 44, ks: 0.07, kd: 0.28, kc: 0.3, kdr: 1, sT: [200], sTd: 0.05, sN: ['bandpass', 1800, 0.7], sNd: 0.2, gate: 1, hM: 1, hF: 7000, hD: 0.03, hO: 0.18, fill: 'toms', tom: [150, 110, 80], tomD: 0.3, room: 0.15 }, // boîte à rythmes des années 80, caisse claire coupée net
+    lin: { kf: 160, ke: 52, ks: 0.04, kd: 0.2, kc: 0.45, sT: [210, 300], sTd: 0.06, sN: ['bandpass', 2400, 0.6], sNd: 0.18, gate: 1, hM: 0, hF: 8000, hD: 0.03, hO: 0.2, fill: 'toms', tom: [200, 150, 105], tomD: 0.28, room: 0.2 },
+    ind: { kf: 260, ke: 75, ks: 0.05, kd: 0.2, kc: 0.2, kdr: 1, sT: [], sTd: 0.05, sN: ['highpass', 1200, 0.5], sNd: 0.14, crunch: 1, hM: 1, hF: 4000, hD: 0.025, hO: 0.1, room: 0.2 },
+    acou: { kf: 130, ke: 58, ks: 0.025, kd: 0.16, kc: 0.4, kcf: 3000, sT: [200, 285], sTd: 0.07, sN: ['bandpass', 4200, 0.6], sNd: 0.2, hM: 0, hF: 7500, hD: 0.035, hO: 0.3, hum: 0.008, fill: 'toms', tom: [230, 170, 120], tomD: 0.2, room: 0.2 },
+    rock: { kf: 110, ke: 48, ks: 0.035, kd: 0.26, kc: 0.5, kcf: 2500, sT: [180, 250], sTd: 0.1, sN: ['bandpass', 3200, 0.5], sNd: 0.28, hM: 0, hF: 6000, hD: 0.06, hO: 0.4, hum: 0.008, fill: 'toms', tom: [190, 140, 95], tomD: 0.3, room: 0.45 },
+    brk: { kf: 150, ke: 60, ks: 0.03, kd: 0.14, kc: 0.5, sT: [220, 320], sTd: 0.06, sN: ['bandpass', 3600, 0.6], sNd: 0.13, crunch: 1, hM: 0, hF: 6500, hD: 0.03, hO: 0.2, fill: 'brk', room: 0.12 }, // breakbeat découpé et sali
+    dnb: { kf: 165, ke: 62, ks: 0.025, kd: 0.11, kc: 0.5, sT: [220, 320], sTd: 0.05, sN: ['bandpass', 3600, 0.6], sNd: 0.1, rate: 1.35, crunch: 1, hM: 0, hF: 8000, hD: 0.025, hO: 0.16, fill: 'brk', room: 0.15 },
+    disco: { kf: 120, ke: 55, ks: 0.02, kd: 0.12, kc: 0.45, kcf: 3500, sT: [210, 300], sTd: 0.05, sN: ['bandpass', 4800, 0.6], sNd: 0.14, hM: 1, hF: 9000, hD: 0.04, hO: 0.32, hum: 0.005, fill: 'toms', tom: [260, 200, 150], tomD: 0.15, room: 0.15 },
   };
-  function bass(st, f, t, dur, vol, cut) {
-    if (vol < 0.002) return;
-    const P = BT[st.bT] || BT.saw, c = cut * (P.k || 1), fl = filt('lowpass', c, P.q, env(P.bus ? fuzz : st.sat ? bsat : bclean, t, dur, vol));
-    fl.frequency.setValueAtTime(c, t); fl.frequency.exponentialRampToValueAtTime(P.hold ? c * 0.7 : 140, t + (P.fast ? 0.09 : dur));
-    const os = P.o.map(([type, det, iv = 0]) => { const o = AC.createOscillator(); o.type = type; o.frequency.setValueAtTime(f * 2 ** (iv / 12), t); o.detune.value = det; o.connect(fl); o.start(t); o.stop(t + dur + 0.05); return o; });
-    const sub = osc('sine', f, t, dur, vol * P.sub, duckG); sub && os.push(sub);
-    if (st.bGl && lastB) for (const o of os) { const k = o.frequency.value / f; o.frequency.setValueAtTime(lastB * k, t); o.frequency.exponentialRampToValueAtTime(f * k, t + st.bGl); } // glissé depuis la note précédente
-    lastB = f;
-  }
   const smp = {};
   function hitS(name, t, vol, dur = 0, rate = 1) { // dur : coupe le son en fondu (la grosse caisse de 808 résonne 1,5 s) ; rate : hauteur de lecture
     const b = smp[name]; if (!b || vol < 0.002) return !!b;
-    vol *= 0.6; // les enregistrements sont plus forts que les sons synthétisés qu'ils remplacent
+    vol *= 0.6; // les enregistrements sont plus forts que les sons synthétisés
     const s = AC.createBufferSource(), gn = gain(vol, drumG); s.buffer = b; s.playbackRate.value = rate; s.connect(gn); s.start(t);
     if (dur) { gn.gain.setValueAtTime(vol, t + dur * 0.6); gn.gain.linearRampToValueAtTime(0, t + dur); s.stop(t + dur + 0.02); }
     return true;
   }
-  function kick(t, v, st) {
-    if (st.kT === 'dur') { const o = osc('sine', 190, t, 0.26, v, kdrv); o && o.frequency.exponentialRampToValueAtTime(44, t + 0.07); nz(t, 0.012, v * 0.3, drumG, 'highpass', 2500); return; } // synthétique et saturée
-    if (st.kT === 'rock' && hitS('bd', t, v * 1.1, 0.22, 1.25)) { nz(t, 0.02, v * 0.2, drumG, 'bandpass', 3000, 1); return; }
-    if (hitS(v > 0.75 ? 'bdL' : 'bd', t, v, v > 0.75 ? 0.42 : 0.3)) return;
-    const o = osc('sine', 165, t, 0.3, v, drumG); o && o.frequency.exponentialRampToValueAtTime(40, t + 0.11); nz(t, 0.015, v * 0.25, drumG, 'highpass', 3000);
+  const dd = K => K.crunch ? kdrv : drumG;
+  function dKick(t, v, K) {
+    if (K.smp && hitS(v > 0.75 ? 'bdL' : 'bd', t, v, v > 0.75 ? 0.42 : 0.3)) return;
+    if (K.smp) K = KIT.k909;
+    const o = osc('sine', K.kf, t, K.kd, v, K.kdr || K.crunch ? kdrv : drumG); o && o.frequency.exponentialRampToValueAtTime(K.ke, t + K.ks);
+    nz(t, 0.012, v * K.kc, drumG, 'lowpass', K.kcf || 5000);
   }
-  function snare(t, v, st, roll) { // sT : cp clap · sd caisse claire · sdh la même, aiguë et sèche · gate réverbération coupée net · bruit · rim · rock
-    const T = roll ? 'sd' : st.sT || 'cp'; if (v < 0.002) return;
-    if (T === 'bruit') return nz(t, 0.14, v * 0.8, kdrv, 'highpass', 1200);
-    if (T === 'rim') { osc('triangle', 1750, t, 0.035, v * 0.5, drumG); nz(t, 0.02, v * 0.4, drumG, 'bandpass', 3500, 2); return; }
-    if (T === 'gate') { const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = nbuf; s.loop = true; s.connect(filt('bandpass', 1800, 0.7, g)); g.connect(drumG);
-      g.gain.setValueAtTime(v * 0.35, t); g.gain.setValueAtTime(v * 0.35, t + 0.16); g.gain.linearRampToValueAtTime(0, t + 0.19); s.start(t, Math.random()); s.stop(t + 0.2); }
-    if (T === 'rock') nz(t, 0.12, v * 0.3, drumG, 'highpass', 3000);
-    if (hitS(T === 'cp' ? 'cp' : 'sd', t, v * 0.9, 0, { sdh: 1.4, gate: 0.85, rock: 0.9 }[T] || 1)) return;
-    for (let i = 0; i < 3; i++) nz(t + i * 0.012, 0.03, v * 0.6, drumG, 'bandpass', 1500, 1.2); nz(t + 0.03, 0.2, v, drumG, 'bandpass', 1500, 1.2); osc('triangle', 190, t, 0.08, v / 2, drumG);
+  function dClap(t, v) { for (let i = 0; i < 3; i++) nz(t + i * 0.011, 0.02, v * 0.6, drumG, 'bandpass', 1300, 1.5); nz(t + 0.033, 0.16, v * 0.7, drumG, 'bandpass', 1300, 1.2); }
+  function dSnare(t, v, K, c = 'x') { // x caisse claire · g note fantôme · c clap · r coup sur le cercle
+    if (c === 'g') v *= 0.3;
+    if (c === 'r') { osc('triangle', 1750, t, 0.03, v * 0.5, drumG); nz(t, 0.015, v * 0.4, drumG, 'bandpass', 3500, 2); return; }
+    if (K.smp && hitS(c === 'c' ? 'cp' : 'sd', t, v * 0.9)) return;
+    if (c === 'c') return dClap(t, v);
+    if (K.smp) K = KIT.k909;
+    const rt = K.rate || 1;
+    for (const f of K.sT) { const o = osc('triangle', f * rt, t, K.sTd, v * 0.5, dd(K)); o && o.frequency.exponentialRampToValueAtTime(f * rt * 0.7, t + K.sTd); }
+    nz(t, K.sNd, v * 0.8, dd(K), K.sN[0], K.sN[1] * rt, K.sN[2]);
+    if (K.gate) { const s = AC.createBufferSource(), g = AC.createGain(); s.buffer = nbuf; s.loop = true; s.connect(filt('bandpass', 1500, 0.6, g)); g.connect(drumG);
+      g.gain.setValueAtTime(v * 0.4, t); g.gain.setValueAtTime(v * 0.4, t + 0.17); g.gain.linearRampToValueAtTime(0, t + 0.2); s.start(t, Math.random()); s.stop(t + 0.22); }
   }
-  function hat(t, c, k) { // x fermé · X accentué · o ouvert · r cymbale ride
-    if (c === 'o') hitS('oh', t, 0.3 * k) || nz(t, 0.12, 0.2 * k, drumG, 'highpass', 6500);
-    else if (c === 'r') hitS('oh', t, 0.16 * k, 0.14, 1.7) || nz(t, 0.08, 0.1 * k, drumG, 'highpass', 8000);
-    else if (c === 'x' || c === 'X') hitS('ch', t, (c === 'X' ? 0.24 : 0.14) * k) || nz(t, 0.03, 0.1 * k, drumG, 'highpass', 9000);
+  function dHat(t, v, K, c) { // x fermé · X accentué · o ouvert · r cymbale ride · b cloche de la ride
+    const ride = c === 'r' || c === 'b', lv = v * (c === 'X' ? 0.36 : c === 'o' ? 0.4 : c === 'x' ? 0.21 : 0.2);
+    if (K.smp && !ride && hitS(c === 'o' ? 'oh' : 'ch', t, lv * 1.1)) return;
+    if (K.smp) K = KIT.k909;
+    const dec = c === 'o' ? K.hO : c === 'r' ? 0.45 : c === 'b' ? 0.3 : K.hD, metal = K.hM || ride;
+    nz(t, dec, lv * (metal ? 0.7 : 1.3), ride ? drumG : dd(K), 'highpass', ride ? (c === 'b' ? 3500 : 5200) : K.hF, 0.8, metal ? mbuf : nbuf);
+    if (c === 'b') osc('triangle', 3900, t, 0.25, lv * 0.25, drumG);
   }
-  function riser(t, dur) { // montée de bruit avant l'entrée du secteur chaud
+  function dTom(t, v, f, d) { const o = osc('sine', f * 1.5, t, d, v, drumG); o && o.frequency.exponentialRampToValueAtTime(f, t + d * 0.4); nz(t, 0.02, v * 0.3, drumG, 'bandpass', 1200, 1); }
+  function dPerc(t, v, K, c) { // c cloche · v clave · h l congas · m shaker · t tambourin · 1 2 3 toms · k métal
+    if (c === 'c') { if (K.smp && hitS('cb', t, v * 0.18)) return; const b = filt('bandpass', 900, 1.5, env(drumG, t, 0.16, v * 0.14)); for (const f of [540, 800]) { const o = AC.createOscillator(); o.type = 'square'; o.frequency.value = f; o.connect(b); o.start(t); o.stop(t + 0.2); } }
+    else if (c === 'v') osc('sine', 2500, t, 0.03, v * 0.2, drumG);
+    else if (c === 'h' || c === 'l') { const f = c === 'h' ? 340 : 230, o = osc('sine', f, t, c === 'h' ? 0.12 : 0.18, v * 0.3, drumG); o && o.frequency.exponentialRampToValueAtTime(f * 0.85, t + 0.08); nz(t, 0.01, v * 0.15, drumG, 'bandpass', 2000, 1); }
+    else if (c === 'm') nz(t, 0.06, v * 0.1, drumG, 'highpass', 6500, 0.7, nbuf, 0.02);
+    else if (c === 't') { nz(t, 0.09, v * 0.1, drumG, 'highpass', 9000, 0.7, mbuf); nz(t, 0.05, v * 0.06, drumG, 'highpass', 7000); }
+    else if (c === 'k') tone('fmMetal', 180, t, 0.3, v * 0.3, kdrv);
+    else if (+c) dTom(t, v * 0.4, (K.tom || [200, 150, 105])[+c - 1], K.tomD || 0.25);
+  }
+  function dFill(t, i, n, K) { // relance de fin de section : i = pas dans la relance (0..n-1)
+    const k = (i + 1) / n;
+    if (K.fill === 'toms') { if (n === 4 || i % 2 === 0 || i >= n - 3) dTom(t, 0.3 + 0.25 * k, K.tom[Math.min(2, Math.floor(i * 3 / n))], K.tomD); if (i === 0) dSnare(t, 0.4, K); }
+    else if (K.fill === 'brk') { if ('x.xx.x.x'[i % 8] === 'x') dSnare(t, 0.3 + 0.25 * k, K); if (i % 4 === 2) dKick(t, 0.7, K); }
+    else dSnare(t, 0.2 + 0.35 * k, K);
+  }
+  function riser(t, dur, v = 0.22) { // montée de bruit : avant le secteur chaud, et pendant les sections de montée
     const s = AC.createBufferSource(), g = AC.createGain(), f = filt('bandpass', 400, 2, g);
     s.buffer = nbuf; s.loop = true; s.connect(f); g.connect(drumG);
     f.frequency.setValueAtTime(400, t); f.frequency.exponentialRampToValueAtTime(7000, t + dur);
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.22, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + 0.05);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + 0.05);
     s.start(t); s.stop(t + dur + 0.1);
   }
-  function crash(t = AC.currentTime) { // impact : départ, entrée et sortie du secteur chaud
-    nz(t, 1.4, 0.28, drumG, 'highpass', 4500);
-    const o = osc('sine', 70, t, 0.7, 0.8, drumG); o && o.frequency.exponentialRampToValueAtTime(30, t + 0.5);
+  function crash(t = AC.currentTime, v = 1) { // impact : départ, entrée et sortie du secteur chaud, début de refrain
+    nz(t, 1.4, 0.28 * v, drumG, 'highpass', 4500);
+    const o = osc('sine', 70, t, 0.7, 0.8 * v, drumG); o && o.frequency.exponentialRampToValueAtTime(30, t + 0.5);
   }
   const stinger = up => AC && (up ? [69, 73, 76, 81, 85] : [69, 64, 60, 57]).forEach((n, i) => osc('square', hz(n), AC.currentTime + i * 0.09, 0.5, 0.12, uiF));
 
+  // ---------- séquenceur ----------
   function schedMenu(s, t) {
     const mn = MENU[M.id] || MENU.ville, bar = s >> 4, q = s % 16, ch = mn.CH[bar % mn.CH.length], a = mn.arp[q];
-    if (q === 0) { for (const n of ch) voice(mn.pad, hz(n), t, S16 * 17, 0.05, padF, 0.6); osc('sine', hz(ch[0] - 24), t, S16 * 14, 0.2, duckG); }
-    if (a !== '.') voice('bell', hz(ch[+a] + 12 + (bar & 1 ? 12 : 0)), t, 0.9, 0.05, arpIn);
+    if (q === 0) { for (const n of ch) tone(mn.pad, hz(n), t, S16 * 16.5, 0.05 * (PATCH[mn.pad].lv || 1), strip.d.in); osc('sine', hz(ch[0] - 24), t, S16 * 14, 0.2, duckG); }
+    if (a !== '.') tone('bell', hz(ch[+a] + 12 + (bar & 1 ? 12 : 0)), t, 0.9, 0.06, strip.a.in);
   }
-  // un pas de double-croche, joué avec les motifs de la station (format : voir RADIO dans cartes.js). Arrangement : léger hors du secteur
-  // chaud (basse filtrée, batterie réduite), plein dans le secteur chaud et sur le dernier secteur (charlestons, percussions, accords,
-  // thème) ; sections A/B de 8 mesures, roulement en fin de phrase.
-  const F4 = 'x...x...x...x...', SN = '....x.......x...', HH = 'x.o.x.o.x.o.x.o.';
+  // Un pas de double-croche. La station donne une forme (suite de sections de 4 mesures : introduction, couplets, refrain, break, montée…) ; chaque
+  // section dit quelles parties jouent et avec quelle variante de motif (format : voir RADIO dans cartes.js). La course s'y ajoute : rien que le
+  // tic-tac au décompte ; dans le secteur chaud et sur le dernier secteur (big), les parties marquées « ! » entrent et les sections calmes sont
+  // remplacées par le refrain ; relance de batterie à chaque fin de section.
   function sched(s, t) {
     if (menu) return schedMenu(s, t);
-    const st = ST[station]; t += (s & 1) * (st.sw || 0) * S16; // swing : les doubles-croches impaires traînent
-    const bar = s >> 4, b = bar % 8, q = s % 16, ch = st.CH[b % st.CH.length], root = st.ROOT[b % st.ROOT.length];
-    const m = mix, d = drums, big = m > 0.5 || lead, B = (bar >> 3) & 1, fill = d && b === 7 && q >= 12;
-    const kc = (big && B && st.kB || st.k || F4)[q];
-    if (d && !fill && kc !== '.') {
-      kick(t, lerp(0.55, 0.95, m) * (kc === 'g' ? 0.55 : 1), st);
+    const st = ST[station], K = KIT[st.kit] || KIT.k909; t += (s & 1) * (st.sw || 0) * S16; // swing : les doubles-croches impaires traînent
+    const bar = s >> 4, q = s % 16, d = drums, big = mix > 0.5 || fin, fi = (bar >> 2) % st.form.length, nxt = st.form[(fi + 1) % st.form.length];
+    let key = st.form[fi]; if (big && st.calm.includes(key)) key = st.hot;
+    const sec = st.sec[key], pr = st.prog[sec.P || 0], ch = pr.CH[bar % pr.CH.length], root = pr.ROOT[bar % pr.ROOT.length], pos = ((bar & 3) * 16 + q) / 64; // pos : avancement dans la section
+    const on = p => { const x = st[p] && sec[p]; return x && (!x.big || big) ? x : null; }, pat = (v, x) => { const b = v[x.v % v.length]; return b[bar % b.length]; };
+    const hum = () => K.hum ? t + Math.random() * K.hum : t; // jeu humain : les batteries acoustiques ne tombent pas pile
+    const fillN = (bar & 3) === 3 && K.fill && sec.k ? (nxt !== st.form[fi] ? 8 : 4) : 0, fill = d && fillN && q >= 16 - fillN;
+    let x, c;
+    if (d && (x = on('k')) && !fill && (c = pat(st.k, x)[q]) !== '.') {
+      dKick(t, lerp(0.5, 0.8, mix) * (c === 'g' ? 0.5 : 1), K);
       const p = st.pump == null ? 0.35 : st.pump; // pompe : tout plonge sous la grosse caisse, plus ou moins selon le style
       if (p < 1) { duckG.gain.cancelScheduledValues(t); duckG.gain.setValueAtTime(p, t); duckG.gain.linearRampToValueAtTime(1, t + Math.min(st.pumpT || 0.24, S16 * 1.9)); }
     }
-    const sc = (st.s || SN)[q];
-    if (d && !fill && sc !== '.') snare(t, (big ? 0.5 : inten > 0.5 ? Math.max(0.25, st.sMin) : st.sMin) * (sc === 'g' ? 0.3 : 1), st); // g : note fantôme
-    if (fill) snare(t, 0.22 + 0.09 * (q - 12), st, 1);
-    if (d && q === 0 && b === 0) nz(t, 1, 0.15, drumG, 'highpass', 5000);
-    if (!d) { if (q % 4 === 2) hat(t, 'x', 0.5); } // seul tic-tac pendant le décompte
-    else if (big || inten > 0.75) hat(t, (st.h || HH)[q], big ? 1 : 0.6);
-    else if (q % 4 === 2) hat(t, 'x', 1);
-    if (d && big && st.p && st.p[q] !== '.') hitS(st.pT || 'cb', t, 0.1, 0, st.pR || 1); // percussion (cloche de 808, plus ou moins grave)
-    const rif = b % 4 === 3 && st.rifB || st.rifA, rf = rif[q];
-    if (d && rf != null) { let n = 1; while (q + n < 16 && rif[q + n] == null) n++; // tenue jusqu'à la note suivante, bornée par bLen
-      bass(st, hz(root + rf), t, S16 * Math.min(n, st.bLen || 1.9) * 0.95, lerp(0.32, 0.5, m), lerp(450 + 1200 * inten, 2800, big ? 1 : m)); }
-    else if (!d && q % 8 === 0) bass(st, hz(root + 12), t, S16 * 6, 0.3, 500);
-    if (q === 0 && st.pad !== 0) { const lv = 0.06 * (st.padV || 1);
-      if (st.gate && d) { for (let i = 0; i < 16; i++) if (st.gate[i] !== '.') for (const n of ch) voice(st.pad, hz(n), t + i * S16, S16 * 0.9, lv * 1.4, padF); } // nappe hachée (gate de trance)
-      else for (const n of ch) voice(st.pad, hz(n), t, S16 * 17, lv, padF, 0.4); }
-    const ac = st.arp && st.arp[q];
-    if (ac && ac !== '.' && (d || q % 2 === 0)) voice(st.arpW || 'sqr', hz(ch[ac % 4 % ch.length] + 12 + (ac >= 4 ? 12 : 0)), t, st.arpL || 0.16, (q % 4 === 0 ? 1.3 : 1) * lerp(0.045, 0.03, m) * (st.arpV || 1), arpIn); // 0-3 : notes de l'accord ; 4-7 : à l'octave
-    if (d && st.stab && st.stab[q] !== '.' && (st.stabAlways || (big && B))) for (const n of ch) voice(st.stabW || 'saw', hz(n + 12 + (st.stabO || 0)), t, st.stabL || 0.14, (big ? 0.05 : 0.035) * (st.stabV || 1), arpIn);
-    if (d && big && st.lead) { const L = st.lead[bar % st.lead.length], N = L[q];
+    if (d && (x = on('s')) && !fill && (c = pat(st.s, x)[q]) !== '.') dSnare(hum(), big ? 0.5 : st.sMin || 0.34, K, c);
+    if (fill) dFill(t, q - 16 + fillN, fillN, K);
+    if (d && sec.roll && q % ((bar & 3) < 2 ? 4 : (bar & 3) < 3 ? 2 : 1) === 0) dSnare(t, 0.12 + 0.4 * pos, K); // montée : roulement qui se resserre
+    if (d && sec.roll && (bar & 3) === 0 && q === 0) riser(t, S16 * 64, 0.18);
+    if (d && (bar & 3) === 0 && q === 0 && key === st.hot && st.form[(fi + st.form.length - 1) % st.form.length] !== key) crash(t, 0.6); // entrée de refrain
+    if (!d) { if (q % 4 === 2) dHat(t, 0.5, K, 'x'); } // seul tic-tac pendant le décompte
+    else if ((x = on('h')) && (c = pat(st.h, x)[q]) !== '.') dHat(hum(), big ? 1 : 0.8, K, c);
+    if (d && (x = on('p')) && (c = pat(st.p, x)[q]) !== '.') dPerc(hum(), 1, K, c);
+    if (d && (x = on('b'))) { const rif = pat(st.b.v, x), rf = rif[q];
+      if (rf != null && rf !== R) { let n = 1; while (q + n < 16 && rif[q + n] == null) n++; // tenue jusqu'à la note suivante
+        const P = PATCH[st.b.p], f = hz(root + rf); tone(st.b.p, f, t, S16 * n * (P.len || 0.9), lerp(0.27, 0.38, mix) * (P.lv || 1), strip.b.in, lastB); lastB = f; } }
+    else if (!d && q % 8 === 0) tone(st.b.p, hz(root + 12), t, S16 * 6, 0.25, strip.b.in);
+    if (st.d && (!d || on('d'))) { const P = PATCH[st.d[0]];
+      if (q === 0) for (const n of ch) tone(st.d[0], hz(n + (st.d[1] || 0)), t, S16 * 16.5, 0.05 * (P.lv || 1), strip.d.in);
+      strip.d.gate.gain.setValueAtTime(d && sec.gate && st.gate[q] === '.' ? 0.06 : 1, t); } // nappe hachée (gate de trance)
+    for (const p of ['c', 'g']) if (d && (x = on(p)) && (c = pat(st[p].v, x)[q]) !== '.') { const P = PATCH[st[p].p];
+      for (const n of ch) tone(st[p].p, hz(n + 12 + (st[p + 'O'] || 0)), t, S16 * (P.s ? 1.6 : 3), (c === 'X' ? 0.065 : 0.045) * (P.lv || 1), strip[p].in); }
+    if ((x = on('a')) && (c = pat(st.a.v, x)[q]) !== '.' && (d || q % 2 === 0)) tone(st.a.p, hz(ch[c % 4 % ch.length] + 12 + (c >= 4 ? 12 : 0)), t, 0.2, (q % 4 === 0 ? 0.05 : 0.038) * (PATCH[st.a.p].lv || 1), strip.a.in); // 0-3 : notes de l'accord ; 4-7 : à l'octave
+    if (d && (x = on('l'))) { const L = pat(st.l.v, x), N = L[q];
       if (N != null && N !== R) { let n = 1; while (q + n < 16 && L[q + n] == null) n++;
-        const w = st.leadW || 'saw', os = voice(w, hz(N), t, S16 * n * 1.15, (CV[w].lv || 0.08) * (st.leadV || 1), leadIn) || [];
-        if (st.gl && lastN) for (const o of os) { o.frequency.setValueAtTime(hz(lastN), t); o.frequency.exponentialRampToValueAtTime(hz(N), t + st.gl); } // portamento
-        if (st.vib && os.length) { const l = AC.createOscillator(), lg = AC.createGain(); l.frequency.value = 5.5; lg.gain.value = st.vib; l.connect(lg); for (const o of os) lg.connect(o.detune); l.start(t); l.stop(t + S16 * n * 1.2); }
-        lastN = N;
-        if (lead) osc('triangle', hz(N + 12), t, S16 * n, 0.04, leadIn); } }
+        tone(st.l.p, hz(N), t, S16 * n * 1.05, PATCH[st.l.p].lv * (st.lV || 1), strip.l.in, lastN && hz(lastN)); lastN = N;
+        if (fin) osc('triangle', hz(N + 12), t, S16 * n, 0.04, strip.l.in); } }
     if (driftL > 0.3) osc('sawtooth', hz(ch[(q * 2) % 3] + 24), t, 0.1, 0.07 * driftL, acid); // ligne acide tant qu'on glisse
     if (st.sweep) swF.frequency.setTargetAtTime(big ? 16000 : 350 * 2 ** (3.6 * (0.5 - 0.5 * Math.cos(Math.PI * (s % 128) / 64))), t, 0.08); // filtre balayé sur 8 mesures, grand ouvert dans le secteur chaud
+    else swF.frequency.setTargetAtTime(sec.lo && !big ? 400 * 30 ** pos : 20000, t, 0.05); // section filtrée : le passe-bas s'ouvre au fil de la section
   }
   const lvl = () => menu ? (MENU[M.id] || MENU.ville).v : ST[station].vol || 1; // niveau de la station : réglé par mesure pour que toutes sortent au même volume
-  function retune(t) { // (re)cale le séquenceur et le bus sur la station ou sur la boucle de menu
-    const st = ST[station]; S16 = 60 / (menu ? (MENU[M.id] || MENU.ville).bpm : st.bpm) / 4; t0 = nextT = t; stp = 0; lastN = lastB = 0;
+  function retune(t) { // (re)cale le séquenceur, le bus et les tranches de mixage sur la station ou sur la boucle de menu
+    const st = ST[station], mn = MENU[M.id] || MENU.ville; S16 = 60 / (menu ? mn.bpm : st.bpm) / 4; t0 = nextT = t; stp = 0; lastN = lastB = 0;
     if (!AC) return;
-    dly.delayTime.value = S16 * 3; dlyFb.gain.value = menu ? 0.5 : 0.42;
+    const e = menu ? [3, 0.5] : st.echo || [3, 0.4], q = menu ? [0, 1000, 0, 0] : st.eq || [0, 1000, 0, 0];
+    dly.delayTime.value = Math.min(0.95, S16 * e[0]); dlyFb.gain.value = e[1];
     busDry.gain.value = !menu && st.drive ? 0.3 : 1; busDrv.gain.value = !menu && st.drive ? 0.45 : 0; // saturation de tout le bus (électro saturée, techno industrielle)
     swF.frequency.cancelScheduledValues(t); swF.frequency.setValueAtTime(!menu && st.sweep ? 500 : 20000, t); swF.Q.value = !menu && st.sweep ? 5 : 0.7;
+    eqL.gain.value = q[0]; eqM.frequency.value = q[1]; eqM.gain.value = q[2]; eqH.gain.value = q[3]; // couleur de la station : grave, médium, aigu
+    mrevG.gain.value = menu ? 0.6 : st.rev == null ? 0.2 : st.rev; drumRv.gain.value = menu ? 0 : (KIT[st.kit] || KIT.k909).room;
+    const parts = menu ? { d: mn.pad, a: 'bell' } : { b: st.b && st.b.p, d: st.d && st.d[0], c: st.c && st.c.p, g: st.g && st.g.p, a: st.a && st.a.p, l: st.l && st.l.p };
+    for (const k in strip) { const P = PATCH[parts[k]] || {}, s = strip[k]; s.pan.pan.value = P.pan || 0; s.rv.gain.value = P.rv || 0; s.ec.gain.value = P.ec || 0; s.ch.gain.value = P.ch || 0; s.gate.gain.cancelScheduledValues(t); s.gate.gain.setValueAtTime(1, t); }
   }
   function setStation(i) {
     station = (((i | 0) % ST.length) + ST.length) % ST.length;
@@ -235,7 +322,7 @@
     if (AC && live && !ctx) return AC.resume();
     if (AC && live) AC.close();
     AC = ctx || new (window.AudioContext || window.webkitAudioContext)(); live = !ctx;
-    const comp = AC.createDynamicsCompressor(); outG = gain(0.67, AC.destination); comp.connect(outG); // marge après le compresseur : mesuré, aucune crête au-dessus de -3 dB
+    const comp = AC.createDynamicsCompressor(); outG = gain(OUT, AC.destination); comp.connect(outG); // marge après le compresseur : mesuré, aucune crête au-dessus de -3 dB
     vu = AC.createAnalyser(); vu.fftSize = 2048; outG.connect(vu); // ce qui sort vraiment, pour le vumètre du banc d'écoute
     lastHit = 0; ambT = 2;
     master = gain(0.9, comp); ana = AC.createAnalyser(); ana.fftSize = 64; master.connect(ana);
@@ -246,15 +333,26 @@
     rev = AC.createConvolver(); const ir = AC.createBuffer(2, AC.sampleRate * 1.6, AC.sampleRate);
     for (let c = 0; c < 2; c++) { const x = ir.getChannelData(c); for (let i = 0; i < x.length; i++) x[i] = (Math.random() * 2 - 1) * Math.exp(-i / AC.sampleRate / 0.35); }
     rev.buffer = ir; rev.connect(gain(0.5, master)); musSend = gain(0, rev); motSend = gain(0, rev); V.mus.connect(musSend); V.mot.connect(motSend);
-    musF = filt('lowpass', 18000, 0.7, V.mus); musicG = gain(musicOn ? 1 : 0, musF); tuneG = gain(1, musicG);
+    musF = filt('lowpass', 18000, 0.7, V.mus); musicG = gain(musicOn ? 1 : 0, musF);
+    eqH = filt('highshelf', 5000, 0.7, musicG); eqM = filt('peaking', 1000, 0.9, eqH); eqL = filt('lowshelf', 130, 0.7, eqM); tuneG = gain(1, eqL); // couleur de la station
     drumG = gain(1, tuneG); kdrv = shaper(3, gain(0.8, drumG));
     swF = filt('lowpass', 20000, 0.7, tuneG); busDry = gain(1, swF); busDrv = gain(0, swF);
     duckG = gain(1, busDry); duckG.connect(gain(2.5, shaper(4, busDrv))); // tout sauf la batterie passe par ce bus pompé
-    bsat = shaper(5, gain(0.5, duckG)); bclean = gain(0.7, duckG);
+    bsat = shaper(5, gain(0.5, duckG));
     const fz = filt('peaking', 1000, 1, filt('lowpass', 2600, 0.7, gain(0.3, duckG))); fz.gain.value = 5; fuzz = gain(6, shaper(8, fz)); // guitare : écrêtage, puis baffle
-    padG = gain(1, duckG); padF = filt('lowpass', 800, 0.5, padG);
-    arpIn = filt('lowpass', 3000, 0.5, duckG); acid = filt('lowpass', 1900, 12, arpIn); leadIn = filt('lowpass', 4500, 1, duckG);
-    dly = AC.createDelay(1); dlyFb = gain(0.42, dly); arpIn.connect(dly); leadIn.connect(dly); dly.connect(dlyFb); dly.connect(duckG);
+    acid = filt('lowpass', 1900, 12, duckG);
+    // réverbération de la musique (pièce de 1,3 s), écho rythmique filtré, chorus (deux retards modulés, un par côté)
+    const mr = AC.createConvolver(), mi = AC.createBuffer(2, AC.sampleRate * 1.3, AC.sampleRate);
+    for (let c = 0; c < 2; c++) { const x = mi.getChannelData(c); for (let i = 0; i < x.length; i++) x[i] = (Math.random() * 2 - 1) * Math.exp(-i / AC.sampleRate / 0.28); }
+    mr.buffer = mi; mrevG = gain(0.2, tuneG); mr.connect(mrevG); revIn = gain(1, mr); drumRv = gain(0.05, revIn); drumG.connect(drumRv);
+    dly = AC.createDelay(1); dlyFb = gain(0.42, dly); dly.connect(filt('lowpass', 3500, 0.5, dlyFb)); dly.connect(duckG); echoIn = gain(1, dly);
+    choIn = AC.createGain();
+    for (const sg of [-1, 1]) { const dl = AC.createDelay(0.1), p = AC.createStereoPanner(), l = AC.createOscillator(); dl.delayTime.value = 0.022 + 0.004 * sg; p.pan.value = 0.8 * sg; l.frequency.value = 0.6 + 0.15 * sg; l.connect(gain(0.003, dl.delayTime)); l.start(); choIn.connect(dl); dl.connect(p); p.connect(duckG); }
+    // une tranche par partie : hachage, panoramique, envois vers réverbération, écho et chorus (réglés par le timbre de la station)
+    for (const k of ['b', 'd', 'c', 'g', 'a', 'l']) { const pan = AC.createStereoPanner(), rv = gain(0, revIn), ec = gain(0, echoIn), ch = gain(0, choIn), gate = gain(1, pan); pan.connect(duckG); pan.connect(rv); pan.connect(ec); pan.connect(ch); strip[k] = { in: gain(MX[k], gate), gate, pan, rv, ec, ch }; }
+    waves();
+    mbuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate); // métal des cymbales : six carrés inharmoniques
+    { const x = mbuf.getChannelData(0); for (let i = 0; i < x.length; i++) { let v = 0; for (const f of [410.6, 608.8, 739.2, 1045.4, 1080, 1600]) v += Math.sin(2 * Math.PI * f * i / AC.sampleRate) > 0 ? 1 : -1; x[i] = v / 6; } }
     pret = Promise.all(Object.keys(window.SMP || {}).map(k => new Promise(ok => { // décodage des sons de TR-808 ; en cas d'échec la batterie reste synthétisée
       const bin = atob(window.SMP[k]), u8 = Uint8Array.from(bin, ch => ch.charCodeAt(0));
       AC.decodeAudioData(u8.buffer, b => { smp[k] = b; ok(); }, ok);
@@ -312,15 +410,15 @@
     const a0 = (car.idx - T.h0 + N) % N, inside = a0 < T.h1 - T.h0, near = racing && !inside && N - a0 < 60;
     if (near && !wasNear) riser(t, clamp((N - a0) * 2 / Math.max(sp, 20), 0.5, 3));
     if (inside !== wasIn && racing) crash(t);
-    if (TH.alarme && inside && !wasIn && racing) for (let i = 0; i < 6; i++) osc('square', i % 2 ? 660 : 880, t + 0.25 + i * 0.18, 0.16, 0.07, arpIn); // sirène d'alarme à l'entrée
+    if (TH.alarme && inside && !wasIn && racing) for (let i = 0; i < 6; i++) osc('square', i % 2 ? 660 : 880, t + 0.25 + i * 0.18, 0.16, 0.07, strip.a.in); // sirène d'alarme à l'entrée
     wasNear = near; wasIn = inside;
-    drums = racing ? 1 : 0; lead = racing && !inside && car.idx >= T.h1 && car.dist > 0;
+    drums = racing ? 1 : 0; fin = racing && !inside && car.idx >= T.h1 && car.dist > 0;
     mix += ((racing ? e.hot : 0) - mix) * Math.min(1, dt * 3);
     inten += (r - inten) * Math.min(1, dt * 2); driftL += ((car.drift ? 1 : 0) - driftL) * Math.min(1, dt * 6);
     // la musique s'ouvre avec la vitesse ; un gros choc l'étouffe ; dans un tunnel elle est étouffée et réverbérée, et le moteur résonne
-    k(musF.frequency, stun > 0 ? 350 : Math.min(state === 'title' ? 5000 : 900 * 20 ** Math.min(1, inten * 1.4 + mix), lerp(18000, 2500, tun)), 0.08);
+    k(musF.frequency, stun > 0 ? 350 : Math.min(state === 'title' ? 7000 : 1500 * 12 ** Math.min(1, inten * 1.4 + mix), lerp(18000, 2500, tun)), 0.08);
     k(musSend.gain, 0.7 * tun, 0.2); k(motSend.gain, 2.5 * tun, 0.2);
-    k(padG.gain, lerp(1, 0.6, mix), 0.1); k(padF.frequency, lerp(800, 2000, mix), 0.1);
+    k(strip.d.in.gain, MX.d * lerp(1, 0.7, mix), 0.1);
   }
 
   document.addEventListener('visibilitychange', () => { if (AC && live) document.hidden ? AC.suspend() : AC.resume(); }); // pas de musique hachée ni de moteur figé en arrière-plan
@@ -332,7 +430,7 @@
     volume(fam, v) { vol[fam] = v; if (V[fam]) V[fam].gain.value = v; },
     evenement: () => { ambT = 0; }, get live() { return live; },
     clac: () => AC && clac(), choc: v => AC && choc(v), boost: () => AC && boostFx(), petarade: () => AC && petarade(),
-    moniteur(v) { if (outG) outG.gain.value = 0.67 * v; }, get vu() { return vu; }, // gain d'écoute du banc : sans effet sur le jeu
+    moniteur(v) { if (outG) outG.gain.value = OUT * v; }, get vu() { return vu; }, // gain d'écoute du banc : sans effet sur le jeu
     get vol() { return vol; }, get pret() { return pret; }, get stations() { return ST; },
     get station() { return station; }, get nom() { return ST[station].name; }, get fq() { return ST[station].fq; }, get genre() { return ST[station].genre; }, get musicOn() { return musicOn; },
     get beat() { return AC ? Math.max(0, (AC.currentTime - t0) / (4 * S16)) : 0; }, // temps écoulés depuis le début de la station, calés sur le kick

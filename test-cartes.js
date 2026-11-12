@@ -76,19 +76,22 @@ for (const M of CARTES) {
   const k = v => Math.round(v * 3.6);
   console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} boosts, ${hgl} chocs), à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);
 }
-// radio : trois stations par carte, motifs de 16 pas, notes dans le registre audible ; les timbres existent dans audio.js
+// radio : trois stations par carte ; une forme d'au moins 32 mesures faite de sections différentes ; timbres et batteries connus d'audio.js
+// (la variété à l'oreille se mesure dans le navigateur : bouton « Variété des stations » de ecoute.html, il n'y a pas de Web Audio sous node)
 const SRC = require('fs').readFileSync(__dirname + '/audio.js', 'utf8'), seen = new Set();
 for (const M of CARTES) {
   assert(M.radio.length === 3, M.id + ' : il faut trois stations');
   for (const s of M.radio) {
     const w = s.name + ' : ';
     assert(!seen.has(s.name) && !seen.has(s.genre), w + 'nom ou genre en double'); seen.add(s.name); seen.add(s.genre);
-    assert(s.bpm >= 80 && s.bpm <= 180 && s.CH.length === s.ROOT.length && [1, 8].includes(s.CH.length), w + 'tempo ou accords');
-    for (const k of ['k', 'kB', 's', 'h', 'p', 'stab', 'gate', 'arp']) assert(s[k] == null || (typeof s[k] === 'string' && s[k].length === 16), w + 'motif ' + k);
-    for (const k of ['rifA', 'rifB']) assert(Array.isArray(s[k]) && s[k].length === 16, w + k);
-    for (const b of s.lead || []) { assert(b.length === 16, w + 'mesure de thème'); for (const n of b) assert(n == null || n === -99 || (n >= 55 && n <= 100), w + 'note de thème ' + n); }
-    for (const k of ['pad', 'stabW', 'arpW', 'leadW']) assert(!s[k] || SRC.includes(' ' + s[k] + ': { o: ['), w + 'timbre inconnu ' + s[k]);
-    assert(!s.bT || SRC.includes(' ' + s.bT + ': { o: [['), w + 'basse inconnue ' + s.bT);
+    assert(s.bpm >= 80 && s.bpm <= 180 && s.name.length <= 13, w + 'tempo ou nom trop long pour le HUD');
+    assert(s.form.length * 4 >= 32 && new Set(s.form).size >= 5, w + 'forme trop courte ou trop peu de sections');
+    assert(s.sec[s.hot] && [...s.calm].every(k => s.sec[k]), w + 'refrain ou sections calmes inconnus');
+    assert(SRC.includes(' ' + s.kit + ': {'), w + 'kit inconnu ' + s.kit);
+    for (const p of ['b', 'c', 'g', 'a', 'l']) assert(!s[p] || SRC.includes(' ' + s[p].p + ': { o: [['), w + 'timbre inconnu ' + (s[p] && s[p].p));
+    assert(!s.d || SRC.includes(' ' + s.d[0] + ': { o: [['), w + 'nappe inconnue');
+    for (const k in s.sec) for (const p in s.sec[k]) if ('kshpbdcgal'.includes(p)) { assert(s[p], w + 'section ' + k + ' : partie absente ' + p); const v = s[p].v || (p === 'd' ? [0] : s[p]); assert(s.sec[k][p].v < v.length, w + 'section ' + k + ' : variante inconnue ' + p + s.sec[k][p].v); }
+    for (const v of (s.l || { v: [] }).v) for (const b of v) for (const n of b) assert(n == null || n === -99 || (n >= 55 && n <= 105), w + 'note de thème ' + n);
   }
 }
 console.log('OK  radio   ' + CARTES.map(M => M.radio.map(s => s.genre.toLowerCase()).join(' / ')).join(' · '));
