@@ -16,7 +16,7 @@
   const MX = { b: 1, d: 1.6, c: 2, g: 2, a: 2, l: 1.6 }; // niveau de chaque tranche : le médium et l'aigu ne doivent pas disparaître sous la basse
   let W = {}; const strip = {}; // ondes sur mesure ; tranches de mixage par partie (b basse, d nappe, c g accords, a arpège, l thème)
   let mix = 0, inten = 0, driftL = 0, drums = 0, fin = false, wasIn = false, wasNear = false, wasBoost = false, lastGas = 0;
-  let eng, sq, scrubG, scrapeG, windG, pluie, gouttes = 0, gerbeT = 0, balaiT = 0, balaiS = 1, ambBed, ambT = 2, inZone = false, uiF;
+  let eng, sq, scrubG, scrapeG, windG, pluie, ambBed, ambT = 2, inZone = false, uiF;
   const RK = () => 'vpr.radio' + (M.id === 'ville' ? '' : '.' + M.id); // dernière station écoutée, par carte
   let station = 0, S16 = 60 / ST[0].bpm / 4;
 
@@ -373,13 +373,11 @@
     scrapeG = gain(0, V.choc); ns.connect(filt('bandpass', 1700, 1.2, scrapeG)); ns.connect(filt('lowpass', 260, 0.7, gain(1.5, scrapeG))); // frottement contre le mur : tôle + grondement
     uiF = filt('lowpass', 3000, 0.5, V.ui);
     windG = gain(0, V.vent); ns.connect(filt('lowpass', 400, 0.5, windG));
-    // pluie, entendue de l'habitacle (famille « pluie ») : rideau étouffé par la carrosserie (passe-bas + grondement, houle lente), chuintement des pneus, gerbe d'aquaplaning ;
-    // les gouttes, gerbes et coups d'essuie-glace sont des sons ponctuels joués par audioFrame
+    // pluie, entendue de l'habitacle (famille « pluie ») : rideau étouffé par la carrosserie (passe-bas + grondement, houle lente) ; gerbe d'aquaplaning sous la caisse
     const rid = gain(0, V.pluie), houle = gain(1, rid), rl = filt('lowpass', 600, 0.7, houle); ns.connect(rl); ns.connect(filt('bandpass', 220, 0.8, gain(0.6, houle)));
     const hl = AC.createOscillator(); hl.frequency.value = 0.13; hl.connect(gain(0.3, houle.gain)); hl.start();
-    const ch = gain(0, V.pluie), cf = filt('bandpass', 2200, 0.8, ch); ns.connect(cf);
     const aq = gain(0, V.pluie); ns.connect(filt('lowpass', 450, 0.6, aq));
-    pluie = { rid, rl, ch, cf, aq, toit: filt('lowpass', 2600, 0.7, V.pluie) };
+    pluie = { rid, rl, aq };
     buildAmb(); retune(AC.currentTime + 0.1); tuneG.gain.value = lvl();
     if (live) { AC.resume(); timer = timer || setInterval(() => live && pump(), 30); }
   }
@@ -399,29 +397,15 @@
   function boostFx(t = AC.currentTime) { const o = osc('sawtooth', 220, t, 0.5, 0.1, filt('lowpass', 3000, 0.5, V.choc)); o.frequency.exponentialRampToValueAtTime(880, t + 0.4); const w = nz(t, 0.6, 0.08, V.choc, 'bandpass', 500, 1.5); w.frequency.exponentialRampToValueAtTime(4000, t + 0.5); } // boost de sortie de glisse : sifflement + souffle
   function petarade(spool = 1, t = AC.currentTime) { nz(t, 0.25, 0.04 * spool, V.mot, 'bandpass', 1400, 1.5); for (let i = 0; i < 3; i++) nz(t + 0.08 + Math.random() * 0.4, 0.035, 0.12, V.mot, 'lowpass', 900); } // lever de pied à haut régime
   // e : état de la course pour cette image — { state, car, T, hot (0..1 dans le secteur chaud), tun (0..1 dans le tunnel), amb (0..1 dans une zone d'ambiance), r (vitesse 0..1), sp, gas, hit, bump (choc entre voitures, m/s), up / down (rapport monté / descendu), rpm, load, spool, stun }
-  // Pluie : quatre variantes à comparer (?pluieson=a|b|c|d dans le jeu, groupe « Pluie » d'ecoute.html). pl = force 0..3 (T.pluie), déjà coupée en tunnel ; r = vitesse 0..1 ; aq = aquaplaning (sim.js)
-  //   a : crépitement de gouttes sur le toit et le pare-brise, plus dense avec la vitesse ; b : rideau étouffé à travers la carrosserie, plus clair avec la vitesse
-  //   c : pneus sur le mouillé : chuintement selon la vitesse et gerbes de flaques ; d : essuie-glace rythmés (plus vite sous l'averse) sur un rideau léger
-  const PLUIE_SON = (typeof location !== 'undefined' && (/[?&]pluieson=([abcd])/.exec(location.search) || [])[1]) || 'c';
-  function pluieFrame(dt, t, pl, r, aq, v, k) {
-    const f = Math.min(pl, 3) / 3, P = pluie;
-    k(P.rid.gain, 0.09 * f * (0.6 + 0.4 * r) * { a: 0.25, b: 1, c: 0.2, d: 0.6 }[v], 0.4); k(P.rl.frequency, 400 + 700 * r, 0.3);
-    k(P.ch.gain, v === 'c' ? 0.05 * f * r ** 1.5 : 0, 0.15); k(P.cf.frequency, 1500 + 1200 * r, 0.2);
-    k(P.aq.gain, 0.25 * aq, 0.1);
-    if (!f) return;
-    // gouttes : impacts courts et sourds, au hasard ; a : nombreuses, d : quelques-unes
-    gouttes += dt * f * (v === 'a' ? 30 + 90 * r : v === 'd' ? 8 : 0);
-    for (; gouttes >= 1; gouttes--) { const q = t + Math.random() * dt, fq = 1200 + Math.random() * 2800; nz(q, 0.006 + Math.random() * 0.02, 0.05 + Math.random() * 0.12, P.toit, 'bandpass', fq, 1.5); }
-    if (v === 'c' && r > 0.25 && (gerbeT -= dt) < 0) { gerbeT = 0.4 + Math.random() * 1.6 / f; nz(t, 0.3 + 0.3 * Math.random(), 0.15 * f * r, V.pluie, 'lowpass', 700 + 600 * Math.random(), 0.7, nbuf, 0.1); } // flaque : souffle qui gonfle
-    if (v === 'd' && (balaiT -= dt) < 0) { // un aller ou un retour : frottement du caoutchouc qui glisse en hauteur, puis butée sourde
-      balaiT = 1.4 - 0.6 * f - 0.2 * r; balaiS = -balaiS; const w = nz(t, 0.42, 0.06, V.pluie, 'bandpass', balaiS > 0 ? 650 : 900, 4, nbuf, 0.12);
-      w.frequency.linearRampToValueAtTime(balaiS > 0 ? 900 : 650, t + 0.35); osc('sine', 85, t + 0.4, 0.07, 0.15, V.pluie);
-    }
+  // Pluie : rideau étouffé à travers la carrosserie, plus fort et plus clair avec la vitesse. pl = force 0..3 (T.pluie), déjà coupée en tunnel ; r = vitesse 0..1 ; aq = aquaplaning (sim.js)
+  function pluieFrame(pl, r, aq, k) {
+    k(pluie.rid.gain, 0.045 * Math.min(pl, 3) / 3 * (0.6 + 0.4 * r), 0.4); k(pluie.rl.frequency, 400 + 700 * r, 0.3);
+    k(pluie.aq.gain, 0.25 * aq, 0.1);
   }
   function audioFrame(dt, e) {
     if (!AC) return;
     const { state, car, T, r, sp, gas, hit, up, rpm, load, spool, stun } = e, N = T.n, tun = e.tun || 0, CARD = M.car;
-    if (state === 'pause') { for (const p of [eng.out.gain, sq.g.gain, scrubG.gain, scrapeG.gain, windG.gain, pluie.rid.gain, pluie.ch.gain, pluie.aq.gain]) p.setTargetAtTime(0, AC.currentTime, 0.05); return; } // en pause : la radio continue, la voiture se tait
+    if (state === 'pause') { for (const p of [eng.out.gain, sq.g.gain, scrubG.gain, scrapeG.gain, windG.gain, pluie.rid.gain, pluie.aq.gain]) p.setTargetAtTime(0, AC.currentTime, 0.05); return; } // en pause : la radio continue, la voiture se tait
     const t = AC.currentTime, racing = state === 'race', k = (p, v, tc = 0.04) => p.setTargetAtTime(v, t, tc);
     if ((state === 'title') !== menu) { menu = !menu; retune(t + 0.05); tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.3); } // menu ↔ course : la boucle de menu laisse la place à la station
     // moteur (discret sous la musique) : coupure au passage de rapport, timbre selon la charge, turbo, pétarades au lever de pied
@@ -437,7 +421,7 @@
     k(sq.b1.frequency, fq, 0.05); k(sq.b2.frequency, fq * 1.52, 0.05); k(sq.g.gain, 0.22 * a, 0.2);
     k(scrubG.gain, 0.5 * clamp(slip / 12, 0, 1) * r, 0.08);
     k(windG.gain, 0.045 * clamp((r - 0.5) * 2, 0, 1) ** 2 * (1 - tun), 0.2); // vent : un souffle à haute vitesse seulement, loin sous le moteur, coupé en tunnel
-    pluieFrame(dt, t, state === 'title' ? 0 : (e.pluie != null ? e.pluie : T.pluie ? T.pluie[car.idx] : 0) * (1 - tun), r, car.aq || 0, e.pluieSon || PLUIE_SON, k);
+    pluieFrame(state === 'title' ? 0 : (e.pluie != null ? e.pluie : T.pluie ? T.pluie[car.idx] : 0) * (1 - tun), r, car.aq || 0, k);
     k(scrapeG.gain, car.rub ? 0.05 + 0.1 * r : 0, 0.05);
     if ((hit > 3 || e.bump > 0.3) && t - lastHit > 0.15) { lastHit = t; choc(Math.max(hit, e.bump > 0.3 ? 8 + e.bump * 2 : 0), t); } // entre voitures les vitesses d'impact sont faibles : plancher de volume, sinon on ne l'entend pas
     if (car.boost > 0 && !wasBoost) boostFx(t);

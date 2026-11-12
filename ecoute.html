@@ -60,7 +60,7 @@
 <div id="g-amb"></div>
 
 <h2>Pluie, depuis l'habitacle</h2>
-<p>Quatre variantes à comparer ; en jeu : <code>?pluieson=a</code> (à <code>d</code>), <code>c</code> par défaut. Elles suivent la force et la vitesse (curseur de la musique), et se taisent dans un tunnel (case de la musique).</p>
+<p>Rideau étouffé, entendu de l'habitacle : suit la force et la vitesse (curseur de la musique), se tait dans un tunnel (case de la musique).</p>
 <div id="g-pluie"></div>
 <label>force de la pluie <input type="range" id="force" min="0" max="3" step="0.1" value="3"><output></output></label>
 
@@ -120,10 +120,7 @@
     lieu: ['amb', 'Ambiance du lieu', 'telle qu\'on l\'entend dans sa zone, à l\'arrêt', ['amb'], 20, () => course({ r: 0, sp: 0, amb: 1 })],
     evt: ['amb', 'Événement du lieu', 'grillons, oiseaux, corne, hélicoptère ou sirène selon la carte', ['amb'], 16, () => course({ r: 0, sp: 0, amb: 1 }), () => SON.evenement()],
     tonnerre: ['amb', 'Tonnerre', 'orage de la ville', ['amb'], 12, null, () => SON.tonnerre()],
-    pluieA: ['pluie', 'A : gouttes sur le toit', 'crépitement sourd des impacts, plus dense avec la vitesse', ['pluie'], 10, () => averse('a')],
-    pluieB: ['pluie', 'B : rideau étouffé', 'la pluie à travers la carrosserie, plus claire avec la vitesse', ['pluie'], 10, () => averse('b')],
-    pluieC: ['pluie', 'C : pneus sur le mouillé', 'chuintement selon la vitesse, gerbes de flaques', ['pluie'], 10, () => averse('c')],
-    pluieD: ['pluie', 'D : essuie-glace', 'allers-retours rythmés sur un rideau léger', ['pluie'], 10, () => averse('d')],
+    pluie: ['pluie', 'Pluie', 'la pluie à travers la carrosserie, plus claire avec la vitesse', ['pluie'], 10, () => averse()],
     bip: ['ui', 'Bip du décompte', '', ['ui'], 8, null, () => SON.beep(440)],
     depart: ['ui', 'Bip de départ', '', ['ui'], 8, null, () => SON.beep(880)],
     record: ['ui', 'Jingle : record', '', ['ui'], 8, null, () => SON.stinger(true)],
@@ -131,12 +128,12 @@
     radio: ['ui', 'Changement de station', 'touche mécanique puis grésillement, sans la musique', ['ui'], 0, null, () => SON.setStation(SON.station + 1)],
     tout: ['mix', 'Course complète', 'musique, moteur, pneus, vent, ambiance : le mélange du jeu', Object.keys(FAM), 0, x => Object.assign(musique(), { rpm: 0.55 + 0.4 * dents(x, 4), load: 1, gas: 1, spool: 0.8, amb: 1, slide: u.glisse ? u.slide : 0 })],
   };
-  const averse = pv => course({ r: u.vit, sp: u.vit * 80, tun: u.tunnel ? 1 : 0, pluie: u.force, pv });
+  const averse = () => course({ r: u.vit, sp: u.vit * 80, tun: u.tunnel ? 1 : 0, pluie: u.force });
   const musique = () => course({ r: u.vit, sp: u.vit * 80, plein: u.plein, drift: u.glisse, tun: u.tunnel ? 1 : 0, rpm: 0.2, load: 0, gas: 0 });
   // état complet envoyé à SON.frame
   function etat(sc, x) {
     const o = sc && sc[5] ? sc[5](x) : { state: 'pause' }, r = o.r || 0;
-    return { state: o.state, T: { h0: 500, h1: 700, n: 1000 }, hot: o.plein ? 1 : 0, tun: o.tun || 0, amb: o.amb || 0, pluie: o.pluie || 0, pluieSon: o.pv,
+    return { state: o.state, T: { h0: 500, h1: 700, n: 1000 }, hot: o.plein ? 1 : 0, tun: o.tun || 0, amb: o.amb || 0, pluie: o.pluie || 0,
       car: { vl: o.slide ? 4 + 14 * o.slide : 0, boost: 0, idx: o.plein ? 600 : 0, dist: 1, drift: !!o.drift, rub: o.rub || 0 },
       r, sp: o.sp || 0, gas: o.gas || 0, hit: 0, up: !!pulse.up, down: !!pulse.down, rpm: o.rpm || 0.2, load: o.load || 0, spool: o.spool || 0, stun: 0 };
   }
