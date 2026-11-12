@@ -92,7 +92,7 @@ Dans `cartes.js`, pour chaque carte :
 | `car` | la voiture : rapports de boîte, courbe de couple, masse, aérodynamique, motricité, silhouette |
 | `radio` | les stations (`RADIO`, en tête de `cartes.js`) : tempo, batterie, timbres, couleur, progressions, motifs, thèmes, sections et forme · `amb` : les zones où l'on entend l'ambiance du lieu |
 | `th` | le thème : ciel, brume, lumières, couleurs de route, style et couleurs de l'interface |
-| `th.pluie` | `1` = pluie partout ; ou des zones `[point a, point b, force 0 à 1]` (Wan-9 : averse sur le port, bruine sur le pont), coupée en tunnel |
+| `th.pluie` | `1` = pluie partout ; ou des zones `[point a, point b, force]` (1 = pluie normale ; au-delà, averse : plus de gouttes, traînées plus longues ; Wan-9 : averse de force 3 sur le port, rien avant la sortie du pont), coupée en tunnel |
 | `trafic` | nombre de camions sur la route |
 
 Dans `sim.js` : `TOP` est la vitesse de référence pour le braquage et les effets visuels, `AI_LVL` le niveau de chaque adversaire du mode course (1 = tour propre du pilote automatique).
