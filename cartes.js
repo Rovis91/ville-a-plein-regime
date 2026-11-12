@@ -178,7 +178,7 @@
       car: car({ nom: 'TOYOTA SUPRA RZ', ratios: [3.827, 2.360, 1.685, 1.312, 1.000, 0.793], final: 3.266, wheel: 0.318, mass: 1585, idle: 800, red: 6800, cd: 0.32, area: 1.95,
         tq: [0, 180, 300, 400, 427, 420, 400, 340, 260], son: 0.95, look: { col: 0x4a4e5c, l: 1.02, w: 1, h: 0.96, nez: 0.66, cab: [-0.45, 2.1, 0.5], aileron: 2 } }),
       radio: RADIO.wangan,
-      th: { decor: 'wangan', pluie: [[3, 8, 0.35], [8, 23, 1]], fog: 0x0c1424, fogD: [90, 1300], sky: [[0, '#02030a'], [0.38, '#0a1024'], [0.47, '#4a2c18'], [0.5, '#0c1424'], [1, '#0c1424']], stars: 40,
+      th: { decor: 'wangan', pluie: [[9, 24, 3]], fog: 0x0c1424, fogD: [90, 1300], sky: [[0, '#02030a'], [0.38, '#0a1024'], [0.47, '#4a2c18'], [0.5, '#0c1424'], [1, '#0c1424']], stars: 40,
         astre: { dir: [0.5, 0.7, -0.4], col: '#e8e0d0', ombre: '#b8b0a0', taille: 120 }, hemi: [0x4a5a8a, 0xff9a2e, 0.55], sun: [0x8fa0d0, 0.25], phares: 2.4, bloom: 0.1, scan: 0.1,
         chev: 1, piles: -14, murH: 1.4, route: ['#24262e', '#30323c', '#f4f1e0', '#f4f1e0', '#24262e', '#24262e', false], mur: ['#3a3e46', '#c9ced6', '#ff9a2e', '#16181e'], depart: [0x1f8f5a, 0xc9ced6, '#f4f1e0'],
         tun: { sol: ['#2a2218', '#3a2e20', '#f4f1e0', '#f4f1e0', '#2a2218', '#2a2218'], murs: ['#ffb85a', '#ffb85a'], paroi: ['#3a2c18', '#6a5028', '#8a6a38', '#120e08'], plafond: ['#1a140c', '#ffb85a', '#ffb85a', '#3a2e20'],

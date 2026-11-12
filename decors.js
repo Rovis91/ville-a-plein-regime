@@ -119,6 +119,20 @@
       const tun = i => h.zone(i, 0) === 1;
       // au-dessus du tunnel, le sol reste au niveau du quai : le tube passe dessous ; dans les tranchées d'accès, il suit la route qui descend
       const g = terrain(h, { pas: 16, marge: 330, sol: s => tun(S.indexOf(s)) ? 0 : Math.min(s.y, 0), creux: (x, z) => mer(x, z) ? 13 : 0, mat: h.mat('bruit', {}, '#1a1c22', ['#22252c', '#14161a', '#2a2622']) });
+      { // un sol en grille de 16 m ne peut pas épouser le tube (fond du chenal, rampes) : on retire les triangles qui entrent dans le tube ou passent au-dessus de la chaussée des tranchées ; de dehors, on voit la coque
+        const ge = h.scene.children[h.scene.children.length - 1].geometry, P = ge.attributes.position.array, I = ge.index.array, zs = [];
+        for (let i = T.t0 - 120; i < T.t1 + 120; i++) { const k = (i + N) % N; if (tun(k) || S[k].y < -0.3) zs.push([S[k], tun(k)]); }
+        const dedans = (x, y, z, m) => { let b = zs[0], bd = 1e18; for (const e of zs) { const d = (e[0].x - x) ** 2 + (e[0].z - z) ** 2; if (d < bd) { bd = d; b = e; } }
+          const [s, t] = b, l = Math.abs((s.x - x) * s.tz - (s.z - z) * s.tx) /* écart en travers */, dy = y - s.y; return bd < (W + 30) ** 2 && l < W + 1.6 + m && (y === null || dy > -0.3 && (!t || dy < 8.5)); };
+        for (let k = 0; k < I.length; k += 3) {
+          const a = I[k] * 3, b = I[k + 1] * 3, c = I[k + 2] * 3;
+          if (!dedans((P[a] + P[b] + P[c]) / 3, null, (P[a + 2] + P[b + 2] + P[c + 2]) / 3, 30)) continue; // loin des tranchées et du tube : rien à tester
+          let hors = true;
+          for (let u = 0; u <= 6 && hors; u++) for (let v = 0; u + v <= 6; v++) { const w = 6 - u - v, f = j => (P[a + j] * u + P[b + j] * v + P[c + j] * w) / 6; if (dedans(f(0), f(1), f(2), 0)) { hors = false; break; } }
+          if (!hors) I[k] = I[k + 1] = I[k + 2] = 0;
+        }
+        ge.index.needsUpdate = true;
+      }
       const eau = h.mat('bruit', { lum: 1, rep: [300, 300] }, '#071824', ['#0f3b4a', '#0a2836', '#3a2c18']);
       // quatre plans d'eau : le chenal, et la mer à l'ouest, à l'est et au sud de l'île
       boite(h, eau, 16000, 1, CH1 - CH0, 0, -3.5, (CH0 + CH1) / 2); boite(h, eau, 16000, 1, 8000, 0, -3.5, ILE[2] + 4000);
@@ -186,7 +200,7 @@
         for (let c = 0; c < C; c++) { H[c] = []; for (let r = 0; r < R; r++) { const bordure = Math.min(c, C - 1 - c, r, R - 1 - r) === 0 ? 1 : 0; H[c][r] = libre(x0 + c * 12.8 + 6, z0 + r * 2.9 + 1.25) ? Math.max(0, Math.min(5, Math.round(fill - bordure + (rnd() - 0.5) * 2.6))) : 0; } }
         for (let c = 0; c < C; c++) for (let r = 0; r < R; r++) {
           const x = x0 + c * 12.8 + 6, z = z0 + r * 2.9 + 1.25, n = H[c][r], vu = Math.min(hAt(c - 1, r), hAt(c + 1, r), hAt(c, r - 1), hAt(c, r + 1)); // sous ce niveau, le conteneur est enfoui entre ses voisins : on ne le dessine pas
-          for (let k = Math.min(vu, n - 1); k < n; k++) { const haut = k === n - 1, col = rnd() < 0.55 ? dom : rnd() * cols.length | 0; piles[col].push([x + (haut ? (rnd() - 0.5) * 0.5 : 0), g.hAt(x, z) + 1.3 + k * 2.6, z, haut ? (rnd() - 0.5) * 0.05 : 0, rnd() < 0.15 ? 0.5 : 1, 1, 1]); }
+          for (let k = Math.max(0, Math.min(vu, n - 1)); k < n; k++) { const haut = k === n - 1, col = rnd() < 0.55 ? dom : rnd() * cols.length | 0; piles[col].push([x + (haut ? (rnd() - 0.5) * 0.5 : 0), g.hAt(x, z) + 1.3 + k * 2.6, z, haut ? (rnd() - 0.5) * 0.05 : 0, rnd() < 0.15 ? 0.5 : 1, 1, 1]); }
         }
         if (rnd() < 0.5 && R <= 7 && libre(x0 + C * 6.4, z0 + R * 1.45, 6)) portiques.push([x0 + (0.2 + rnd() * 0.6) * C * 12.8, g.hAt(x0, z0), z0 + R * 1.45, Math.PI / 2]);
       };
@@ -224,9 +238,9 @@
       const nav = (L, type, coque, cheminee, baies) => ({ carene: minium, coque: h.mat('metalClair', { c: coque }), blanc: cabine, hublots: h.mat('tourFenetres', { lum: 1, fog: false }, ['#ffe2a0', '#f4f1e0']), cheminee: h.mat('metalClair', { c: cheminee }),
         cargaison: h.mat('cargaison'), cale: h.mat('metalClair', { c: 0x8a3a2a }), grueBord: structure, defense: h.mat('defense'), vitre });
       const baies = (L, f) => Array.from({ length: Math.floor((L - 50) / 24) }, () => Math.max(1, Math.min(6, Math.round(f + (rnd() - 0.5) * 3))));
-      const feuxNav = [], navire = (L, type, coque, chem, x, z, ry, f = 4) => { const p = new THREE.Group(); p.position.set(x, -3.5, z); p.rotation.y = ry; h.scene.add(p); h.pose('navire', nav(L, type, coque, chem), p, [0, 0, 0], L, type, type === 'vrac' ? [] : baies(L, f)); return p; };
+      const feuxNav = [], navire = (L, type, coque, chem, x, z, ry, f = 4) => { const p = new THREE.Group(); p.position.set(x, -3, z); p.rotation.y = ry; h.scene.add(p); h.pose('navire', nav(L, type, coque, chem), p, [0, 0, 0], L, type, type === 'vrac' ? [] : baies(L, f)); return p; };
       for (const [L, x, coque, chem, f] of [[250, -40, 0x1a2a4a, 0xc8442c, 4.5], [200, 690, 0x2a3a2a, 0xe8e4dc, 3]]) { navire(L, 'conteneurs', coque, chem, x, CH1 - 16, 0, f); feuxNav.push(x + L / 2 - 6, 19, CH1 - 16, x - L / 2 + 14, 36, CH1 - 16); }
-      const remorqueur = (x, z, ry) => { const p = new THREE.Group(); p.position.set(x, -3.5, z); p.rotation.y = ry; h.scene.add(p); h.pose('remorqueur', nav(30, '', 0xc8302c, 0x1a1a20), p); return p; };
+      const remorqueur = (x, z, ry) => { const p = new THREE.Group(); p.position.set(x, -3, z); p.rotation.y = ry; h.scene.add(p); h.pose('remorqueur', nav(30, '', 0xc8302c, 0x1a1a20), p); return p; };
       remorqueur(830, CH1 - 22, 0.3); remorqueur(860, CH1 - 40, -0.2);
       for (let k = 0; k < 7; k++) { // au mouillage, au sud de l'île : l'avant face au courant, feux de mouillage
         const L = 160 + rnd() * 110, x = -900 + k * 420 + rnd() * 150, z = ILE[2] + 260 + rnd() * 900, ry = 0.6 + (rnd() - 0.5) * 0.3;
@@ -235,15 +249,15 @@
       }
       // dans le chenal, sur une boucle : cap à l'est au nord, demi-tour, cap à l'ouest au sud ; le remorqueur suit le premier
       const passants = [[navire(170, 'conteneurs', 0x3a1a2a, 0xf4f0e0, 0, 0, 0, 3.5), 0], [navire(150, 'vrac', 0x1a3a3a, 0xc8442c, 0, 0, 0), 0.25], [navire(190, 'conteneurs', 0x1a2a4a, 0xe8b02c, 0, 0, 0, 4), 0.5], [navire(140, 'ferry', 0xe8e8e4, 0x2c6ab8, 0, 0, 0), 0.75], [remorqueur(0, 0, 0), 0.04]];
-      // en face de l'entrée, à quai sur la rive de la ville : un ferry de nuit, tout éclairé, juste au-dessus du tube
-      navire(180, 'ferry', 0xe8e8e4, 0xc8302c, axe + 20, CH0 + 15, Math.PI);
+      // en face de l'entrée, à quai sur la rive de la ville : un ferry de nuit, tout éclairé, à côté du tube (sa carène descendrait dans le tunnel)
+      navire(180, 'ferry', 0xe8e8e4, 0xc8302c, axe + 110, CH0 + 15, Math.PI);
       const BX0 = -1500, BX1 = 1000, BR = 110, BZ = 310, LB = 2 * (BX1 - BX0) + 2 * Math.PI * BR;
       const boucle = (u, p) => { // u de 0 à 1 le long de la boucle
         let d = (u % 1) * LB; const dr = BX1 - BX0, dc = Math.PI * BR;
-        if (d < dr) { p.position.set(BX0 + d, -3.5, BZ + BR); p.rotation.y = 0; return; } d -= dr;
-        if (d < dc) { const a = d / BR; p.position.set(BX1 + Math.sin(a) * BR, -3.5, BZ + Math.cos(a) * BR); p.rotation.y = a; return; } d -= dc;
-        if (d < dr) { p.position.set(BX1 - d, -3.5, BZ - BR); p.rotation.y = Math.PI; return; } d -= dr;
-        const a = d / BR; p.position.set(BX0 - Math.sin(a) * BR, -3.5, BZ - Math.cos(a) * BR); p.rotation.y = Math.PI + a;
+        if (d < dr) { p.position.set(BX0 + d, -3, BZ + BR); p.rotation.y = 0; return; } d -= dr;
+        if (d < dc) { const a = d / BR; p.position.set(BX1 + Math.sin(a) * BR, -3, BZ + Math.cos(a) * BR); p.rotation.y = a; return; } d -= dc;
+        if (d < dr) { p.position.set(BX1 - d, -3, BZ - BR); p.rotation.y = Math.PI; return; } d -= dr;
+        const a = d / BR; p.position.set(BX0 - Math.sin(a) * BR, -3, BZ - Math.cos(a) * BR); p.rotation.y = Math.PI + a;
       };
       const nf = new THREE.BufferGeometry(); nf.setAttribute('position', new THREE.Float32BufferAttribute(feuxNav, 3));
       const pnav = new THREE.Points(nf, new THREE.PointsMaterial({ color: 0xfff2d0, size: 2, sizeAttenuation: false, fog: false })); pnav.frustumCulled = false; h.scene.add(pnav);
