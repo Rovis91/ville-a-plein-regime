@@ -5,7 +5,7 @@
   const M = G.CARTE, W = M.W, TOP = 55; // demi-largeur de route (m) ; vitesse de référence (m/s) pour le braquage et les effets visuels
   const GRIP = M.grip; // adhérence latérale maxi (m/s²) : 44 sur la ville (arcade : à fond on passe tout ce qui fait plus de 70 m de rayon), 15 à 24 ailleurs
   const CARD = M.car; // mécanique : fiche technique de la voiture de la carte
-  const WALL_RUB = 0.35, WALL_SOFT = 0.2, WALL_LOSS = 7, WALL_HARD = 0.45, WALL_MU = 10; // murs : frein du frottement (1/s) ; sinus de l'angle d'arrivée sous lequel ça gratte sans perte ; pente de la perte au-delà (choc franc) ; sinus au-dessus duquel le moteur coupe ; frottement du mur extérieur d'un virage (part de la force centripète qu'il fournit à la place des pneus, perdue en vitesse)
+  const WALL_RUB = 0.35, WALL_SOFT = 0.2, WALL_LOSS = 7, WALL_HARD = 0.45, WALL_MU = 10; // murs : frein du frottement (1/s) ; sinus de l'angle d'arrivée sous lequel ça gratte sans perte ; pente de la perte au-delà (choc franc) ; sinus au-dessus duquel le moteur coupe ; frottement du mur extérieur d'un virage (part de la force centripète qu'il fournit, au-delà du quart de l'adhérence, perdue en vitesse)
   const torque = rpm => { const x = Math.max(0, Math.min(8, rpm / 1000)), i = Math.min(7, x | 0); return CARD.tq[i] + (CARD.tq[i + 1] - CARD.tq[i]) * (x - i); };
   // Points de contrôle (x,z) en mètres, sens horaire = virages à droite. Départ en [0]. HGT = altitude de chaque point.
   const SC = M.sc, HGT = M.pts.map(p => p[2]), PTS = M.pts.map(p => [p[0] * SC, p[1] * SC]);
@@ -130,8 +130,8 @@
     if (o > 0) {
       const sg = Math.sign(c.d), vn = (c.vx * nx + c.vz * nz) * sg;
       c.x -= nx * sg * o; c.z -= nz * sg * o; c.d = sg * L; c.rub = 1;
-      // frotter le mur freine en continu ; et le mur extérieur d'un virage ne remplace pas les pneus : ce qu'il fait tourner au-delà de leur adhérence se paie en vitesse (rien le long d'un mur droit)
-      const v = Math.hypot(c.vx, c.vz), sc = Math.exp(-(WALL_RUB + WALL_MU * Math.max(0, -s.k * sg * v - g / Math.max(v, 1))) * dt); c.vx *= sc; c.vz *= sc;
+      // frotter le mur freine en continu ; et le mur extérieur d'un virage ne remplace pas les pneus : s'y appuyer pour tourner se paie en vitesse, jusqu'à retomber à la moitié de la vitesse que les pneus tiendraient (rien le long d'un mur droit)
+      const v = Math.hypot(c.vx, c.vz), sc = Math.exp(-(WALL_RUB + WALL_MU * Math.max(0, -s.k * sg * v - 0.25 * g / Math.max(v, 1))) * dt); c.vx *= sc; c.vz *= sc;
       const rel = wrap(c.th - Math.atan2(s.tz, s.tx)), into = rel * sg > 0 && Math.abs(rel) < 1.5; // nez tourné vers le mur
       c.th -= rel * Math.min(1, (into ? 25 : 4) * dt); // le mur redresse la voiture : volant braqué vers lui, elle glisse le long au lieu de s'y planter
       if (vn > 0) {

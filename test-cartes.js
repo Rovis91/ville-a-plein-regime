@@ -51,16 +51,15 @@ for (const M of CARTES) {
   assert(rat < 1.2, `${M.id} : glisse non rattrapée volant lâché (${rat} s)`);
   c = go(tenue(), I(-1, 1), 0.6);
   assert(!c.drift && der(c) < 10, `${M.id} : le contre-braquage ne redresse pas proprement (${der(c)}°)`);
-  // ordre des trois façons de boucler un tour lancé : à fond sans freiner, en s'appuyant sur les murs, on perd au moins 3 % sur le tour propre du pilote automatique
-  // (1 % sur le touge : ses courbes moyennes se passent en frôlant le mur sous 11°, et un frôlement ne coûte presque rien, c'est voulu) ;
+  // ordre des trois façons de boucler un tour lancé : à fond sans freiner, en s'appuyant sur les murs, on perd au moins 3 % sur le tour propre du pilote automatique ;
   // en glisse (coup de frein à main dans les virages serrés, puis volant tenu et gaz tant que ça glisse) on déclenche des boosts et on fait jeu égal avec le tour propre, à 0,3 s près. La ville a son test dans test.js.
   const tour = drive => { const c = newCar(T), st = {}; let t = 0, t1 = 0, b = 0, pb = 0; while (c.dist < 2 * n && t < 900) { step(c, drive(c, t, st), T, H); t += H; if (!t1 && c.dist >= n) t1 = t; if (t1 && c.boost > 0 && pb <= 0) b++; pb = c.boost; } return [t - t1, b]; };
   const lap = t - t1, [tfond] = tour(c => ({ ...autopilot(c, T), gas: 1, brake: 0 })), [tgl, boosts] = tour((c, t, st) => {
     let inp = autopilot(c, T);
-    if (!st.until && Math.abs(inp.steer) > 0.2 && Math.abs(S[c.idx].kl) > 0.012 && Math.hypot(c.vx, c.vz) > 25 && t > (st.cool || 0)) { st.until = t + 0.1; st.dir = Math.sign(inp.steer); st.hold = t + 0.6; st.cool = t + 3; }
+    if (!st.until && Math.abs(inp.steer) > 0.2 && Math.abs(S[c.idx].kl) > 0.012 && Math.hypot(c.vx, c.vz) > 25 && t > (st.cool || 0)) { st.until = t + 0.1; st.dir = Math.sign(inp.steer); st.hold = t + 0.6; st.cool = t + 5; }
     if (st.until) { if (t < st.until) inp = I(st.dir, 1, 0, true); else if (t < st.hold && c.slide > 0.3) inp = I(st.dir, 1); else st.until = 0; }
     return inp; });
-  assert(tfond > lap * (M.id === 'touge' ? 1.01 : 1.03), `${M.id} : à fond dans les murs (${tfond} s) pas assez lent face au tour propre (${lap} s)`);
+  assert(tfond > lap * 1.03, `${M.id} : à fond dans les murs (${tfond} s) pas assez lent face au tour propre (${lap} s)`);
   assert(M.id === 'ville' || boosts && tgl <= lap + 0.3, `${M.id} : tour en glisse (${tgl} s, ${boosts} boosts) plus lent que le tour propre (${lap} s)`);
   // trafic : positions finies, sur la route ; une voiture arrêtée sur une file se fait pousser sans être traversée
   if (M.trafic) {
