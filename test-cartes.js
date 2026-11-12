@@ -2,9 +2,9 @@
 // La ville a ses propres tests, plus complets, dans test.js (ses chiffres ne doivent pas bouger : records de la ville).
 const assert = require('assert'), THREE = require('./three.min.js');
 require('./cartes.js');
-const H = 1 / 120, deg = r => r * 180 / Math.PI; let surfTxt = '';
+const H = 1 / 120, deg = r => r * 180 / Math.PI; let surfTxt = '', surfCarte = '';
 for (const M of CARTES) {
-  globalThis.CARTE = M; delete require.cache[require.resolve('./sim.js')]; require('./sim.js'); // sim.js lit la carte active à son chargement
+  globalThis.CARTE = M; surfCarte = ''; delete require.cache[require.resolve('./sim.js')]; require('./sim.js'); // sim.js lit la carte active à son chargement
   const T = buildTrack(THREE), { S, n, W } = T;
   const rmin = 1 / Math.max(...S.map(s => Math.abs(s.k)));
   assert(rmin > 15, `${M.id} : rayon mini trop serré (${rmin})`);
@@ -65,7 +65,7 @@ for (const M of CARTES) {
   const [tni, bni, hni, dni, reste] = tour(c => autopilot(c, T), 1);
   assert(bni && reste <= 0.3 && tni < lap - 0.3 && hni <= hits && !dni, `${M.id} : tour du pilote automatique avec une jauge de nitro ${tni} s (${bni} coups, reste ${reste}, ${hni} chocs, ${dni} réceptions dures) contre ${lap} s sans`);
   const [tfond, , hfond] = tour(c => ({ ...autopilot(c, T), gas: 1, brake: 0 })), [tgl, boosts, hgl] = tour(c => {
-    const a = autopilot(c, T, c.dd ? 1.2 : 1), sp = Math.hypot(c.vx, c.vz), la = S[(c.idx + 3 + Math.floor(sp * 0.1)) % n], dem = s => s.kl * sp / omega(sp); // dem = part du braquage que demande la trajectoire
+    const a = autopilot(c, T, c.dd ? 1.2 : 1), sp = Math.hypot(c.vx, c.vz), la = S[(c.idx + 3 + Math.floor(sp * 0.1)) % n], dem = s => s.kl * sp / omega(sp) / (M.surf ? 1 - T.surf[c.idx].vir : 1); // dem = part du braquage que demande la trajectoire (sur une carte à surface déclarée : du braquage que la surface laisse)
     const m = wrap(Math.atan2(la.z + la.tx * la.dl - c.z, la.x - la.tz * la.dl - c.x) - (c.dd ? cap(c) : c.th)) * 3; // en glisse le nez est en travers : on vise avec la direction de la vitesse
     if (c.dd ? m * c.dd > 0 && Math.max(dem(S[c.idx]) * c.dd, dem(la) * c.dd) > 0.3 : Math.abs(dem(la)) > 0.9 && dem(la) * m > 0 && sp > 15) { const d = c.dd || Math.sign(m), f = Math.max(m * d, 0.35); return I(d * Math.max(-1, Math.min(1, f < 1.1 ? (f - 1.1) / 0.75 : f - 1.1)), a.gas ? 1 : 0, a.brake, true); }
     return { ...a, gas: a.gas ? 1 : 0, nitro: !!a.gas }; });
@@ -85,11 +85,14 @@ for (const M of CARTES) {
     assert(ras[0] > 0.05 && !ras[1] && lrg[0] === 0 && !lrg[1] && dedans[1] > 5 && dedans[0] === 0, `${M.id} : camion doublé au ras (jauge ${ras[0]}, choc ${ras[1]}), au large (${lrg}), percuté (jauge ${dedans[0]}, choc ${dedans[1]})`);
   }
   // pluie : la bruine (force 1) ne change rien ; une averse ralentit le pilote automatique de 2 à 12 % sans l'envoyer dans les murs, et allonge le freinage
-  // aucune carte du jeu ne déclare de surface : la route est sèche partout (T.surf[i] === SURF.sec), sauf sous une averse
-  assert(!M.surf && T.surf.length === n && T.surf.every(q => q === SURF.sec) === !(Array.isArray(M.th.pluie) && M.th.pluie.some(z => z[2] > 1)), M.id + ' : route mouillée là où il ne pleut pas fort');
+  // sans surface déclarée, la route est sèche partout (T.surf[i] === SURF.sec), sauf sous une averse
+  assert(T.surf.length === n); assert(M.surf ||T.surf.every(q => q === SURF.sec) === !(Array.isArray(M.th.pluie) && M.th.pluie.some(z => z[2] > 1)), M.id + ' : route mouillée là où il ne pleut pas fort');
   if (T.surf.some(q => q !== SURF.sec)) {
     const E = T.surf; T.surf = null; const [sec] = tour(c => autopilot(c, T)); T.surf = E;
-    assert(lap > 1.02 * sec && lap < 1.12 * sec, `${M.id} : tour sous la pluie ${lap} s, au sec ${sec} s`);
+    if (!M.surf) assert(lap > 1.02 * sec && lap < 1.12 * sec, `${M.id} : tour sous la pluie ${lap} s, au sec ${sec} s`);
+    // surface déclarée (neige, glace, terre) : la carte se conduit autrement qu'au sec, sans tourner à la patinoire. Le tour perd de 8 à 35 %, et la glace vive, s'il y en a, reste par plaques : moins du quart du tour
+    else { const gl = T.surf.filter(q => q.vir > 0.45).length / n; surfCarte = `, ${((lap / sec - 1) * 100).toFixed(0)} % plus lent qu'au sec (${sec.toFixed(1)} s), glace vive sur ${(gl * 100).toFixed(0)} % du tour`;
+      assert(lap > 1.08 * sec && lap < 1.35 * sec && gl < 0.25, `${M.id} : tour ${lap} s${surfCarte}`); }
   }
   // surfaces (table SURF) : lancée au sec puis posée sur chaque surface, en plan ouvert. Distance de freinage depuis 200 km/h, rayon volant à fond à 120 km/h, vitesse perdue en 2 s pied levé depuis 100 km/h
   { const sur = (q, v, f) => { const c = lance(v); c.x = c.z = 1e5; TO.surf = [q]; // (au loin : à Paris, les piles de l'arc sont sur le chemin)
@@ -130,7 +133,7 @@ for (const M of CARTES) {
   while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && (Math.abs(x.d) <= S[x.idx].w || dansPlace(x.x, x.z)), M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }
   assert(R.done, M.id + ' : la course ne se termine pas');
   const k = v => Math.round(v * 3.6);
-  console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs${T.vert ? ', ' + vols + ' vols' : ''}, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} coups de nitro, ${hgl} chocs), pilote auto avec une jauge ${tni.toFixed(1)} s, à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);
+  console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs${T.vert ? ', ' + vols + ' vols' : ''}, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} coups de nitro, ${hgl} chocs), pilote auto avec une jauge ${tni.toFixed(1)} s, à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture${surfCarte}`);
 }
 // surfaces déclarées par une carte (champ surf : { fond, zones }) : cartes d'essai, le touge recouvert de chaque surface, puis avec une seule plaque de glace.
 // Le pilote automatique lit la même table : il boucle son tour lancé sans taper, plus lentement qu'au sec ; et la plaque n'existe que là où elle est déclarée, fondue sur ses bords.
