@@ -41,6 +41,18 @@
   // Aspiration (course) : derrière une voiture, de 3 à ad m, dans un cône qui s'ouvre de ac par mètre : jusqu'à acx de traînée en moins, tout près
   const NI = { dur: 3, acc: 6, gl: 0.3, mur: 0.5, cam: 0.6, asp: 0.12, ad: 30, ac: 0.08, acx: 0.5 };
   const gagne = (c, x) => { c.nitro = Math.min(1, c.nitro + x); };
+  // Mode Glisse : le score, calculé à part de la physique (points() ne fait que lire la voiture : aucun temps au tour n'en dépend). Tenu pour toute voiture, lu par le mode Glisse.
+  //   c.cours = points de la glisse en cours ; c.score = points acquis ; c.mult = multiplicateur d'enchaînement
+  //   k = points par seconde, par m/s de vitesse, glisse en plein travers (c.slide = angle de dérive rapporté à son plafond) et multiplicateur à 1
+  //   min = durée (s) d'une glisse validée : à sa sortie ses points sont versés au score et le multiplicateur monte d'un cran, jusqu'à max ; plus courte, elle ne rapporte rien (pas de zigzags)
+  //   pause = secondes sans glisser après lesquelles le multiplicateur retombe à 1 ; un choc contre un mur ou un camion (c.hit > 2 m/s) l'y ramène aussi, et perd la glisse en cours
+  const GL = { k: 20, min: 0.8, pause: 3, max: 5 };
+  function points(c, dt) {
+    if (c.hit > 2) { c.cours = 0; c.glD = 0; c.mult = 1; }
+    if (c.drift && !c.air) { c.glD += dt; c.glT = 0; c.cours += GL.k * Math.hypot(c.vx, c.vz) * c.slide * c.mult * dt; return; }
+    if (c.glD >= GL.min) { c.score += c.cours; c.mult = Math.min(GL.max, c.mult + 1); }
+    c.cours = 0; c.glD = 0; if ((c.glT += dt) > GL.pause) c.mult = 1;
+  }
   // Relief (cartes qui déclarent des sauts ou des murs roulables, sinon rien de tout cela ne joue) : la voiture a une hauteur c.y et une vitesse verticale c.vy.
   //   Elle tombe à GRAV ; le sol la rattrape et lui donne sa propre vitesse verticale. À plus de DROOP du sol (débattement des suspensions) elle vole : ni volant, ni moteur, ni frein.
   //   Réception : au-delà de LAND0 m/s d'impact contre le sol, LANDK de vitesse perdue par m/s, jusqu'à LANDX (se recevoir dans une descente ne coûte rien)
@@ -112,6 +124,7 @@
   function newCar(T) {
     const i = T.n - 8, s = T.S[i]; // 16 m avant la ligne
     return { x: s.x, z: s.z, th: Math.atan2(s.tz, s.tx), vx: 0, vz: 0, steer: 0, yaw: 0, idx: i, dist: -8, d: 0, hit: 0, vf: 0, vl: 0,
+      score: 0, cours: 0, mult: 1, glD: 0, glT: 0, // mode Glisse (voir GL) ; glD, glT : durée de la glisse en cours, temps depuis la dernière
       drift: false, slide: 0, driftT: 0, dd: 0, sa: 0, nitro: 0, boost: 0, asp: 0, stun: 0, nDrift: 0, nBoost: 0, nWall: 0, // nitro : la jauge ; boost : elle pousse ; asp : aspiration reçue (0 à 1, course) ; n… : bilan (glisses, coups de nitro, chocs mur)
       manual: false, gear: 0, lastGear: 0, shiftT: 0, rpm: CARD.idle,
       y: s.y, vy: 0, air: false, airT: 0, land: 0 }; // relief : hauteur, vitesse verticale, en l'air, durée du vol en cours, vitesse d'impact à la réception (un seul pas)
@@ -207,6 +220,7 @@
 
   function step(c, inp, T, dt) {
     const S = T.S, n = T.n;
+    points(c, dt); // (avant le pas : c.hit porte encore le choc du pas précédent, camions compris)
     if (c.air) vole(c, inp, dt); else roule(c, inp, T, dt);
     // position sur la piste + murs (impossible de couper : un tour bouclé est toujours valide)
     let b = c.idx, bd = 1e9;
@@ -388,5 +402,5 @@
     }
   }
 
-  Object.assign(G, { sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, SURF });
+  Object.assign(G, { sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, SURF, GL });
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -16,9 +16,10 @@ Prenez le volant d'une bête de 500 chevaux et lâchez-la dans les artères d'un
 
 <p align="center"><img src="docs/course-1.png" alt="En course, les adversaires dans les rétros"></p>
 
-### 🏁 DEUX MODES DE JEU EXPLOSIFS !
+### 🏁 QUATRE MODES DE JEU EXPLOSIFS !
 
 - **CONTRE-LA-MONTRE** : enchaînez les tours, battez vos records… puis battez votre propre **fantôme** !
+- **GLISSE** : 2 tours pour le style. Plus ça glisse vite, de travers et longtemps, plus ça paie… et le **multiplicateur** grimpe tant que vous enchaînez sans toucher un mur !
 - **COURSE** : 3 tours, 3 rivaux sans pitié. **KENJI**, **REI** et **JUN** ne vous feront aucun cadeau.
 - **ÉLIMINATION** : 4 voitures, 4 tours. À chaque passage sur la ligne, **le dernier sort**. Jusqu'au duel final !
 
@@ -114,6 +115,20 @@ X ou N la dépense : une jauge pleine pousse 3 secondes, gaz ouverts et roues au
 
 Les médailles se mesurent toujours au tour lancé du pilote automatique, qui part avec une jauge pleine et la dépense en ligne droite. La physique ayant changé, les records d'avant la V2 (clés `vpr6.*`) ne comptent plus : le menu le signale une fois.
 
+### Mode Glisse
+
+Troisième mode du menu, sur toutes les cartes : deux tours, départ arrêté, à points.
+
+- Une glisse rapporte, par seconde, sa vitesse × son angle de dérive (plafonné) × le multiplicateur.
+- À la sortie d'une glisse d'au moins 0,8 s, ses points sont versés au score et le multiplicateur monte d'un cran (jusqu'à x5). Plus courte, elle ne rapporte rien.
+- Un choc contre un mur ou un camion perd la glisse en cours et ramène le multiplicateur à x1 ; 3 secondes sans glisser aussi. Frotter un mur ne casse rien.
+- Le score ne compte que si les deux tours sont bouclés dans le délai affiché sous le chrono : deux tours au temps de la médaille de bronze du contre-la-montre, plus 30 %.
+- Une glisse encore en cours sur la ligne d'arrivée n'est pas comptée.
+
+Le HUD montre le score, le multiplicateur, et au centre les points de la glisse en cours (en blanc tant qu'elle est trop courte pour compter). Record et médailles par carte (clé `vpr7.<carte>.glisse`).
+
+Le score est tenu dans `sim.js` pour chaque voiture (`c.score`, `c.cours`, `c.mult`, réglages `GL`), à part de la physique : aucun temps au tour n'en dépend. Les seuils de médailles sont dans `game.js` (`GLM`, en points, par carte) : le pilote en glisse de `test-cartes.js`, qui ne glisse que pour aller vite, y fait à peu près le bronze. Une carte sans ligne dans `GLM` reçoit des seuils au mètre de piste, à régler après essais.
+
 ### Course à élimination
 
 Variante de la course, au menu des modes (« ÉLIMINATION », aux trois difficultés). Il y a autant de tours que de voitures. Chaque fois que le meneur passe la ligne, à partir de la fin du tour 2, la voiture classée dernière sort : elle se range sur le côté, clignote et disparaît, sans plus gêner personne. Le premier tour est protégé, le dernier se joue à deux. Un bandeau rouge prévient le joueur tant qu'il est dernier. Le classement final est l'ordre inverse des sorties.
@@ -154,7 +169,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 node test.js
 ```
 
-Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, la jauge de nitro (remplissage, poussée, choc, vol), l'aspiration, la course contre IA et la course à élimination (personne ne sort au premier tour, classement = ordre inverse des sorties). Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
+Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, la jauge de nitro (remplissage, poussée, choc, vol), l'aspiration, la course contre IA, le score du mode Glisse (une glisse rapide rapporte plus qu'une lente, l'enchaînement multiplie, un choc le casse, des zigzags lents ne rapportent rien) et la course à élimination (personne ne sort au premier tour, classement = ordre inverse des sorties). Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
 
 ```bash
 node test-cartes.js
