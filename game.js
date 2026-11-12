@@ -515,7 +515,7 @@
   const zap = () => { SON.setStation(SON.station + 1); radioT = 2.5; };
   // boîte et régime : calculés même sans audio, la jauge du HUD s'en sert
   function drivetrain(dt, r, gas) { // rapport et régime viennent de la physique (sim.js) ; ici on les lisse pour le son et la jauge
-    const up = car.gear > gear; gear = car.gear;
+    const up = Math.sign(car.gear - gear); gear = car.gear; // +1 rapport monté, -1 descendu
     let tgt = car.rpm / CARD.red;
     if (state === 'count' && gas) tgt = 0.8 + 0.05 * Math.sin(performance.now() / 22); // rupteur sur la grille
     rpm += (tgt - rpm) * Math.min(1, dt * 14); load += ((car.shiftT > 0 ? 0 : gas) - load) * Math.min(1, dt * 12); spool += ((gas ? rpm : 0) - spool) * Math.min(1, dt * 2.5);
@@ -833,7 +833,7 @@
     ghostM.visible = ghostOn && state === 'race' && !race && !!ghost && g0 + 7 < ghost.length;
     if (ghostM.visible) { ghostM.position.set(lerp(ghost[g0], ghost[g0 + 4], gf), lerp(ghost[g0 + 1], ghost[g0 + 5], gf) + 0.6, lerp(ghost[g0 + 2], ghost[g0 + 6], gf)); ghostM.rotation.y = -(ghost[g0 + 3] + wrap(ghost[g0 + 7] - ghost[g0 + 3]) * gf); }
     fxFrame(dt, now, sp, inp, hit, fx, fz);
-    SON.frame(dt, { state, car, T, hot: hot(car.idx, 50), tun: lm, amb: ambAt(car.idx), r, sp, gas, hit, up, rpm, load, spool, stun });
+    SON.frame(dt, { state, car, T, hot: hot(car.idx, 50), tun: lm, amb: ambAt(car.idx), r, sp, gas, hit, up: up > 0, down: up < 0, rpm, load, spool, stun });
 
     // alerte de virage serré, lue sur la courbure à venir
     let wk = 0;

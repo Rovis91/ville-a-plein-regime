@@ -7,7 +7,7 @@
 // couleur de la station (3 bandes) → musique oui/non → filtre de vitesse et de tunnel → famille « mus » → master → compresseur. Familles réglables : mus, mot (moteur, boîte), pneu, vent, amb (lieu), choc (chocs, frottement, boost), ui (bips, jingle, radio).
 (() => {
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const hz = m => 440 * 2 ** ((m - 69) / 12), R = -99, OUT = 0.56; // R : silence dans un thème (voir mel() dans cartes.js)
+  const hz = m => 440 * 2 ** ((m - 69) / 12), R = -99, OUT = 0.56, CLAC = 1; // R : silence dans un thème (voir mel() dans cartes.js)
   let M = CARTE, ST = M.radio, TH = M.th;
   let AC, live = true, timer, pret = Promise.resolve(), ana, master, musicG, tuneG, drumG, musF, duckG, swF, busDry, busDrv, acid, fuzz, kdrv, bsat, dly, dlyFb, eqL, eqM, eqH, mrevG, drumRv, revIn, echoIn, choIn, mbuf, rev, musSend, motSend, nbuf, outG, vu;
   let t0 = 0, nextT = 0, stp = 0, musicOn = true, lastHit = 0, lastN = 0, lastB = 0, menu = true;
@@ -377,11 +377,15 @@
   }
   const beep = f => AC && osc('square', f, AC.currentTime, 0.25, 0.2, V.ui);
   // bruitages ponctuels : appelés par audioFrame, et un par un par le banc d'écoute
-  function clac(t = AC.currentTime) { osc('triangle', 80, t, 0.06, 0.07, V.mot); } // clac de boîte ; la coupure de poussée vient de la physique
+  function clac(down, t = AC.currentTime) { // passage de rapport : débrayage puis engagement, deux claquements secs dans le médium et un petit choc de transmission ; la coupure de poussée vient de la physique
+    const f = down ? 1500 : 1900;
+    nz(t, 0.018, CLAC, V.mot, 'bandpass', f, 2.5); osc('triangle', 150, t, 0.05, CLAC * 0.25, V.mot);
+    nz(t + 0.07, 0.03, CLAC * 1.4, V.mot, 'bandpass', f * 1.5, 2); nz(t + 0.07, 0.012, CLAC * 0.6, V.mot, 'highpass', 4000); osc('square', 320, t + 0.07, 0.03, CLAC * 0.15, V.mot);
+  }
   function choc(hit, t = AC.currentTime) { nz(t, 0.25, Math.min(0.6, hit * 0.04), V.choc, 'lowpass', 400); }
   function boostFx(t = AC.currentTime) { const o = osc('sawtooth', 220, t, 0.5, 0.1, filt('lowpass', 3000, 0.5, V.choc)); o.frequency.exponentialRampToValueAtTime(880, t + 0.4); const w = nz(t, 0.6, 0.08, V.choc, 'bandpass', 500, 1.5); w.frequency.exponentialRampToValueAtTime(4000, t + 0.5); } // boost de sortie de glisse : sifflement + souffle
   function petarade(spool = 1, t = AC.currentTime) { nz(t, 0.25, 0.04 * spool, V.mot, 'bandpass', 1400, 1.5); for (let i = 0; i < 3; i++) nz(t + 0.08 + Math.random() * 0.4, 0.035, 0.12, V.mot, 'lowpass', 900); } // lever de pied à haut régime
-  // e : état de la course pour cette image — { state, car, T, hot (0..1 dans le secteur chaud), tun (0..1 dans le tunnel), amb (0..1 dans une zone d'ambiance), r (vitesse 0..1), sp, gas, hit, up (rapport monté), rpm, load, spool, stun }
+  // e : état de la course pour cette image — { state, car, T, hot (0..1 dans le secteur chaud), tun (0..1 dans le tunnel), amb (0..1 dans une zone d'ambiance), r (vitesse 0..1), sp, gas, hit, up / down (rapport monté / descendu), rpm, load, spool, stun }
   function audioFrame(dt, e) {
     if (!AC) return;
     const { state, car, T, r, sp, gas, hit, up, rpm, load, spool, stun } = e, N = T.n, tun = e.tun || 0, CARD = M.car;
@@ -389,7 +393,7 @@
     const t = AC.currentTime, racing = state === 'race', k = (p, v, tc = 0.04) => p.setTargetAtTime(v, t, tc);
     if ((state === 'title') !== menu) { menu = !menu; retune(t + 0.05); tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.3); } // menu ↔ course : la boucle de menu laisse la place à la station
     // moteur (discret sous la musique) : coupure au passage de rapport, timbre selon la charge, turbo, pétarades au lever de pied
-    if (up) clac(t);
+    if (up || e.down) clac(e.down, t);
     const f = rpm * CARD.red / 40 * CARD.son; // la moitié de la fréquence d'allumage d'un 6 cylindres (3 explosions par tour) : même montée en régime, une octave plus grave
     k(eng.a.frequency, f); k(eng.b.frequency, f / 2); k(eng.c.frequency, f * 2); k(eng.lfo.frequency, f / 3);
     k(eng.lp.frequency, 180 + rpm * 320 + load * 380); k(eng.drive.gain, 0.35 + 0.5 * load); k(eng.lfoG.gain, 0.1 + 0.15 * load); // filtre bas : le grave domine
@@ -431,7 +435,7 @@
     toggleMusic() { musicOn = !musicOn; if (AC) musicG.gain.value = musicOn ? 1 : 0; },
     volume(fam, v) { vol[fam] = v; if (V[fam]) V[fam].gain.value = v; },
     evenement: () => { ambT = 0; }, get live() { return live; },
-    clac: () => AC && clac(), choc: v => AC && choc(v), boost: () => AC && boostFx(), petarade: () => AC && petarade(),
+    clac: down => AC && clac(down), choc: v => AC && choc(v), boost: () => AC && boostFx(), petarade: () => AC && petarade(),
     moniteur(v) { if (outG) outG.gain.value = OUT * v; }, get vu() { return vu; }, // gain d'écoute du banc : sans effet sur le jeu
     get vol() { return vol; }, get pret() { return pret; }, get stations() { return ST; },
     get station() { return station; }, get nom() { return ST[station].name; }, get fq() { return ST[station].fq; }, get genre() { return ST[station].genre; }, get musicOn() { return musicOn; },
