@@ -19,6 +19,12 @@
   const vturn = (a, k) => { const c = a / k; return KT.w1 * c >= KT.vref ? KT.w1 * c : KT.w0 * c / (1 + (KT.w0 - KT.w1) * c / KT.vref); }; // vitesse à laquelle la part a du braquage suffit pour une courbure k
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+  // Pluie sur la route : m = (force − 1) / 2 (T.eau, 0 à force 1 ou en tunnel, 1 à force 3). La bruine (force 1, la ville) ne change rien : records intacts.
+  //   vir = lacet perdu en courbe ; frein, trac = freinage et motricité perdus ; colle = rattrapage de la vitesse par le nez perdu (la voiture chasse)
+  //   aquaplaning : au-dessus de vaq − dvaq·m (m/s), sur 4 m/s : jusqu'à aq de lacet en moins, et le rattrapage perd encore aqc
+  const PL = { vir: 0.15, frein: 0.3, trac: 0.25, colle: 0.5, vaq: 230 / 3.6, dvaq: 40 / 3.6, aq: 0.25, aqc: 0.3 };
+  const aqua = (m, v) => m * clamp((v - PL.vaq + PL.dvaq * m) / 4, 0, 1);
+  const eau = (T, i) => T.eau ? T.eau[i] : 0;
 
   function buildTrack(THREE) {
     const curve = new THREE.CatmullRomCurve3(PTS.map((p, i) => new THREE.Vector3(p[0], HGT[i], p[1])), true, 'centripetal');
@@ -44,9 +50,14 @@
         s.kl = 2 * (ux * vz - uz * vx) / (Math.hypot(ux, uz) * Math.hypot(vx, vz) * Math.hypot(c[0] - a[0], c[1] - a[1])); });
     }
     const near = p => { let b = 0, bd = 1e9; S.forEach((s, i) => { const d = (s.x - p[0]) ** 2 + (s.z - p[1]) ** 2; if (d < bd) { bd = d; b = i; } }); return b; };
-    const at = i => near(PTS[i]), TUN = M.tun || [0, 0];
+    const at = i => near(PTS[i]), TUN = M.tun || [0, 0], t0 = at(TUN[0]), t1 = at(TUN[1]);
+    // pluie (th.pluie) : 1 = partout, ou des zones [point a, point b, force] fondues sur 60 échantillons (120 m). T.pluie = force par échantillon (l'image), T.eau = m ci-dessus, nul en tunnel (la route)
+    const span = (a0, a1, r) => i => { const a = (i - a0 + n) % n, L = (a1 - a0 + n) % n; return a < L ? 1 : Math.max(0, 1 - (a - L) / r, 1 - (n - a) / r); };
+    const pz = Array.isArray(M.th.pluie) ? M.th.pluie.map(([a, b, f]) => [span(at(a), at(b), 60), f]) : null, tz = span(t0, t1, 20);
+    const pluie = Float32Array.from(S, (_, i) => pz ? Math.max(0, ...pz.map(([z, f]) => z(i) * f)) : M.th.pluie ? 1 : 0);
+    const eau = pluie.map((p, i) => clamp((p - 1) / 2, 0, 1) * (M.tun ? 1 - tz(i) : 1));
     // tun : la carte a un tunnel, de t0 à t1 ; h0-h1 : secteur « chaud » pour la musique ; sp : les deux temps intermédiaires (indices d'échantillons)
-    return { S, n, W, len, tun: !!M.tun, t0: at(TUN[0]), t1: at(TUN[1]), h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at) };
+    return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, eau };
   }
 
   function newCar(T) {
@@ -66,7 +77,8 @@
     // La voiture se met en travers de c.sa (angle de dérive) mais sa trajectoire tourne au lacet commandé : on serre plus qu'en adhérence, sans perdre de vitesse.
     if (!c.dd && inp.hand && sp > 12 && Math.abs(inp.steer) > 0.3) c.dd = Math.sign(inp.steer);
     if (c.dd && (!inp.hand || sp < 10)) { if (c.driftT > 0.6 && sp >= 10) c.boost = Math.min(1.5, c.driftT * 0.8); c.dd = 0; c.driftT = 0; } // glisse tenue plus de 0,6 s : boost à la sortie
-    const om = omega(sp) * Math.min(1, sp / 10), sd = c.steer * (c.dd || 0);
+    const m = eau(T, c.idx); c.aq = aqua(m, sp); // route mouillée : moins de lacet, encore moins en aquaplaning
+    const om = omega(sp) * Math.min(1, sp / 10) * (1 - PL.vir * m) * (1 - PL.aq * c.aq), sd = c.steer * (c.dd || 0);
     const w = c.dd ? c.dd * om * lerp(KT.dn, sd > 0 ? KT.din : KT.dout, Math.abs(sd)) : c.steer * om * (inp.gas && !inp.brake ? 1 : KT.lift);
     c.yaw += (w - c.yaw) * Math.min(1, dt * 18); // un rien d'inertie : la réponse est quasi immédiate
     const dsa = ((c.dd || 0) * KT.ang * (1 + 0.2 * sd) - c.sa) * Math.min(1, dt * 6); c.sa += dsa;
@@ -89,19 +101,19 @@
     else if (wr > CARD.red) acc = -6 * Math.sign(vf); // surrégime : rupteur et gros frein moteur
     else {
       const tqe = inp.gas * torque(er) - (1 - inp.gas) * (20 + 0.01 * er) * Math.sign(vf); // couple moteur, ou frein moteur pied levé
-      acc = Math.min(CARD.trac, tqe * ratio * CARD.final * CARD.eff / CARD.wheel / CARD.mass); // plafonné par la motricité (~1,1 g en 4 roues motrices, moins en propulsion)
+      acc = Math.min(CARD.trac * (1 - PL.trac * m), tqe * ratio * CARD.final * CARD.eff / CARD.wheel / CARD.mass); // plafonné par la motricité (~1,1 g en 4 roues motrices, moins en propulsion)
     }
     if (c.boost > 0) { c.boost -= dt; if (inp.gas) acc += 6; }
     if (c.stun > 0) { c.stun -= dt; if (acc > 0) acc *= 0.2; }
     vf += acc * dt;
     const s0 = S[c.idx]; if (Math.abs(vf) > 1) vf -= 9.81 * s0.sl * (fx * s0.tx + fz * s0.tz) * dt; // la pente pousse ou retient
-    if (inp.brake) vf -= (vf > 0.5 ? 18 : 12) * inp.brake * dt;
+    if (inp.brake) vf -= (vf > 0.5 ? 18 : 12) * (1 - PL.frein * m) * inp.brake * dt;
     if (vf < -12) vf = -12;
     // traînée aérodynamique (½·ρ·Cd·A·v²), résistance au roulement, et un peu de vitesse perdue en tournant
     vf -= (0.6 * CARD.cd * CARD.area * vf * Math.abs(vf) / CARD.mass + ((Math.abs(vf) > 0.3 ? 0.15 : 0) + KT.tv * Math.abs(c.yaw) * Math.min(1, sp / 10)) * Math.sign(vf)) * dt;
     // pas de pneus qui décrochent : la vitesse suit le nez de la voiture (décalé de l'angle de dérive en glisse), sans rien perdre ; un choc de côté est rattrapé en un dixième de seconde
     const v0 = Math.hypot(vf, vl);
-    vl += (-Math.sin(c.sa) * v0 - vl) * Math.min(1, 25 * dt);
+    vl += (-Math.sin(c.sa) * v0 - vl) * Math.min(1, 25 * (1 - PL.colle * m) * (1 - PL.aqc * c.aq) * dt); // sur le mouillé, la vitesse suit le nez avec retard : la voiture chasse
     if (v0 > 1) { const k = v0 / Math.max(Math.hypot(vf, vl), 1e-3); vf *= k; vl *= k; }
     c.slide = Math.min(1, Math.abs(c.sa) / KT.ang); c.drift = !!c.dd;
     if (c.dd) c.driftT += dt;
@@ -156,7 +168,13 @@
     const e = wrap(Math.atan2(la.z + la.tx * (off || la.dl) - c.z, la.x - la.tz * (off || la.dl) - c.x) - c.th);
     let va = 1e9;
     // vitesse permise = celle de chaque virage de la trajectoire à venir, plus ce qu'on peut perdre en freinant d'ici là (10 m/s², 2 m par échantillon)
-    for (let j = 0; j < 200; j++) va = Math.min(va, Math.sqrt(vturn(1.3, Math.abs(S[(c.idx + j) % n].kl) + 1e-4) ** 2 + 40 * j));
+    // sous la pluie : virages au lacet mouillé, sans dépasser le seuil d'aquaplaning là où il ne passerait plus, et freinage plus long
+    const fr = 40 * (1 - PL.frein * eau(T, c.idx));
+    for (let j = 0; j < 200; j++) {
+      const i = (c.idx + j) % n, m = eau(T, i), k = Math.abs(S[i].kl) + 1e-4, g = 1.3 * (1 - PL.vir * m), vq = PL.vaq - PL.dvaq * m;
+      let v = vturn(g, k); if (m && v > vq) v = Math.max(vq, vturn(g * (1 - PL.aq * m) * 0.7, k)); // au-delà du seuil d'aquaplaning, avec de la marge : la voiture y chasse
+      va = Math.min(va, Math.sqrt(v ** 2 + fr * j));
+    }
     const vt = Math.min(vcap, va * lvl * (off ? 0.9 : 1)); // hors trajectoire, on passe moins vite
     const st = clamp(e * 3, -1, 1);
     return { steer: st, gas: sp < vt ? lvl : 0, brake: sp > vt + 3 ? 1 : 0, hand: false };
@@ -243,5 +261,5 @@
     }
   }
 
-  Object.assign(G, { buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, TOP, CARD, vturn, omega });
+  Object.assign(G, { buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, TOP, CARD, vturn, omega, PL });
 })(typeof window !== 'undefined' ? window : globalThis);

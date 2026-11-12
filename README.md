@@ -92,7 +92,9 @@ Dans `cartes.js`, pour chaque carte :
 | `car` | la voiture : rapports de boîte, courbe de couple, masse, aérodynamique, motricité, silhouette |
 | `radio` | les stations (`RADIO`, en tête de `cartes.js`) : tempo, batterie, timbres, couleur, progressions, motifs, thèmes, sections et forme · `amb` : les zones où l'on entend l'ambiance du lieu |
 | `th` | le thème : ciel, brume, lumières, couleurs de route, style et couleurs de l'interface |
-| `th.pluie` | `1` = pluie partout ; ou des zones `[point a, point b, force]` (1 = pluie normale ; au-delà, averse : plus de gouttes, traînées plus longues ; Wan-9 : averse de force 3 sur le port, rien avant la sortie du pont), coupée en tunnel |
+| `th.pluie` | `1` = pluie partout ; ou des zones `[point a, point b, force]` (1 = pluie normale ; au-delà, averse : plus de gouttes, traînées plus longues ; Wan-9 : averse de force 3 sur le port, rien avant la sortie du pont), coupée en tunnel. Calculée une fois par `buildTrack` (`T.pluie`, lue par le dessin et le son) |
+| Pluie sur la conduite | `PL` en tête de `sim.js` : tout part de `m = (force − 1) / 2` (`T.eau`, nul en tunnel), donc la force 1 (la ville) ne change rien. `vir` lacet en courbe, `frein` et `trac` freinage et motricité, `colle` retard de la vitesse sur le nez (la voiture chasse), `vaq`/`dvaq`/`aq`/`aqc` aquaplaning au-delà de 230 − 40·m km/h. Le pilote auto et les IA en tiennent compte (virages et freinage, marge au-dessus du seuil d'aquaplaning). Wan-9 : +6 % au tour |
+| Pluie au son | `audioFrame` d'`audio.js` : `rainG` (averse, ∝ force), `wetG` (chuintement des pneus, ∝ force × vitesse), `aqG` (gerbe d'aquaplaning, `car.aq`) |
 | `trafic` | nombre de camions sur la route |
 
 Dans `sim.js` : `TOP` est la vitesse de référence pour le braquage et les effets visuels, `AI_LVL` le niveau de chaque adversaire du mode course (1 = tour propre du pilote automatique).
