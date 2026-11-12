@@ -529,7 +529,11 @@
   const store = { get: k => { try { return JSON.parse(localStorage.getItem(PRE + k)); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(PRE + k, JSON.stringify(v)); } catch (e) { } } };
   const pref = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }, setPref = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
   let msel = 3; // ligne du menu principal
-  try { if (sessionStorage.getItem('vpr.menu')) { msel = 0; sessionStorage.removeItem('vpr.menu'); } } catch (e) { } // on vient de changer de carte : on reste sur cette ligne
+  // écran d'accueil : le navigateur n'autorise le son qu'après un geste ; on le demande d'abord, pour que la musique soit là quand le menu s'affiche
+  let accueil = true;
+  const entrer = () => { SON.init(); accueil = false; };
+  try { if (sessionStorage.getItem('vpr.menu')) { msel = 0; sessionStorage.removeItem('vpr.menu'); entrer(); } } catch (e) { } // on vient de changer de carte : on reste sur cette ligne, sans repasser par l'accueil (le navigateur garde en général le droit au son d'une page à l'autre ; sinon il revient à la touche suivante)
+  for (const ev of ['mousedown', 'pointerup', 'touchend']) addEventListener(ev, () => { if (accueil) entrer(); else SON.init(); }); // un clic ou un appui valent une touche
   const fmt = t => `${t / 60 | 0}'${String(t % 60 | 0).padStart(2, '0')}"${String(t * 100 % 100 | 0).padStart(2, '0')}`;
   let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, cth = car.th, lm = 0, carY = S[car.idx].y, pitch = 0, result = null, manual = pref('vpr.boite', 'a') === 'm';
   // secteurs (entrée et sortie de l'échangeur) et fantôme du record : [x, y, z, cap] à 20 Hz
@@ -539,7 +543,7 @@
   const keys = {}, H = 1 / 120;
 
   function start() {
-    SON.init();
+    SON.init(); accueil = false;
     race = mode === 'course' ? newRace(T) : null; raceEnd = false;
     car = race ? race.cars[0] : newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 3; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1; rLap = 0; rLapT = 0; result = null;
   }
@@ -571,9 +575,10 @@
     else start();
   }
   addEventListener('keydown', e => {
-    keys[e.code] = 1; SON.init(); // le contexte audio ne peut démarrer qu'après un geste : la musique de menu part à la première touche
+    keys[e.code] = 1; SON.init(); // le contexte audio ne peut démarrer qu'après un geste
     if (/^Arrow|Space/.test(e.code)) e.preventDefault();
     if (e.repeat) return;
+    if (accueil) { entrer(); return; } // la première touche ne fait qu'ouvrir le menu
     const key = (e.key || '').toLowerCase(); // lettre réellement tapée, pour les commandes nommées par une lettre (le pilotage, lui, reste en positions physiques)
     if (state === 'pause') {
       if (e.code === 'Escape' || key === 'p') state = prev;
@@ -638,6 +643,14 @@
   function drawHUD(dt, sp, r, warn) {
     hg.clearRect(0, 0, HW, HH);
     const cx = HW / 2, blink = (performance.now() / 160 | 0) % 3 > 0;
+    if (state === 'title' && accueil) { // écran d'accueil : la carte tourne derrière, on attend un geste
+      R(hg, 'rgba(8,8,12,.55)', 0, 0, HW, HH);
+      if (HU.sur[0]) txt(HU.sur[0], cx, HH / 2 - 76, 16, C, 'center', 0, JP);
+      txt(HU.titre[0], cx, HH / 2 - 50, 24, Y, 'center', 2); txt(HU.titre[1], cx, HH / 2 - 24, 24, Y, 'center', 2);
+      if (blink) tag('APPUIE SUR UNE TOUCHE', cx, HH / 2 + 22, Y);
+      txt('OU CLIQUE', cx, HH / 2 + 44, 8, '#e8e8e4', 'center');
+      hudT.needsUpdate = true; return;
+    }
     if (state === 'title') { // menu principal : la carte tourne derrière, on choisit carte, mode et boîte
       R(hg, 'rgba(8,8,12,.45)', 0, 0, HW, HH);
       if (HU.sur[0]) txt(HU.sur[0], cx, 8, 16, C, 'center', 0, JP); txt(HU.sur[1], cx, 30, 8, C, 'center');
@@ -832,5 +845,5 @@
   }
   const loop = now => { requestAnimationFrame(loop); frame(now); };
   requestAnimationFrame(loop);
-  window.__g = { frame, start, M, scene, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
+  window.__g = { frame, start, M, scene, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
 })();
