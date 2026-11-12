@@ -209,7 +209,7 @@
       radio: RADIO.canal,
       th: { decor: 'canal', fog: 0xe89060, fogD: [160, 1700], sky: [[0, '#3d2a5c'], [0.24, '#3d2a5c'], [0.25, '#7a4078'], [0.36, '#7a4078'], [0.37, '#d85a50'], [0.44, '#d85a50'], [0.45, '#ff9a4a'], [0.49, '#ff9a4a'], [0.5, '#e89060'], [1, '#e89060']], stars: 0,
         astre: { dir: [-0.85, 0.11, 0.35], col: '#fff4c0', ombre: '#fff4c0', taille: 340 }, hemi: [0xb898c8, 0xb8ad9a, 0.85], sun: [0xffa860, 0.9], phares: 0.4, bloom: 0.03, scan: 0.05,
-        murH: 1.3, route: ['#7a7066', '#867c70', '#f4f0e0', '#2aa39a', '#e83f8c', '#f4f0e0', 2], mur: ['#f4f0e0', '#e83f8c', '#1848c8', '#e4ddd0'], depart: [0xff7a3d, 0x3d2a5c, '#f4f0e0'],
+        murH: 1.3, route: ['#4c4a50', '#58565c', '#f4f0e0', '#2aa39a', '#e83f8c', '#f4f0e0', false], mur: ['#f4f0e0', '#e83f8c', '#1848c8', '#e4ddd0'], depart: [0xff7a3d, 0x3d2a5c, '#f4f0e0'],
         hud: { y: '#ffc04a', c: '#ff7a3d', r: '#e83f8c', fond: 'rgba(40,24,56,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'SPEEDWAY · HEURE DOREE'], titre: ['CANAL', 'SIX'] } } },
   ];
   let id = 'ville';
