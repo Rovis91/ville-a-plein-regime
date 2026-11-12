@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ville à plein régime — propositions de cartes</title>
+<style>
+  @font-face { font-family: "Press Start 2P"; src: url(../fonts/press-start-2p-latin-400-normal.woff2) format("woff2"); }
+  @font-face { font-family: DotGothic16; src: url(../fonts/dotgothic16-japanese-400-normal.woff2) format("woff2"); }
+  * { box-sizing: border-box; }
+  html { background: #08080c; color: #d8d8e0; font: 13px/1.5 Consolas, ui-monospace, "Courier New", monospace; }
+  body { margin: 0; padding: 20px 16px 40px; }
+  h1, h2, h3, .lab, button, th, .tag { font-family: "Press Start 2P", DotGothic16, monospace; font-weight: 400; letter-spacing: 0; }
+  h1 { font-size: 18px; color: #fcee0a; margin: 0 0 6px; line-height: 1.4; }
+  h1 span { color: #00f0ff; }
+  h2 { font-size: 12px; color: #00f0ff; margin: 28px 0 10px; border-bottom: 2px solid #00f0ff; padding-bottom: 6px; }
+  p { margin: 0 0 8px; max-width: 110ch; }
+  code { color: #fcee0a; font: inherit; }
+  b { color: #fff; font-weight: 700; }
+  .pre { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .box { border: 2px solid #2c2c3a; background: #0e0e16; padding: 10px 12px; }
+  .box h3 { font-size: 9px; color: #ff4fc8; margin: 0 0 8px; }
+  ul { margin: 0; padding-left: 16px; } li { margin-bottom: 4px; }
+  .opts { display: flex; gap: 16px; align-items: center; margin: 0 0 10px; flex-wrap: wrap; }
+  label { cursor: pointer; }
+  /* cartes côte à côte : chaque rubrique est une rangée commune (subgrid), pour comparer à l'horizontale */
+  .cards { display: grid; grid-template-columns: repeat(5, minmax(310px, 1fr)); grid-template-rows: repeat(10, auto); gap: 0 12px; overflow-x: auto; padding-bottom: 12px; }
+  .card { display: grid; grid-row: span 10; grid-template-rows: subgrid; border: 2px solid var(--a); background: #0e0e16; }
+  .card > section { padding: 8px 10px; border-top: 2px solid #1c1c26; min-width: 0; }
+  .card > section:first-child { border-top: 0; background: var(--a); color: #08080c; }
+  .card h3 { font-size: 12px; margin: 0 0 6px; line-height: 1.5; }
+  .card .sub { font-weight: 700; }
+  .tag { font-size: 8px; background: #08080c; color: var(--a); padding: 3px 5px; display: inline-block; margin-bottom: 6px; }
+  .lab { font-size: 8px; color: var(--a); margin: 0 0 6px; text-transform: uppercase; }
+  .pal { display: flex; flex-wrap: wrap; gap: 4px; }
+  .sw { width: 64px; font-size: 10px; line-height: 1.2; }
+  .sw i { display: block; height: 22px; border: 1px solid #000; }
+  canvas { display: block; width: 100%; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
+  table { border-collapse: collapse; width: 100%; margin-top: 6px; }
+  td { padding: 1px 0; vertical-align: top; } td:last-child { text-align: right; color: #fff; white-space: nowrap; }
+  button { font-size: 8px; background: #08080c; color: var(--a, #fcee0a); border: 2px solid var(--a, #fcee0a); padding: 6px 8px; cursor: pointer; margin-top: 6px; }
+  button:hover, button.on { background: var(--a, #fcee0a); color: #08080c; }
+  details summary { cursor: pointer; color: var(--a); }
+  pre { font: 11px/1.4 Consolas, monospace; white-space: pre-wrap; word-break: break-all; background: #08080c; padding: 6px; margin: 6px 0 0; max-height: 220px; overflow: auto; color: #9fc8ff; }
+  .cmp th { font-size: 8px; text-align: left; color: #00f0ff; padding: 4px 8px 4px 0; }
+  .cmp td { padding: 3px 8px 3px 0; border-top: 1px solid #1c1c26; text-align: left !important; white-space: normal !important; color: #d8d8e0 !important; }
+</style>
+</head>
+<body>
+<h1>VILLE À PLEIN RÉGIME <span>// propositions de cartes</span></h1>
+<p>Quatre cartes à trancher, à côté de la carte actuelle. Conception seule : rien n'est implémenté, <code>game.js</code> et <code>sim.js</code> n'ont pas été touchés. Les tracés sont des points de contrôle au format <code>PTS</code>/<code>HGT</code>, passés dans la vraie physique (tour au pilote automatique) : les longueurs, vitesses et temps affichés sont mesurés, pas estimés.</p>
+
+<h2>0. PRÉREQUIS COMMUN : RENDRE LA CARTE SÉLECTIONNABLE</h2>
+<div class="pre">
+  <div class="box"><h3>SIM.JS — ENVIRON 40 LIGNES</h3><ul>
+    <li><code>PTS</code>, <code>HGT</code>, <code>SC</code>, <code>TUN</code>, <code>W</code>, <code>GRIP</code>, <code>CARD</code> sont des constantes de module : les passer en données (<code>buildTrack(THREE, carte)</code>, voiture portée par la piste).</li>
+    <li>Quatre valeurs câblées pour la Z-tune : <code>c.gear &lt; 5</code>, passages à 7500 / 6200 tr/min, motricité plafonnée à 11 m/s² (4 roues motrices), patinage à 3500 tr/min.</li>
+    <li><code>TUN</code> suppose un tunnel, et un seul.</li>
+    <li>Le pilote automatique ne regarde pas assez loin pour freiner avant une épingle : il touche sur les quatre nouveaux tracés (vérifié). Il lui faut une anticipation de la distance de freinage.</li>
+    <li><code>test.js</code> : boucler sur les cartes, seuils par carte (rayon mini 25 m, 0 à 100 de la Z-tune).</li>
+  </ul></div>
+  <div class="box"><h3>GAME.JS — 300 À 400 LIGNES, SURTOUT DÉPLACÉES</h3><ul>
+    <li>Tout le décor est construit une fois au chargement, dans une seule fermeture : palette et lumières, textures, piste (qui suppose le tunnel), ville (grille aux bornes en dur), horizon, voiture, radio <code>const ST</code>.</li>
+    <li>La musique adaptative et les deux temps intermédiaires sont accrochés à l'entrée et à la sortie du tunnel : à remplacer par des secteurs décrits dans la carte.</li>
+    <li>Le moins cher : carte choisie à l'écran-titre, mémorisée, puis rechargement de la page. Le décor reste construit une seule fois, rien à démonter. Une carte = un objet de données + une fonction de décor.</li>
+  </ul></div>
+  <div class="box"><h3>EFFORT ET RISQUES POUR LES RECORDS</h3><ul>
+    <li><b>Effort</b> : une session pour le prérequis, puis une session par carte (300 à 500 lignes de décor et une station de radio). Le trafic de la carte Wangan compte pour une session de plus.</li>
+    <li><b>Records</b> : les clés <code>vpr5.best</code>, <code>splits</code>, <code>ghost</code> deviennent <code>vpr5.&lt;carte&gt;.…</code> ; la ville garde ses clés actuelles, donc aucun record perdu tant que sa physique ne bouge pas. Garde-fou : son tour automatique doit rester à 37,9 s avant et après.</li>
+    <li>La radio est mémorisée par numéro de station (<code>vpr.radio</code>) : à ranger par carte.</li>
+    <li>D'autres sessions modifient <code>game.js</code> et <code>sim.js</code> en ce moment : faire le prérequis après elles, sinon conflits de fusion.</li>
+  </ul></div>
+</div>
+
+<h2>1. LES CARTES</h2>
+<div class="opts">
+  <label><input type="checkbox" id="same"> tracés à la même échelle</label>
+  <span>Couleur du tracé = altitude (bas → haut). Pointillé = tunnel. Carré blanc = départ, sens horaire.</span>
+</div>
+<div class="cards" id="cards"></div>
+
+<h2>2. ORDRE CONSEILLÉ</h2>
+<table class="cmp">
+  <tr><th>ORDRE</th><th>CARTE</th><th>POURQUOI À CETTE PLACE</th></tr>
+  <tr><td>1</td><td>Prérequis</td><td>Sans lui, chaque carte est une copie du jeu.</td></tr>
+  <tr><td>2</td><td>Karasu-tōge</td><td>La plus différente à conduire (163 km/h de moyenne contre 221), le moins de nouveautés moteur, et c'est la carte demandée. Le touge l'emporte sur le Wangan comme carte japonaise numéro un.</td></tr>
+  <tr><td>3</td><td>Premier métro</td><td>Prouve que le jeu sait sortir de la nuit au néon. Si l'aube pixel ne plaît pas, on le sait tôt.</td></tr>
+  <tr><td>4</td><td>Wan-9</td><td>Ne vaut que avec du trafic à doubler, la plus grosse nouveauté moteur. Sans trafic, c'est « 250 km/h en permanence », déjà refusé.</td></tr>
+  <tr><td>5</td><td>Canal 6</td><td>La glisse à l'accélérateur demande de retoucher la physique : à faire quand le reste est stable.</td></tr>
+</table>
+
+<h2>3. QUESTIONS OUVERTES</h2>
+<ul>
+  <li><b>Adhérence.</b> Avec <code>GRIP = 44</code> une épingle de 20 m se passe à 97 km/h. On garde 44 partout (ça tourne, comme aujourd'hui), ou on baisse sur le touge pour des épingles à 80 km/h et plus de glisse ?</li>
+  <li><b>Wangan.</b> 290 km/h en pointe sur 2,7 km, puis 2,5 km de boucle serrée : acceptable, ou trop proche de ce qui a été refusé ? Avec trafic dès la première version ?</li>
+  <li><b>Voitures.</b> Fiches de série (RX-7 280 ch, Supra 320 ch) ou préparées (350 et 450 ch, mesuré : pointe 315 km/h pour la Supra) ? Une voiture imposée par carte, ou au choix ?</li>
+  <li><b>Jour.</b> Deux cartes sortent de la nuit (aube à Paris, heure dorée à Los Angeles). D'accord, ou tout doit rester nocturne ?</li>
+  <li><b>Fiches techniques.</b> Les rapports de boîte de la Renault 5 Maxi Turbo sont estimés, ceux des trois autres cités de mémoire : à vérifier sur fiche constructeur avant d'intégrer.</li>
+</ul>
+
+<script id="donnees">
+// Une carte = { W demi-largeur de route (m), sc échelle, tun [début, fin] du tunnel en indices de points, grip, car au format CARD,
+// pts [x, z, altitude], auto = mesures du tour lancé au pilote automatique (node propositions/verif.js) }.
+const _ = null;
+const MAPS = [
+  { id: 'ville', tag: 'CARTE ACTUELLE', nom: 'VILLE À PLEIN RÉGIME', sub: 'Viaduc et échangeur, nuit cyberpunk', a: '#00f0ff', lo: '#ff003c', hi: '#00f0ff',
+    refs: 'La référence pour comparer. Une grande boucle rapide : viaduc, bosse, plongée dans un échangeur couvert, remontée.',
+    pal: [['#1f0a36', 'brume'], ['#00f0ff', 'néon'], ['#ff003c', 'alarme'], ['#fcee0a', 'marquage'], ['#ff4fc8', 'enseignes'], ['#2c2c3a', 'bitume']],
+    W: 9, sc: 0.85, tun: [6, 12], grip: 44, car: null, auto: { t: 37.9, moy: 221, max: 261, min: 169, ep: 0 },
+    pts: [[0,0,0],[220,0,0],[420,10,4],[560,90,10],[600,240,12],[520,370,6],[360,400,-2],[230,340,-10],[110,400,-14],[0,520,-14],[-150,560,-10],[-300,500,-4],[-360,360,2],[-300,240,8],[-380,120,6],[-330,10,2],[-180,0,0]],
+    drive: 'Presque tout à fond : on ne descend jamais sous 169 km/h. Aucune épingle. La glisse est un choix, jamais une obligation.',
+    decor: ['Tours à fenêtres allumées, enseignes en japonais', 'Échangeur couvert rouge et jaune', 'Hologrammes, projecteurs, trafic volant, pluie'],
+    voit: 'Nismo Skyline GT-R Z-tune', fiche: '500 ch, 1600 kg, 4 roues motrices, 6 rapports.', why: 'Motricité totale, pointe vers 260.',
+    mus: null, musTxt: 'Radio actuelle : darksynth 126 BPM, house filtrée 122, breakbeat 168.', cout: ['Rien : c\'est le jeu d\'aujourd\'hui.'] },
+
+  { id: 'touge', tag: 'PROPOSITION A', nom: 'KARASU-TŌGE 烏峠', sub: 'Le col du Corbeau — touge, nuit claire', a: '#ff8c1a', lo: '#16504a', hi: '#ffe9b0',
+    refs: 'Initial D (manga de Shūichi Shigeno, 1995). Routes réelles : mont Haruna, lacets d\'Irohazaka à Nikkō, col d\'Usui. Vidéos Best Motoring et Hot Version de Keiichi Tsuchiya.',
+    pal: [['#070d0b', 'nuit'], ['#16302a', 'cèdres'], ['#e8e6da', 'glissière'], ['#ff8c1a', 'ligne centrale'], ['#ffe9b0', 'phares'], ['#9ff0ff', 'distributeur'], ['#ff2a3a', 'feux stop']],
+    W: 6, sc: 1, tun: [0, 0], grip: 44, auto: { t: 84.0, moy: 163, max: 226, min: 97, ep: 4 },
+    car: { ratios: [3.483, 2.015, 1.391, 1.000, 0.719], final: 4.1, wheel: 0.318, mass: 1345, eff: 0.88, idle: 900, red: 8000, cd: 0.31, area: 1.8, trac: 8.5, tq: [0, 150, 220, 270, 300, 314, 308, 290, 240] },
+    pts: [[0,0,0],[150,0,4],[300,-40,12],[430,-10,22],[560,-70,34],[700,-40,46],[820,40,60],[860,170,74],[800,290,88],[840,400,100],[790,500,108],[720,580,107],[640,610,105],[570,580,103],[542,520,100],[540,430,95],[540,345,90],[534,331,89],[520,325,88],[506,331,87],[500,345,86],[500,430,81],[500,515,76],[494,529,75],[480,535,74],[466,529,73],[460,515,72],[460,430,67],[460,345,62],[454,331,61],[440,325,60],[426,331,59],[420,345,58],[420,430,53],[420,515,48],[414,529,47],[400,535,46],[386,529,45],[380,515,44],[380,430,39],[372,350,34],[335,285,29],[250,250,24],[150,275,19],[50,300,14],[-60,260,9],[-150,180,5],[-200,80,2],[-140,5,1]],
+    drive: 'Deux temps. Montée de 1,5 km en enfilades rapides (+108 m, jusqu\'à 11 %), puis descente : quatre épingles de 20 m de rayon empilées, à prendre au frein à main, et des esses pour finir. Route deux fois plus étroite que la ville.',
+    decor: ['Forêt de cèdres : rangées de plans sombres texturés', 'Glissières blanches à catadioptres, ligne centrale orange', 'Chevrons jaunes et miroirs convexes aux épingles', 'Talus côté montagne, vide côté vallée', 'Distributeur de boissons allumé au sommet, lac noir, lune', 'Ville minuscule dans la vallée : la texture de rues actuelle, 150 m plus bas'],
+    voit: 'Mazda RX-7 Spirit R Type A (FD3S, 2002)', fiche: 'Birotor biturbo 1,3 L, 280 ch à 6500 tr/min, 314 N·m, 1270 kg, propulsion, 5 rapports, zone rouge à 8000.',
+    why: 'Légère et courte, propulsion : elle pivote au frein à main là où la GT-R tire droit. Option préparée à 350 ch si la série paraît molle.',
+    mus: { nom: 'USUI FM', bpm: 156, lead: 'saw', stab: [2, 6, 10, 14], arp: 0, sw: 0, kick: '1000100010001000',
+      CH: [[58,62,65],[60,64,67],[62,65,69],[62,65,69],[58,62,65],[60,64,67],[57,61,64],[57,61,64]], ROOT: [34,36,38,38,34,36,33,33],
+      rif: [0,0,12,0,0,0,12,0,0,0,12,0,0,12,0,12],
+      LEAD: [[[0,77,2],[2,74,1],[3,77,2],[6,79,2],[8,77,2],[10,74,2],[12,72,2],[14,74,2]], [[0,76,2],[2,72,1],[3,76,2],[6,79,2],[8,76,2],[10,72,2],[12,76,2],[14,79,2]],
+        [[0,81,3],[3,79,3],[6,77,2],[8,76,2],[10,77,2],[12,74,4]], [[0,74,2],[2,77,2],[4,81,2],[6,82,2],[8,81,4],[12,77,2],[14,76,2]],
+        [[0,77,2],[2,74,1],[3,77,2],[6,79,2],[8,77,2],[10,74,2],[12,72,2],[14,74,2]], [[0,76,2],[2,72,1],[3,76,2],[6,79,2],[8,76,2],[10,72,2],[12,76,2],[14,79,2]],
+        [[0,76,3],[3,73,3],[6,76,2],[8,81,3],[11,79,3],[14,76,2]], [[0,73,2],[2,76,2],[4,79,2],[6,81,2],[8,85,8]]] },
+    musTxt: 'Eurobeat, 156 BPM, ré mineur. Grosse caisse sur tous les temps, basse en doubles-croches à l\'octave, accords de cuivres synthétiques à contretemps, riff de scie désaccordée. Le riff n\'entre qu\'en glisse : l\'épingle déclenche le refrain.',
+    cout: ['Largeur de route par carte', 'Pas de tunnel : secteurs musicaux et temps intermédiaires en données', 'Talus et forêt le long du tracé (la ville actuelle évite la route, ici le décor la borde)', 'Motricité de propulsion, son de moteur rotatif à régler', 'Seuil de rayon mini du test : 19 m ici'] },
+
+  { id: 'wangan', tag: 'PROPOSITION B', nom: 'WAN-9 湾岸九号', sub: 'Ligne de baie — autoroute surélevée', a: '#ff9a2e', lo: '#1f8f5a', hi: '#ff9a2e',
+    refs: 'Wangan Midnight (manga de Michiharu Kusunoki, 1990). Le Mid Night Club, club réel de 1987 à 1999. Ambiance des Shutokō Battle. Lieux : route Bayshore et boucle C1 du Shuto, Rainbow Bridge, aire de Daikoku.',
+    pal: [['#0a0f1c', 'ciel'], ['#ff9a2e', 'sodium'], ['#1f8f5a', 'panneaux'], ['#f4f1e0', 'phares'], ['#ff2a3a', 'feux'], ['#0f3b4a', 'baie'], ['#c9ced6', 'béton']],
+    W: 8, sc: 1, tun: [13, 18], grip: 44, auto: { t: 122.4, moy: 210, max: 289, min: 127, ep: 0 },
+    car: { ratios: [3.827, 2.360, 1.685, 1.312, 1.000, 0.793], final: 3.266, wheel: 0.318, mass: 1585, eff: 0.88, idle: 800, red: 6800, cd: 0.32, area: 1.95, trac: 8.5, tq: [0, 180, 300, 400, 427, 420, 400, 340, 260] },
+    pts: [[0,0,20],[500,0,20],[1000,-30,22],[1500,-20,34],[1900,10,40],[2300,60,30],[2600,180,22],[2720,380,18],[2690,515,15],[2635,570,13],[2560,590,10],[2420,555,7],[2290,650,4],[2160,550,0],[2030,650,-8],[1900,550,-12],[1770,650,-12],[1640,550,-6],[1510,650,2],[1380,550,8],[1250,650,12],[1120,560,15],[980,640,17],[840,600,18],[700,660,18],[450,650,19],[200,640,20],[-50,600,20],[-250,470,20],[-320,290,20],[-250,100,20],[-120,10,20]],
+    drive: 'Deux moitiés opposées. 2,7 km de ligne de baie à fond, pont en dos d\'âne, pointe à 290. Puis la bretelle et 2,5 km de boucle intérieure en gauche-droite serrés (30 à 60 m de rayon), dont un tunnel sous la baie. Pas de glisse : du placement, et du trafic à doubler.',
+    decor: ['Viaduc sur piles, murs antibruit', 'Lampadaires au sodium à intervalle fixe : leur rythme donne la vitesse sans flou', 'Panneaux verts suspendus, kanji procéduraux', 'Pont à haubans : pylônes en boîtes, câbles en lignes', 'Grues de port, conteneurs, grande roue en points lumineux', 'Camions lents : boîtes à feux rouges'],
+    voit: 'Toyota Supra RZ (JZA80, 1997)', fiche: '6 en ligne biturbo 3,0 L, fiche export 320 ch, 427 N·m, 1510 kg, propulsion, boîte Getrag V160 à 6 rapports.',
+    why: 'Même boîte Getrag que la Z-tune, pont plus long : elle allonge là où la GT-R plafonne. Lourde en boucle serrée, c\'est le prix.',
+    mus: { nom: 'BAY 138', bpm: 138, lead: 'saw', stab: [], arp: 1, sw: 0, kick: '1000100010001000',
+      CH: [[64,67,71],[60,64,67],[59,62,67],[62,66,69],[64,67,71],[60,64,67],[59,62,67],[62,66,69]], ROOT: [28,36,31,38,28,36,31,38],
+      rif: [_,_,0,0,_,_,0,0,_,_,0,0,_,_,0,12],
+      LEAD: [[[0,83,6],[6,79,2],[8,76,8]], [[0,84,6],[6,79,2],[8,76,4],[12,79,4]], [[0,86,6],[6,83,2],[8,79,8]], [[0,81,4],[4,78,4],[8,81,4],[12,78,2],[14,81,2]],
+        [[0,83,6],[6,79,2],[8,76,8]], [[0,84,6],[6,79,2],[8,76,4],[12,79,4]], [[0,86,6],[6,83,2],[8,91,8]], [[0,90,8],[8,86,8]]] },
+    musTxt: 'Trance, 138 BPM, mi mineur. Basse à contretemps, arpège carré avec écho, longue mélodie de scies, pompe sous la grosse caisse. Le séquenceur actuel sait déjà tout faire.',
+    cout: ['Trafic : obstacles mobiles et collisions. La plus grosse nouveauté', 'Carte trois fois plus longue : trois fois plus de géométrie', 'Second type de tunnel', 'Risque assumé : proche du « 250 en permanence » refusé si le trafic n\'y est pas'] },
+
+  { id: 'paris', tag: 'PROPOSITION C', nom: 'PREMIER MÉTRO', sub: 'Paris, 5 h 30 — circuit de rues à l\'aube', a: '#ffb38a', lo: '#5d6b82', hi: '#ffd05a',
+    refs: 'C\'était un rendez-vous (Claude Lelouch, 1976). Ronin (John Frankenheimer, 1998). Lieux : place de l\'Étoile, voies sur berge et leurs trémies, rue Lepic et la butte Montmartre.',
+    pal: [['#2b3a67', 'ciel haut'], ['#ffb38a', 'aube'], ['#d9c9a8', 'pierre'], ['#5d6b82', 'zinc'], ['#ffd05a', 'réverbères'], ['#c8102e', 'stores'], ['#1e3a3a', 'Seine']],
+    W: 7, sc: 1, tun: [27, 30], grip: 44, auto: { t: 77.5, moy: 207, max: 257, min: 109, ep: 0 },
+    car: { ratios: [3.36, 2.06, 1.38, 1.06, 0.82], final: 3.89, wheel: 0.29, mass: 980, eff: 0.88, idle: 1000, red: 7500, cd: 0.40, area: 1.9, trac: 8.5, tq: [0, 120, 220, 330, 400, 420, 400, 370, 300] },
+    pts: [[0,0,0],[200,0,0],[330,15,0],[424,70,0],[476,70,0],[515,37,0],[524,-13,0],[498,-57,0],[430,-160,0],[420,-300,2],[450,-390,4],[540,-420,6],[700,-420,8],[810,-435,12],[880,-480,19],[860,-545,26],[800,-590,31],[830,-660,37],[930,-670,42],[1020,-630,44],[1070,-540,38],[1040,-410,26],[1085,-280,14],[1060,-150,4],[1100,0,0],[1090,140,-2],[1010,225,-4],[800,240,-6],[600,250,-12],[400,250,-12],[200,240,-6],[0,240,-3],[-150,225,0],[-235,150,0],[-235,60,0],[-150,0,0]],
+    drive: 'Relances courtes entre des angles. Avenue, tour de place à rayon constant sur pavés, boulevard, montée en lacets vers la butte (+44 m, 12 %), descente raide, puis 1,2 km de quais avec une trémie. On freine beaucoup, on repart fort.',
+    decor: ['Aube : ciel en bandes de couleur nettes, pas de dégradé flou', 'Immeubles de pierre à hauteur constante, toits de zinc, stores rouges', 'Réverbères encore allumés, arbres d\'alignement', 'Pavés sur la place, arche au centre (trois boîtes)', 'Trémie carrelée sous les quais, Seine sombre', 'Dôme blanc au sommet de la butte'],
+    voit: 'Renault 5 Maxi Turbo (1985)', fiche: '4 cylindres turbo 1,5 L, 350 ch, 905 kg, moteur central arrière, propulsion, 5 rapports (rapports estimés).',
+    why: 'Minuscule et violente : faite pour les angles droits et les relances. Le temps de réponse du turbo donne son caractère à chaque sortie de virage.',
+    mus: { nom: 'RADIO 5H30', bpm: 120, lead: 'tri', stab: [], arp: 1, sw: 0, kick: '1000100010001000',
+      CH: [[60,63,67],[56,60,63],[53,56,60],[55,59,62],[60,63,67],[56,60,63],[53,56,60],[55,59,62]], ROOT: [36,32,29,31,36,32,29,31],
+      rif: [0,_,12,_,0,_,12,_,0,_,12,_,0,_,12,12],
+      LEAD: [[[0,79,4],[4,75,2],[6,77,2],[8,79,6],[14,82,2]], [[0,84,6],[6,82,2],[8,80,8]], [[0,77,4],[4,80,2],[6,84,2],[8,82,4],[12,80,4]], [[0,79,4],[4,83,4],[8,86,8]],
+        [[0,79,4],[4,75,2],[6,77,2],[8,79,6],[14,82,2]], [[0,84,6],[6,82,2],[8,80,8]], [[0,77,4],[4,80,2],[6,84,2],[8,87,4],[12,84,4]], [[0,83,8],[8,79,8]]] },
+    musTxt: 'Disco spatiale française de 1977, dans le style de Cerrone, Space ou Jarre. 120 BPM, do mineur. Basse à l\'octave en croches, nappe de cordes, arpège, mélodie de triangle avec vibrato.',
+    cout: ['Éclairage d\'aube : ciel, palette claire, néons et halo à repenser', 'Façades alignées le long de la route', 'Adhérence par surface (pavés)', 'Temps de réponse du turbo', 'Vibrato dans le séquenceur (une ligne)'] },
+
+  { id: 'canal', tag: 'PROPOSITION D', nom: 'CANAL 6', sub: 'Los Angeles, heure dorée — la carte de la glisse', a: '#ff7a3d', lo: '#2aa39a', hi: '#ffc04a',
+    refs: 'Terminator 2 (1991), la poursuite dans le canal. Drive (2011), l\'ouverture. Grease (1978), la course du canal. Police fédérale Los Angeles (1985). Lieux : la Los Angeles River et le viaduc de la 6e Rue.',
+    pal: [['#3d2a5c', 'ciel'], ['#ff7a3d', 'smog'], ['#b8ad9a', 'béton'], ['#ffc04a', 'sodium'], ['#2aa39a', 'filet d\'eau'], ['#e83f8c', 'graffiti'], ['#1a1420', 'palmiers']],
+    W: 15, sc: 1, tun: [0, 0], grip: 34, auto: { t: 89.1, moy: 194, max: 251, min: 145, ep: 0 },
+    car: { ratios: [2.66, 1.78, 1.30, 1.00, 0.74, 0.50], final: 3.07, wheel: 0.333, mass: 1610, eff: 0.88, idle: 800, red: 6000, cd: 0.35, area: 1.9, trac: 8.5, tq: [0, 420, 560, 640, 664, 625, 540, 400, 0] },
+    pts: [[0,0,-8],[250,-80,-8],[500,90,-8],[750,-80,-8],[1000,90,-8],[1250,-80,-8],[1500,60,-8],[1720,40,-8],[1825,123,-5],[1828,168,-3],[1803,206,-1],[1760,220,2],[1500,230,4],[1300,290,4],[1100,220,4],[900,290,4],[700,220,4],[500,290,4],[300,220,4],[50,240,4],[-170,230,2],[-256,156,-1],[-270,110,-3],[-256,64,-5],[-170,-10,-8]],
+    drive: 'Un lit de béton de 30 m de large, mouillé (adhérence 34 au lieu de 44). Sept grandes courbes enchaînées gauche-droite, un demi-tour large, retour par la berge en esses. Plat. On relie les courbes en dérive pour enchaîner les boosts.',
+    decor: ['Lit et berges inclinées en béton : le ruban oblique existe déjà', 'Filet d\'eau central brillant', 'Ponts en arc qui enjambent la piste', 'Graffitis procéduraux, pylônes électriques', 'Palmiers et soleil bas en silhouettes pixel', 'Voies ferrées et wagons sur la berge du retour'],
+    voit: 'Dodge Viper GTS (1996)', fiche: 'V10 de 8,0 L, 450 ch, 664 N·m dès 3700 tr/min, 1535 kg, propulsion, 6 rapports, zone rouge à 6000.',
+    why: 'Du couple partout et rien pour le retenir : la voiture qui glisse à l\'accélérateur, sur la carte la plus large.',
+    mus: { nom: 'KDAY 94', bpm: 94, lead: 'sine', stab: [], arp: 0, sw: 0.3, kick: '1000000010100000',
+      CH: [[58,62,65,67],[58,62,65,67],[58,62,63,67],[58,62,63,67],[58,62,65,67],[58,62,65,67],[58,60,63,67],[57,60,62,66]], ROOT: [31,31,27,27,31,31,36,38],
+      rif: [0,_,_,0,_,_,7,_,_,_,10,_,12,_,_,_],
+      LEAD: [[[0,86,6],[6,84,2],[8,82,4],[12,79,4]], [[0,82,2],[2,84,2],[4,86,8],[12,89,4]], [[0,87,6],[6,86,2],[8,82,4],[12,79,4]], [[0,77,4],[4,79,12]],
+        [[0,86,6],[6,84,2],[8,82,4],[12,79,4]], [[0,82,2],[2,84,2],[4,86,8],[12,89,4]], [[0,87,6],[6,84,2],[8,82,4],[12,84,4]], [[0,86,4],[4,81,4],[8,78,8]]] },
+    musTxt: 'G-funk, 94 BPM, sol mineur. Batterie traînante, basse ronde, accords de septième tenus, et par-dessus un sinus aigu qui glisse d\'une note à l\'autre.',
+    cout: ['Glisse à l\'accélérateur : la physique ne décroche aujourd\'hui qu\'au frein à main ou en latéral', 'Adhérence par carte', 'Éclairage de crépuscule', 'Berges praticables (les murs sont verticaux)', 'Swing et glissando dans le séquenceur'] },
+];
+</script>
+<script>
+// Spline de Catmull-Rom centripète fermée, comme THREE.CatmullRomCurve3 dans sim.js : le tracé dessiné est celui que le jeu roulerait.
+function spline(P, per = 24) {
+  const n = P.length, out = [];
+  for (let i = 0; i < n; i++) {
+    const p = [P[(i + n - 1) % n], P[i], P[(i + 1) % n], P[(i + 2) % n]];
+    const d = k => Math.pow((p[k + 1][0] - p[k][0]) ** 2 + (p[k + 1][1] - p[k][1]) ** 2 + (p[k + 1][2] - p[k][2]) ** 2, 0.25) || 1;
+    const d0 = d(0), d1 = d(1), d2 = d(2);
+    const c = [0, 1, 2].map(a => {
+      const [x0, x1, x2, x3] = p.map(q => q[a]);
+      const t1 = ((x1 - x0) / d0 - (x2 - x0) / (d0 + d1) + (x2 - x1) / d1) * d1, t2 = ((x2 - x1) / d1 - (x3 - x1) / (d1 + d2) + (x3 - x2) / d2) * d1;
+      return [x1, t1, -3 * x1 + 3 * x2 - 2 * t1 - t2, 2 * x1 - 2 * x2 + t1 + t2];
+    });
+    for (let j = 0; j < per; j++) { const t = j / per; out.push([...c.map(k => k[0] + k[1] * t + k[2] * t * t + k[3] * t * t * t), i]); }
+  }
+  return out;
+}
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const mix = (a, b, t) => { const A = hex(a), B = hex(b); return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t))})`; };
+const el = (tag, html, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; e.innerHTML = html; return e; };
+const fr = (v, d = 0) => v.toFixed(d).replace('.', ',');
+
+for (const m of MAPS) {
+  m.S = spline(m.pts.map(p => [p[0] * m.sc, p[1] * m.sc, p[2]]));
+  m.len = m.S.reduce((s, p, i) => { const q = m.S[(i + 1) % m.S.length]; return s + Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]); }, 0);
+  const ys = m.S.map(p => p[2]); m.y0 = Math.min(...ys); m.y1 = Math.max(...ys);
+  const xs = m.S.map(p => p[0]), zs = m.S.map(p => p[1]);
+  m.box = [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)];
+}
+const SPAN = Math.max(...MAPS.map(m => Math.max((m.box[2] - m.box[0]) / 140, (m.box[3] - m.box[1]) / 96)));
+
+// Tracé vu de dessus sur un canvas de 150 × 110 pixels, agrandi sans lissage.
+function drawTrack(cv, m, same) {
+  const g = cv.getContext('2d'), [x0, z0, x1, z1] = m.box, s = same ? SPAN : Math.max((x1 - x0) / 140, (z1 - z0) / 96);
+  const ox = 75 - (x0 + x1) / 2 / s, oz = 53 - (z0 + z1) / 2 / s;
+  g.fillStyle = m.pal[0][0]; g.fillRect(0, 0, 150, 110);
+  const w = Math.max(1, Math.round(2 * m.W / s)) + 1; // largeur de route à l'échelle, 2 pixels au moins
+  m.S.forEach((p, i) => {
+    const tun = m.tun[1] > m.tun[0] && p[3] >= m.tun[0] && p[3] < m.tun[1];
+    if (tun && (i >> 2) % 2) return;
+    g.fillStyle = mix(m.lo, m.hi, (p[2] - m.y0) / (m.y1 - m.y0 || 1));
+    g.fillRect(Math.round(ox + p[0] / s - w / 2), Math.round(oz + p[1] / s - w / 2), w, w);
+  });
+  g.fillStyle = '#fff'; g.fillRect(Math.round(ox + m.S[0][0] / s) - 2, Math.round(oz + m.S[0][1] / s) - 2, 4, 4);
+  g.fillStyle = '#fff'; g.fillRect(4, 104, Math.round(500 / s), 2); // barre d'échelle : 500 m
+}
+// Profil d'altitude déroulé sur un tour, exagéré, même échelle verticale pour toutes les cartes (0 à 125 m de dénivelé).
+function drawProfile(cv, m) {
+  const g = cv.getContext('2d'); g.fillStyle = m.pal[0][0]; g.fillRect(0, 0, 150, 26);
+  for (let x = 0; x < 150; x++) {
+    const p = m.S[Math.floor(x / 150 * m.S.length)], h = 1 + Math.round((p[2] - m.y0) / 125 * 24);
+    g.fillStyle = mix(m.lo, m.hi, (p[2] - m.y0) / (m.y1 - m.y0 || 1)); g.fillRect(x, 26 - h, 1, h);
+  }
+}
+
+const cards = document.getElementById('cards');
+for (const m of MAPS) {
+  const c = el('article', '', 'card'); c.style.setProperty('--a', m.a);
+  const sec = (lab, html) => c.appendChild(el('section', (lab ? `<div class="lab">${lab}</div>` : '') + html));
+  sec('', `<span class="tag">${m.tag}</span><h3>${m.nom}</h3><div class="sub">${m.sub}</div>`);
+  sec('Références', m.refs);
+  sec('Palette', `<div class="pal">${m.pal.map(([h, n]) => `<div class="sw"><i style="background:${h}"></i>${h}<br>${n}</div>`).join('')}</div>`);
+  const a = m.auto;
+  sec('Tracé et dénivelé', `<canvas class="trk" width="150" height="110"></canvas><canvas class="prf" width="150" height="26" style="margin-top:4px"></canvas>
+    <table><tr><td>Longueur</td><td>${fr(m.len / 1000, 1)} km</td></tr><tr><td>Dénivelé</td><td>${Math.round(m.y1 - m.y0)} m</td></tr>
+    <tr><td>Largeur de route</td><td>${2 * m.W} m</td></tr><tr><td>Épingles</td><td>${a.ep}</td></tr>
+    <tr><td>Tour au pilote auto</td><td>${fr(a.t, 1)} s</td></tr><tr><td>Vitesse moyenne</td><td>${a.moy} km/h</td></tr>
+    <tr><td>Mini / maxi</td><td>${a.min} / ${a.max} km/h</td></tr></table>`);
+  sec('Conduite', m.drive);
+  sec('Décor, avec le moteur actuel', `<ul>${m.decor.map(d => `<li>${d}</li>`).join('')}</ul>`);
+  sec('Voiture', `<b>${m.voit}</b><br>${m.fiche}<br>${m.why}`);
+  const mu = sec('Musique', m.musTxt + (m.mus ? `<br><button>▶ ÉCOUTER L'ESQUISSE</button>` : ''));
+  if (m.mus) mu.querySelector('button').onclick = e => toggle(m, e.target);
+  sec('Coût : ce que le moteur ne sait pas faire', `<ul>${m.cout.map(d => `<li>${d}</li>`).join('')}</ul>`);
+  const code = `const W = ${m.W}, GRIP = ${m.grip}, SC = ${m.sc}, TUN = ${JSON.stringify(m.tun)};\nconst HGT = ${JSON.stringify(m.pts.map(p => p[2]))};\nconst PTS = ${JSON.stringify(m.pts.map(p => [p[0], p[1]]))};`
+    + (m.car ? `\nconst CARD = ${JSON.stringify(m.car)};` : '') + (m.mus ? `\n// station, au format de const ST\n${JSON.stringify(m.mus)}` : '');
+  sec('', `<details><summary>Données à coller pour tester</summary><pre>${code}</pre></details>`);
+  cards.appendChild(c);
+  m.cv = c.querySelector('.trk'); drawProfile(c.querySelector('.prf'), m);
+}
+// la police pixel n'a pas de capitales accentuées : on retire les accents des titres (et d'eux seuls)
+for (const e of document.querySelectorAll('h1, h2, h3, .lab, .tag, th')) for (const t of e.childNodes) if (t.nodeType === 3) t.nodeValue = t.nodeValue.normalize('NFD').replace(/[̀-ͯ]/g, '');
+const same = document.getElementById('same'), redraw = () => MAPS.forEach(m => drawTrack(m.cv, m, same.checked));
+same.onchange = redraw; redraw();
+
+// Esquisse sonore : huit mesures en boucle, synthétisées en direct à partir des mêmes motifs que const ST (accords, fondamentales, riff de basse, thème).
+// shortcut: sons simplifiés par rapport au séquenceur du jeu (pas de TR-808, pas de pompe), à remplacer par sched() à l'intégration.
+let AC, out, noise, timer, cur, btn;
+function toggle(m, b) {
+  const was = cur; clearInterval(timer); if (btn) { btn.classList.remove('on'); btn.textContent = "▶ ÉCOUTER L'ESQUISSE"; } cur = null;
+  if (was === m) return;
+  if (!AC) {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    const comp = AC.createDynamicsCompressor(); comp.connect(AC.destination); out = AC.createGain(); out.gain.value = 0.5; out.connect(comp);
+    noise = AC.createBuffer(1, AC.sampleRate, AC.sampleRate); const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  AC.resume(); cur = m; btn = b; b.classList.add('on'); b.textContent = '■ ARRÊTER';
+  const s = m.mus, S16 = 60 / s.bpm / 4; let step = 0, next = AC.currentTime + 0.1, prev = 0;
+  const hz = n => 440 * 2 ** ((n - 69) / 12);
+  const env = (t, dur, vol, dest = out) => { const g = AC.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); g.connect(dest); return g; };
+  const osc = (type, f, t, dur, vol, det = 0, cut = 0) => {
+    const o = AC.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); o.detune.value = det;
+    let dest = env(t, dur, vol); if (cut) { const fl = AC.createBiquadFilter(); fl.frequency.value = cut; fl.connect(dest); dest = fl; }
+    o.connect(dest); o.start(t); o.stop(t + dur + 0.05); return o;
+  };
+  const nz = (t, dur, vol, type, f) => { const b = AC.createBufferSource(), fl = AC.createBiquadFilter(); b.buffer = noise; b.loop = true; fl.type = type; fl.frequency.value = f; b.connect(fl); fl.connect(env(t, dur, vol)); b.start(t, Math.random()); b.stop(t + dur + 0.05); };
+  timer = setInterval(() => {
+    while (next < AC.currentTime + 0.15) {
+      const q = step % 16, b = (step >> 4) % 8, ch = s.CH[b], t = next + (q % 2) * s.sw * S16;
+      if (s.kick[q] === '1') osc('sine', 150, t, 0.3, 0.9).frequency.exponentialRampToValueAtTime(40, t + 0.1);
+      if (q % 8 === 4) nz(t, 0.18, 0.4, 'bandpass', 1500);
+      nz(t, q % 4 === 2 ? 0.1 : 0.03, q % 4 === 2 ? 0.14 : q % 2 ? 0.04 : 0.07, 'highpass', 7000);
+      if (s.rif[q] != null) { const f = hz(s.ROOT[b] + s.rif[q]); osc('sawtooth', f, t, S16 * 1.6, 0.3, 0, 900); osc('sine', f, t, S16 * 1.6, 0.3); }
+      if (q === 0) for (const n of ch) osc('sawtooth', hz(n), t, S16 * 16, 0.035, 8, 1200);
+      if (s.stab.includes(q)) for (const n of ch) osc('sawtooth', hz(n + 12), t, 0.14, 0.05, 0, 3000);
+      if (s.arp) osc('square', hz(ch[[0, 1, 2, 1, 2, 0, 1, 2][q % 8]] + 12 + (q >= 8 ? 12 : 0)), t, 0.15, 0.035, 0, 3000);
+      for (const [p, n, len] of s.LEAD[b]) if (p === q) {
+        const d = S16 * len * 1.1;
+        if (s.lead === 'saw') for (const dt of [-10, 10]) osc('sawtooth', hz(n), t, d, 0.06, dt, 3800);
+        else if (s.lead === 'tri') { const o = osc('triangle', hz(n), t, d, 0.16), l = AC.createOscillator(), lg = AC.createGain(); l.frequency.value = 5.5; lg.gain.value = 14; l.connect(lg); lg.connect(o.detune); l.start(t); l.stop(t + d); }
+        else { const o = osc('sine', hz(prev || n), t, d, 0.13); o.frequency.exponentialRampToValueAtTime(hz(n), t + 0.07); } // glissando depuis la note précédente
+        prev = n;
+      }
+      next += S16; step++;
+    }
+  }, 30);
+}
+</script>
+</body>
+</html>
