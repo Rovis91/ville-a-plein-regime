@@ -165,7 +165,23 @@
   const pose = (nom, peau, parent = scene, [x, y, z] = [0, 0, 0], ...a) => {
     const f = FORMES[nom](...a);
     if (f.isBufferGeometry) { const m = new THREE.Mesh(habille(f, peau), peau); m.position.set(x, y, z); parent.add(m); return m; }
-    return f.map(([zone, w, h, d, px, py, pz, r, ombre]) => { const m = box(w, h, d, peau[zone], x + px, y + py, z + pz, parent); if (r) m.rotation.set(...r); if (ombre) m.castShadow = true; return m; });
+    return Object.entries(zones(f, peau)).map(([zn, g]) => { const m = new THREE.Mesh(g, peau[zn]); m.position.set(x, y, z); m.castShadow = !!g.userData.ombre; parent.add(m); return m; });
+  };
+  // un assemblage fondu en une géométrie par zone (une seule passe de dessin par zone) ; f = nom de forme + réglages, ou la liste de boîtes déjà calculée
+  const EUL = new THREE.Euler(), QUA = new THREE.Quaternion(), M4 = new THREE.Matrix4(), UN = new V3(1, 1, 1);
+  const zones = (f, peau, ...a) => {
+    const par = {};
+    for (const [zn, w, h, d, px, py, pz, r, ombre] of typeof f === 'string' ? FORMES[f](...a) : f) {
+      const g = habille(geo('boite', w, h, d), peau[zn]).toNonIndexed(); M4.compose(new V3(px, py, pz), QUA.setFromEuler(EUL.set(...(r || [0, 0, 0]))), UN); g.applyMatrix4(M4);
+      (par[zn] = par[zn] || { l: [], ombre: 0 }).l.push(g); if (ombre) par[zn].ombre = 1;
+    }
+    const out = {};
+    for (const zn in par) {
+      const l = par[zn].l, n = l.reduce((s, g) => s + g.attributes.position.count, 0), g = new THREE.BufferGeometry();
+      for (const [k, sz] of [['position', 3], ['normal', 3], ['uv', 2]]) { const A = new Float32Array(n * sz); let o = 0; for (const p of l) { A.set(p.attributes[k].array, o); o += p.attributes[k].array.length; } g.setAttribute(k, new THREE.BufferAttribute(A, sz)); }
+      g.userData.ombre = par[zn].ombre; out[zn] = g;
+    }
+    return out;
   };
   const LUMI = { lum: 1 }, LUMI2 = { lum: 1, side: THREE.DoubleSide }; // lumineuse par elle-même ; idem, visible des deux côtés
 
@@ -405,7 +421,7 @@
   movers = new THREE.Points(mvGeo, new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true, fog: false })); movers.frustumCulled = false; scene.add(movers);
   const beaconGeo = new THREE.BufferGeometry(); beaconGeo.setAttribute('position', new THREE.Float32BufferAttribute(beacons, 3));
   beaconPts = new THREE.Points(beaconGeo, new THREE.PointsMaterial({ color: 0xff2030, size: 2, sizeAttenuation: false, fog: false })); scene.add(beaconPts);
-  } else decorTick = window.DECORS[TH.decor]({ THREE, scene, T, S, N, W, M, TH, ribbon, rnd, across, zone, lum, geo, mat, pose, habille, temps: () => race ? -1 : tTraf }); // pas de trafic en course : les adversaires ne savent pas l'éviter
+  } else decorTick = window.DECORS[TH.decor]({ THREE, scene, T, S, N, W, M, TH, ribbon, rnd, across, zone, lum, geo, mat, pose, zones, habille, temps: () => race ? -1 : tTraf }); // pas de trafic en course : les adversaires ne savent pas l'éviter
 
   // pluie : traînées qui s'allongent et foncent vers la caméra avec la vitesse
   const RN = 400, rainP = new Float32Array(RN * 3), rainGeo = new THREE.BufferGeometry(), rainV = new Float32Array(RN * 6);
