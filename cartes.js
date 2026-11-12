@@ -170,6 +170,26 @@
           '27 - - - 24 - - - 31 - - - 27 - - - | 29 - - - 26 - - - 34 - - - 29 - - - | 31 - - - - - 27 - 24 - - - - - - - | 24 - - - - - - - . - - - - - - -'],
         sec: { i: 'k0 h0 b0 lo', a: 'k0 s0 h0 b0 a0', b: 'k0 s0 h1 b0 a0 c0', c: 'k1 s1 h1 b1 a1 c0 d l0 p0', x: 'd a0 c1 l1 P1', u: 'k0 h1 b1 a1 roll P1', e: 'k1 s1 h1 b1 c1 d l1 P1 p0' }, form: 'iabcbxucecbc' }),
     ],
+    stade: [
+      st({ name: 'ARENA ROCK FM', fq: '105.5', vol: 0.4, genre: 'HARD ROCK', bpm: 140, gamme: 'mineur', bPar: [0, 3, 5, 7, 10, -2], key: 52, kit: 'rock', eq: [-4, 1200, 7, 3], rev: 0.35, pump: 1, // rock de stade : accords de puissance, batterie dans sa salle, solo de guitare qui monte ; aucun synthé
+        prog: ['E5 E5 G5 A5 E5 E5 C5 D5', 'C5 D5 E5 E5'], k: ['x.....x.x.....x.', 'x..x..x.x..x..x.', 'x...x...x...x...'], s: [SN, '....x.......x.xx'], h: ['X.x.X.x.X.x.X.x.', 'o.o.o.o.o.o.o.o.', 'r.r.r.r.r.r.r.r.'],
+        b: ['bPick', '0 - 0 - 0 - 0 - 0 - 0 - 0 - 3 5', '0 0 0 0 0 0 0 0 0 0 0 0 7 7 10 10'], c: ['pwr', 'x..x..x...x.x...', 'x.......x.......'], cO: -12, g: ['gtrMute', 'xxxxxxxxxxxxxxxx'],
+        l: ['ldGtr', '24 - - - 27 - 24 - 22 - 24 - - - . - | 24 - - - 27 - 29 - 31 - - - 27 - - - | 22 - - - 26 - 22 - 19 - 22 - - - . - | 22 - - - 24 - 29 - 34 - - - 31 - - - | 36 - - - 34 - 31 - 34 - 36 - - - . - | 36 - - - 39 - 36 - 34 - - - 31 - - - | 31 - - - 36 - 31 - 27 - 31 - - - . - | 34 - - - 31 - - - 26 - - - - - - -',
+          '31 - 27 - 24 - 27 - 31 - 36 - 31 - - - | 34 - 29 - 26 - 29 - 34 - 38 - 34 - - - | 36 - - 31 - - 27 - 31 - - - 36 - - - | 36 - - - - - - - . - - - - - - -'],
+        sec: { i: 'g0 h0', a: 'k0 s0 h0 b0 g0', b: 'k0 s0 h1 b0 c0', c: 'k1 s1 h1 b0 c0 l0', x: 'h2 b1 g0 l1 P1', e: 'k1 s1 h1 b1 c0 l1 P1', q: 'k2 s0 h2 b1 c1' }, form: 'iabcqxecabcc' }),
+      st({ name: 'TRIBUNE NORD', fq: '91.9', vol: 0.9, genre: 'FANFARE FUNK', bpm: 108, gamme: 'mineur', emprunts: 'D', sw: 0.12, key: 55, kit: 'acou', eq: [3, 900, 5, 0], rev: 0.3, pump: 1, // l'orgue de la patinoire et la fanfare des supporters : orgue, cuivres plaqués, clavinet, cloche et tambourin
+        prog: ['Gm Gm Cm D Gm Gm Eb D', 'Cm D Gm Gm'], k: ['x..x..x...x..x..', 'x.....x..xx.....'], s: ['....x..g.g..x..g', '....x..g....x.xx'], h: ['x.x.x.x.x.x.x.o.', 'b.x.x.b.x.x.b.x.'], p: ['t.t.t.t.t.t.t.t.', 'c..c..c..c..c.c.'],
+        b: ['bSlap', '0 - - 0 - 12 - 0 - - 7 - 12 - 0 - | 0 - - 0 - 12 - 0 - 12 - 7 - 12 - 7', '0 - - - - - 0 - - - 12 - - - 7 -'], d: ['organ', 0], c: ['brass', 'x..x....x.x.....', 'x.......x..x..x.'], g: ['clav', '..x..x.x..x..x.x'],
+        l: ['organ', '19 - - 22 - - 19 - 17 - 19 - - - . - | 19 - - 22 - - 24 - 26 - - - 22 - - - | 24 - - 27 - - 24 - 22 - 24 - - - . - | 26 - - 23 - - 19 - 14 - - - 19 - - - | 31 - - 34 - - 31 - 29 - 31 - - - . - | 31 - - 29 - - 26 - 22 - - - 26 - - - | 27 - - 31 - - 27 - 26 - 27 - - - . - | 31 - - 26 - - 23 - 19 - - - - - - -',
+          '24 - 27 - 31 - 27 - 24 - 27 - 31 - - - | 26 - 31 - 35 - 31 - 26 - 31 - 35 - - - | 31 - - 26 - - 22 - 26 - - - 31 - - - | 34 - - - - - - - . - - - - - - -'],
+        sec: { i: 'h1 d p0', a: 'k0 s0 h0 b1 g0', b: 'k0 s0 h0 b0 g0 d', c: 'k1 s1 h1 b0 c0 d l0 p0', x: 'd c1 l1 P1 p1', e: 'k1 s1 h1 b0 c1 g0 l1 P1 p0' }, form: 'iabccxecabcc' }),
+      st({ name: 'KOP 170', fq: '170', vol: 1.2, genre: 'HAPPY HARDCORE', bpm: 170, gamme: 'majeur', key: 60, kit: 'k909', eq: [-8, 3200, 5, 10], rev: 0.25, echo: [3, 0.35], pump: 0.3, // grosse caisse à tous les temps, basse à contretemps, piano plaqué, thème majeur que tout le virage reprend
+        prog: ['C G Am F C G F G', 'F G Am Am'], k: [F4], s: [CP, '....c.......c.cc'], h: [OFF, 'x.o.x.o.x.o.x.o.'],
+        b: ['bOff', '. . 0 - . . 0 - . . 0 - . . 0 -', '. 0 0 0 . 0 0 0 . 0 0 0 . 0 0 0'], d: ['super', 0], c: ['dxEp', 'x..x..x.x..x..x.', 'x.......x.......'], a: ['pluck', '0124210201242102', '0.2.4.2.1.2.4.2.'],
+        l: ['ldVox', '28 - - - 31 - 28 - 24 - - - 28 - - - | 26 - - - 31 - 26 - 23 - - - 26 - - - | 24 - - - 28 - 24 - 21 - - - 24 - - - | 24 - - - 29 - 24 - 21 - - - . - - - | 28 - - - 31 - 36 - 31 - - - 28 - - - | 26 - - - 31 - 35 - 31 - - - 26 - - - | 29 - - - 33 - 29 - 24 - - - 29 - - - | 31 - - - 35 - - - 38 - - - - - - -',
+          '29 - - - 33 - - - 36 - - - 33 - - - | 31 - - - 35 - - - 38 - - - 35 - - - | 33 - - 36 - - 40 - 36 - 33 - 36 - - - | 33 - - - - - - - . - - - - - - -'],
+        sec: { i: 'd a1 lo', a: 'k0 h0 b0 d', b: 'k0 s0 h1 b0 d a0', c: 'k0 s1 h1 b1 d c0 l0', x: 'd a1 l1 P1', u: 'k0 h1 b0 d roll P1', e: 'k0 s1 h1 b1 c1 l1 P1' }, form: 'iabcxucceabc' }),
+    ],
   };
 
   G.CARTES = [
@@ -257,6 +277,21 @@
         astre: { dir: [0.35, 0.8, -0.45], col: '#fffbe8', ombre: '#fffbe8', taille: 150 }, hemi: [0xbcd8ff, 0x9aa89a, 0.95], sun: [0xfff4d8, 1], phares: 0.3, bloom: 0.03, scan: 0.05,
         murH: 1.1, paroi: 'parement', route: ['#54565a', '#606266', '#f4f0e0', '#f4c020', '#e8482a', '#f4f0e0', false], mur: ['#d8d4c8', '#e8482a', '#f4c020', '#b8b4a8'], depart: [0xe8482a, 0x2a3a4a, '#f4f0e0'],
         hud: { y: '#ffffff', c: '#f4c020', r: '#e8482a', fond: 'rgba(20,40,64,.9)', style: 'trait', split: 0, jp: null, sur: [null, 'BARRAGE · PLEIN MIDI'], titre: ['ROCHE', 'SOURDE'] } } },
+
+    // Grand Vacarme : une arène couverte, pleine à craquer. Trois lignes droites en épi sous la charpente, chacune avec son tremplin : la table de la ligne de départ,
+    // le saut par-dessus la fosse (trop lent, on tombe dedans et on en ressort par sa rampe), la grande bosse du fond. Deux demi-tours relevés côté est, une épingle à plat au milieu,
+    // et le grand virage relevé de la tribune ouest qui ramène à la ligne (le mur y est plus rapide que la corde).
+    { id: 'stade', nom: 'GRAND VACARME', rivaux: ['NOUR', 'ENZO', 'JADE'], med: [1.08, 1, 0.94], W: 9, grip: 20, sc: 1, tun: null, chaud: [23, 29], amb: [[0, 4], [23, 29]], sect: [9, 23], anticipe: 1,
+      sauts: [[2, 40, 1.5], [9, 36, 1.5, 40, 5], [16, 30, 1.2], [22, 60, 2.2]], cuv: [[4, 8, 10, 9], [17, 21, 10, 9], [25, 29, 10, 9]],
+      pts: [[0, 0, 4], [80, 0, 4], [150, 0, 4], [230, 0, 1], [300, 0, 0], [339, 16, 0], [355, 55, 0], [339, 94, 0], [300, 110, 0], [220, 110, 0], [150, 110, 0], [80, 110, 0], [45, 125, 0], [30, 160, 0], [45, 195, 0], [80, 210, 0], [190, 210, 0], [300, 210, 0], [339, 226, 0], [355, 265, 0], [339, 304, 0], [300, 320, 0], [190, 320, 0], [100, 320, 0], [0, 320, 0], [-60, 320, 0], [-173, 273, 1], [-220, 160, 2], [-173, 47, 3], [-60, 0, 4]],
+      // voiture inventée : un pick-up de stade à châssis tubulaire, V8 atmosphérique de 6 L, 600 ch, 1300 kg, propulsion, grands débattements
+      car: car({ nom: 'MASTIFF V8 ARENA', ratios: [2.9, 1.95, 1.45, 1.15, 0.95], final: 5.2, wheel: 0.36, mass: 1375, idle: 900, red: 7200, cd: 0.45, area: 2.3,
+        tq: [0, 380, 500, 580, 640, 660, 640, 590, 480], son: 0.85, look: { col: 0xffc21a, l: 0.9, w: 1.04, h: 1.2, nez: 0.45, cab: [-0.1, 1.9, 0.62], aileron: 2, bandes: 0x16161c } }),
+      radio: RADIO.stade,
+      th: { decor: 'stade', fog: 0x0e0c18, fogD: [120, 900], sky: [[0, '#05050a'], [1, '#05050a']], stars: 0,
+        astre: { dir: [0.2, 0.95, 0.25], col: '#05050a', ombre: '#05050a', taille: 1 }, hemi: [0xdfe6ff, 0x6a5038, 0.9], sun: [0xfff6e0, 0.55], phares: 1.2, bloom: 0.1, scan: 0.08,
+        murH: 1.2, paroi: 'paroiArene', route: ['#7a5a3c', '#86643f', '#f4f0e0', '#ffc21a', '#e8362a', '#f4f0e0', false], mur: ['#f4f0e0', '#e8362a', '#1c3fa8', '#c8c4b8'], depart: [0xe8362a, 0x20242c, '#f4f0e0'],
+        hud: { y: '#ffffff', c: '#ffc21a', r: '#e8362a', fond: 'rgba(16,14,28,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'ARENE COUVERTE · COMPLET'], titre: ['GRAND', 'VACARME'] } } },
   ];
   let id = 'ville';
   if (typeof location !== 'undefined') try { id = new URLSearchParams(location.search).get('carte') || localStorage.getItem('vpr.carte') || id; } catch (e) { }
