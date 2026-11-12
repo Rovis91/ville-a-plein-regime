@@ -307,6 +307,11 @@
   //   R = newRace(T, laps = 3, lvls = AI_LVL, el = 0, opt = {})  crée la course. R.cars[0] = joueur (dernier sur la grille), R.cars[1..] = adversaires, le plus rapide en tête ; opt.grille[i] = place de départ de la voiture i (0 = pole), pour une autre grille.
   //   stepRace(R, inp, dt)                     avance toutes les voitures d'un pas (dt = 1/120). inp = commandes du joueur, comme step() ;
   //                                            inp = null : le joueur est conduit par l'IA (mode ?auto, ou après son arrivée). Ne pas appeler pendant le décompte.
+  //   Plusieurs humains (écran partagé) : newRace(T, laps, lvls, el, { humains: 2 }). Les humains sont les premières voitures (R.cars[0] = joueur 1, R.cars[1] = joueur 2, puis les IA de lvls),
+  //     sur les dernières places de la grille (joueur 1 dernier). stepRace(R, [inp1, inp2], dt) : une entrée par humain ; entrée absente ou nulle = le pilote automatique conduit cet humain.
+  //     L'élastique des IA se règle sur la moyenne des humains encore en course. R.h = nombre d'humains.
+  //   Glisse en duel : newRace(T, 2, [], 0, { humains: 2, delai }), delai en secondes pour chaque voiture. c.score, c.cours, c.mult comme en solo ; un choc entre voitures (c.bump > 2) casse l'enchaînement ;
+  //     c.pts = score de la manche, figé à l'arrivée de la voiture, nul si elle arrive hors délai.
   //   R.t = temps de course (s) ; R.done = true quand tout le monde est arrivé ; R.laps = nombre de tours.
   //   Par voiture, en plus des champs de newCar() (x, z, th, vf, rpm, drift, hit...) :
   //     c.pos  = place en direct (1 = premier)     c.lap = tour en cours (1..laps)
@@ -324,11 +329,12 @@
   const CR = 1.1, CO = 1.2; // une voiture = 2 cercles de rayon CR, à ±CO m le long de son axe (4,6 m × 2,2 m)
 
   function newRace(T, laps = 3, lvls = AI_LVL, el = 0, opt = {}) {
-    const cars = [1, ...lvls].map((lvl, i) => {
-      const c = newCar(T), k = opt.grille ? opt.grille[i] : i ? i - 1 : lvls.length, j = T.n - 8 - 4 * k, s = T.S[j], d = k % 2 ? 3 : -3; // grille en quinconce, 8 m entre deux places
+    const h = opt.humains || 1, N = h + lvls.length; // les humains d'abord (0 = joueur 1, 1 = joueur 2), en fond de grille : le joueur 1 dernier, comme en solo
+    const cars = [...Array(h).fill(1), ...lvls].map((lvl, i) => {
+      const c = newCar(T), k = opt.grille ? opt.grille[i] : i < h ? N - 1 - i : i - h, j = T.n - 8 - 4 * k, s = T.S[j], d = k % 2 ? 3 : -3; // grille en quinconce, 8 m entre deux places
       return Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, y: s.y, th: Math.atan2(s.tz, s.tx), idx: j, dist: -8 - 4 * k, d, lvl, pos: k + 1, lap: 1, fin: 0, out: 0, bump: 0 });
     });
-    return { T, cars, laps: opt.elim ? cars.length : laps, el, elim: !!opt.elim, tete: 0, t: 0, done: false };
+    return { T, cars, laps: opt.elim ? cars.length : laps, el, elim: !!opt.elim, h, delai: opt.delai || 0, tete: 0, t: 0, done: false };
   }
 
   // Tournée : toutes les cartes à la suite, des points à chaque manche. Les voitures sont désignées par leur indice dans R.cars (0 = joueur, 1.. = rivaux de la carte : les points suivent la place sur la liste, pas le nom).
@@ -365,13 +371,18 @@
   function stepRace(R, inp, dt) {
     const { T, cars } = R;
     R.t += dt;
-    const p = cars[0], rub = c => Math.min(LVL_MAX, c.lvl * (1 - R.el * clamp((c.dist - p.dist) / 150, -1, 1)));
+    // inp : une entrée par humain (ou une seule, hors tableau, pour le joueur seul) ; entrée absente = le pilote automatique conduit cet humain
+    const inps = Array.isArray(inp) ? inp : [inp], ia = cars.map((c, i) => i >= R.h || !inps[i]);
+    // élastique : l'écart à la moyenne des humains encore en course (tous arrivés ou sortis : à leur moyenne à tous), pour ne favoriser aucun des deux ; à un humain, c'est l'écart à la voiture 0
+    const hum = cars.slice(0, R.h), enc = hum.filter(c => !c.fin && !c.out), ref = enc.length ? enc : hum, pd = ref.reduce((s, c) => s + c.dist, 0) / ref.length;
+    const rub = c => Math.min(LVL_MAX, c.lvl * (1 - R.el * clamp((c.dist - pd) / 150, -1, 1)));
     // une voiture arrivée lève le pied : elle finit son tour au ralenti au lieu de repartir à fond
     const piste = R.elim ? cars.filter(c => !c.out) : cars; // les voitures encore en course : les seules qui se touchent, s'aspirent et s'évitent
-    const ins = cars.map((c, i) => c.out ? range(c, T) : i || !inp ? autopilot(c, T, c.fin ? 0.6 : i ? rub(c) : c.lvl, piste) : inp);
-    for (const c of cars) c.bump = 0; ins.forEach((p, i) => { const c = cars[i]; if (c.fin && (i || !inp) && Math.hypot(c.vx, c.vz) > 28) { p.gas = 0; p.brake = Math.max(p.brake, 0.3); } }); // tour d'honneur à 100 km/h
+    const ins = cars.map((c, i) => c.out ? range(c, T) : ia[i] ? autopilot(c, T, c.fin ? 0.6 : i < R.h ? c.lvl : rub(c), piste) : inps[i]);
+    for (const c of cars) c.bump = 0; ins.forEach((p, i) => { const c = cars[i]; if (c.fin && ia[i] && Math.hypot(c.vx, c.vz) > 28) { p.gas = 0; p.brake = Math.max(p.brake, 0.3); } }); // tour d'honneur à 100 km/h
     // les chocs entre voitures d'abord, puis step() : les murs ont le dernier mot, aucune voiture ne peut être poussée hors piste
     for (let i = 0; i < piste.length; i++) for (let j = i + 1; j < piste.length; j++) collide(piste[i], piste[j]);
+    for (const c of piste) if (c.bump > 2) { c.cours = 0; c.glD = 0; c.mult = 1; } // Glisse : un choc entre voitures casse l'enchaînement, comme un mur (voir points() ; le score ne touche pas à la physique)
     // aspiration : c.asp = 1 collé derrière une voiture lancée, 0 à NI.ad mètres ou hors du cône (la plus forte l'emporte)
     for (const c of cars) { c.asp = 0; const fx = Math.cos(c.th), fz = Math.sin(c.th);
       for (const o of piste) { const dx = o.x - c.x, dz = o.z - c.z, lon = dx * fx + dz * fz;
@@ -379,7 +390,7 @@
     cars.forEach((c, i) => {
       step(c, ins[i], T, dt);
       c.lap = clamp(Math.floor(c.dist / T.n) + 1, 1, R.laps);
-      if (!c.fin && !c.out && c.dist >= R.laps * T.n) c.fin = R.t;
+      if (!c.fin && !c.out && c.dist >= R.laps * T.n) { c.fin = R.t; c.pts = R.delai && R.t > R.delai ? 0 : c.score; } // c.pts : le score de Glisse figé à l'arrivée, nul hors délai
     });
     if (R.elim) { const o = raceOrder(R).filter(c => !c.out), tete = Math.floor(o[0].dist / T.n); // le meneur passe la ligne : dès la fin du tour 2, la dernière en piste sort
       if (tete > R.tete) { R.tete = tete; if (tete >= 2 && o.length > 1) o[o.length - 1].out = R.t; } }

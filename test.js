@@ -246,6 +246,65 @@ let elimTxt;
   elimTxt = `${E.laps} tours, sorties à ${sorties.reverse().map(c => nom(E, c) + ' ' + c.out.toFixed(2)).join(', ')} s, vainqueur ${nom(E, gagnant)} en ${gagnant.fin.toFixed(2)} s`;
 }
 
+// ---------- écran partagé : plusieurs humains dans la même course (opt.humains ; les humains sont les premières voitures, une entrée chacun) ----------
+let duoTxt;
+{
+  const etat = c => [c.x, c.z, c.th, c.vx, c.vz, c.nitro, c.asp, c.bump];
+  // grille à deux : quatre voitures, les deux humains sur les deux dernières places (le joueur 1 à sa place du solo), sans chevauchement
+  const G2 = newRace(T, 3, AI_LVL.slice(0, 2), 0, { humains: 2 });
+  assert.deepStrictEqual(G2.cars.map(c => c.pos), [4, 3, 1, 2], 'grille à deux humains');
+  assert.deepStrictEqual(G2.cars.map(c => c.dist), [-20, -16, -8, -12]);
+  for (const x of G2.cars) for (const y of G2.cars) assert(x === y || sep(x, y) > 5, 'grille à deux : voitures trop proches');
+  // chaque voiture suit sa propre entrée : celle qui accélère avance, celle qui ne touche à rien ne bouge pas (l'IA ne conduit ni l'une ni l'autre)
+  for (const qui of [0, 1]) { const R = newRace(T, 3, AI_LVL.slice(0, 2), 0, { humains: 2 }), g = R.cars[qui], f = R.cars[1 - qui], d0 = g.dist, x0 = f.x, z0 = f.z;
+    for (let i = 0; i < 3 / H; i++) stepRace(R, qui ? [I(0, 0), I(0, 1)] : [I(0, 1), I(0, 0)], H);
+    assert(g.dist > d0 + 10 && f.x === x0 && f.z === z0 && R.cars[2].dist > -5, `deux humains : le joueur ${qui + 1} accélère seul (${g.dist - d0} échantillons, l'autre en ${f.x - x0}, ${f.z - z0})`); }
+  // aspiration et chocs entre deux humains : exactement comme entre un humain et une IA placés de la même façon (le second humain reçoit les commandes que l'IA se donnerait)
+  for (const [avant, v, quoi] of [[6, 60, 'aspiration'], [8, 20, 'choc']]) {
+    const A = newRace(T, 3, [1]), B = newRace(T, 3, [], 0, { humains: 2 }); let vu = 0;
+    for (const R of [A, B]) { at(R.cars[0], 40, 0, 60); at(R.cars[1], 40 + avant, 0, v); }
+    for (let i = 0; i < 1.5 / H; i++) { stepRace(A, I(0, 1), H); stepRace(B, [I(0, 1), autopilot(B.cars[1], T, 1, B.cars)], H); vu = Math.max(vu, quoi === 'choc' ? A.cars[0].bump : A.cars[0].asp); }
+    assert(vu > 0.3, quoi + ' de test raté: ' + vu);
+    assert.deepStrictEqual(B.cars.map(etat), A.cars.map(etat), quoi + ' entre deux humains différent de humain contre IA');
+  }
+  // arrivée : chaque humain a la sienne. Le joueur 1, sans entrée, est conduit par le pilote automatique et boucle son tour ; la course n'est pas finie tant que le joueur 2 roule
+  const R = newRace(T, 1, [], 0, { humains: 2 }), [a, b] = R.cars;
+  while (!a.fin && R.t < 100) stepRace(R, [null, I(0, 0)], H);
+  assert(a.fin && a.fin < 60 && !b.fin && !R.done && a.pos === 1, "un humain arrivé ne doit pas finir la course de l'autre: " + a.fin);
+  while (!R.done && R.t < 200) stepRace(R, [null], H); // entrée absente pour le joueur 2 : le pilote automatique le ramène
+  assert(R.done && b.fin > a.fin && raceOrder(R)[0] === a && b.pos === 2, 'arrivée à deux humains : classement selon les temps');
+  // élastique : l'IA règle son rythme sur l'écart à la moyenne des humains encore en course. rythme() = le chemin d'une IA partie arrêtée de l'échantillon 300, humains immobiles aux `places`
+  const rythme = (places, el, lvl = 0.9, sec = 2) => { const R = newRace(T, 3, [lvl], el, { humains: places.length }), ia = R.cars[places.length]; places.forEach((p, i) => at(R.cars[i], p, 0, 0)); at(ia, 300, 0, 0);
+    for (let i = 0; i < sec / H; i++) stepRace(R, places.map(() => I(0, 0)), H); return Math.hypot(ia.x - S[300].x, ia.z - S[300].z); }; // en mètres
+  const libre = rythme([150], 0), frein = rythme([150], 0.3);
+  assert(frein < libre - 1 && frein === rythme([150], 0, 0.9 * (1 - 0.3)), `élastique à un humain : la formule ne doit pas changer (${frein} contre ${libre} sans élastique)`);
+  assert(rythme([200, 100], 0.3) === frein, 'élastique à deux humains : la référence doit être leur moyenne');
+  const milieu = rythme([100, 500], 0.3); // un humain 400 m derrière, l'autre 400 m devant : l'IA roule à son rythme
+  assert(Math.abs(milieu - libre) < 0.1 * (libre - frein), `élastique : deux humains à égale distance de part et d'autre ne doivent pas changer le rythme de l'IA (${milieu} contre ${libre}, ${frein} freinée)`);
+  // élimination à deux humains et deux IA : le joueur 1 ne touche à rien, le joueur 2 est conduit par le pilote automatique. Personne ne sort au premier tour, le joueur 1 sort au deuxième passage du meneur
+  const E = newRace(T, 3, AI_LVL.slice(0, 2), 0, { elim: true, humains: 2 }), sorties = []; let passages = 0, pp = 0;
+  assert(E.laps === 4, 'élimination à deux : quatre voitures, quatre tours');
+  while (!E.done && E.t < 400) { stepRace(E, [I(0, 0), null], H); const k = Math.floor(Math.max(...E.cars.map(c => c.dist)) / n); if (k > pp) { pp = k; passages++; }
+    for (const c of E.cars) if (c.out && !sorties.includes(c)) { sorties.push(c); assert(passages === sorties.length + 1, `élimination à deux : sortie ${sorties.length} au passage ${passages} du meneur`); } }
+  assert(E.done && sorties.length === 3 && sorties[0] === E.cars[0] && E.cars[0].pos === 4, "élimination à deux : l'humain immobile sort le premier, au deuxième passage du meneur");
+  assert.deepStrictEqual(raceOrder(E), [E.cars.find(c => c.fin), ...sorties.reverse()], "élimination à deux : classement = ordre inverse des sorties");
+  // Glisse en duel : 2 tours, deux humains, pas d'IA, un délai (opt.delai, en secondes) pour chaque voiture. Deux scores indépendants : le joueur 1 glisse, le joueur 2 roule droit
+  const duel = delai => newRace(T, 2, [], 0, { humains: 2, delai });
+  let D = duel(200), [g, d] = D.cars; at(g, 25, -6, 33); at(d, 80, 0, 33);
+  assert(D.cars.length === 2 && D.laps === 2, 'Glisse en duel : deux voitures, deux tours');
+  for (const [inp, sec] of [[I(1, 1, 0, true), 0.1], [I(-1, 1, 0, true), 0.8], [I(0, 1), 0.1]]) for (let i = 0; i < sec / H; i++) stepRace(D, [inp, I(0, 1)], H);
+  assert(g.score > 100 && g.mult === 2 && d.score === 0 && d.mult === 1, `Glisse en duel : scores indépendants (${g.score} x${g.mult} et ${d.score} x${d.mult})`);
+  // un choc entre les deux voitures casse l'enchaînement des deux, comme un mur ; le score acquis reste
+  D = duel(200); [g, d] = D.cars; at(g, 60, 0, 40); at(d, 66, 0, 10); g.mult = d.mult = 3; g.score = d.score = 500; let choc = 0;
+  for (let i = 0; i < 2 / H && !choc; i++) { stepRace(D, [I(0, 1), I(0, 1)], H); choc = g.bump; if (!choc) assert(g.mult === 3 && d.mult === 3, "Glisse en duel : l'enchaînement ne doit tomber qu'au choc"); }
+  assert(choc > 2 && g.mult === 1 && d.mult === 1 && g.score === 500 && d.score === 500, `Glisse en duel : un choc entre voitures (${choc} m/s) doit casser l'enchaînement des deux (x${g.mult}, x${d.mult})`);
+  // délai par voiture : c.pts = le score de la manche, figé à l'arrivée ; nul hors délai. Le joueur 2 attend 30 s sur la grille : il boucle ses deux tours trop tard
+  D = duel(100); [g, d] = D.cars; g.score = d.score = 1234;
+  while (!D.done && D.t < 300) stepRace(D, [null, D.t < 30 ? I(0, 0) : null], H);
+  assert(D.done && g.fin < 100 && g.pts >= 1234 && d.fin > 100 && d.pts === 0, `Glisse en duel : hors délai, score nul (${g.fin} s : ${g.pts} points, ${d.fin} s : ${d.pts} points)`);
+  duoTxt = `arrivées ${a.fin.toFixed(2)} et ${b.fin.toFixed(2)} s ; élastique sur 2 s : ${libre.toFixed(1)} m libre, ${milieu.toFixed(1)} m entre deux humains, ${frein.toFixed(1)} m freinée ; élimination : joueur 1 sorti à ${E.cars[0].out.toFixed(2)} s ; Glisse en duel : ${g.fin.toFixed(2)} s dans le délai, ${d.fin.toFixed(2)} s hors délai`;
+}
+
 // --- fantôme des médailles : la trace du tour de référence (pilote automatique, jauge pleine), ralentie au ratio de la médaille ---
 // une trace = [x, y, z, cap, …] à 20 Hz. Ralentie de 10 %, elle passe aux mêmes endroits 10 % plus tard, et finit au même point
 // ---------- relief : sauts, réceptions, murs roulables (sur Grand Vacarme, la carte qui les déclare) ----------
@@ -340,4 +399,5 @@ let elimTxt;
 console.log(`OK  course : IA seules ${laps.map(l => l.toFixed(2)).join(' / ')} s au tour (niveaux ${AI_LVL.join(' / ')}), dépassement en ${tpass.toFixed(1)} s, 3 tours à 4 IA : ${arr.map(c => R0(c) + ' ' + c.fin.toFixed(2)).join(', ')} (${walls} chocs mur, ${bumps} chocs voiture)`);
 console.log(`OK  élimination : ${elimTxt}`);
 console.log(`OK  glisse : ${glisseTxt}`);
+console.log(`OK  deux humains : ${duoTxt}`);
 console.log(`OK  fantôme des médailles : ${fantTxt}`);
