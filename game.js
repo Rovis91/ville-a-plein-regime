@@ -851,7 +851,7 @@
     if ((lookT -= dt) < 0) { const k = Math.exp(-dt * 5); lookA *= k; lookP *= k; } // souris immobile depuis 2,5 s : la caméra revient derrière la voiture
     const cx = Math.cos(cth + lookA), cz = Math.sin(cth + lookA), back = 6.4 - 1 * r; // caméra basse et proche : le sol défile en proportion inverse de sa hauteur, c'est ce qui donne la sensation de vitesse
     let px = car.x - cx * back, pz = car.z - cz * back;
-    const s = S[(car.idx - 4 + N) % N], nx = -s.tz, nz = s.tx, d = (px - s.x) * nx + (pz - s.z) * nz, o = Math.abs(d) - (W - 0.8);
+    const s = S[(car.idx - 4 + N) % N], nx = -s.tz, nz = s.tx, d = (px - s.x) * nx + (pz - s.z) * nz, o = Math.abs(d) - (s.w - 0.8);
     if (o > 0) { px -= nx * Math.sign(d) * o; pz -= nz * Math.sign(d) * o; } // la caméra reste entre les murs
     const shake = 0.04 * r * r + (stun > 0 ? stun * 0.5 : 0);
     cam.position.set(px + (Math.random() - 0.5) * shake, yAt(car, -3) + (M.camH || 3.2) + lookP - 0.5 * r + (Math.random() - 0.5) * shake, pz);

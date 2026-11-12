@@ -320,15 +320,59 @@
       const { THREE, S, N, W, rnd, M } = h, quai = (x, z) => z > 262 && x > -170 && x < 1060; // côté fleuve des quais
       const g = terrain(h, { pas: 16, marge: 320, mat: h.mat('bruit', {}, '#6e6a66', ['#7a7672', '#625e5a']), creux: (x, z) => quai(x, z) ? Math.min(9, (z - 262) * 0.5) : 0 });
       boite(h, h.mat('bruit', { lum: 1, rep: [40, 20] }, '#1e3a3a', ['#2a4a48', '#c08a7a', '#16302e']), 1500, 1, 700, 450, -11, 640); // la Seine, qui prend le rose du ciel
+      let graine = 1; const al = () => (graine = graine * 16807 % 2147483647) / 2147483647; // hasard propre aux nouveaux placements : ne décale pas rnd
+      // ruban le long de la piste dont les bords suivent la largeur locale : fa(s), fb(s) = écarts à l'axe ; à plat, la texture est plaquée en plan (une tuile tous les `tuile` m)
+      const ruban = (i0, cnt, fa, ya, fb, yb, m) => {
+        const t = m.userData.tuile || 4, pos = [], uv = [], idx = [];
+        for (let k = 0; k <= cnt; k++) {
+          const s = S[(i0 + k) % N], a = fa(s), b = fb(s), A = [s.x - s.tz * a, s.y + ya, s.z + s.tx * a], B = [s.x - s.tz * b, s.y + yb, s.z + s.tx * b];
+          pos.push(...A, ...B); uv.push(...(ya === yb ? [A[0] / t, A[2] / t, B[0] / t, B[2] / t] : [k * 2 / t, ya / t, k * 2 / t, yb / t]));
+          if (k < cnt) idx.push(2 * k, 2 * k + 1, 2 * k + 2, 2 * k + 1, 2 * k + 3, 2 * k + 2);
+        }
+        return nappe(pos, uv, idx, m);
+      };
+      const nappe = (pos, uv, idx, m) => { const ge = new THREE.BufferGeometry(); ge.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); ge.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); ge.setIndex(idx); ge.computeVertexNormals();
+        const me = new THREE.Mesh(ge, m); me.receiveShadow = true; h.scene.add(me); return me; };
+      // couronne horizontale de centre (cx, cz), du rayon r0 à r1, à l'altitude y, en n secteurs ; garde(x, z) = faux pour sauter un secteur
+      const couronne = (cx, cz, r0, r1, y, n, m, garde = () => true) => {
+        const t = m.userData.tuile || 4, pos = [], uv = [], idx = [];
+        for (let k = 0; k < n; k++) { const a0 = k / n * 6.2832, a1 = (k + 1) / n * 6.2832, am = (a0 + a1) / 2, rm = (r0 + r1) / 2;
+          if (!garde(cx + Math.cos(am) * rm, cz + Math.sin(am) * rm, a0, a1)) continue;
+          const v = pos.length / 3; for (const [r, a] of [[r0, a0], [r1, a0], [r1, a1], [r0, a1]]) { const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r; pos.push(x, y, z); uv.push(x / t, z / t); }
+          idx.push(v, v + 2, v + 1, v, v + 3, v + 2); }
+        return nappe(pos, uv, idx, m);
+      };
+      const proche = (x, z) => { let b = S[0], bd = 1e18; for (const s of S) { const d = (s.x - x) ** 2 + (s.z - z) ** 2; if (d < bd) { bd = d; b = s; } } return [Math.sqrt(bd), b]; }; // échantillon le plus proche et sa distance
       // types de rue : recul = distance du trottoir à la façade, H = hauteur des immeubles, arbres = rangées (distance au bord), gare = stationnement
       const TYPES = { boulevard: { recul: 21, H: [26, 30], arbres: [5.5, 15], gare: 2 }, avenue: { recul: 11, H: [22, 26], arbres: [6], gare: 1 }, rue: { recul: 3.2, H: [18, 22], arbres: [], gare: 0 },
-        ruelle: { recul: 1, H: [9, 15], arbres: [], gare: 0 }, quai: { recul: 6.5, H: [20, 24], arbres: [], gare: 1 }, place: { recul: 30, H: [26, 28], arbres: [], gare: 0 } };
+        ruelle: { recul: 1, H: [9, 15], arbres: [], gare: 0 }, quai: { recul: 6.5, H: [20, 24], arbres: [], gare: 1 }, place: { recul: 19, H: [26, 28], arbres: [], gare: 0 } };
       const type = new Array(N).fill('rue'), rues = M.th.rues.map(([p, t]) => [pt(h, p), t]).sort((a, b) => a[0] - b[0]);
       rues.forEach(([i0, t], k) => { const i1 = k + 1 < rues.length ? rues[k + 1][0] : N; for (let i = i0; i < i1; i++) type[i] = t; });
       for (let i = 0; i < rues[0][0]; i++) type[i] = rues[rues.length - 1][1];
-      // trottoirs et contre-allées : un ruban clair de la chaussée à la façade, par tronçon de même type ; la bande de stationnement reste sombre
-      const dalle = h.mat('trottoir', { side: THREE.DoubleSide });
-      for (let i = 0; i < N;) { let j = i; while (j < N && type[j] === type[i]) j++; const t = TYPES[type[i]]; for (const sd of [-1, 1]) h.ribbon(i, j - i, sd * (W + (t.gare ? 3.2 : 0.1)), 0.22, sd * (W + t.recul + 0.5), 0.22, dalle); i = j; }
+      // trottoirs à bordure de granit, et bande de stationnement en asphalte, par tronçon de même type hors tunnel ; ils suivent la largeur de la chaussée (la place s'élargit)
+      const dalle = h.mat('dalles', { side: THREE.DoubleSide }), bordure = h.mat('pierre', { side: THREE.DoubleSide }), bitume = h.mat('bruit', { side: THREE.DoubleSide }, '#45454c', ['#4f4f56', '#3c3c42']);
+      for (let i = 0; i < N;) {
+        let j = i; const tun = h.zone(i, 1) > 0.5; while (j < N && type[j] === type[i] && (h.zone(j, 1) > 0.5) === tun) j++;
+        const t = TYPES[type[i]], gb = t.gare ? 3.2 : 0;
+        if (!tun) for (const sd of [-1, 1]) {
+          ruban(i, j - i, s => sd * (s.w + gb), 0.22, s => sd * (s.w + t.recul + 0.5), 0.22, dalle); ruban(i, j - i, s => sd * (s.w + gb), 0.22, s => sd * (s.w + gb), -0.6, bordure);
+          if (gb) ruban(i, j - i, s => sd * s.w, 0.01, s => sd * (s.w + gb), 0.01, bitume);
+        }
+        i = j;
+      }
+      // ---- la place : chaussée pavée tout autour d'un îlot central, l'arc de triomphe au milieu ; on la contourne en glisse (la traverser par l'arche ferait sortir de la piste)
+      const C = [450, 0], RI = 47, RT = 121; // centre, bord de l'îlot, façades
+      const large = S.map((s, i) => i).filter(i => S[i].w > W + 0.05), paves = h.mat('paves', { side: THREE.DoubleSide });
+      ruban(large[0], large[large.length - 1] - large[0], s => -s.w, 0.02, s => s.w, 0.02, paves);
+      couronne(C[0], C[1], RI, RT, 0.02, 120, paves);
+      couronne(C[0], C[1], 0, RI, 0.25, 96, dalle); // l'îlot, dallé clair comme un trottoir, plus haut
+      h.pose('cylindreOuvert', bordure, h.scene, [C[0], 0.1, C[1]], RI, 0.7, 96);
+      // le trottoir du pourtour, hors de la chaussée là où une avenue en part
+      couronne(C[0], C[1], RT - 20, RT + 6, 0.22, 160, dalle, (x, z) => { const [d, s] = proche(x, z); return d > s.w + 11; });
+      const arc = h.pose('arc', { pierre: h.mat('pierre'), relief: h.mat('basRelief') }, h.scene, [C[0], 0.25, C[1]]); arc.forEach(m => m.rotation.y = 1.5708); // grande arche face à l'arrivée
+      // réverbères à couronne autour de l'îlot
+      const couronneLum = [];
+      for (let k = 0; k < 16; k++) { const a = k / 16 * 6.2832; couronneLum.push([C[0] + Math.cos(a) * (RI - 2), C[1] + Math.sin(a) * (RI - 2)]); }
       const fm = ['#d9c9a8', '#cfc0a0', '#e0d4b8'].map(p => h.mat('facadeParis', {}, p)), lots = fm.map(() => []);
       const fb = ['#e8dcc0', '#d8c8b0'].map(p => h.mat('facadeParis', {}, p, 1)), bas = fb.map(() => []); // maisons basses de la butte
       const troncs = [], houp = [], mats = [], lant = [], autos = [[], [], [], []];
@@ -337,17 +381,21 @@
         for (const sd of [-1, 1]) {
           const [qx, qz] = bord(s, sd, W + 12), fleuve = quai(qx, qz) || quai(qx, qz + 14);
           if (i % 8 === 0 && !tun && !fleuve) { // un immeuble tous les 16 m, au recul de la rue ; pas sur la trémie, ni côté fleuve, ni là où une autre rue passe
-            const [x, z] = bord(s, sd, W + t.recul + 7.5), ruelle = type[i] === 'ruelle';
-            if (g.dAt(x, z) > W + t.recul + 6.5 && (type[i] !== 'place' || (x - 450) ** 2 + z * z > 118 * 118)) { const H = t.H[0] + rnd() * (t.H[1] - t.H[0]); (ruelle ? bas[rnd() * 2 | 0] : lots[rnd() * 3 | 0]).push([x, g.hAt(x, z) + H / 2 - 3, z, ry, 17, H + 6, 14]); }
+            const [x, z] = bord(s, sd, s.w + t.recul + 7.5), ruelle = type[i] === 'ruelle';
+            if (g.dAt(x, z) > s.w + t.recul + 6.5 && (x - C[0]) ** 2 + (z - C[1]) ** 2 > (RT + 14) ** 2) { const H = t.H[0] + rnd() * (t.H[1] - t.H[0]); (ruelle ? bas[rnd() * 2 | 0] : lots[rnd() * 3 | 0]).push([x, g.hAt(x, z) + H / 2 - 3, z, ry, 17, H + 6, 14]); }
           }
-          if (i % 10 === 0 && !tun) for (const off of fleuve ? [2.4] : t.arbres) { const [x, z] = bord(s, sd, W + off); if (g.dAt(x, z) > W + off - 1.5) { troncs.push([x, s.y + 2.6, z]); houp.push([x, s.y + 7.6, z, rnd() * 6, 1, 0.9, 1]); } } // platanes : en rangées sur les grands axes, le long du fleuve sur le quai
-          if (t.gare && !tun && !fleuve && i % 4 === 0 && rnd() < (t.gare > 1 ? 0.8 : 0.55)) { const [x, z] = bord(s, sd, W + 1.7); autos[rnd() * 4 | 0].push([x, s.y, z, ry + 1.5708]); } // voitures en stationnement
+          if (i % 10 === 0 && !tun) for (const off of fleuve ? [2.4] : t.arbres) { const [x, z] = bord(s, sd, s.w + off); if (g.dAt(x, z) > s.w + off - 1.5) { troncs.push([x, s.y + 2.6, z]); houp.push([x, s.y + 7.6, z, rnd() * 6, 1, 0.9, 1]); } } // platanes : en rangées sur les grands axes, le long du fleuve sur le quai
+          if (t.gare && !tun && !fleuve && s.w < W + 0.3 && i % 4 === 0 && rnd() < (t.gare > 1 ? 0.8 : 0.55)) { const [x, z] = bord(s, sd, s.w + 1.7); autos[rnd() * 4 | 0].push([x, s.y, z, ry + 1.5708]); } // voitures en stationnement
         }
-        if (i % 10 === 0 && h.zone(i, 6) === 0) { const sd = (i / 10) & 1 ? 1 : -1, [x, z] = bord(s, sd, W + (t.gare ? 3.6 : 0.6)); mats.push([x, s.y + 3.4, z]); lant.push([x, s.y + 7, z]); h.lum(i, x, s.y + 6.5, z, 0xffd05a, 15, 1.6); } // réverbères, allumés jusqu'au lever du jour
+        if (i % 10 === 0 && h.zone(i, 6) === 0) { const sd = (i / 10) & 1 ? 1 : -1, [x, z] = bord(s, sd, s.w + (t.gare ? 3.6 : 0.6)); mats.push([x, s.y + 3.4, z]); lant.push([x, s.y + 7, z]); h.lum(i, x, s.y + 6.5, z, 0xffd05a, 15, 1.6); } // réverbères, allumés jusqu'au lever du jour
       }
+      for (const [x, z] of couronneLum) { mats.push([x, 3.65, z]); lant.push([x, 7.25, z]); h.lum(near(h, x, z), x, 6.75, z, 0xffd05a, 15, 1.6); }
+      // la couronne d'immeubles qui ferme la place, façades tournées vers l'arc ; une avenue part là où passe la piste
+      for (let a = 0; a < 6.2832; a += 17.5 / RT) { const x = C[0] + Math.cos(a) * (RT + 7), z = C[1] + Math.sin(a) * (RT + 7), [d, s] = proche(x, z);
+        if (d > s.w + 18) { const H = 26 + al() * 3; lots[al() * 3 | 0].push([x, g.hAt(x, z) + H / 2 - 3, z, Math.atan2(-Math.sin(a), Math.cos(a)), 14, H + 6, 17.4]); } }
       for (let k = 0; k < 420; k++) { // et la ville derrière : des toits à perte de vue
         const x = g.box[0] + rnd() * (g.box[2] - g.box[0]), z = g.box[1] + rnd() * (g.box[3] - g.box[1]), d = g.dAt(x, z);
-        if (d > 52 && !quai(x, z - 30) && (x - 450) ** 2 + z * z > 118 * 118) { const H = 18 + rnd() * 8; lots[k % 3].push([x, g.hAt(x, z) + H / 2 - 3, z, (rnd() * 4 | 0) * 1.5708 + rnd() * 0.3, 16 + rnd() * 14, H + 6, 14 + rnd() * 10]); }
+        if (d > 52 && !quai(x, z - 30) && (x - C[0]) ** 2 + (z - C[1]) ** 2 > (RT + 22) ** 2) { const H = 18 + rnd() * 8; lots[k % 3].push([x, g.hAt(x, z) + H / 2 - 3, z, (rnd() * 4 | 0) * 1.5708 + rnd() * 0.3, 16 + rnd() * 14, H + 6, 14 + rnd() * 10]); }
       }
       const cube = h.geo('bloc');
       lots.forEach((l, i) => inst(h, cube, fm[i], l)); bas.forEach((l, i) => inst(h, cube, fb[i], l));
@@ -364,8 +412,7 @@
       inst(h, h.geo('tronc'), h.mat('tronc'), troncs); inst(h, h.geo('houppier'), h.mat('feuillage'), houp);
       const garees = autos.flatMap((l, i) => l.map(p => [...p, 1, 1, 1, [0x2a3a5a, 0x8a8a90, 0x5a1a1a, 0xd8d4c8][i]]));
       insts(h, 'voitureGaree', { caisse: h.mat('laque'), vitre: h.mat('vitreSombre'), chassis: h.mat('matGris'), roue: h.mat('roue'), pneu: h.mat('pneu'), feuRouge: h.mat('feuRouge', LUM), feuBlanc: h.mat('lampe', LUM) }, garees, { teinte: 'caisse' });
-      // l'arche au centre de la place ; le dôme blanc en haut de la butte
-      h.pose('arche', { pierre: h.mat('pierre') }, h.scene, [450, g.hAt(450, 0), 0]);
+      // le dôme blanc en haut de la butte
       const craie = h.mat('craie'), yb = g.hAt(935, -598);
       h.pose('basilique', { craie }, h.scene, [935, yb, -598]);
       h.pose('dome', craie, h.scene, [935, yb + 24, -596], 13, 8, 5).scale.y = 1.5;

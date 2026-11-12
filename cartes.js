@@ -3,7 +3,7 @@
 // Changer de carte recharge la page : le décor n'est construit qu'une fois, comme avant.
 //
 // Champs d'une carte :
-//   W demi-largeur de route (m) · grip adhérence latérale maxi (m/s²) · sc échelle du tracé · pts [x, z, altitude], sens horaire, départ en [0]
+//   W demi-largeur de route (m) · large [[a, b, w], …] demi-largeur w entre les points a et b (place) · grip adhérence latérale maxi (m/s²) · sc échelle du tracé · pts [x, z, altitude], sens horaire, départ en [0]
 //   camH hauteur de la caméra (m, 3,2 par défaut : à relever quand la voiture masque la route) · tun [a, b] tunnel entre deux points (ou null) · chaud [a, b] secteur où la musique se déchaîne · amb [[a, b], …] zones où l'on entend l'ambiance du lieu · sect [a, b] les deux temps intermédiaires
 //   anticipe : le pilote automatique calcule sa distance de freinage (indispensable dès qu'il y a une épingle)
 //   rivaux : prénoms des trois adversaires du mode course (sinon ceux de la ville) · trafic : nombre de camions à doubler · car : la voiture (format CARD de sim.js) · radio : stations (voir RADIO plus bas) · th : thème
@@ -186,7 +186,7 @@
         hud: { y: '#ffffff', c: '#ffb85a', r: '#ff2a3a', fond: 'rgba(10,84,52,.92)', style: 'panneau', split: 0, jp: ['周回', '速度'], sur: ['湾岸九号線', 'LIGNE DE BAIE'], titre: ['WAN-9', 'BAYSHORE'] } } },
 
     // Paris à l'aube : circuit de rues, relances entre des angles, pavés.
-    { id: 'paris', nom: 'PREMIER METRO', rivaux: ['LUCIE', 'MARC', 'INES'], W: 7, grip: 19, sc: 1, tun: [27, 30], chaud: [13, 22], amb: [[3, 7], [23, 26]], sect: [12, 25], anticipe: 1,
+    { id: 'paris', nom: 'PREMIER METRO', rivaux: ['LUCIE', 'MARC', 'INES'], W: 7, large: [[3, 7, 26]], grip: 19, sc: 1, tun: [27, 30], chaud: [13, 22], amb: [[3, 7], [23, 26]], sect: [12, 25], anticipe: 1,
       pts: [[0, 0, 0], [200, 0, 0], [330, 15, 0], [424, 70, 0], [476, 70, 0], [515, 37, 0], [524, -13, 0], [498, -57, 0], [430, -160, 0], [420, -300, 2], [450, -390, 4], [540, -420, 6], [700, -420, 8], [810, -435, 12], [880, -480, 19], [860, -545, 26], [800, -590, 31], [830, -660, 37], [930, -670, 42], [1020, -630, 44], [1070, -540, 38], [1040, -410, 26], [1085, -280, 14], [1060, -150, 4], [1100, 0, 0], [1090, 140, -2], [1010, 225, -4], [800, 240, -6], [600, 250, -12], [400, 250, -12], [200, 240, -6], [0, 240, -3], [-150, 225, 0], [-235, 150, 0], [-235, 60, 0], [-150, 0, 0]],
       // Renault 5 Maxi Turbo (1985, Groupe B) : 4 cylindres turbo 1,5 L, 350 ch, 905 kg, moteur central arrière, propulsion (rapports estimés)
       car: car({ nom: 'RENAULT 5 MAXI TURBO', ratios: [3.36, 2.06, 1.38, 1.06, 0.82], final: 3.89, wheel: 0.29, mass: 980, idle: 1000, red: 7500, cd: 0.40, area: 1.9,
@@ -195,7 +195,7 @@
       th: { decor: 'paris', fog: 0xf0b89a, fogD: [140, 1500], sky: [[0, '#2b3a67'], [0.26, '#2b3a67'], [0.27, '#5a6a9a'], [0.38, '#5a6a9a'], [0.39, '#c08a9a'], [0.45, '#c08a9a'], [0.46, '#f0b89a'], [1, '#f0b89a']], stars: 0,
         astre: { dir: [0.8, 0.14, 0.3], col: '#fff0c0', ombre: '#fff0c0', taille: 260 }, hemi: [0xa8b8e8, 0xd9c9a8, 0.95], sun: [0xffc890, 0.75], phares: 0.5, bloom: 0.03, scan: 0.05,
         rues: [[0, 'boulevard'], [3, 'place'], [8, 'avenue'], [11, 'rue'], [13, 'ruelle'], [19, 'rue'], [24, 'avenue'], [26, 'quai'], [31, 'avenue'], [33, 'boulevard']],
-        murH: 0.5, route: ['#4a4a52', '#56565e', '#e8e4d8', '#e8e4d8', '#8a8478', '#8a8478', false], mur: ['#8a8478', '#b0a898', '#8a8478', '#6a665e'], depart: [0x1d2f6f, 0x2a7a4a, '#f4f0e0'],
+        murH: 0, route: ['#4a4a52', '#56565e', '#e8e4d8', '#e8e4d8', '#8a8478', '#8a8478', false], mur: ['#8a8478', '#b0a898', '#8a8478', '#6a665e'], depart: [0x1d2f6f, 0x2a7a4a, '#f4f0e0'],
         tun: { sol: ['#3a3a40', '#46464c', '#e8e4d8', '#e8e4d8', '#3a3a40', '#3a3a40'], murs: ['#dfeeff', '#dfeeff'], paroi: ['#b8b4a8', '#d8d4c8', '#8a867a', '#5a564e'], plafond: ['#3a3830', '#ffe9a0', '#ffe9a0', '#5a564e'], carreaux: 1,
           fog: 0x40382a, portail: 0x5d6b82, neons: [0xdfeeff, 0xdfeeff], coque: 14 }, // néon blanc froid, parois carrelées
         hud: { y: '#ffffff', c: '#ffd05a', r: '#ff6a5a', fond: 'rgba(24,44,110,.92)', style: 'plaque', split: 0, jp: null, sur: [null, 'PARIS · 5 H 30'], titre: ['PREMIER', 'METRO'] } } },

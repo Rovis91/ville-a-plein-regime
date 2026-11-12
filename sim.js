@@ -31,20 +31,23 @@
     // courbure signée (>0 = virage à droite), lissée sur ±3 échantillons
     S.forEach((s, i) => { const a = S[(i - 3 + n) % n], b = S[(i + 3) % n]; s.k = s.kl = (a.tx * b.tz - a.tz * b.tx) / (6 * len / n); });
     KT.w1 = KT.vref / (KT.large * (1 / Math.max(...S.map(s => Math.abs(s.k))) + W)); KT.w0 = 1.6 * KT.w1;
-    // la trajectoire du pilote automatique est la ligne de moindre courbure qui tient dans la route, à 2,1 m des murs (extérieur, corde, extérieur).
+    const near = p => { let b = 0, bd = 1e9; S.forEach((s, i) => { const d = (s.x - p[0]) ** 2 + (s.z - p[1]) ** 2; if (d < bd) { bd = d; b = i; } }); return b; };
+    const at = i => near(PTS[i]), TUN = M.tun || [0, 0];
+    // largeur variable : M.large = [[a, b, w], …] demi-largeur w entre les points a et b, raccordée sur 60 m de part et d'autre ; ailleurs W (s.w = demi-largeur à l'échantillon)
+    S.forEach(s => s.w = W);
+    for (const [a, b, w] of M.large || []) { const i0 = at(a), l = (at(b) - i0 + n) % n; for (let k = -30; k <= l + 30; k++) { const f = Math.min(1, (k + 30) / 30, (l + 30 - k) / 30), s = S[(i0 + k + n) % n]; s.w = Math.max(s.w, W + (w - W) * f * f * (3 - 2 * f)); } }
+    // la trajectoire du pilote automatique est la ligne de moindre courbure qui tient dans la route, à 2,1 m des murs, quelle que soit la largeur (extérieur, corde, extérieur).
     // Un point tous les 8 m, chacun ramené là où ses 4 voisins le voudraient pour que la ligne tourne le moins possible ; puis sa courbure, par le cercle passant par 3 points.
     {
-      const m = 4, N = Math.floor(n / m), D = new Float64Array(N), lim = W - 3.2, pt = (i, d) => { const s = S[(i + n) % n]; return [s.x - s.tz * d, s.z + s.tx * d]; }, pj = j => pt((j + N) % N * m, D[(j + N) % N]);
+      const m = 4, N = Math.floor(n / m), D = new Float64Array(N), pt = (i, d) => { const s = S[(i + n) % n]; return [s.x - s.tz * d, s.z + s.tx * d]; }, pj = j => pt((j + N) % N * m, D[(j + N) % N]);
       for (let it = 0; it < 6000; it++) for (let j = 0; j < N; j++) {
         const s = S[j * m], a = pj(j - 1), b = pj(j + 1), a2 = pj(j - 2), b2 = pj(j + 2);
-        D[j] = clamp(-((4 * (a[0] + b[0]) - a2[0] - b2[0]) / 6 - s.x) * s.tz + ((4 * (a[1] + b[1]) - a2[1] - b2[1]) / 6 - s.z) * s.tx, -lim, lim);
+        D[j] = clamp(-((4 * (a[0] + b[0]) - a2[0] - b2[0]) / 6 - s.x) * s.tz + ((4 * (a[1] + b[1]) - a2[1] - b2[1]) / 6 - s.z) * s.tx, 3.2 - s.w, s.w - 3.2);
       }
       S.forEach((s, i) => { const j = Math.floor(i / m) % N, f = i / m - Math.floor(i / m); s.dl = D[j] + (D[(j + 1) % N] - D[j]) * f; });
       S.forEach((s, i) => { const a = pt(i - m, S[(i - m + n) % n].dl), b = pt(i, s.dl), c = pt(i + m, S[(i + m) % n].dl), ux = b[0] - a[0], uz = b[1] - a[1], vx = c[0] - b[0], vz = c[1] - b[1];
         s.kl = 2 * (ux * vz - uz * vx) / (Math.hypot(ux, uz) * Math.hypot(vx, vz) * Math.hypot(c[0] - a[0], c[1] - a[1])); });
     }
-    const near = p => { let b = 0, bd = 1e9; S.forEach((s, i) => { const d = (s.x - p[0]) ** 2 + (s.z - p[1]) ** 2; if (d < bd) { bd = d; b = i; } }); return b; };
-    const at = i => near(PTS[i]), TUN = M.tun || [0, 0];
     // tun : la carte a un tunnel, de t0 à t1 ; h0-h1 : secteur « chaud » pour la musique ; sp : les deux temps intermédiaires (indices d'échantillons)
     return { S, n, W, len, tun: !!M.tun, t0: at(TUN[0]), t1: at(TUN[1]), h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at) };
   }
@@ -112,7 +115,7 @@
     for (let j = -6; j <= 14; j++) { const i = (c.idx + j + n) % n, s = S[i], d = (s.x - c.x) ** 2 + (s.z - c.z) ** 2; if (d < bd) { bd = d; b = i; } }
     c.dist += ((b - c.idx + n + n / 2) % n) - n / 2;
     c.idx = b;
-    const s = S[b], nx = -s.tz, nz = s.tx, L = W - 1.1;
+    const s = S[b], nx = -s.tz, nz = s.tx, L = s.w - 1.1;
     c.d = (c.x - s.x) * nx + (c.z - s.z) * nz; c.hit = 0; c.rub = 0; c.wallT = (c.wallT || 0) - dt;
     const o = Math.abs(c.d) - L;
     if (o > 0) {
