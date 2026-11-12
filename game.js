@@ -499,6 +499,13 @@
   let pi = 0;
   pGeo.setAttribute('position', new THREE.BufferAttribute(pP, 3)); pGeo.setAttribute('color', new THREE.BufferAttribute(pC, 3));
   const parts = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 1.1, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false })); parts.frustumCulled = false; scene.add(parts);
+  // poussière des cartes en terre (th.poussiere = sa teinte) : des disques flous, opaques, qui grossissent en s'effaçant ; à part des particules additives, qui la faisaient lire en carrés clairs
+  const DN = 480, dP = new Float32Array(DN * 3), dV = new Float32Array(DN * 3), dA = new Float32Array(DN).fill(1), dGeo = new THREE.BufferGeometry(), dEch = { value: 135 }; let di = 0;
+  dGeo.setAttribute('position', new THREE.BufferAttribute(dP, 3)); dGeo.setAttribute('age', new THREE.BufferAttribute(dA, 1));
+  if (TH.poussiere) { const d = new THREE.Points(dGeo, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { col: { value: new THREE.Color(...TH.poussiere) }, ech: dEch },
+    vertexShader: 'attribute float age; varying float a; uniform float ech; void main() { a = age; vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_PointSize = age < 1.0 ? ech * projectionMatrix[1][1] * (1.1 + 6.0 * age) / -p.z : 0.0; }',
+    fragmentShader: 'varying float a; uniform vec3 col; void main() { float r = length(gl_PointCoord - 0.5) * 2.0; if (r > 1.0 || a >= 1.0) discard; gl_FragColor = vec4(col, (1.0 - r * r) * (1.0 - a) * min(1.0, 0.15 + a * 4.0) * 0.5); }' })); d.frustumCulled = false; scene.add(d); }
+  function poussiere(x, y, z, vx, vy, vz) { const i = di++ % DN; dP.set([x, y, z], i * 3); dV.set([vx, vy, vz], i * 3); dA[i] = 0; }
   function emit(x, y, z, vx, vy, vz, life, r, gg, b, grav) { const i = pi++ % PN; pP.set([x, y, z], i * 3); pV.set([vx, vy, vz], i * 3); pB.set([r, gg, b], i * 3); pL[i] = pM[i] = life; pGv[i] = grav; }
 
   let flashT = 0, nextFlash = 6;
@@ -521,8 +528,12 @@
     if (car.slide > 0.3 && sp > 10 && !car.air) for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.2, car.z - fz * 1.4 + rz * sd, car.vx * 0.25 + jit(4), 1 + Math.random() * 2.5, car.vz * 0.25 + jit(4), 0.9, lerp(0.16, 0.28, lm), lerp(0.18, 0.06, lm), lerp(0.28, 0.06, lm), -1);
     if (hit > 3) { const s = S[car.idx], sg = Math.sign(car.d); for (let i = 0; i < 16; i++) emit(car.x - s.tz * sg, carY + 0.5, car.z + s.tx * sg, car.vx * 0.5 + jit(14), 2 + Math.random() * 7, car.vz * 0.5 + jit(14), 0.5, 1, 0.75, 0.25, 22); }
     else if (car.rub && sp > 8) { const s = S[car.idx], sg = Math.sign(car.d); for (let i = 0; i < 3; i++) emit(car.x - s.tz * sg, carY + 0.4, car.z + s.tx * sg, car.vx * 0.6 + jit(5), 1 + Math.random() * 4, car.vz * 0.6 + jit(5), 0.35, 1, 0.75, 0.25, 22); } // frottement continu : gerbe plus fine que le choc
-    if (TH.poussiere) for (const c of race ? race.cars : [car]) { const q = T.surf[c.idx], v = Math.hypot(c.vx, c.vz), [pr, pg, pb] = q.aq ? [0.3, 0.34, 0.36] : TH.poussiere; // terre (th.poussiere = sa teinte) : chaque voiture lève un panache derrière elle, plus fourni en glisse ; dans le gué, une gerbe d'eau
-      if (v > 8 && !c.air && !c.out && (q.roul > 0.25 || q.aq) && (c === car || c.drift || Math.random() < 0.5)) for (const sd of [-0.8, 0.8]) emit(c.x - Math.cos(c.th) * 1.6 - Math.sin(c.th) * sd, c.y + 0.25, c.z - Math.sin(c.th) * 1.6 + Math.cos(c.th) * sd, c.vx * 0.3 + jit(3), 0.6 + Math.random() * (q.aq ? 5 : 2), c.vz * 0.3 + jit(3), q.aq ? 0.5 : 0.9, pr, pg, pb, q.aq ? 12 : -1); }
+    if (TH.poussiere) { for (const c of race ? race.cars : [car]) { const q = T.surf[c.idx], v = Math.hypot(c.vx, c.vz), sd = Math.random() < 0.5 ? -0.8 : 0.8, x = c.x - Math.cos(c.th) * 1.6 - Math.sin(c.th) * sd, z = c.z - Math.sin(c.th) * 1.6 + Math.cos(c.th) * sd; // chaque voiture lève un panache derrière elle ; dans le gué, une gerbe d'eau. La poussière part à la vitesse de la voiture puis freine : le panache reste dans le champ de la caméra de poursuite
+        if (v < 8 || c.air || c.out || !(c === car || c.drift || Math.random() < 0.5)) continue;
+        if (q.aq) for (let k = 0; k < 3; k++) poussiere(x + jit(1), c.y + 0.15, z + jit(1), c.vx * 0.8 + jit(5), 1.5 + Math.random() * 4, c.vz * 0.8 + jit(5)); // l'eau du gué est trouble : une gerbe de la même teinte, plus haute
+        else if (q.roul > 0.25) for (let k = 0; k < 2; k++) poussiere(x + jit(0.6), c.y + 0.15, z + jit(0.6), c.vx * 0.7 + jit(2), 0.3 + Math.random() * 1.2, c.vz * 0.7 + jit(2)); }
+      const fr = Math.exp(-3 * dt); for (let i = 0; i < DN; i++) if (dA[i] < 1) { const j = i * 3; dA[i] += dt / 1.4; dV[j] *= fr; dV[j + 2] *= fr; dP[j] += dV[j] * dt; dP[j + 1] += dV[j + 1] * dt; dP[j + 2] += dV[j + 2] * dt; }
+      dEch.value = RH / 2; dGeo.attributes.position.needsUpdate = dGeo.attributes.age.needsUpdate = true; }
     for (const fl of flames) { fl.visible = car.boost > 0; fl.scale.y = (0.5 + Math.random() * 0.7) * Math.min(1, car.boost * 2); } // nitro : deux flammes d'échappement qui vacillent, les traînées virent au bleu
     if (car.dd && sp > 10 && !car.air) { const ok = car.driftT > 0.6; for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.15, car.z - fz * 1.4 + rz * sd, car.vx * 0.5 + rx * sd * 3 + jit(3), 1 + Math.random() * 3, car.vz * 0.5 + rz * sd * 3 + jit(3), 0.3, ok ? 1 : 0.3, ok ? 0.55 : 0.6, ok ? 0.1 : 1, 14); } // glisse : étincelles aux roues arrière, bleues puis orange quand la jauge se remplit à plein débit
     for (let i = 0; i < PN; i++) {
@@ -669,7 +680,7 @@
   }
   // mode Glisse : le score ne compte que si les deux tours sont bouclés en moins de GLT (deux tours au temps de bronze, plus 30 %) ; record et médailles par carte
   // GLM = [bronze, argent, or] en points, fixés à la main par carte d'après le pilote en glisse de test-cartes.js sur deux tours (son score vaut à peu près le bronze). Carte sans ligne ici : 8, 16 et 28 points par mètre de tour
-  const GLT = 2 * REF * MED[0] * 1.3, GLM = { ville: [20000, 40000, 70000], touge: [20000, 40000, 70000], wangan: [50000, 90000, 140000], paris: [15000, 30000, 55000], canal: [150000, 250000, 350000], barrage: [15000, 30000, 55000], stade: [25000, 50000, 80000], givre: [40000, 75000, 120000], terre: [90000, 160000, 240000] }[M.id] || [8, 16, 28].map(k => Math.round(k * T.len / 1000) * 1000);
+  const GLT = 2 * REF * MED[0] * 1.3, GLM = { ville: [20000, 40000, 70000], touge: [20000, 40000, 70000], wangan: [50000, 90000, 140000], paris: [15000, 30000, 55000], canal: [150000, 250000, 350000], barrage: [15000, 30000, 55000], stade: [25000, 50000, 80000], givre: [40000, 75000, 120000], terre: [75000, 135000, 200000] }[M.id] || [8, 16, 28].map(k => Math.round(k * T.len / 1000) * 1000);
   const medG = s => GLM.filter(k => s >= k).length; let bestG = store.get('glisse') || 0, glFin = null; // glFin : le résultat de la manche, une fois les deux tours bouclés
   function finGlisse() {
     const score = Math.round(car.score), valide = tRace <= GLT, rec = valide && score > bestG; glFin = { score, valide, rec }; raceEnd = true; car.manual = false;
