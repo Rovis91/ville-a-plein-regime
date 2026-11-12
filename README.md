@@ -80,7 +80,17 @@ Tout tourne dans le navigateur, sans étape de build ni dépendance à installer
 python -m http.server 8123
 ```
 
-puis ouvrir http://localhost:8123/.
+puis ouvrir l'une de ces pages (le même serveur les sert toutes) :
+
+| Application | Adresse | À quoi elle sert |
+|---|---|---|
+| **Le jeu** | http://localhost:8123/ | jouer ; `?carte=ville`, `touge`, `wangan`, `paris` ou `canal` pour choisir la carte |
+| **Les sons** (banc d'écoute) | http://localhost:8123/ecoute.html | écouter chaque station, ambiance et bruitage seul, régler le mélange de course par famille, mesurer les niveaux |
+| **La musique** (éditeur) | http://localhost:8123/editeur.html | modifier une station : mixage, timbres, accords, arrangement, motifs, basse et thème en piano-roll |
+
+Les trois partagent le même moteur audio (`audio.js`). Les réglages de l'éditeur de musique sont enregistrés dans le navigateur : pour les entendre en course, ouvrir le jeu **à la même adresse** (même hôte, même port) que l'éditeur, puis recharger la page. « Exporter » dans l'éditeur donne le texte à conserver ou à inscrire dans `cartes.js`.
+
+Autres pages d'outils : `manette.html` (diagnostic de la manette) et `styles.html` (planche des styles visuels).
 
 ## Commandes
 
