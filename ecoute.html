@@ -59,6 +59,11 @@
 <h2>Vent et ambiance du lieu</h2>
 <div id="g-amb"></div>
 
+<h2>Pluie, depuis l'habitacle</h2>
+<p>Quatre variantes à comparer ; en jeu : <code>?pluieson=a</code> (à <code>d</code>), <code>c</code> par défaut. Elles suivent la force et la vitesse (curseur de la musique), et se taisent dans un tunnel (case de la musique).</p>
+<div id="g-pluie"></div>
+<label>force de la pluie <input type="range" id="force" min="0" max="3" step="0.1" value="3"><output></output></label>
+
 <h2>Interface</h2>
 <div id="g-ui"></div>
 
@@ -81,9 +86,9 @@
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const FAM = { mus: 'Musique', mot: 'Moteur et boîte', pneu: 'Pneus (dérapage)', vent: 'Vent', amb: 'Ambiance du lieu', choc: 'Chocs, frottement, boost', ui: 'Interface (bips, jingle, radio)' };
+  const FAM = { mus: 'Musique', mot: 'Moteur et boîte', pneu: 'Pneus (dérapage)', vent: 'Vent', amb: 'Ambiance du lieu', choc: 'Chocs, frottement, boost', ui: 'Interface (bips, jingle, radio)', pluie: 'Pluie' };
   let M = CARTE, scene = null, t0 = 0;
-  const u = { plein: false, glisse: false, tunnel: false, gaz: true, vit: 0.85, rpm: 0.6, slide: 0.6 }; // réglages de la page
+  const u = { plein: false, glisse: false, tunnel: false, gaz: true, vit: 0.85, rpm: 0.6, slide: 0.6, force: 3 }; // réglages de la page
   const pulse = {}; // déclencheurs d'une seule image (montée ou descente de rapport)
 
   // Une scène = un son joué seul : [groupe, titre, sous-titre, familles ouvertes, amplification d'écoute (dB), état de course simulé (x = secondes depuis le clic), action au clic]
@@ -115,6 +120,10 @@
     lieu: ['amb', 'Ambiance du lieu', 'telle qu\'on l\'entend dans sa zone, à l\'arrêt', ['amb'], 20, () => course({ r: 0, sp: 0, amb: 1 })],
     evt: ['amb', 'Événement du lieu', 'grillons, oiseaux, corne, hélicoptère ou sirène selon la carte', ['amb'], 16, () => course({ r: 0, sp: 0, amb: 1 }), () => SON.evenement()],
     tonnerre: ['amb', 'Tonnerre', 'orage de la ville', ['amb'], 12, null, () => SON.tonnerre()],
+    pluieA: ['pluie', 'A : gouttes sur le toit', 'crépitement sourd des impacts, plus dense avec la vitesse', ['pluie'], 10, () => averse('a')],
+    pluieB: ['pluie', 'B : rideau étouffé', 'la pluie à travers la carrosserie, plus claire avec la vitesse', ['pluie'], 10, () => averse('b')],
+    pluieC: ['pluie', 'C : pneus sur le mouillé', 'chuintement selon la vitesse, gerbes de flaques', ['pluie'], 10, () => averse('c')],
+    pluieD: ['pluie', 'D : essuie-glace', 'allers-retours rythmés sur un rideau léger', ['pluie'], 10, () => averse('d')],
     bip: ['ui', 'Bip du décompte', '', ['ui'], 8, null, () => SON.beep(440)],
     depart: ['ui', 'Bip de départ', '', ['ui'], 8, null, () => SON.beep(880)],
     record: ['ui', 'Jingle : record', '', ['ui'], 8, null, () => SON.stinger(true)],
@@ -122,11 +131,12 @@
     radio: ['ui', 'Changement de station', 'touche mécanique puis grésillement, sans la musique', ['ui'], 0, null, () => SON.setStation(SON.station + 1)],
     tout: ['mix', 'Course complète', 'musique, moteur, pneus, vent, ambiance : le mélange du jeu', Object.keys(FAM), 0, x => Object.assign(musique(), { rpm: 0.55 + 0.4 * dents(x, 4), load: 1, gas: 1, spool: 0.8, amb: 1, slide: u.glisse ? u.slide : 0 })],
   };
+  const averse = pv => course({ r: u.vit, sp: u.vit * 80, tun: u.tunnel ? 1 : 0, pluie: u.force, pv });
   const musique = () => course({ r: u.vit, sp: u.vit * 80, plein: u.plein, drift: u.glisse, tun: u.tunnel ? 1 : 0, rpm: 0.2, load: 0, gas: 0 });
   // état complet envoyé à SON.frame
   function etat(sc, x) {
     const o = sc && sc[5] ? sc[5](x) : { state: 'pause' }, r = o.r || 0;
-    return { state: o.state, T: { h0: 500, h1: 700, n: 1000 }, hot: o.plein ? 1 : 0, tun: o.tun || 0, amb: o.amb || 0,
+    return { state: o.state, T: { h0: 500, h1: 700, n: 1000 }, hot: o.plein ? 1 : 0, tun: o.tun || 0, amb: o.amb || 0, pluie: o.pluie || 0, pluieSon: o.pv,
       car: { vl: o.slide ? 4 + 14 * o.slide : 0, boost: 0, idx: o.plein ? 600 : 0, dist: 1, drift: !!o.drift, rub: o.rub || 0 },
       r, sp: o.sp || 0, gas: o.gas || 0, hit: 0, up: !!pulse.up, down: !!pulse.down, rpm: o.rpm || 0.2, load: o.load || 0, spool: o.spool || 0, stun: 0 };
   }
@@ -148,13 +158,13 @@
   const sous = id => /^st\d$/.test(id) ? M.radio[+id[2]].genre.toLowerCase() + ' · ' + M.radio[+id[2]].bpm + ' bpm' : SC[id][2];
   function boutons() {
     $('cartes').innerHTML = CARTES.map(c => `<button data-c="${c.id}" class="${c === M ? 'on' : ''}">${c.nom}</button>`).join('');
-    for (const g of ['mus', 'mot', 'pneu', 'choc', 'amb', 'ui', 'mix']) $('g-' + g).innerHTML = Object.keys(SC).filter(id => SC[id][0] === g).map(id => `<button data-sc="${id}" class="${scene === SC[id] ? 'on' : ''}">${titre(id)}<small>${sous(id)}</small></button>`).join('');
+    for (const g of ['mus', 'mot', 'pneu', 'choc', 'amb', 'pluie', 'ui', 'mix']) $('g-' + g).innerHTML = Object.keys(SC).filter(id => SC[id][0] === g).map(id => `<button data-sc="${id}" class="${scene === SC[id] ? 'on' : ''}">${titre(id)}<small>${sous(id)}</small></button>`).join('');
   }
   document.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.sc) jouer(b.dataset.sc); else if (b.dataset.c) { stop(); M = CARTES.find(c => c.id === b.dataset.c); SON.carte(M); boutons(); } });
   for (const k in FAM) $('fam').insertAdjacentHTML('beforeend', `<label><span class="n">${FAM[k]}</span><input type="range" id="v-${k}" min="0" max="2" step="0.05" value="1"><output id="o-${k}"></output></label>`);
   for (const k in FAM) $('v-' + k).oninput = volumes;
   for (const id of ['plein', 'glisse', 'tunnel', 'gaz']) $(id).onchange = e => { u[id] = e.target.checked; };
-  for (const id of ['vit', 'rpm', 'slide']) { const el = $(id), out = el.nextElementSibling; (el.oninput = () => { u[id] = +el.value; out.textContent = (+el.value).toFixed(2).replace('.', ','); })(); }
+  for (const id of ['vit', 'rpm', 'slide', 'force']) { const el = $(id), out = el.nextElementSibling; (el.oninput = () => { u[id] = +el.value; out.textContent = (+el.value).toFixed(2).replace('.', ','); })(); }
   $('stop').onclick = stop;
   $('go').onclick = () => { SON.init(); stop(); boutons(); $('voile').remove(); };
 
