@@ -86,7 +86,7 @@ for (const M of CARTES) {
     assert(!seen.has(s.name) && !seen.has(s.genre), w + 'nom ou genre en double'); seen.add(s.name); seen.add(s.genre);
     assert(s.bpm >= 80 && s.bpm <= 180 && s.name.length <= 13, w + 'tempo ou nom trop long pour le HUD');
     assert(s.form.length * 4 >= 32 && new Set(s.form).size >= 5, w + 'forme trop courte ou trop peu de sections');
-    assert(s.sec[s.hot] && [...s.calm].every(k => s.sec[k]), w + 'refrain ou sections calmes inconnus');
+    assert(s.sec[s.hot] && s.sec.e, w + 'refrain ou variation absents');
     assert(SRC.includes(' ' + s.kit + ': {'), w + 'kit inconnu ' + s.kit);
     for (const p of ['b', 'c', 'g', 'a', 'l']) assert(!s[p] || SRC.includes(' ' + s[p].p + ': { o: [['), w + 'timbre inconnu ' + (s[p] && s[p].p));
     assert(!s.d || SRC.includes(' ' + s.d[0] + ': { o: [['), w + 'nappe inconnue');

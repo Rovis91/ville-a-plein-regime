@@ -7,7 +7,7 @@
 // couleur de la station (3 bandes) → musique oui/non → filtre de vitesse et de tunnel → famille « mus » → master → compresseur. Familles réglables : mus, mot (moteur, boîte), pneu, vent, amb (lieu), choc (chocs, frottement, boost), ui (bips, jingle, radio).
 (() => {
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const hz = m => 440 * 2 ** ((m - 69) / 12), R = -99, OUT = 0.56, CLAC = 1; // R : silence dans un thème (voir mel() dans cartes.js)
+  const hz = m => 440 * 2 ** ((m - 69) / 12), R = -99, OUT = 0.56, CLAC = 0.6; // R : silence dans un thème (voir mel() dans cartes.js)
   let M = CARTE, ST = M.radio, TH = M.th;
   let AC, live = true, timer, pret = Promise.resolve(), ana, master, musicG, tuneG, drumG, musF, duckG, swF, busDry, busDrv, acid, fuzz, kdrv, bsat, dly, dlyFb, eqL, eqM, eqH, mrevG, drumRv, revIn, echoIn, choIn, mbuf, rev, musSend, motSend, nbuf, outG, vu;
   let t0 = 0, nextT = 0, stp = 0, musicOn = true, lastHit = 0, lastN = 0, lastB = 0, menu = true;
@@ -222,13 +222,13 @@
   }
   // Un pas de double-croche. La station donne une forme (suite de sections de 4 mesures : introduction, couplets, refrain, break, montée…) ; chaque
   // section dit quelles parties jouent et avec quelle variante de motif (format : voir RADIO dans cartes.js). La course s'y ajoute : rien que le
-  // tic-tac au décompte ; dans le secteur chaud et sur le dernier secteur (big), les parties marquées « ! » entrent et les sections calmes sont
-  // remplacées par le refrain ; relance de batterie à chaque fin de section.
+  // tic-tac au décompte ; dans le secteur chaud et sur le dernier secteur (big), les parties marquées « ! » entrent et toutes les sections deviennent
+  // le refrain (hot), sauf la variation (e) ; relance de batterie à chaque fin de section.
   function sched(s, t) {
     if (menu) return schedMenu(s, t);
     const st = ST[station], K = KIT[st.kit] || KIT.k909; t += (s & 1) * (st.sw || 0) * S16; // swing : les doubles-croches impaires traînent
     const bar = s >> 4, q = s % 16, d = drums, big = mix > 0.5 || fin, fi = (bar >> 2) % st.form.length, nxt = st.form[(fi + 1) % st.form.length];
-    let key = st.form[fi]; if (big && st.calm.includes(key)) key = st.hot;
+    let key = st.form[fi]; if (big && key !== 'e') key = st.hot; // secteur chaud : le refrain, et sa variation quand la forme y arrive
     const sec = st.sec[key], pr = st.prog[sec.P || 0], ch = pr.CH[bar % pr.CH.length], root = pr.ROOT[bar % pr.ROOT.length], pos = ((bar & 3) * 16 + q) / 64; // pos : avancement dans la section
     const on = p => { const x = st[p] && sec[p]; return x && (!x.big || big) ? x : null; }, pat = (v, x) => { const b = v[x.v % v.length]; return b[bar % b.length]; };
     const hum = () => K.hum ? t + Math.random() * K.hum : t; // jeu humain : les batteries acoustiques ne tombent pas pile
@@ -267,7 +267,7 @@
   }
   const lvl = () => menu ? (MENU[M.id] || MENU.ville).v : ST[station].vol || 1; // niveau de la station : réglé par mesure pour que toutes sortent au même volume
   function retune(t) { // (re)cale le séquenceur, le bus et les tranches de mixage sur la station ou sur la boucle de menu
-    const st = ST[station], mn = MENU[M.id] || MENU.ville; S16 = 60 / (menu ? mn.bpm : st.bpm) / 4; t0 = nextT = t; stp = 0; lastN = lastB = 0;
+    const st = ST[station], mn = MENU[M.id] || MENU.ville; S16 = 60 / (menu ? mn.bpm : st.bpm) / 4; t0 = nextT = t; stp = !menu && drums ? 64 : 0; lastN = lastB = 0; // en course, une station prise en route commence au premier couplet, pas à l'introduction
     if (!AC) return;
     const e = menu ? [3, 0.5] : st.echo || [3, 0.4], q = menu ? [0, 1000, 0, 0] : st.eq || [0, 1000, 0, 0];
     dly.delayTime.value = Math.min(0.95, S16 * e[0]); dlyFb.gain.value = e[1];
@@ -325,7 +325,7 @@
     AC = ctx || new (window.AudioContext || window.webkitAudioContext)(); live = !ctx;
     const comp = AC.createDynamicsCompressor(); outG = gain(OUT, AC.destination); comp.connect(outG); // marge après le compresseur : mesuré, aucune crête au-dessus de -3 dB
     vu = AC.createAnalyser(); vu.fftSize = 2048; outG.connect(vu); // ce qui sort vraiment, pour le vumètre du banc d'écoute
-    lastHit = 0; ambT = 2;
+    lastHit = 0; ambT = 2; drums = 0; mix = inten = driftL = 0; fin = inZone = false; // un contexte neuf repart de l'arrêt
     master = gain(0.9, comp); ana = AC.createAnalyser(); ana.fftSize = 64; master.connect(ana);
     for (const k in vol) V[k] = gain(vol[k], master);
     nbuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
@@ -419,6 +419,7 @@
     if (inside !== wasIn && racing) crash(t);
     if (TH.alarme && inside && !wasIn && racing) for (let i = 0; i < 6; i++) osc('square', i % 2 ? 660 : 880, t + 0.25 + i * 0.18, 0.16, 0.07, strip.a.in); // sirène d'alarme à l'entrée
     wasNear = near; wasIn = inside;
+    if (racing && !drums && !menu) { stp = 64; nextT = Math.max(nextT, t); } // départ : on saute l'introduction, la course s'ouvre sur le premier couplet (l'introduction revient quand la forme boucle)
     drums = racing ? 1 : 0; fin = racing && !inside && car.idx >= T.h1 && car.dist > 0;
     mix += ((racing ? e.hot : 0) - mix) * Math.min(1, dt * 3);
     inten += (r - inten) * Math.min(1, dt * 2); driftL += ((car.drift ? 1 : 0) - driftL) * Math.min(1, dt * 6);
