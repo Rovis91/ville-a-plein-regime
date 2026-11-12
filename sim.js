@@ -9,6 +9,19 @@
   const torque = rpm => { const x = Math.max(0, Math.min(8, rpm / 1000)), i = Math.min(7, x | 0); return CARD.tq[i] + (CARD.tq[i + 1] - CARD.tq[i]) * (x - i); };
   // Points de contrôle (x,z) en mètres, sens horaire = virages à droite. Départ en [0]. HGT = altitude de chaque point.
   const SC = M.sc, HGT = M.pts.map(p => p[2]), PTS = M.pts.map(p => [p[0] * SC, p[1] * SC]);
+  // shortcut: sélecteur de tenue de route provisoire, pour comparer au clavier (?tenue=actuel|vif|glisse ; sous node : globalThis.TENUE). Une fois le choix fait : garder ses valeurs, supprimer TENUES et les branches « P ? … : … » (actuel = l'ancienne physique, P nul).
+  //   bas   = surcroît d'adhérence à basse vitesse (×(1+bas) à l'arrêt, ×1 à TOP) : les épingles se passent plus vite, les grandes courbes rapides ne changent pas
+  //   lift, frein = braquage maxi en part de l'adhérence, pied levé et au frein (0,95 sur les gaz) : au-dessus de 1 l'avant mord et l'arrière part ; gf = adhérence restante au frein
+  //   ds    = surcroît de braquage en glisse ; ad = adhérence en glisse sur les gaz (+0,15 pied levé) ; kr = rappel du nez vers la trajectoire : angle tenu volant à fond ≈ (0,95·(1+ds) − ad) / kr rad
+  //   po    = survirage à l'accélérateur des propulsions ; tr = vitesse perdue en glisse ; gl = part de la vitesse que les pneus en travers ne mangent pas (0 = physique : une glisse à 30° freine très fort)
+  const TENUES = {
+    actuel: null,
+    vif: { bas: 0.6, lift: 1, frein: 1.2, gf: 0.9, ds: 0.5, ad: 1, kr: 1.3, po: 0.3, tr: 0.15, gl: 0.5 },
+    glisse: { bas: 0.4, lift: 1.1, frein: 1.3, gf: 0.85, ds: 0.6, ad: 1, kr: 1.3, po: 0.4, tr: 0.12, gl: 0.7 },
+  };
+  const TENUE = [G.TENUE, G.location && new URLSearchParams(G.location.search).get('tenue'), 'vif'].find(k => k in TENUES), P = TENUES[TENUE];
+  const grip = v => P ? GRIP * (1 + P.bas * Math.max(0, 1 - v / TOP)) : GRIP; // adhérence latérale à la vitesse v
+  const vturn = (a, k) => { let v = Math.sqrt(a * GRIP / k); for (let i = 0; i < 2; i++) v = Math.sqrt(a * grip(v) / k); return v; }; // vitesse de passage d'une courbure k, à la part a de l'adhérence
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -37,7 +50,7 @@
   // inp: {steer:-1..1 (droite>0), gas:0..1, brake:0..1, hand:bool}
   function step(c, inp, T, dt) {
     const S = T.S, n = T.n;
-    c.steer += clamp(inp.steer - c.steer, -8 * dt, 8 * dt);
+    const vol = P ? 12 : 8; c.steer += clamp(inp.steer - c.steer, -vol * dt, vol * dt);
     let fx = Math.cos(c.th), fz = Math.sin(c.th);
     let vf = c.vx * fx + c.vz * fz, vl = c.vz * fx - c.vx * fz;
     const sp = Math.abs(vf), hand = inp.hand && sp > 12;
@@ -45,10 +58,14 @@
     // Le braquage donne plus de rotation en glisse ; un couple de rappel ramène le nez vers la trajectoire,
     // donc l'angle de dérive se règle au volant et la voiture se redresse seule quand on lâche.
     const sl = clamp((Math.abs(vl) - 3) / 8, 0, 1), beta = Math.atan2(vl, Math.max(sp, 1));
-    // le braquage maxi est bridé juste sous la limite d'adhérence : volant à fond = virage le plus serré possible, sans décrocher
-    let w = c.steer * Math.min(1, sp / 10) * Math.min(2.3 - 1.3 * Math.min(1, sp / TOP), 0.95 * GRIP / Math.max(sp, 1)) * (1 + 0.6 * sl) + beta * 1.5 * sl;
+    // le braquage maxi est bridé juste sous la limite d'adhérence : volant à fond sur les gaz = virage le plus serré possible, sans décrocher.
+    // Transfert de charge : pied levé ou au frein, la bride monte, la voiture pivote plus que l'adhérence ne suit et l'arrière part.
+    // En glisse, braquage et rappel sont proportionnels à adhérence / vitesse : l'angle tenu ne dépend ni de la carte ni de la vitesse.
+    const g = grip(sp), gs = g / Math.max(sp, 10), wl = c.steer * Math.min(1, sp / 10), wlow = 2.3 - 1.3 * Math.min(1, sp / TOP);
+    let w = P ? wl * Math.min(wlow + sl, (inp.brake ? P.frein : inp.gas ? 0.95 : P.lift) * g / Math.max(sp, 1)) * (1 + P.ds * sl) + (clamp(vl / Math.max(sp, 1), -2, 2) * P.kr * sl + c.steer * P.po * (c.pw || 0)) * gs
+      : wl * Math.min(wlow, 0.95 * GRIP / Math.max(sp, 1)) * (1 + 0.6 * sl) + beta * 1.5 * sl;
     if (hand) w += c.steer * 0.9; // le frein à main fait pivoter
-    c.yaw += (w - c.yaw) * Math.min(1, dt * lerp(14, 6, sl)); // inertie de lacet, plus marquée en glisse
+    c.yaw += (w - c.yaw) * Math.min(1, dt * (P ? lerp(18, 8, sl) : lerp(14, 6, sl))); // inertie de lacet, plus marquée en glisse
     c.th += c.yaw * (Math.sign(vf) || 1) * dt;
     fx = Math.cos(c.th); fz = Math.sin(c.th);
     vf = c.vx * fx + c.vz * fz; vl = c.vz * fx - c.vx * fz;
@@ -71,8 +88,9 @@
       const tqe = inp.gas * torque(er) - (1 - inp.gas) * (20 + 0.01 * er) * Math.sign(vf); // couple moteur, ou frein moteur pied levé
       acc = Math.min(CARD.trac, tqe * ratio * CARD.final * CARD.eff / CARD.wheel / CARD.mass); // plafonné par la motricité (~1,1 g en 4 roues motrices, moins en propulsion)
     }
-    // propulsion : ce que les roues arrière donnent en motricité, elles ne l'ont plus en latéral (cercle d'adhérence) : gaz à fond en bas rapport = survirage
-    const tc = CARD.rwd && acc > 0 ? Math.sqrt(Math.max(0.2, 1 - (acc / CARD.trac) ** 2)) : 1;
+    // propulsion : ce que les roues arrière donnent en motricité, elles ne l'ont plus en latéral (cercle d'adhérence) : gaz à fond en bas rapport = survirage.
+    // c.pw = part perdue : elle fait pivoter la voiture au pas suivant (l'arrière chasse) au lieu de la faire tirer tout droit
+    const tc = CARD.rwd && acc > 0 ? Math.sqrt(Math.max(0.2, 1 - (acc / CARD.trac) ** 2)) : 1; c.pw = 1 - tc;
     if (c.boost > 0) { c.boost -= dt; if (inp.gas) acc += 6; }
     if (c.stun > 0) { c.stun -= dt; if (acc > 0) acc *= 0.2; }
     vf += acc * dt;
@@ -81,10 +99,15 @@
     if (vf < -12) vf = -12;
     if (hand) vf -= Math.sign(vf) * 4 * dt;
     // traînée aérodynamique (½·ρ·Cd·A·v²), résistance au roulement, et un peu de vitesse perdue en glisse
-    vf -= (0.6 * CARD.cd * CARD.area * vf * Math.abs(vf) / CARD.mass + (Math.abs(vf) > 0.3 ? 0.15 : 0) * Math.sign(vf) + 0.1 * Math.abs(vl) * Math.sign(vf)) * dt;
+    vf -= (0.6 * CARD.cd * CARD.area * vf * Math.abs(vf) / CARD.mass + (Math.abs(vf) > 0.3 ? 0.15 : 0) * Math.sign(vf) + (P ? P.tr : 0.1) * Math.abs(vl) * Math.sign(vf)) * dt;
     // adhérence latérale plafonnée (m/s²) : au-delà les pneus décrochent ; elle chute en glisse, au frein à main et au freinage appuyé
-    const A = lerp(GRIP, GRIP * 0.95, sl) * (hand ? 0.35 : 1) * (inp.brake && sp > 25 ? 0.4 : 1) * tc;
+    // (tenue « actuel » : elle chute aussi sur les gaz en propulsion ; les autres : en glisse elle reste entière, la voiture tourne serré de travers et y laisse de la vitesse)
+    const A = P ? g * lerp(1, P.ad + (inp.gas ? 0 : 0.15), sl) * (hand ? 0.35 : 1) * (inp.brake ? P.gf : 1)
+      : lerp(GRIP, GRIP * 0.95, sl) * (hand ? 0.35 : 1) * (inp.brake && sp > 25 ? 0.4 : 1) * tc;
+    const v0 = Math.hypot(vf, vl);
     vl += clamp(-vl * 25, -A, A) * dt;
+    // arcade : jusqu'à 35° de dérive les pneus en travers font tourner la vitesse plus qu'ils ne la freinent ; au-delà ils freinent de plus en plus, et à 60° (tête-à-queue, voiture percutée) comme des vrais
+    if (P && v0 > 1) { const k = lerp(1, v0 / Math.max(Math.hypot(vf, vl), 1e-3), P.gl * clamp((0.87 - Math.abs(vl) / v0) / 0.3, 0, 1)); vf *= k; vl *= k; }
     // une glisse tenue plus de 0,6 s donne un boost à la reprise d'adhérence
     c.slide = sl; c.drift = sl > 0.35;
     if (sl > 0.5) c.driftT += dt;
@@ -140,8 +163,8 @@
     let km = 0, va = 1e9;
     for (let j = 0; j < 8 + sp * 0.7; j++) km = Math.max(km, Math.abs(S[(c.idx + j) % n].k));
     // cartes à épingles : vitesse permise = celle de chaque virage à venir, plus ce qu'on peut perdre en freinant d'ici là (10 m/s², 2 m par échantillon)
-    if (M.anticipe) for (let j = 0; j < 200; j++) va = Math.min(va, Math.sqrt(0.85 * GRIP / (Math.abs(S[(c.idx + j) % n].k) + 1e-4) + 40 * j));
-    const vt = Math.min(vcap, (M.anticipe ? va : Math.sqrt(1.5 * GRIP / (km + 1e-4))) * lvl * (off ? 0.9 : 1)); // hors trajectoire, on passe moins vite
+    if (M.anticipe) for (let j = 0; j < 200; j++) va = Math.min(va, Math.sqrt(vturn(0.85, Math.abs(S[(c.idx + j) % n].k) + 1e-4) ** 2 + 40 * j));
+    const vt = Math.min(vcap, (M.anticipe ? va : vturn(1.5, km + 1e-4)) * lvl * (off ? 0.9 : 1)); // hors trajectoire, on passe moins vite
     const st = clamp(e * 3, -1, 1);
     // en propulsion le pilote dose : moins de gaz tant que le volant est braqué, sinon l'arrière décroche en sortie d'épingle
     return { steer: st, gas: sp < vt ? lvl * (CARD.rwd ? 1 - 0.75 * Math.min(1, Math.abs(st) * 1.5) : 1) : 0, brake: sp > vt + 3 ? 1 : 0, hand: false };
@@ -228,5 +251,5 @@
     }
   }
 
-  Object.assign(G, { buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, TOP, CARD });
+  Object.assign(G, { buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, TOP, CARD, TENUE });
 })(typeof window !== 'undefined' ? window : globalThis);
