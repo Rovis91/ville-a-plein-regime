@@ -190,6 +190,24 @@
           '29 - - - 33 - - - 36 - - - 33 - - - | 31 - - - 35 - - - 38 - - - 35 - - - | 33 - - 36 - - 40 - 36 - 33 - 36 - - - | 33 - - - - - - - . - - - - - - -'],
         sec: { i: 'd a1 lo', a: 'k0 h0 b0 d', b: 'k0 s0 h1 b0 d a0', c: 'k0 s1 h1 b1 d c0 l0', x: 'd a1 l1 P1', u: 'k0 h1 b0 d roll P1', e: 'k0 s1 h1 b1 c1 l1 P1' }, form: 'iabcxucceabc' }),
     ],
+    givre: [
+      st({ name: 'RADIO VERGLAS', fq: '88.1', vol: 0.9, genre: 'COLD WAVE', bpm: 132, gamme: 'mineur', key: 57, kit: 'lin', eq: [-4, 2200, 3, 6], rev: 0.4, echo: [3, 0.35], pump: 0.9, // boîte à rythmes sèche, basse au médiator qui porte le morceau, guitare claire arpégée, chœur froid : la montée du col, phares allumés
+        prog: ['Am F C Em Am F Dm Em', 'F G Am Am'], k: ['x.....x.x.....x.', 'x...x...x...x...'], s: [SN, '....x.......x.xx'], h: ['x.x.x.x.x.x.x.x.', 'xxXxxxXxxxXxxxXx'],
+        b: ['bPick', '0 - 0 - 0 - 0 - 0 - 0 - 7 - 0 -', '0 0 0 0 0 0 0 0 0 0 0 0 7 7 12 12'], d: ['choir', 0], a: ['pluck', '0.2.4.2.1.2.4.2.', '0124210201242102'],
+        l: ['ldTri', '12 - - - 15 - - - 19 - - - 15 - - - | 17 - - - 20 - - - 24 - - - 20 - - - | 19 - - - 15 - - - 12 - - - 15 - - - | 19 - - - - - - - 22 - - - 19 - - - | 24 - - - 22 - - - 19 - - - 15 - - - | 20 - - - 17 - - - 24 - - - 20 - - - | 22 - - - 20 - - - 17 - - - 14 - - - | 19 - - - - - - - . - - - - - - -',
+          '24 - 27 - 31 - 27 - 24 - 27 - 31 - - - | 20 - 24 - 29 - 24 - 20 - 24 - 29 - - - | 27 - - - 24 - - - 22 - - - 19 - - - | 24 - - - - - - - . - - - - - - -'],
+        sec: { i: 'b0 a0 lo', a: 'k0 s0 h0 b0 a0', b: 'k0 s0 h0 b0 a0 d', c: 'k1 s0 h1 b1 a1 d l0', x: 'd a0 l1 P1', u: 'k1 h1 b1 d roll P1', e: 'k1 s1 h1 b1 a1 l1 P1' }, form: 'iabcxuceabcc' }),
+      st({ name: 'POLAIRE 118', fq: '118', vol: 1.2, genre: 'DUB TECHNO', bpm: 118, gamme: 'mineur', sw: 0.06, key: 62, kit: 'k909', eq: [5, 700, -3, -4], rev: 0.45, echo: [3, 0.6], pump: 0.5, // un accord mineur plaqué que l'écho répète jusqu'à s'éteindre, basse ronde, shaker : pas de thème, la route déserte avant le jour
+        prog: ['Dm7 Dm7 Gm7 Gm7 Dm7 Dm7 BbM7 Am7', 'Gm7 Am7 Dm7 Dm7'], k: [F4, 'x...x...x...x..x'], s: ['....r.......r...', CP], h: [OFF, 'x.oxx.oxx.oxx.ox'], p: ['m.m.m.m.m.m.m.m.', '...v..v...v..v..'],
+        b: ['bSeq', '0 - - - - - 0 - - - 0 - - - 7 -', '0 - - 0 - - 0 - - 0 - - 12 - 7 -'], d: ['warm', 0], c: ['stabM7', 'x.....x.........', '..x...x...x...x.'], a: ['bell', '....4.......5...', '0...2...4...2...'],
+        sec: { i: 'k0 c0 lo', a: 'k0 h0 b0 c0', b: 'k0 s0 h0 b0 c0 d', c: 'k1 s0 h1 b1 c1 d a0 p0', x: 'd c0 a1 P1', u: 'k0 h1 b0 c1 roll P1', e: 'k1 s1 h1 b1 c1 d a1 p1 P1' }, form: 'iabcbxucecbc' }),
+      st({ name: 'REFUGE FM', fq: '94.4', vol: 1, genre: 'SYNTH-POP', bpm: 120, gamme: 'majeur', key: 60, kit: 'lin', eq: [2, 1800, 2, 6], rev: 0.3, echo: [3, 0.3], pump: 0.7, // majeur et chaud : basse ronde, piano électrique, cordes, refrain en dents de scie ; le poêle du refuge, en haut du col
+        prog: ['C G Am F C G F G', 'F G Em Am'], k: [F4, 'x...x...x..xx...'], s: [SN, CP], h: [OFF, 'x.x.x.x.x.x.x.o.'], p: ['t.t.t.t.t.t.t.t.'],
+        b: ['bMoog', '0 - 0 - 12 - 0 - 0 - 0 - 12 - 7 -', '0 0 12 0 0 12 0 12 0 0 12 0 7 12 0 12'], d: ['strings', 0], c: ['dxEp', '..x...x..x....x.', 'x.......x.......'], a: ['pulseArp', '0.2.4.2.0.2.4.6.', '0121201245656456'],
+        l: ['ldSaw', '16 - - - 19 - - - 24 - - - 19 - - - | 14 - - - 19 - - - 23 - - - 19 - - - | 12 - - - 16 - - - 21 - - - 16 - - - | 17 - - - 21 - - - 24 - - - - - - - | 28 - - - 24 - - - 19 - - - 16 - - - | 26 - - - 23 - - - 19 - - - 14 - - - | 21 - - - 24 - - - 29 - - - 24 - - - | 26 - - - - - - - 31 - - - - - - -',
+          '24 - 28 - 31 - 28 - 24 - 28 - 31 - - - | 26 - 31 - 35 - 31 - 26 - 31 - 35 - - - | 28 - - - 24 - - - 19 - - - 24 - - - | 24 - - - - - - - . - - - - - - -'],
+        sec: { i: 'h0 d a0 lo', a: 'k0 s0 h0 b0 c0', b: 'k0 s0 h1 b0 c0 d', c: 'k1 s1 h1 b1 c0 d a1 l0 p0', x: 'd c1 a0 l1 P1', u: 'k0 h1 b0 d roll P1', e: 'k1 s1 h1 b1 c1 l1 P1 p0' }, form: 'iabcxuceabcc' }),
+    ],
   };
 
   G.CARTES = [
@@ -292,6 +310,20 @@
         astre: { dir: [0.2, 0.95, 0.25], col: '#05050a', ombre: '#05050a', taille: 1 }, hemi: [0xdfe6ff, 0x6a5038, 0.9], sun: [0xfff6e0, 0.55], phares: 1.2, bloom: 0.1, scan: 0.08,
         murH: 1.2, paroi: 'paroiArene', route: ['#7a5a3c', '#86643f', '#f4f0e0', '#ffc21a', '#e8362a', '#f4f0e0', false], mur: ['#f4f0e0', '#e8362a', '#1c3fa8', '#c8c4b8'], depart: [0xe8362a, 0x20242c, '#f4f0e0'],
         hud: { y: '#ffffff', c: '#ffc21a', r: '#e8362a', fond: 'rgba(16,14,28,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'ARENE COUVERTE · COMPLET'], titre: ['GRAND', 'VACARME'] } } },
+    // Nuit Blanche : la route d'un col fermé pour l'hiver, à l'aube. Neige tassée partout, glace vive là où le soleil ne vient jamais (elle luit, sombre, sur la route claire) :
+    // le pied de la falaise après le départ, le replat entre les deux lacets, la crête du col balayée par le vent, le pont sur la gorge, le bois de mélèzes du retour.
+    // Pas de relief actif : tout se joue au freinage, qu'il faut avoir fini avant la plaque, et à la remise des gaz, qu'il faut attendre.
+    { id: 'givre', nom: 'NUIT BLANCHE', rivaux: ['SOLVEIG', 'ANSELME', 'MIKKO'], W: 7, grip: 20, sc: 1, tun: null, chaud: [16, 22], amb: [[15, 19]], sect: [10, 20], anticipe: 1,
+      surf: { fond: 'neige', zones: [[2, 3, 'glace'], [13, 14, 'glace'], [18, 19, 'glace'], [22, 23, 'glace'], [25, 26, 'glace']] },
+      pts: [[0, 0, 0], [180, 0, 1], [340, -30, 6], [480, 10, 14], [600, -30, 24], [720, 20, 36], [790, 120, 50], [770, 230, 62], [680, 270, 72], [590, 260, 80], [558, 273, 83], [545, 305, 86], [558, 337, 89], [590, 350, 92], [700, 350, 102], [735, 365, 106], [750, 400, 110], [735, 435, 114], [700, 450, 117], [560, 470, 122], [420, 440, 118], [280, 490, 104], [150, 470, 90], [0, 470, 72], [-140, 470, 54], [-250, 400, 40], [-290, 290, 28], [-250, 180, 18], [-300, 90, 10], [-230, 10, 3], [-120, 0, 0]],
+      // Audi Sport quattro S1 E2 (1985, Groupe B) : 5 cylindres turbo de 2,1 L, environ 480 ch, 590 N·m, 1090 kg, transmission intégrale (rapports et courbe de couple estimés)
+      car: car({ nom: 'AUDI QUATTRO S1 E2', ratios: [3.5, 2.27, 1.63, 1.27, 1.04, 0.85], final: 4.3, wheel: 0.31, mass: 1165, idle: 1000, red: 8000, cd: 0.45, area: 2.0,
+        tq: [0, 180, 300, 430, 540, 590, 580, 520, 400], trac: 11, rwd: 0, son: 1.1, look: { col: 0xf4f0e0, l: 0.9, w: 1.03, h: 1.06, nez: 0.5, cab: [-0.2, 2.1, 0.58], aileron: 2, bandes: 0xf4c020 } }),
+      radio: RADIO.givre,
+      th: { decor: 'givre', neige: 1.6, fog: 0x8a9cc0, fogD: [70, 1100], sky: [[0, '#070c24'], [0.3, '#16224a'], [0.4, '#3a4a80'], [0.46, '#b07a98'], [0.49, '#f0b890'], [0.5, '#8a9cc0'], [1, '#8a9cc0']], stars: 90,
+        astre: { dir: [-0.55, 0.3, 0.5], col: '#f4f8ff', ombre: '#aab8d8', taille: 150 }, hemi: [0x8aa4e0, 0xc8d4f0, 0.8], sun: [0xc0d0ff, 0.45], phares: 2.4, bloom: 0.08, scan: 0.06,
+        chev: 1, murH: 1.4, route: ['#c4d0e2', '#dce6f4', '#aab8d0', '#c4d0e2', '#e8eef8', '#d4deec', false], mur: ['#dfe8f6', '#f8fbff', '#c4d0e4', '#b4c2da'], depart: [0xe8482a, 0x1c2a4a, '#f4f8ff'],
+        hud: { y: '#ffffff', c: '#8fd0ff', r: '#ff5a4a', fond: 'rgba(14,24,52,.9)', style: 'trait', split: 0, jp: null, sur: [null, 'COL FERME · -14 °C · AUBE'], titre: ['NUIT', 'BLANCHE'] } } },
   ];
   let id = 'ville';
   if (typeof location !== 'undefined') try { id = new URLSearchParams(location.search).get('carte') || localStorage.getItem('vpr.carte') || id; } catch (e) { }
