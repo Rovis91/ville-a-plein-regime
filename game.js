@@ -684,7 +684,6 @@
     // chrono
     panel(6, 6, 132, 50); txt(race ? 'TOUR ' + car.lap + '/' + race.laps : 'TOUR ' + lapN, 12, 11, 8, C); if (HU.jp) txt(HU.jp[0], 132, 6, 16, C, 'right', 0, JP);
     txt(fmt(tRace), 12, 24, 16, Y, 'left', 1); txt(race ? 'PLACE ' + car.pos + '/' + race.cars.length : best ? 'REC ' + fmt(best) : 'REC --', 12, 44, 8, RD);
-    if (race && !raceEnd && state !== 'count' && goT <= 0) txt(car.pos + '/' + race.cars.length, cx, 8, 16, Y, 'center', 1);
     // vitesse
     panel(HW - 126, HH - 64, 120, 58); txt('KM/H', HW - 120, HH - 59, 8, C); if (HU.jp) txt(HU.jp[1], HW - 12, HH - 64, 16, C, 'right', 0, JP);
     txt(String(sp * 3.6 | 0), HW - 10, HH - 42, 32, Y, 'right', 1);
