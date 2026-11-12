@@ -26,6 +26,16 @@ Prenez le volant d'une bête de 500 chevaux et lâchez-la dans les artères d'un
 
 <p align="center"><img src="docs/depart.png" alt="La grille de départ"></p>
 
+### 👥 À DEUX SUR LE MÊME ÉCRAN !
+
+Un ami sur le canapé ? Passez la ligne **JOUEURS** du menu sur **2** : l'écran se coupe en deux, **joueur 1 en haut, joueur 2 en bas**, chacun sa caméra, son compteur, sa nitro… et son moteur dans les oreilles !
+
+- **COURSE** : 3 tours, vous deux et les **deux rivaux les plus rapides** de la carte. L'aspiration de l'autre est à prendre !
+- **ÉLIMINATION** : 4 voitures, 4 tours, le dernier sort. Éliminé ? Votre écran suit le meneur jusqu'au bout.
+- **GLISSE EN DUEL** : 2 tours, vous deux seuls en piste, **le meilleur score gagne**. Un coup de portière casse l'enchaînement… des deux !
+
+Sur l'**écran d'inscription**, chacun appuie sur un bouton de ce qu'il tient : **une manette chacun**, **un Joy-Con chacun** (tenu à l'horizontale), ou **le clavier partagé**, ZQSD d'un côté, flèches de l'autre. À l'arrivée : **REVANCHE** ! Rien n'est enregistré à deux, ni record ni trophée : c'est une partie de canapé.
+
 ### ⚙️ UNE MÉCANIQUE DE PRO
 
 - Boîte **automatique ou manuelle** : passez vos rapports comme un vrai pilote !
@@ -49,7 +59,7 @@ Pas de disquette, pas de CD, pas de téléchargement de 40 Go. **Un navigateur, 
 | | |
 |---|---|
 | 🎮 Genre | Course arcade |
-| 👤 Joueurs | 1 |
+| 👤 Joueurs | 1 ou 2, sur le même écran |
 | 🖥️ Plateforme | Tout navigateur moderne |
 | ⏱️ Chargement | Instantané |
 | 💰 Prix | **GRATUIT** |
@@ -61,7 +71,7 @@ Pas de disquette, pas de CD, pas de téléchargement de 40 Go. **Un navigateur, 
 
 # Pour les développeurs
 
-Jeu de course arcade solo, contre-la-montre en 3D pixelisée. Six cartes, chacune avec son tracé, sa voiture, sa radio, son décor et son interface ; la musique réagit à la course.
+Jeu de course arcade en 3D pixelisée, seul ou à deux sur le même écran. Six cartes, chacune avec son tracé, sa voiture, sa radio, son décor et son interface ; la musique réagit à la course.
 
 | Carte | Conduite | Voiture | Radio |
 |---|---|---|---|
@@ -71,7 +81,7 @@ Jeu de course arcade solo, contre-la-montre en 3D pixelisée. Six cartes, chacun
 | Premier métro | rues de Paris à l'aube, relances entre des angles | Renault 5 Maxi Turbo | disco spatiale |
 | Canal 6 | canal de Los Angeles au couchant, large et glissant | Dodge Viper GTS | g-funk |
 
-Le menu principal choisit la carte, le mode et la boîte (haut / bas pour la ligne, gauche / droite pour la valeur, Entrée pour démarrer). Deux modes : **contre-la-montre** (tours lancés, record et fantôme par carte) et **course** (3 tours, départ en grille contre 3 IA, classement à l'arrivée). La ligne MODE du menu fait aussi défiler la difficulté de la course (détente, normal, chaud : `DIFF` dans `sim.js`). En contre-la-montre, chaque carte a ses médailles de temps, calculées sur le tour lancé du pilote automatique (`med` dans `cartes.js`). Changer de carte recharge la page ; on peut aussi la choisir par l'adresse : `?carte=touge`, `wangan`, `paris`, `canal`, `stade`, `givre`, `terre`, `ville`.
+Le menu principal choisit la carte, le nombre de joueurs, le mode et la boîte (haut / bas pour la ligne, gauche / droite pour la valeur, Entrée pour démarrer). Deux modes : **contre-la-montre** (tours lancés, record et fantôme par carte) et **course** (3 tours, départ en grille contre 3 IA, classement à l'arrivée). La ligne MODE du menu fait aussi défiler la difficulté de la course (détente, normal, chaud : `DIFF` dans `sim.js`). En contre-la-montre, chaque carte a ses médailles de temps, calculées sur le tour lancé du pilote automatique (`med` dans `cartes.js`). Changer de carte recharge la page ; on peut aussi la choisir par l'adresse : `?carte=touge`, `wangan`, `paris`, `canal`, `stade`, `givre`, `terre`, `ville`.
 
 Tout tourne dans le navigateur, sans étape de build ni dépendance à installer.
 
@@ -90,7 +100,7 @@ puis ouvrir http://localhost:8123/.
 
 | Touche | Action |
 |---|---|
-| Haut / bas, gauche / droite, Entrée | menu principal : carte, mode, boîte, démarrer |
+| Haut / bas, gauche / droite, Entrée | menu principal : carte, joueurs, mode, boîte, démarrer |
 | ↑ ↓ ← → ou ZQSD | accélérer, freiner, tourner |
 | Espace | frein à main (déclenche la glisse) |
 | X ou N | nitro : dépense la jauge (gaz ouverts, roues au sol) |
@@ -103,7 +113,12 @@ puis ouvrir http://localhost:8123/.
 | Échap ou P | menu pause (reprendre, recommencer, boîte, radio, musique, fantôme, lien de défi, quitter) |
 | R | recommencer |
 | Manette | stick ou croix : volant et menus · ZR ou B : gaz · ZL ou Y : frein · A : glisse · X : nitro · clic du stick : radio · L / R : rapports · − : boîte manuelle / automatique · + : pause · B : valider |
-| Joy-Con seul, à l'horizontale | touche J une fois pour l'autoriser (Chrome ou Edge) · stick : volant et menus · bouton de droite : gaz et valider · gauche : boîte manuelle / automatique · haut / bas : rapport supérieur / inférieur · SR : glisse · SL : nitro · clic du stick : radio · + ou − : pause |
+| À deux, clavier de gauche | ZQSD : accélérer, freiner, tourner · Espace : frein à main · X : nitro · A / E : rapports · G : boîte automatique / manuelle |
+| À deux, clavier de droite | ↑ ↓ ← → : accélérer, freiner, tourner · Maj droite : frein à main · la touche à gauche de Maj droite (« ! » en AZERTY, « / » en QWERTY) ou Entrée du pavé numérique : nitro · boîte automatique seulement |
+| À deux, manettes et Joy-Con | les mêmes boutons qu'en solo, chacun pour sa voiture ; l'un ou l'autre met en pause, navigue dans les menus et change de station |
+| À deux, écran d'inscription | une touche de son côté du clavier ou un bouton de sa manette : prendre une place · Échap ou + : la libérer (sans place : refermer) · Entrée ou B : partir, les deux places prises |
+| I | à deux, au menu principal : rouvrir l'écran d'inscription pour changer de périphérique |
+| Joy-Con seul, à l'horizontale | touche J une fois pour l'autoriser (Chrome ou Edge ; deux Joy-Con au plus, un par joueur) · stick : volant et menus · bouton de droite : gaz et valider · gauche : boîte manuelle / automatique · haut / bas : rapport supérieur / inférieur · SR : glisse · SL : nitro · clic du stick : radio · + ou − : pause |
 
 ### Nitro et aspiration
 
@@ -172,6 +187,27 @@ Au menu des modes (« TOURNEE », aux trois difficultés) : toutes les cartes du
 
 La liste des manches est `CARTES` (`cartes.js`), lue telle quelle : une carte ajoutée entre dans la Tournée sans rien changer. Le calcul est une fonction pure de `sim.js`, `tournee(points, arrivée)`, qui rend les points, le classement et la grille ; `newRace` prend la grille par `{ grille }`. Dans `game.js`, voir « Tournée » : état dans `localStorage` sous `vpr7.tournee` (par difficulté : prochaine manche et points) et `vpr7.trophee`. On passe d'une carte à l'autre sans recharger la page ; la mémoire tenue d'une carte à l'autre se mesure avec `chaine()` de `outils/perf.js` (voir « Performances »).
 
+### Écran partagé
+
+Ligne « JOUEURS » du menu principal : à 2, l'écran est coupé en deux vues superposées (joueur 1 en haut), et les deux joueurs courent dans la même course. Le choix est gardé (clé `vpr7.joueurs`). Spec et tickets : `docs/SPEC-ECRAN-PARTAGE.md`.
+
+- **Modes à deux** (`MODES2` dans `game.js`) : Course (3 tours, les deux joueurs et les deux rivaux les plus rapides de la carte : toujours quatre voitures), Élimination (les mêmes, 4 tours), Glisse en duel (2 tours, sans rival, le délai du solo pour chacun ; un choc entre les deux voitures casse l'enchaînement des deux). Ni contre-la-montre ni Tournée. Les deux joueurs partent sur les deux dernières places de la grille ; l'élastique des rivaux se règle sur la moyenne des deux. Le mode et la difficulté choisis à deux ont leurs propres clés (`vpr7.mode2`, `vpr7.diff2`) : revenir à un joueur rend le solo tel qu'on l'a laissé.
+- **Inscription** : au premier départ, chaque périphérique qui appuie prend la première place libre (clavier de gauche, clavier de droite, manette, Joy-Con). Les places sont gardées pour la session (`PLACES`), changement de carte compris : une revanche ne redemande rien, et la touche I du menu rouvre l'écran. Une manette inscrite qui disparaît en course met en pause et rouvre l'inscription pour sa place ; n'importe quel périphérique libre peut la reprendre.
+- **Dans la simulation** (`sim.js`) : `newRace(T, tours, niveaux, élastique, { humains: 2 })` met les humains en tête de la liste des voitures (0 = joueur 1, 1 = joueur 2), et `stepRace(R, entrées, H)` prend une entrée par humain ; une entrée absente fait conduire le pilote automatique (`?auto`, joueur arrivé). `{ delai }` est le temps limite de la Glisse en duel. À un humain, rien ne change : les temps de référence des tests sont les mêmes.
+- **Les vues** (`VUES` dans `game.js`, une par joueur ; une seule en solo) : chaque vue porte sa caméra, sa cible de rendu, son canvas de HUD et tout l'état lissé « par caméra » (cap, tangage, roulis, secousse, fondus de nitro et de tunnel, régime affiché, tri des luminaires, gouttes de pluie, bandeaux). Chaque image, la simulation avance une fois ; puis `vueFrame` pose la caméra de chaque vue, règle lumière, brouillard et pluie pour sa voiture, dessine son HUD, la scène dans sa cible, et joue la passe finale dans sa moitié d'écran. Chaque vue garde la grille de 270 lignes du solo : le canvas en fait 540, avec un trait de 2 pixels entre les deux. `joueurs(n)` ajoute ou retire la deuxième vue ; `libere()` rend au GPU ce que chacune tient.
+- **L'état par joueur** est dans sa vue : son périphérique (`vu.periph`), son entrée de l'image (`vu.inp`), « arrivé » (`vu.fini`), « éliminé, regarde le meneur » (`vu.spec` : la vue affiche ÉLIMINÉ 3 secondes, puis suit le meneur), ses compteurs du tour. La voiture du joueur est `race.cars[vu.n]`. Le score, la jauge de nitro et la boîte sont sur la voiture, dans `sim.js`, comme en solo.
+- **Les écrans communs** (menu, inscription, pause, tableau d'arrivée, fin du duel de Glisse) sont dessinés une fois, par `ecrans()`, sur une couche plein écran posée par-dessus les deux vues (`COM`, `couche()`). Le décompte de départ reste dans chaque vue.
+- **Le son** (`audio.js`) : moteur, boîte et pneus sont joués une fois par joueur (joueur 1 un peu à gauche, joueur 2 un peu à droite). La radio, l'ambiance, le tunnel et la pluie sont uniques, pilotés par le joueur le mieux placé encore en course.
+- **Rien n'est enregistré à deux** : ni record, ni médaille, ni fantôme, ni trophée, ni Tournée, en lecture comme en écriture ; les touches F et L ne font rien. Seuls le nombre de joueurs, le mode et la difficulté à deux sont gardés. La boîte du joueur 1 est la préférence du solo ; celle du joueur 2 repart en automatique à chaque départ.
+- **Par l'adresse** : `?joueurs=2` (ou `1`) passe devant la préférence du menu sans y toucher, et y reste d'une carte à l'autre. Avec `?auto`, les deux voitures sont conduites par le pilote automatique, sans inscription : c'est ce qui sert aux captures et au banc de mesure (`?perf&auto&joueurs=2`, voir « Performances »). Un lien de défi s'ouvre toujours en solo ; les styles de comparaison (`?style=`) restent à une vue.
+
+Limites connues :
+
+- **Joy-Con gauche** : sa table de boutons est déduite du format du rapport, pas essayée (seul un Joy-Con droit l'a été). S'il arrive inversé, lui donner sa table dans `hidLire` (`game.js`).
+- **Clavier partagé** : beaucoup de claviers ne transmettent pas plus de trois ou quatre touches à la fois, selon leur position. C'est un dépannage ; deux manettes sont la bonne façon de jouer. Le clavier de droite n'a pas de boîte manuelle.
+- **Menus à deux** : la couche commune est un canvas de la page posé sur celui du jeu. Elle ne passe pas par la passe finale : menu, pause et tableau d'arrivée n'ont à deux ni scanlines ni tramage.
+- L'ombre portée d'une voiture sous les luminaires n'existe que dans la vue de son joueur ; la caméra libre à la souris ne tourne que la vue du joueur 1.
+
 Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/E sur un clavier QWERTY. Les autres commandes sont lues par la lettre tapée.
 
 ## Fichiers
@@ -180,10 +216,10 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 |---|---|
 | `index.html` | page, polices, icône, ordre de chargement des scripts |
 | `icon.svg` | icône de l'app (favicon) |
-| `docs/` | captures d'écran du README |
+| `docs/` | captures d'écran du README, spec de l'écran partagé (`SPEC-ECRAN-PARTAGE.md`) |
 | `cartes.js` | **les cartes**, en données : tracé, largeur, adhérence, voiture, stations de radio, thème (couleurs, ciel, lumière, interface). Ajouter une carte commence ici. |
-| `sim.js` | **physique**, sans aucun rendu : piste, moteur et boîte, glisse, murs, pilote automatique, course contre IA, trafic, traces des fantômes et liens de défi. Partagé entre le jeu et les tests. |
-| `game.js` | rendu three.js, décor de la ville, effets, interface, commandes, boucle de jeu |
+| `sim.js` | **physique**, sans aucun rendu : piste, moteur et boîte, glisse, murs, pilote automatique, course contre IA à un ou deux humains, trafic, traces des fantômes et liens de défi. Partagé entre le jeu et les tests. |
+| `game.js` | rendu three.js, décor de la ville, effets, interface, commandes et périphériques, vues de l'écran partagé, boucle de jeu |
 | `audio.js` | tout le son, synthétisé : trois stations de radio par carte (données `RADIO` dans `cartes.js`), chacune avec ses timbres (`PATCH`), sa batterie (`KIT`), ses effets et sa forme en sections ; musique de menu, ambiance du lieu par zones, tunnels, moteur, boîte, pneus, bruitages. Exposé au jeu par `window.SON`. |
 | `ecoute.html` | banc d'écoute : chaque station, ambiance et bruitage joué seul (amplifié pour l'écoute, vumètre, « tout arrêter »), le mélange de course avec un curseur par famille, et trois vérifications : auto-test des boutons, niveaux (RMS et crête) et variété des stations (corrélation des spectres), par rendu hors ligne |
 | `textures.js` | **catalogue des textures** : l'aspect de chaque surface, aplat (`nom: 0xrrggbb`) ou dessin sur canvas. Ni forme, ni emplacement. |
@@ -198,6 +234,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | `fonts/` | polices pixel |
 | `three.min.js` | three.js r128 |
 | `test.js` | tests de la physique |
+| `outils/perf.js` | banc de mesure : performances à une et à deux vues, mémoire sur un enchaînement de cartes (voir « Performances ») |
 
 `game.js` est un seul fichier découpé en sections repérées par `// ----------` : rendu et passe finale, outils des trois entités du décor (`tx`, `mat`, `geo`, `pose`), piste, ville, horizon, voiture et effets, état de jeu et commandes, interface, boucle.
 
@@ -207,7 +244,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 node test.js
 ```
 
-Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, la jauge de nitro (remplissage, poussée, choc, vol), l'aspiration, la course contre IA, le score du mode Glisse (une glisse rapide rapporte plus qu'une lente, l'enchaînement multiplie, un choc le casse, des zigzags lents ne rapportent rien) la course à élimination (personne ne sort au premier tour, classement = ordre inverse des sorties) et la Tournée (points et grille sur des classements donnés, départ sur la grille demandée), les traces des fantômes de médaille et les liens de défi (aller-retour, liens invalides refusés). Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
+Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, la jauge de nitro (remplissage, poussée, choc, vol), l'aspiration, la course contre IA, le score du mode Glisse (une glisse rapide rapporte plus qu'une lente, l'enchaînement multiplie, un choc le casse, des zigzags lents ne rapportent rien) la course à élimination (personne ne sort au premier tour, classement = ordre inverse des sorties) et la Tournée (points et grille sur des classements donnés, départ sur la grille demandée), la course à deux humains (chacun suit sa propre entrée, entrée absente = pilote automatique, grille, élastique sur la moyenne des deux, arrivée de l'un sans arrêter l'autre, élimination, Glisse en duel et son délai, aspiration et chocs identiques à ceux d'un humain contre une IA), les traces des fantômes de médaille et les liens de défi (aller-retour, liens invalides refusés). Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
 
 ```bash
 node test-cartes.js
@@ -215,7 +252,9 @@ node test-cartes.js
 
 Passe chaque carte dans la physique : tracé sans recoupement, tour bouclé au pilote automatique, 0 à 100 km/h plausible, glisse au frein à main, trafic, trace or du fantôme (lisible, sur la route, sous le seuil or). Affiche longueur, temps au tour et vitesses de chaque carte.
 
-Dans le navigateur, `?auto` fait conduire le pilote automatique, et `window.__g` expose l'état du jeu pour le débogage.
+Le rendu, le HUD, les commandes et le son de l'écran partagé ne sont pas testés automatiquement : à la main dans le navigateur, avec `?auto&joueurs=2` pour voir les deux vues sans manette.
+
+Dans le navigateur, `?auto` fait conduire le pilote automatique (les deux voitures à deux joueurs), et `window.__g` expose l'état du jeu pour le débogage.
 
 ## Performances
 
@@ -231,6 +270,17 @@ Pour la mémoire sur un enchaînement de cartes sans rechargement (Tournée) : `
 | `appelsMax` | ≤ 300 | passes de dessin par image, ombres comprises (le seul chiffre qui ne dépend pas de la machine) |
 
 Les millisecondes valent pour la machine de mesure (portable à puce graphique intégrée Intel Arc 140T, image de 480 × 270) ; sur une autre, comparer les cartes entre elles et surveiller `appelsMax`. Une carte qui sort du tableau : `sectMs` et `sectAppels` disent sur quel dixième du tracé, `piresCpu` où tombent les à-coups et s'ils viennent du rendu ou du son.
+
+**À deux vues** : `index.html?perf&auto&joueurs=2` refait la même mesure avec l'écran partagé, les deux vues dessinées à chaque image (les deux joueurs au pilote automatique, deux adversaires). Le tableau est le même, avec une colonne `vues`, et sort dans `localStorage['vpr.perf2']` sans toucher à celui du solo. La référence vaut **par vue** (`budget(2)` dans `outils/perf.js`) : deux fois les passes de dessin du solo, et un temps d'image qui reste sous une image à 120 Hz.
+
+| mesure à deux vues | référence |
+|---|---|
+| `appelsMax` | ≤ 600 |
+| `ms`, `msMax`, `cpuMax` | ≤ 8,3 ms |
+
+Relevé du 13/11/2026 sur les huit cartes, pour le seul chiffre qui ne dépend pas de la machine : `appelsMax` va de 252 (Nuit Blanche) à 556 (Wan-9) à deux vues, pour 131 à 256 en solo. Les millisecondes à deux vues restent à relever sur la machine de mesure, fenêtre visible : à deux, l'image compte jusqu'à quatre fois les pixels du solo (deux vues, chacune deux fois plus large), c'est donc le temps du GPU (`ms`) qu'il faut regarder en premier. `chaine()` à deux, sur deux passages : mêmes géométries et textures au second passage qu'au premier.
+
+Le banc écrit toujours le nombre de vues dans l'adresse (`joueurs=1` ou `2`) : la mesure du solo ne dépend pas de la préférence du menu. `chaine()` marche aussi à deux, depuis `index.html?auto&joueurs=2` (sa colonne `vues` dit ce qui a été mesuré).
 
 Ce qui tient ces chiffres, et qu'il ne faut pas défaire :
 
@@ -293,7 +343,7 @@ Dette connue, à traiter avant d'ajouter beaucoup de contenu :
 - La ville compte plusieurs centaines d'objets dessinés séparément. Sans souci sur une machine récente, à fusionner si le jeu doit tourner sur du matériel modeste.
 - L'interface est entièrement redessinée à chaque image.
 - Aucun test automatique ne couvre le rendu ni le son.
-- La lumière dynamique demande WebGL 2 (dérivées dans le shader) ; l'ombre portée sous les luminaires n'existe que pour la voiture du joueur.
+- La lumière dynamique demande WebGL 2 (dérivées dans le shader) ; l'ombre portée sous les luminaires n'existe que pour la voiture du joueur (à deux : chacun la sienne, dans sa vue).
 
 ## Déployer
 
