@@ -78,6 +78,35 @@ assert(c.nitro > 0.02 && c.nitro < 0.5, 'la glisse tenue doit remplir la jauge d
   assert(stun > 0 && c.nitro < 0.2, 'un choc franc doit vider la jauge: ' + c.nitro);
 }
 
+// ---------- mode Glisse : le score (c.score), les points de la glisse en cours (c.cours) et le multiplicateur d'enchaînement (c.mult), calculés à part de la physique ----------
+let glisseTxt;
+{
+  // en plan ouvert, comme test-cartes.js (sans murs : un seul échantillon de piste, recollé sous la voiture à chaque pas)
+  const O = { x: 0, y: 0, z: 0, tx: 1, tz: 0, k: 0, sl: 0 }, TO = { S: [O], n: 1 };
+  const go = (c, inp, sec) => { for (let i = 0; i < sec / H; i++) { O.x = c.x; O.z = c.z; const v = Math.hypot(c.vx, c.vz) || 1; O.tx = c.vx / v; O.tz = c.vz / v; step(c, inp, TO, H); } return c; };
+  const neuve = () => Object.assign(newCar(T), { idx: 0 });
+  // une glisse : lancée `elan` secondes, frein à main tenu `tenue` secondes, puis relâché
+  const glisse = (elan, tenue, c = neuve()) => { go(c, I(0, 1), elan); const v = c.vf; go(c, I(1, 1, 0, true), tenue); assert(c.drift, 'glisse de test ratée'); c.v0 = v; c.enCours = c.cours; go(c, I(0, 1), 0.1); return c; };
+  const vite = glisse(5, 1.2), lente = glisse(1.6, 1.2);
+  assert(neuve().score === 0 && neuve().mult === 1, 'départ : score nul, multiplicateur à 1');
+  assert(vite.enCours > 0 && vite.cours === 0 && vite.score >= vite.enCours && vite.score < 1.02 * vite.enCours, `la glisse en cours doit être versée au score quand elle se termine: ${vite.enCours} puis ${vite.score}`);
+  assert(lente.score > 0 && vite.score > 1.5 * lente.score, `une glisse rapide (${vite.v0 * 3.6 | 0} km/h : ${vite.score}) doit rapporter bien plus qu'une lente (${lente.v0 * 3.6 | 0} km/h : ${lente.score})`);
+  assert(glisse(5, 2).score > 1.5 * vite.score, 'une glisse plus longue doit rapporter plus');
+  // enchaînement : chaque glisse validée monte le multiplicateur d'un cran, la suivante rapporte d'autant plus ; quelques secondes sans glisser et il retombe à 1, le score reste
+  const deux = glisse(0.5, 1.2, glisse(5, 1.2)), gain2 = deux.score - vite.score;
+  assert(vite.mult === 2 && deux.mult === 3 && gain2 > 1.7 * vite.score, `l'enchaînement doit multiplier : x${vite.mult} puis x${deux.mult}, ${vite.score} puis ${gain2} points`);
+  const acquis = deux.score; go(deux, I(0, 1), 3.2); assert(deux.mult === 1 && deux.score === acquis, `3 s sans glisser : le multiplicateur doit retomber (x${deux.mult})`);
+  // des zigzags à basse vitesse (glisses de 0,4 s, d'un côté puis de l'autre) ne rapportent presque rien
+  const zig = neuve(); go(zig, I(0, 1), 1.6); for (let i = 0; i < 16; i++) { go(zig, I(i % 2 ? 1 : -1, 0.5, 0, true), 0.4); go(zig, I(0, 0.5), 0.1); }
+  assert(zig.nDrift >= 8 && zig.score < 0.05 * vite.score && zig.mult === 1, `zigzags lents : ${zig.nDrift} glisses, ${zig.score} points, x${zig.mult}`);
+  // sur la piste : une glisse validée (x2, partie du bord gauche : elle emmène à droite), puis une glisse qui finit dans le mur : ses points sont perdus et le multiplicateur retombe à 1
+  const m = newCar(T); run(m, I(0, 1), 3); { const s = S[m.idx], o = -6 - m.d; m.x += -s.tz * o; m.z += s.tx * o; } run(m, I(1, 1, 0, true), 0.1); run(m, I(-1, 1, 0, true), 0.8); run(m, I(0, 1), 0.1);
+  assert(m.mult === 2 && m.score > 0 && !m.nWall, `glisse sur la piste non validée (x${m.mult}, ${m.score} points, ${m.nWall} chocs)`);
+  const avant = m.score; let perdu = 0, t = 0; while (!m.nWall && t < 3) { perdu = m.cours; step(m, I(1, 1, 0, true), T, H); t += H; } step(m, I(1, 1, 0, true), T, H);
+  assert(m.nWall && perdu > 100 && m.cours < 5 && m.mult === 1 && m.score === avant, `un choc contre le mur doit casser l'enchaînement : x${m.mult}, ${perdu} points en cours avant, ${m.cours} après`);
+  glisseTxt = `x2 puis x3 (${gain2 | 0} points la seconde), zigzags lents ${zig.score | 0}, choc : ${perdu | 0} points perdus ; ${vite.score | 0} points pour 1,2 s à ${vite.v0 * 3.6 | 0} km/h, ${lente.score | 0} à ${lente.v0 * 3.6 | 0} km/h`;
+}
+
 // boîte manuelle : en 1re la vitesse plafonne au rupteur (8000 tr/min = 72 km/h), et un rétrogradage abusif met en surrégime sans dépasser la zone rouge affichée
 c = newCar(T); c.manual = true; run(c, I(0, 1), 6);
 assert(c.gear === 0 && c.vf * 3.6 > 62 && c.vf * 3.6 < 76, 'rupteur de 1re mal placé: ' + c.vf * 3.6);
@@ -161,6 +190,38 @@ assert(arr[3].fin - arr[0].fin < 8, 'course trop étalée: ' + arr.map(c => c.fi
 R = newRace(T, 1); while (!R.cars.slice(1).every(c => c.fin) && R.t < 100) stepRace(R, I(0, 0), H);
 assert(R.cars[0].pos === 4 && !R.cars[0].fin && !R.done && R.t < 60, 'course à 1 tour avec joueur immobile');
 
+// ---------- course à élimination : autant de tours que de voitures ; à chaque passage de ligne du meneur à partir de la fin du tour 2, la dernière sort ----------
+let elimTxt;
+{
+  const nom = (R, c) => R.cars.indexOf(c) ? 'IA' + R.cars.indexOf(c) : 'joueur', vivantes = R => R.cars.filter(c => !c.out);
+  const E = newRace(T, 3, AI_LVL, 0, { elim: true }), sorties = []; let tetes = 0, pt = 0;
+  assert(E.laps === 4 && E.cars.every(c => !c.out), 'élimination : autant de tours que de voitures, toutes en piste au départ');
+  while (!E.done && E.t < 400) {
+    stepRace(E, null, H);
+    const tete = Math.floor(Math.max(...E.cars.map(c => c.dist)) / n); if (tete > pt) { pt = tete; tetes++; }
+    for (const c of E.cars) if (c.out && !sorties.includes(c)) {
+      sorties.push(c);
+      assert(pt >= 2, `élimination : ${nom(E, c)} sort au premier tour (${E.t} s)`);
+      assert(c.pos === E.cars.length - sorties.length + 1 && c.dist === Math.min(...[c, ...vivantes(E)].map(x => x.dist)), `élimination : ${nom(E, c)} sort sans être dernière`);
+      assert(sorties.length === pt - 1, `élimination : ${sorties.length} sorties après ${pt} passages du meneur`);
+    }
+    for (const c of E.cars) assert(fin(c) && Math.abs(c.d) <= W, 'élimination : NaN ou voiture hors piste');
+  }
+  const [gagnant] = vivantes(E);
+  assert(E.done && sorties.length === 3 && vivantes(E).length === 1 && gagnant.fin && gagnant.dist >= 4 * n, `élimination non terminée (${sorties.length} sorties, ${E.t} s)`);
+  assert.deepStrictEqual(raceOrder(E), [gagnant, ...sorties.reverse()], "élimination : le classement final doit être l'ordre inverse des sorties");
+  raceOrder(E).forEach((c, i) => assert(c.pos === i + 1));
+  // la voiture sortie se range : elle ralentit, ne touche plus personne, et le pilote automatique des autres ne s'en occupe plus
+  const der = sorties[2], ts = der.out; while (E.t < ts + 6) { stepRace(E, null, H); assert(!der.bump && Math.abs(der.d) <= W); }
+  assert(Math.hypot(der.vx, der.vz) < 3 && Math.abs(der.d) > 3, `élimination : la voiture sortie doit se ranger sur le côté (${Math.hypot(der.vx, der.vz)} m/s, à ${der.d} m de l'axe)`);
+  const R2 = newRace(T, 3, [1], 0, { elim: true }), [p, q] = R2.cars; at(p, 60, 0, 40); at(q, 62, 0, 0); q.out = 1; for (let i = 0; i < 1 / H; i++) { stepRace(R2, I(0, 1), H); assert(!p.bump, 'une voiture sortie ne doit plus gêner'); }
+  // un joueur qui ne touche à rien : épargné au premier passage du meneur, sorti au deuxième ; la course se finit sans lui
+  const F = newRace(T, 3, AI_LVL, 0, { elim: true }); let passages = 0, pp = 0, vu = 0;
+  while (!F.done && F.t < 400) { stepRace(F, I(0, 0), H); const k = Math.floor(Math.max(...F.cars.map(c => c.dist)) / n); if (k > pp) { pp = k; passages++; } if (F.cars[0].out && !vu) vu = passages; }
+  assert(vu === 2 && F.done && F.cars[0].pos === 4 && !F.cars[0].fin, `élimination : joueur immobile sorti au passage ${vu} du meneur`);
+  elimTxt = `${E.laps} tours, sorties à ${sorties.reverse().map(c => nom(E, c) + ' ' + c.out.toFixed(2)).join(', ')} s, vainqueur ${nom(E, gagnant)} en ${gagnant.fin.toFixed(2)} s`;
+}
+
 // ---------- relief : sauts, réceptions, murs roulables (sur la carte du barrage, qui les déclare) ----------
 {
   globalThis.CARTE = CARTES.find(m => m.id === 'barrage'); delete require.cache[require.resolve('./sim.js')]; require('./sim.js');
@@ -217,3 +278,5 @@ assert(R.cars[0].pos === 4 && !R.cars[0].fin && !R.done && R.t < 60, 'course à 
   console.log(`OK  relief (barrage) : sauts à 108 / 162 / 216 km/h = ${s30.d.toFixed(0)} / ${s45.d.toFixed(0)} / ${s60.d.toFixed(0)} m (${s60.t.toFixed(2)} s, ${s60.hmax.toFixed(1)} m de haut, impact ${s60.land.toFixed(1)} m/s), fosse franchie en ${ok.t.toFixed(1)} s, ratée en ${rate.t.toFixed(1)} s ; virage relevé : propre ${propre.t.toFixed(2)} s (mini ${(propre.vmin * 3.6) | 0} km/h), par le mur ${parMur.t.toFixed(2)} s (mini ${(parMur.vmin * 3.6) | 0} km/h, ${parMur.ymax.toFixed(1)} m de haut)`);
 }
 console.log(`OK  course : IA seules ${laps.map(l => l.toFixed(2)).join(' / ')} s au tour (niveaux ${AI_LVL.join(' / ')}), dépassement en ${tpass.toFixed(1)} s, 3 tours à 4 IA : ${arr.map(c => R0(c) + ' ' + c.fin.toFixed(2)).join(', ')} (${walls} chocs mur, ${bumps} chocs voiture)`);
+console.log(`OK  élimination : ${elimTxt}`);
+console.log(`OK  glisse : ${glisseTxt}`);
