@@ -21,6 +21,9 @@
   const vturn = (a, k) => { const c = a / k; return KT.wa * c >= KT.vref ? KT.wa * c : KT.w0 * c / (1 + (KT.w0 - KT.wa) * c / KT.vref); }; // vitesse à laquelle la part a du braquage suffit pour une courbure k
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+  // ?braq= (navigateur) ou BRAQ= (node) : 0 = braquage d'avant (lacet calé sur l'épingle à toute vitesse, clavier et stick bruts), 1 = plafond `trav` et commandes progressives (défaut) ; entre les deux, un mélange
+  // shortcut: réglage de comparaison, à figer une fois le braquage choisi (ici, buildTrack, et input() de game.js)
+  const bq = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('braq') : process.env.BRAQ, BRAQ = bq == null || bq === '' || isNaN(bq) ? 1 : clamp(+bq, 0, 1);
   // Pluie sur la route : m = (force − 1) / 2 (T.eau, 0 à force 1 ou en tunnel, 1 à force 3). La bruine (force 1, la ville) ne change rien : records intacts.
   //   vir = lacet perdu en courbe ; frein, trac = freinage et motricité perdus ; colle = rattrapage de la vitesse par le nez perdu (la voiture chasse)
   //   aquaplaning : au-dessus de vaq − dvaq·m (m/s), sur 4 m/s : jusqu'à aq de lacet en moins, et le rattrapage perd encore aqc
@@ -39,7 +42,7 @@
     // courbure signée (>0 = virage à droite), lissée sur ±3 échantillons
     S.forEach((s, i) => { const a = S[(i - 3 + n) % n], b = S[(i + 3) % n]; s.k = s.kl = (a.tx * b.tz - a.tz * b.tx) / (6 * len / n); });
     KT.w1 = KT.vref / (KT.large * (1 / Math.max(...S.map(s => Math.abs(s.k))) + W)); KT.w0 = 1.6 * KT.w1;
-    KT.wa = Math.min(KT.w1, 4 * (W - 1.1) / (KT.vref * KT.trav ** 2)); // traversée de 2 (W − 1,1) m au lacet w : t² = 4 (W − 1,1) / (v w)
+    KT.wa = lerp(KT.w1, Math.min(KT.w1, 4 * (W - 1.1) / (KT.vref * KT.trav ** 2)), BRAQ); // traversée de 2 (W − 1,1) m au lacet w : t² = 4 (W − 1,1) / (v w)
     const near = p => { let b = 0, bd = 1e9; S.forEach((s, i) => { const d = (s.x - p[0]) ** 2 + (s.z - p[1]) ** 2; if (d < bd) { bd = d; b = i; } }); return b; };
     const at = i => near(PTS[i]), TUN = M.tun || [0, 0];
     // largeur variable : M.large = [[a, b, w], …] demi-largeur w entre les points a et b, raccordée sur 60 m de part et d'autre ; ailleurs W (s.w = demi-largeur à l'échantillon)
@@ -294,5 +297,5 @@
     }
   }
 
-  Object.assign(G, { dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, PL });
+  Object.assign(G, { dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, PL, BRAQ });
 })(typeof window !== 'undefined' ? window : globalThis);

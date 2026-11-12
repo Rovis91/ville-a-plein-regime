@@ -699,11 +699,17 @@
       if (on[k]) padWas[k] = 1; else delete padWas[k];
     }
   }
-  const input = () => {
-    const b = i => pad && pad.buttons[i] ? pad.buttons[i].value : 0, sx = pad && Math.abs(pad.axes[0]) > 0.15 ? pad.axes[0] : 0;
+  // Volant progressif (dosé par ?braq=, voir sim.js ; jamais frein à main tenu : la glisse garde ses commandes brutes) :
+  //   stick : la zone morte ne fait plus de saut, et la course est assouplie autour du centre (pente 0,4, plein braquage en butée)
+  //   clavier : le volant met jusqu'à 0,2 s à atteindre la butée à 250 km/h (rien à l'arrêt), et revient au centre d'un coup : un appui bref corrige peu
+  let kbS = 0;
+  const input = dt => {
+    const b = i => pad && pad.buttons[i] ? pad.buttons[i].value : 0, hand = !!(keys.Space || b(1)), B = hand ? 0 : BRAQ, ax = pad ? pad.axes[0] : 0, t = (Math.abs(ax) - 0.15) / 0.85, sx = t > 0 ? Math.sign(ax) * (Math.abs(ax) + (t * (0.4 + 0.6 * t) - Math.abs(ax)) * B) : 0;
+    const k = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0), tau = B * 0.2 * Math.min(1, Math.abs(car.vf) / 70);
+    if (kbS * k <= 0) kbS = 0; kbS = tau > 0 ? clamp(kbS + k * dt / tau, -1, 1) : k;
     return {
-      steer: clamp((keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0) + sx, -1, 1),
-      gas: keys.ArrowUp || keys.KeyW || b(7) > 0.1 || b(0) ? 1 : 0, brake: keys.ArrowDown || keys.KeyS || b(6) > 0.1 || b(2) ? 1 : 0, hand: !!(keys.Space || b(1)),
+      steer: clamp(kbS + sx, -1, 1),
+      gas: keys.ArrowUp || keys.KeyW || b(7) > 0.1 || b(0) ? 1 : 0, brake: keys.ArrowDown || keys.KeyS || b(6) > 0.1 || b(2) ? 1 : 0, hand,
     };
   };
 
@@ -850,7 +856,7 @@
     }
     if (goT > 0) goT -= dt;
     FEUX.forEach((m, i) => m.color.setHex(goT > 0 ? 0x30ff60 : state === 'count' && shown && shown <= 3 - i ? 0xff2030 : 0x3a0810)); // décompte 3, 2, 1 : un feu de plus à chaque chiffre ; vert au GO
-    padFrame(); const keyIn = input();
+    padFrame(); const keyIn = input(dt);
     const inp = state === 'race' ? (AUTO || raceEnd ? autopilot(car, T, 1, M.trafic && !race ? trafic(T, tTraf) : []) : keyIn) : { steer: 0, gas: 0, brake: 0, hand: false };
     let hit = 0, bump = 0;
     for (acc += dt; acc >= H; acc -= H) {

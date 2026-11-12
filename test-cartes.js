@@ -38,7 +38,7 @@ for (const M of CARTES) {
   const braq = [60 / 3.6, v120, v200, vtop - 0.5].map(v => { const c = go(lance(v), I(1, 1), 0.5), w = c.yaw, r = Math.hypot(c.vx, c.vz) / w, d = lance(v), nx = -Math.sin(d.th), nz = Math.cos(d.th), x0 = d.x, z0 = d.z; let tt = 0;
     while ((d.x - x0) * nx + (d.z - z0) * nz < 2 * (W - 1.1) && tt < 20) { go(d, I(1, 1), H); tt += H; } return [deg(w).toFixed(0), r.toFixed(0), tt.toFixed(2)]; });
   // précision en ligne droite : à la pointe, volant à fond, la route ne se traverse pas en moins de 0,8 s, sur aucune carte
-  assert(braq[3][2] >= 0.8, `${M.id} : route traversée en ${braq[3][2]} s à la pointe`);
+  assert(BRAQ < 1 || braq[3][2] >= 0.8, `${M.id} : route traversée en ${braq[3][2]} s à la pointe`);
   // le volant commande une rotation : à 120 km/h, volant à fond, pied levé on tourne plus serré que le virage le plus serré de la carte élargi de la demi-route, et sur les gaz presque (sur les routes étroites le lacet est plafonné : l'épingle se prend pied levé ou en glisse)
   assert(r120l < ext && r120 < 1.2 * ext && r120l < 0.9 * r120, `${M.id} : à 120 km/h, rayon ${r120} m sur les gaz, ${r120l} m pied levé (virage de ${rmin} m, ${ext} m avec la demi-largeur)`);
   // doubler la vitesse ne fait pas plus que quintupler le rayon (tripler là où le plafond de lacet ne joue pas : ville, wangan, canal)
