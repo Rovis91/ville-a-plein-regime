@@ -322,7 +322,7 @@
     { id: 'stade', nom: 'GRAND VACARME', rivaux: ['NOUR', 'ENZO', 'JADE'], med: [1.08, 1, 0.94], W: 9, grip: 20, sc: 1, tun: null, chaud: [23, 29], amb: [[0, 4], [23, 29]], sect: [9, 23], anticipe: 1,
       // lignes droites du départ et du fond élargies ; au centre, l'aire ouverte : on y roule partout, on coupe l'épingle par l'arche de feu (et l'on saute alors la butte de sortie)
       large: [[0, 3, 18], [22, 24, 16]], place: { c: [150, 160], r: 59, a: 0, piles: [[34.5, 0, 24.5, 3], [-35.5, 0, 12.5, 1]] },
-      // six tremplins (le deuxième par-dessus la fosse), trois hauteurs de mur roulable : 5, 7 et 10 m
+      // cinq tremplins (le quatrième par-dessus la fosse), trois hauteurs de mur roulable : 5, 7 et 10 m
       sauts: [[2, 40, 1.5], [9, 30, 1.7], [16, 24, 1.4], [22, 60, 2, 40, 5], [24, 30, 1.5]], cuv: [[4, 8, 6, 6], [17, 21, 10, 9], [25, 29, 13, 12]],
       pts: [[0, 0, 0], [80, 0, 0], [150, 0, 0], [230, 0, 0], [300, 0, 0], [339, 16, 0], [355, 55, 0], [339, 94, 0], [300, 110, 0], [255, 110, 0], [150, 110, 0], [80, 110, 0], [45, 125, 0], [30, 160, 0], [45, 195, 0], [80, 210, 0], [126, 210, 0], [300, 210, 0], [339, 226, 0], [355, 265, 0], [339, 304, 0], [300, 320, 0], [190, 320, 0], [100, 320, 0], [0, 320, 0], [-60, 320, 0], [-173, 273, 0], [-220, 160, 0], [-173, 47, 0], [-60, 0, 0]],
       // voiture inventée : un pick-up de stade à châssis tubulaire, V8 atmosphérique de 6 L, 600 ch, 1300 kg, propulsion, grands débattements
