@@ -10,7 +10,7 @@ Jeu de course arcade solo, contre-la-montre en 3D pixelisée. Cinq cartes, chacu
 | Premier métro | rues de Paris à l'aube, relances entre des angles | Renault 5 Maxi Turbo | disco spatiale |
 | Canal 6 | canal de Los Angeles au couchant, large et glissant | Dodge Viper GTS | g-funk |
 
-On change de carte à l'écran-titre avec gauche / droite (la page se recharge), ou par l'adresse : `?carte=touge`, `wangan`, `paris`, `canal`, `ville`.
+Le menu principal choisit la carte, le mode et la boîte (haut / bas pour la ligne, gauche / droite pour la valeur, Entrée pour démarrer). Deux modes : **contre-la-montre** (tours lancés, record et fantôme par carte) et **course** (3 tours, départ en grille contre 3 IA, classement à l'arrivée). Changer de carte recharge la page ; on peut aussi la choisir par l'adresse : `?carte=touge`, `wangan`, `paris`, `canal`, `ville`.
 
 Tout tourne dans le navigateur, sans étape de build ni dépendance à installer.
 
@@ -29,7 +29,7 @@ puis ouvrir http://localhost:8123/.
 
 | Touche | Action |
 |---|---|
-| Entrée | démarrer |
+| Haut / bas, gauche / droite, Entrée | menu principal : carte, mode, boîte, démarrer |
 | ↑ ↓ ← → ou ZQSD | accélérer, freiner, tourner |
 | Espace | frein à main (déclenche la glisse) |
 | G | boîte automatique / manuelle |

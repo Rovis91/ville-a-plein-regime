@@ -248,7 +248,7 @@
   movers = new THREE.Points(mvGeo, new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true, fog: false })); movers.frustumCulled = false; scene.add(movers);
   const beaconGeo = new THREE.BufferGeometry(); beaconGeo.setAttribute('position', new THREE.Float32BufferAttribute(beacons, 3));
   beaconPts = new THREE.Points(beaconGeo, new THREE.PointsMaterial({ color: 0xff2030, size: 2, sizeAttenuation: false, fog: false })); scene.add(beaconPts);
-  } else decorTick = window.DECORS[TH.decor]({ THREE, scene, T, S, N, W, M, TH, tex, R, box, ribbon, rnd, addMat, gradTex, bas, across, zone, temps: () => tTraf });
+  } else decorTick = window.DECORS[TH.decor]({ THREE, scene, T, S, N, W, M, TH, tex, R, box, ribbon, rnd, addMat, gradTex, bas, across, zone, temps: () => race ? -1 : tTraf }); // pas de trafic en course : les adversaires ne savent pas l'éviter
 
   // pluie : traînées qui s'allongent et foncent vers la caméra avec la vitesse
   const RN = 400, rainP = new Float32Array(RN * 3), rainGeo = new THREE.BufferGeometry(), rainV = new Float32Array(RN * 6);
@@ -283,6 +283,13 @@
   box(0.06, 0.2, 1.8, brakeMat, -2.27, 0.72, 0, body); // feux arrière, plus vifs au freinage
   for (const z of [-0.65, 0.65]) box(0.06, 0.16, 0.45, new THREE.MeshBasicMaterial({ color: 0xfff2d0 }), 2.27, 0.42, z, body); // phares
   if (L.neon) for (const z of [-1, 1]) box(3, 0.07, 0.05, new THREE.MeshBasicMaterial({ color: L.neon }), 0, 0.34, z, body); // liserés néon de bas de caisse
+
+  const rivals = [0x2a7aff, 0xffc04a, 0x3ad06a].map(col => {
+    const g = new THREE.Group(), m = new THREE.MeshLambertMaterial({ color: col });
+    part(wedge(4.5, 0.62, 1.95, L.nez), m, 0, 0.62, 0, g); part(wedge(L.cab[1], L.cab[2], 1.6, 0.75), dark, L.cab[0], 0.91 + L.cab[2] / 2, 0, g);
+    box(0.06, 0.2, 1.8, new THREE.MeshBasicMaterial({ color: 0xff3040 }), -2.27, 0.72, 0, g);
+    g.scale.set(L.l, L.h, L.w); g.traverse(o => { o.castShadow = true; }); g.visible = false; scene.add(g); return g;
+  });
 
   // traînées lumineuses des feux arrière : deux rubans tirés sur les dernières positions
   const TN = 18, hist = [], trailP = new Float32Array(TN * 12), trailC = new Float32Array(TN * 12), trailGeo = new THREE.BufferGeometry(), trailI = [];
@@ -518,15 +525,19 @@
   // une série de records par carte ; la ville garde ses clés d'origine
   const PRE = 'vpr5.' + (M.id === 'ville' ? '' : M.id + '.');
   const store = { get: k => { try { return JSON.parse(localStorage.getItem(PRE + k)); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(PRE + k, JSON.stringify(v)); } catch (e) { } } };
+  const pref = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }, setPref = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
+  // mode : 'chrono' (contre-la-montre, tours lancés, fantôme) ou 'course' (3 tours contre 3 IA) ; race = la course en cours (sim.js), sinon null
+  let mode = pref('vpr.mode', 'chrono') === 'course' ? 'course' : 'chrono', race = null, msel = 3;
+  try { if (sessionStorage.getItem('vpr.menu')) { msel = 0; sessionStorage.removeItem('vpr.menu'); } } catch (e) { } // on vient de changer de carte : on reste sur cette ligne
   const fmt = t => `${t / 60 | 0}'${String(t % 60 | 0).padStart(2, '0')}"${String(t * 100 % 100 | 0).padStart(2, '0')}`;
-  let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, cth = car.th, lm = 0, carY = S[car.idx].y, pitch = 0, result = null, manual = false;
+  let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, cth = car.th, lm = 0, carY = S[car.idx].y, pitch = 0, result = null, manual = pref('vpr.boite', 'a') === 'm';
   // secteurs (entrée et sortie de l'échangeur) et fantôme du record : [x, y, z, cap] à 20 Hz
   let si = 0, cur = [], bestSpl = store.get('splits'), ghost = store.get('ghost'), recG = [], splitMsg = null, lapN = 1, prev = 'race', psel = 0, ghostOn = !!store.get('ghostOn');
   const keys = {}, H = 1 / 120;
 
   function start() {
     if (!AC) initAudio(); AC.resume();
-    car = newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 1.8; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1; result = null;
+    race = mode === 'course' ? newRace(T, 3) : null; car = race ? race.cars[0] : newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 1.8; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1; result = null;
   }
   function finish() { // tour bouclé : on l'enregistre, on affiche son temps 4 s, et le chrono repart aussitôt pour un tour lancé
     const rec = !best || tRace < best; result = { rec, diff: best ? tRace - best : 0, t: tRace, n: lapN, T: 4 };
@@ -543,7 +554,18 @@
     else if (psel === 3) setStation(station + 1);
     else if (psel === 4) toggleMusic();
     else if (psel === 5) { ghostOn = !ghostOn; store.set('ghostOn', ghostOn); }
-    else { state = 'title'; car = newCar(T); cth = car.th; carY = S[car.idx].y; tRace = 0; lapN = 1; result = null; hist.length = 0; }
+    else toMenu();
+  }
+  function toMenu() { state = 'title'; race = null; car = newCar(T); cth = car.th; carY = S[car.idx].y; tRace = 0; lapN = 1; result = null; hist.length = 0; msel = 3; }
+  // menu principal : 0 carte, 1 mode, 2 boîte, 3 démarrer ; d = -1 / +1 (gauche / droite ; Entrée vaut +1)
+  function menuAct(d) {
+    if (msel === 0) { // changer de carte : on mémorise et on recharge, le décor n'est construit qu'au chargement
+      const id = CARTES[(CARTES.indexOf(M) + d + CARTES.length) % CARTES.length].id;
+      setPref('vpr.carte', id); try { sessionStorage.setItem('vpr.menu', 1); } catch (e) { }
+      location.href = location.pathname + '?carte=' + id;
+    } else if (msel === 1) { mode = mode === 'course' ? 'chrono' : 'course'; setPref('vpr.mode', mode); }
+    else if (msel === 2) { manual = !manual; car.manual = manual; setPref('vpr.boite', manual ? 'm' : 'a'); }
+    else start();
   }
   addEventListener('keydown', e => {
     keys[e.code] = 1;
@@ -558,13 +580,17 @@
       return;
     }
     if ((e.code === 'Escape' || key === 'p') && (state === 'race' || state === 'count')) { prev = state; state = 'pause'; psel = 0; return; }
-    if (state === 'title' && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) { // changer de carte : on mémorise et on recharge, le décor n'est construit qu'au chargement
-      const id = CARTES[(CARTES.indexOf(M) + (e.code === 'ArrowRight' ? 1 : CARTES.length - 1)) % CARTES.length].id;
-      try { localStorage.setItem('vpr.carte', id); } catch (e) { }
-      location.href = location.pathname + '?carte=' + id; return;
+    if (state === 'title') {
+      const dx = (e.code === 'ArrowRight' || e.code === 'KeyD' ? 1 : 0) - (e.code === 'ArrowLeft' || e.code === 'KeyA' ? 1 : 0);
+      if (e.code === 'ArrowUp' || e.code === 'KeyW') msel = (msel + 3) % 4;
+      else if (e.code === 'ArrowDown' || e.code === 'KeyS') msel = (msel + 1) % 4;
+      else if (e.code === 'Enter' || e.code === 'Space') menuAct(1);
+      else if (dx && msel < 3) menuAct(dx);
+      return;
     }
-    if ((e.code === 'Enter' && state === 'title') || key === 'r') start();
-    if (key === 'g') { manual = !manual; car.manual = manual; car.gear = gear; }
+    if (state === 'fini') { if (e.code === 'Enter' || e.code === 'Escape') toMenu(); else if (key === 'r') start(); return; }
+    if (key === 'r') start();
+    if (key === 'g') { manual = !manual; car.manual = manual; car.gear = gear; setPref('vpr.boite', manual ? 'm' : 'a'); }
     if (manual && (e.code === 'KeyE' || e.code === 'KeyQ')) car.gear = clamp(car.gear + (e.code === 'KeyE' ? 1 : -1), 0, CARD.ratios.length - 1); // physiquement A / E autour du Z en AZERTY
     if (key === 'c') setStation(station + 1);
     if (key === 'm') toggleMusic();
@@ -611,9 +637,24 @@
   function drawHUD(dt, sp, r, warn) {
     hg.clearRect(0, 0, HW, HH);
     const cx = HW / 2, blink = (performance.now() / 160 | 0) % 3 > 0;
+    if (state === 'title') { // menu principal : la carte tourne derrière, on choisit carte, mode et boîte
+      R(hg, 'rgba(8,8,12,.45)', 0, 0, HW, HH);
+      if (HU.sur[0]) txt(HU.sur[0], cx, 8, 16, C, 'center', 0, JP); txt(HU.sur[1], cx, 30, 8, C, 'center');
+      txt(HU.titre[0], cx, 44, 24, Y, 'center', 2); txt(HU.titre[1], cx, 70, 24, Y, 'center', 2);
+      panel(cx - 160, 100, 320, 130);
+      [['CARTE', M.nom + '  ' + (CARTES.indexOf(M) + 1) + '/' + CARTES.length], ['MODE', mode === 'course' ? 'COURSE CONTRE 3 IA' : 'CONTRE-LA-MONTRE'], ['BOITE', manual ? 'MANUELLE' : 'AUTO']].forEach(([l, v], i) => {
+        const on = msel === i, y = 108 + i * 15;
+        txt((on ? '> ' : '  ') + l, cx - 152, y, 8, on ? Y : '#e8e8e4'); txt(on ? '< ' + v + ' >' : v, cx + 152, y, 8, on ? Y : C, 'right');
+      });
+      if (msel === 3) { if (blink) tag('> DEMARRER <', cx, 152, Y); } else txt('DEMARRER', cx, 155, 8, '#e8e8e4', 'center');
+      hg.drawImage(MM.c, cx - 152, 170); // le tracé, puis la fiche de la carte
+      [CARD.nom, (T.len / 1000).toFixed(1).replace('.', ',') + ' KM   ' + (M.trafic ? 'TRAFIC' : T.tun ? 'TUNNEL' : 'CIEL OUVERT'), mode === 'course' ? '3 TOURS, DEPART EN GRILLE' : 'RECORD ' + (best ? fmt(best) : '--'), ST[station].name + ' ' + ST[station].fq].forEach((l, i) => txt(l, cx - 58, 174 + i * 13, 8, i ? '#e8e8e4' : C));
+      txt('HAUT/BAS : CHOISIR  GAUCHE/DROITE : CHANGER', cx, 238, 8, '#e8e8e4', 'center'); txt('FLECHES / ZQSD : PILOTER   ESPACE : GLISSE', cx, 251, 8, '#e8e8e4', 'center');
+      hudT.needsUpdate = true; return;
+    }
     // chrono
-    panel(6, 6, 132, 50); txt('TOUR ' + lapN, 12, 11, 8, C); if (HU.jp) txt(HU.jp[0], 132, 6, 16, C, 'right', 0, JP);
-    txt(fmt(tRace), 12, 24, 16, Y, 'left', 1); txt(best ? 'REC ' + fmt(best) : 'REC --', 12, 44, 8, RD);
+    panel(6, 6, 132, 50); txt(race ? 'TOUR ' + car.lap + '/' + race.laps : 'TOUR ' + lapN, 12, 11, 8, C); if (HU.jp) txt(HU.jp[0], 132, 6, 16, C, 'right', 0, JP);
+    txt(fmt(tRace), 12, 24, 16, Y, 'left', 1); txt(race ? 'PLACE ' + car.pos + '/' + race.cars.length : best ? 'REC ' + fmt(best) : 'REC --', 12, 44, 8, RD);
     // vitesse
     panel(HW - 126, HH - 64, 120, 58); txt('KM/H', HW - 120, HH - 59, 8, C); if (HU.jp) txt(HU.jp[1], HW - 12, HH - 64, 16, C, 'right', 0, JP);
     txt(String(sp * 3.6 | 0), HW - 10, HH - 42, 32, Y, 'right', 1);
@@ -628,24 +669,22 @@
       R(hg, '#ffffff', 12 + i * 6, HH - 14 - Math.min(EQR - 1, Math.round(peak[i] * EQR)) * 4, 5, 1);
     }
     radioT -= dt; panel(HW - 126, 6, 120, 30); txt('RADIO ' + ST[station].fq, HW - 120, 11, 8, radioT > 0 && blink ? '#ffffff' : C); txt(ST[station].name, HW - 120, 23, 8, Y);
-    if (state === 'race' || state === 'count') { // minicarte, sous la radio ; un point par voiture : dot(x, z, couleur)
+    if (state === 'race' || state === 'count' || state === 'fini') { // minicarte, sous la radio ; un point par voiture : dot(x, z, couleur)
       const mx = HW - 96, my = 46, dot = (x, z, c) => R(hg, c, mx + MM.px(x) - 1, my + MM.pz(z) - 1, 3, 3);
       panel(HW - 102, 40, 96, 68); hg.drawImage(MM.c, mx, my); // 96 de large : ne touche pas les bandeaux centraux même en 4:3 (HW = 360)
       if (ghostM.visible) dot(ghostM.position.x, ghostM.position.z, C);
+      if (race) for (const c of race.cars.slice(1)) dot(c.x, c.z, RD);
       dot(car.x, car.z, Y);
     }
     if (car.boost > 0) tag('BOOST', cx, 82, C);
     if (splitMsg && (splitMsg.T -= dt) > 0) tag('S' + (splitMsg.i + 1) + ' ' + (splitMsg.d == null ? fmt(splitMsg.t) : (splitMsg.d <= 0 ? '-' : '+') + Math.abs(splitMsg.d).toFixed(2)), cx, 102, splitMsg.d == null ? Y : splitMsg.d <= 0 ? C : RD); // écart au record à chaque secteur
     if (warn && blink) tag(warn > 0 ? '! VIRAGE DROITE >>' : '<< VIRAGE GAUCHE !', cx, 62, Y);
     // écrans
-    if (state === 'title') {
-      R(hg, 'rgba(8,8,12,.8)', 0, 0, HW, HH);
-      if (HU.sur[0]) txt(HU.sur[0], cx, 22, 16, C, 'center', 0, JP); txt(HU.sur[1], cx, 44, 8, C, 'center');
-      txt(HU.titre[0], cx, 62, 24, Y, 'center', 2); txt(HU.titre[1], cx, 90, 24, Y, 'center', 2);
-      txt('< CARTE ' + (CARTES.indexOf(M) + 1) + '/' + CARTES.length + ' >', cx, 124, 8, '#e8e8e4', 'center');
-      txt(CARD.nom + '   ' + (T.len / 1000).toFixed(1).replace('.', ',') + ' KM' + (best ? '   REC ' + fmt(best) : ''), cx, 137, 8, C, 'center');
-      if (blink) tag('> ENTREE : DEMARRER <', cx, 154, Y);
-      ['GAUCHE / DROITE : CHANGER DE CARTE', 'FLECHES OU ZQSD : PILOTER', 'ESPACE : FREIN A MAIN / GLISSE', 'G : BOITE MANUELLE (A / E : RAPPORTS)', 'C : RADIO   M : SON   ECHAP : PAUSE'].forEach((s, i) => txt(s, cx, 178 + i * 13, 8, '#e8e8e4', 'center'));
+    if (state === 'fini') { // arrivée de la course : classement, les temps tombent à mesure que les adversaires arrivent
+      R(hg, 'rgba(8,8,12,.6)', 0, 0, HW, HH); txt(car.pos === 1 ? 'VICTOIRE' : car.pos + 'E PLACE', cx, 40, 24, Y, 'center', 2);
+      panel(cx - 110, 84, 220, 96);
+      raceOrder(race).forEach((c, i) => { const moi = c === car, n = race.cars.indexOf(c); txt((i + 1) + '  ' + (moi ? 'VOUS' : 'IA ' + n), cx - 100, 94 + i * 20, 8, moi ? Y : '#e8e8e4'); txt(c.fin ? fmt(c.fin) : '--', cx + 100, 94 + i * 20, 8, moi ? Y : C, 'right'); });
+      if (blink) tag('> ENTREE : MENU <', cx, 196, Y); txt('R : REJOUER', cx, 218, 8, '#e8e8e4', 'center');
     } else if (state === 'count' && shown) txt(String(shown), cx, 90, 64, Y, 'center', 3);
     else if (goT > 0) txt('GO', cx, 90, 64, Y, 'center', 3);
     if (result && state !== 'title' && (result.T -= dt) > 0) { // résultat du tour qu'on vient de boucler, sans arrêter la course
@@ -680,6 +719,11 @@
     const inp = state === 'race' ? (AUTO ? autopilot(car, T, 1, M.trafic ? trafic(T, tTraf) : []) : keyIn) : { steer: 0, gas: 0, brake: 0, hand: false };
     let hit = 0;
     for (acc += dt; acc >= H; acc -= H) {
+      if (race && (state === 'race' || state === 'fini')) { // course : la simulation avance toutes les voitures ; après l'arrivée, l'IA ramène celle du joueur
+        stepRace(race, state === 'fini' || AUTO ? null : inp, H); hit = Math.max(hit, car.hit, car.bump); tRace = race.t;
+        if (state === 'race' && car.fin) { state = 'fini'; stinger(car.pos === 1); }
+        continue;
+      }
       step(car, inp, T, H); if (M.trafic && state === 'race') hitTrafic(car, T, tTraf); hit = Math.max(hit, car.hit);
       if (state === 'race') { tRace += H; tTraf += H; if (car.dist >= N) finish(); }
     }
@@ -691,8 +735,9 @@
     // voiture (suit le relief) + caméra derrière : plus basse, plus proche et plus grand-angle avec la vitesse
     const sc = S[car.idx], fx = Math.cos(car.th), fz = Math.sin(car.th);
     carY += (sc.y - carY) * Math.min(1, dt * 18); pitch += (Math.atan(sc.sl) - pitch) * Math.min(1, dt * 10);
-    carG.position.set(car.x, carY, car.z); carG.rotation.set(0, -car.th, pitch); body.rotation.x = car.steer * r * 0.07;
-    cth += wrap(car.th - cth) * Math.min(1, dt * 6);
+    carG.position.set(car.x, carY, car.z); carG.rotation.set(0, -car.th, pitch);
+    rivals.forEach((g, i) => { const c = race && race.cars[i + 1]; g.visible = !!c; if (c) { const q = S[c.idx]; g.position.set(c.x, q.y, c.z); g.rotation.set(0, -c.th, Math.atan(q.sl)); } }); body.rotation.x = car.steer * r * 0.07;
+    if (state === 'title') cth += dt * 0.22; else cth += wrap(car.th - cth) * Math.min(1, dt * 6); // au menu, la caméra tourne autour de la voiture pour montrer la carte
     const cx = Math.cos(cth), cz = Math.sin(cth), back = 8.2 - 1.4 * r;
     let px = car.x - cx * back, pz = car.z - cz * back;
     const s = S[(car.idx - 4 + N) % N], nx = -s.tz, nz = s.tx, d = (px - s.x) * nx + (pz - s.z) * nz, o = Math.abs(d) - (W - 0.8);
@@ -721,12 +766,12 @@
     }
     rainGeo.attributes.position.needsUpdate = true;
 
-    if (state === 'race') {
+    if (state === 'race' && !race) {
       while (recG.length / 4 <= tRace * 20) recG.push(+car.x.toFixed(2), +carY.toFixed(2), +car.z.toFixed(2), +car.th.toFixed(3));
       if (si < 2 && car.dist >= T.sp[si]) { cur[si] = tRace; splitMsg = { i: si, t: tRace, d: bestSpl ? tRace - bestSpl[si] : null, T: 2.5 }; si++; }
     }
     const gi = tRace * 20, g0 = Math.floor(gi) * 4, gf = gi % 1;
-    ghostM.visible = ghostOn && state === 'race' && !!ghost && g0 + 7 < ghost.length;
+    ghostM.visible = ghostOn && state === 'race' && !race && !!ghost && g0 + 7 < ghost.length;
     if (ghostM.visible) { ghostM.position.set(lerp(ghost[g0], ghost[g0 + 4], gf), lerp(ghost[g0 + 1], ghost[g0 + 5], gf) + 0.6, lerp(ghost[g0 + 2], ghost[g0 + 6], gf)); ghostM.rotation.y = -(ghost[g0 + 3] + wrap(ghost[g0 + 7] - ghost[g0 + 3]) * gf); }
     fxFrame(dt, now, sp, inp, hit, fx, fz);
     if (AC) audioFrame(dt, r, sp, gas, hit, up);
@@ -741,5 +786,5 @@
   }
   const loop = now => { requestAnimationFrame(loop); frame(now); };
   requestAnimationFrame(loop);
-  window.__g = { frame, start, M, keys, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return AC; }, get out() { return master; }, get smp() { return Object.keys(smp); } }; // prise de test
+  window.__g = { frame, start, M, get race() { return race; }, get mode() { return mode; }, keys, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return AC; }, get out() { return master; }, get smp() { return Object.keys(smp); } }; // prise de test
 })();

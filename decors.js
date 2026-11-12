@@ -138,6 +138,7 @@
       for (const m of [rem, cab, feux]) { m.frustumCulled = false; h.scene.add(m); }
       return (dt, now) => {
         roue.rotation.z = now * 0.00012; bp.visible = (now / 700 & 1) === 1;
+        const vis = h.temps() >= 0; rem.visible = cab.visible = feux.visible = vis; if (!vis) return; // pas de camions en mode course
         trafic(T, h.temps()).forEach((k, i) => {
           const fx = Math.cos(k.th), fz = Math.sin(k.th);
           d.rotation.set(0, -k.th, 0);
