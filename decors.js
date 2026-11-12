@@ -254,7 +254,7 @@
       const craie = lambert(h, 0xf4f0e8), yb = g.hAt(935, -598);
       h.box(40, 24, 30, craie, 935, yb + 12, -598); h.box(9, 46, 9, craie, 935, yb + 23, -620);
       const dome = new THREE.Mesh(new THREE.SphereGeometry(13, 8, 5, 0, 6.283, 0, 1.6), craie); dome.position.set(935, yb + 24, -596); dome.scale.y = 1.5; h.scene.add(dome);
-      for (const sx of [-15, 15]) { const d2 = new THREE.Mesh(new THREE.SphereGeometry(5, 6, 4, 0, 6.283, 0, 1.6), craie); d2.position.set(935 + sx, yb + 24, -588); d2.scale.y = 1.5; h.scene.add(d2); }
+      for (const sx of [-15, 15]) { const d2 = new THREE.Mesh(new THREE.SphereGeometry(5, 6, 4, 0, 6.283, 0, 1.6), craie); d2.position.set(935 + sx, yb + 24, -588); d2.scale.y = 1.5; h.scene.add(d2); }
       // --- la ville se réveille : passants sur les trottoirs, vitrines allumées (cafés, boulangeries), et le premier métro sur son viaduc le long du fleuve ---
       // tirage à part (r2) : rien de ce qui précède ne change de place
       let g2 = 99; const r2 = () => (g2 = g2 * 1664525 + 1013904223 >>> 0) / 4294967296;
