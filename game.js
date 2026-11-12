@@ -217,7 +217,7 @@
 
   const cT = T.t1 - T.t0, cO = N - cT; // sans tunnel : cT = 0, la route à ciel ouvert fait tout le tour
   // route : mouillée, elle renvoie en reflets étirés les phares, les néons, la lune ou le soleil (lumière dynamique)
-  ribbon(T.t1, cO, -W, 0, W, 0, gloss(new THREE.MeshLambertMaterial({ map: roadTex(...TH.route), side: THREE.DoubleSide }), TH.route[6] ? 0.55 : 0.08), 32);
+  ribbon(T.t1, cO, -W, 0, W, 0, gloss(new THREE.MeshLambertMaterial({ map: roadTex(...TH.route), side: THREE.DoubleSide }), TH.route[6] ? 0.2 : 0.08), 32); // 0,55 noyait la route sous le reflet de la lune dans la courbe d'avant le tunnel
   const barT = tex(32, 32, g => { // x : 0 = haut ; lisse, rainure, poteaux tous les 4 m, coulures
     const p = TH.mur; R(g, p[0], 0, 0, 32, 32); R(g, p[1], 0, 0, 3, 32); R(g, p[2], 6, 0, 1, 32); R(g, p[3], 13, 0, 19, 32); R(g, p[3], 3, 0, 10, 1);
     voile(g, 0.3, () => { R(g, '#fff', 3, 0, 1, 32); R(g, '#000', 9, 0, 2, 32); R(g, '#000', 12, 0, 1, 32); R(g, '#000', 3, 16, 10, 1); for (let i = 0; i < 10; i++) R(g, '#000', 4 + rnd() * 3 | 0, rnd() * 32 | 0, 3 + rnd() * 6 | 0, 1); });
@@ -269,7 +269,7 @@
     for (let i = 0; i < N; i++) {
       const s = S[i], nx = -s.tz, nz = s.tx, inT = zone(i, 0) === 1;
       dummy.scale.set(1, 1, 1); dummy.rotation.set(0, across(s), 0);
-      if (TH.tubes && i % 10 === 0 && !inT) { const k = i / 10, sd = (k >> 1) & 1 ? 1 : -1; lum(i, s.x + nx * sd * (W - 0.5), s.y + 3, s.z + nz * sd * (W - 0.5), [0xff2bd6, 0x00f0ff][(k & 1) ^ (sd > 0 ? 1 : 0)], 17, 1.8); } // un tube sur deux éclaire vraiment : magenta, cyan, d'un côté puis de l'autre
+      if (TH.tubes && i % 10 === 0 && !inT) { const k = i / 10, sd = (k >> 1) & 1 ? 1 : -1; lum(i, s.x + nx * sd * (W - 0.5), s.y + 3, s.z + nz * sd * (W - 0.5), [0xff2bd6, 0x00f0ff][(k & 1) ^ (sd > 0 ? 1 : 0)], 17, 0.8); } // un tube sur deux éclaire vraiment : magenta, cyan, d'un côté puis de l'autre
       if (TH.tubes && i % 10 === 0 && !inT) for (const sd of [-1, 1]) {
         const c = (i / 10 & 1) ^ (sd > 0 ? 1 : 0);
         dummy.position.set(s.x + nx * sd * (W + 0.9), s.y + 3.5, s.z + nz * sd * (W + 0.9)); dummy.updateMatrix(); tubes[c].setMatrixAt(nt[c], dummy.matrix);
@@ -301,7 +301,7 @@
     for (let i = 70, k = 0; i < N; i += 90) {
       if (zone(i, 40) > 0) continue;
       const s = S[i], gr = new THREE.Group(); gr.position.set(s.x, s.y, s.z); gr.rotation.y = across(s); scene.add(gr);
-      lum(i, s.x, s.y + 9, s.z, [0xff2bd6, 0x00f0ff, 0xfcee0a][k % 3], 24, 2.6); // l'écran éclaire la route sous lui
+      lum(i, s.x, s.y + 9, s.z, [0xff2bd6, 0x00f0ff, 0xfcee0a][k % 3], 24, 1.2); // l'écran éclaire la route sous lui
       box(2 * W + 3, 4, 0.5, adMats[k++ % 3], 0, 11.5, 0, gr);
       for (const sd of [-1, 1]) box(0.8, 13.5, 0.8, concrete, sd * (W + 1.3), 6.75, 0, gr);
     }
@@ -443,6 +443,7 @@
   if (L.neon) for (const z of [-1, 1]) box(3, 0.07, 0.05, new THREE.MeshBasicMaterial({ color: L.neon }), 0, 0.34, z, body); // liserés néon de bas de caisse
 
   // traînées lumineuses des feux arrière : deux rubans tirés sur les dernières positions
+  const flames = [-0.5, 0.5].map(z => { const g = new THREE.ConeGeometry(0.17, 1.6, 5); g.translate(0, 0.8, 0); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x60d0ff, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false })); m.rotation.z = Math.PI / 2; m.position.set(-2.25, 0.42, z); m.visible = false; carG.add(m); return m; }); // pointe vers l'arrière
   const TN = 18, hist = [], trailP = new Float32Array(TN * 12), trailC = new Float32Array(TN * 12), trailGeo = new THREE.BufferGeometry(), trailI = [];
   for (let l = 0; l < 2; l++) for (let k = 0; k < TN - 1; k++) { const a = (l * TN + k) * 2; trailI.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
   trailGeo.setAttribute('position', new THREE.BufferAttribute(trailP, 3)); trailGeo.setAttribute('color', new THREE.BufferAttribute(trailC, 3)); trailGeo.setIndex(trailI);
@@ -464,18 +465,19 @@
     brakeMat.color.setHex(inp.brake ? 0xff7080 : 0x8a1020);
     // traînées
     hist.unshift([car.x - fx * 2.3, carY + 0.72, car.z - fz * 2.3, rx, rz]); if (hist.length > TN) hist.length = TN;
-    const glow = Math.min(1, sp / 15) * (inp.brake ? 1 : 0.4);
+    const bst = car.boost > 0, glow = Math.min(1, sp / 15) * (inp.brake || bst ? 1 : 0.4);
     for (let l = 0; l < 2; l++) for (let k = 0; k < TN; k++) {
       const h = hist[Math.min(k, hist.length - 1)], sd = l ? 0.78 : -0.78, a = (l * TN + k) * 6, f = (1 - k / TN) ** 2 * glow;
       trailP.set([h[0] + h[3] * sd, h[1] + 0.1, h[2] + h[4] * sd, h[0] + h[3] * sd, h[1] - 0.1, h[2] + h[4] * sd], a);
-      trailC.set([f, f * 0.08, f * 0.16, f, f * 0.08, f * 0.16], a);
+      trailC.set(bst ? [f * 0.2, f * 0.8, f, f * 0.2, f * 0.8, f] : [f, f * 0.08, f * 0.16, f, f * 0.08, f * 0.16], a);
     }
     trailGeo.attributes.position.needsUpdate = trailGeo.attributes.color.needsUpdate = true;
     // émissions
     if (car.slide > 0.3 && sp > 10) for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.2, car.z - fz * 1.4 + rz * sd, car.vx * 0.25 + jit(4), 1 + Math.random() * 2.5, car.vz * 0.25 + jit(4), 0.9, lerp(0.16, 0.28, lm), lerp(0.18, 0.06, lm), lerp(0.28, 0.06, lm), -1);
     if (hit > 3) { const s = S[car.idx], sg = Math.sign(car.d); for (let i = 0; i < 16; i++) emit(car.x - s.tz * sg, carY + 0.5, car.z + s.tx * sg, car.vx * 0.5 + jit(14), 2 + Math.random() * 7, car.vz * 0.5 + jit(14), 0.5, 1, 0.75, 0.25, 22); }
     else if (car.rub && sp > 8) { const s = S[car.idx], sg = Math.sign(car.d); for (let i = 0; i < 3; i++) emit(car.x - s.tz * sg, carY + 0.4, car.z + s.tx * sg, car.vx * 0.6 + jit(5), 1 + Math.random() * 4, car.vz * 0.6 + jit(5), 0.35, 1, 0.75, 0.25, 22); } // frottement continu : gerbe plus fine que le choc
-    if (car.boost > 0) for (const sd of [-0.5, 0.5]) emit(car.x - fx * 2.4 + rx * sd, carY + 0.45, car.z - fz * 2.4 + rz * sd, car.vx * 0.7 - fx * 5 + jit(1), jit(1), car.vz * 0.7 - fz * 5 + jit(1), 0.2, 0.3, 0.8, 1, 0);
+    for (const fl of flames) { fl.visible = car.boost > 0; fl.scale.y = (0.5 + Math.random() * 0.7) * Math.min(1, car.boost * 2); } // boost : deux flammes d'échappement qui vacillent, les traînées virent au bleu
+    if (car.dd && sp > 10) { const ok = car.driftT > 0.6; for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.15, car.z - fz * 1.4 + rz * sd, car.vx * 0.5 + rx * sd * 3 + jit(3), 1 + Math.random() * 3, car.vz * 0.5 + rz * sd * 3 + jit(3), 0.3, ok ? 1 : 0.3, ok ? 0.55 : 0.6, ok ? 0.1 : 1, 14); } // glisse : étincelles aux roues arrière, bleues puis orange quand le boost est acquis
     for (let i = 0; i < PN; i++) {
       if (pL[i] <= 0) continue;
       pL[i] -= dt; const j = i * 3, f = Math.max(0, pL[i] / pM[i]);
@@ -586,7 +588,7 @@
     else if (msel === 2) { manual = !manual; car.manual = manual; setPref('vpr.boite', manual ? 'm' : 'a'); }
     else start();
   }
-  addEventListener('keydown', e => {
+  const onKey = e => {
     keys[e.code] = 1; SON.init(); // le contexte audio ne peut démarrer qu'après un geste
     if (/^Arrow|Space/.test(e.code)) e.preventDefault();
     if (e.repeat) return;
@@ -614,14 +616,32 @@
     if (manual && (e.code === 'KeyE' || e.code === 'KeyQ')) car.gear = clamp(car.gear + (e.code === 'KeyE' ? 1 : -1), 0, CARD.ratios.length - 1); // physiquement A / E autour du Z en AZERTY
     if (key === 'c') zap();
     if (key === 'm') SON.toggleMusic();
-  });
+  };
+  addEventListener('keydown', onKey);
   addEventListener('keyup', e => { keys[e.code] = 0; });
   addEventListener('blur', () => { for (const k in keys) keys[k] = 0; }); // sinon une touche reste enfoncée après Alt-Tab
   // e.code = position physique : KeyW/KeyA sont Z/Q sur un clavier AZERTY
-  const input = () => ({
-    steer: (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0),
-    gas: keys.ArrowUp || keys.KeyW ? 1 : 0, brake: keys.ArrowDown || keys.KeyS ? 1 : 0, hand: !!keys.Space,
-  });
+  // manette (disposition « standard » du navigateur, noms des boutons d'une manette de Switch) : stick ou croix = volant et menus, ZR ou B = gaz, ZL ou Y = frein,
+  // A = glisse, X = radio, L / R = rapports, + = pause, B = valider. Les boutons rejouent les touches du clavier, pour ne pas dédoubler les menus.
+  const PADK = { 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight', 0: 'Enter', 9: 'Escape', 3: 'c', 4: 'KeyQ', 5: 'KeyE' }, padWas = {}; let pad = null;
+  function padFrame() {
+    pad = [...(navigator.getGamepads ? navigator.getGamepads() : [])].find(p => p && p.connected) || null; if (!pad) return;
+    const on = {}, ax = pad.axes;
+    pad.buttons.forEach((b, i) => { if (b.pressed && PADK[i]) on[PADK[i]] = 1; });
+    if (accueil || state === 'title' || state === 'pause') { if (ax[1] < -0.6) on.ArrowUp = 1; if (ax[1] > 0.6) on.ArrowDown = 1; if (ax[0] < -0.6) on.ArrowLeft = 1; if (ax[0] > 0.6) on.ArrowRight = 1; } // en course le stick est lu en analogique, pas en flèches
+    for (const k of new Set([...Object.keys(on), ...Object.keys(padWas)])) {
+      if (on[k] && !padWas[k]) onKey({ code: k.length > 1 ? k : '', key: k.length > 1 ? '' : k, preventDefault() { } });
+      else if (!on[k] && padWas[k]) keys[k] = 0;
+      if (on[k]) padWas[k] = 1; else delete padWas[k];
+    }
+  }
+  const input = () => {
+    const b = i => pad && pad.buttons[i] ? pad.buttons[i].value : 0, sx = pad && Math.abs(pad.axes[0]) > 0.15 ? pad.axes[0] : 0;
+    return {
+      steer: clamp((keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0) + sx, -1, 1),
+      gas: keys.ArrowUp || keys.KeyW || b(7) > 0.1 || b(0) ? 1 : 0, brake: keys.ArrowDown || keys.KeyS || b(6) > 0.1 || b(2) ? 1 : 0, hand: !!(keys.Space || b(1)),
+    };
+  };
 
   // ---------- HUD pixel (canvas 2D à la résolution du jeu) ----------
   const PS = '"Press Start 2P", monospace', JP = 'DotGothic16, sans-serif', HU = TH.hud, Y = HU.y, C = HU.c, RD = HU.r; // couleurs et style d'interface de la carte
@@ -765,7 +785,7 @@
       else if (k !== shown) { shown = k; SON.beep(440); }
     }
     if (goT > 0) goT -= dt;
-    const keyIn = input();
+    padFrame(); const keyIn = input();
     const inp = state === 'race' ? (AUTO || raceEnd ? autopilot(car, T, 1, M.trafic && !race ? trafic(T, tTraf) : []) : keyIn) : { steer: 0, gas: 0, brake: 0, hand: false };
     let hit = 0, bump = 0;
     for (acc += dt; acc >= H; acc -= H) {
@@ -864,7 +884,7 @@
     for (let j = 15; j < 35 + sp * 0.6; j++) { const k = S[(car.idx + j) % N].k; if (Math.abs(k) > Math.abs(wk)) wk = k; }
     drawHUD(dt, sp, r, state === 'race' && sp > 30 && Math.abs(wk) > 0.011 ? Math.sign(wk) : 0);
     // flou de vitesse : rien sous 55 % de la vitesse de pointe, léger au-delà, franc seulement pendant le boost
-    post.uniforms.amt.value = 0.35 * Math.max(0, (r - 0.55) / 0.45) ** 2 + (car.boost > 0 ? 0.3 : 0); post.uniforms.ab.value = 0.002 + 0.004 * r + (stun > 0 ? stun * 0.06 : 0);
+    post.uniforms.amt.value = 0.35 * Math.max(0, (r - 0.55) / 0.45) ** 2; post.uniforms.ab.value = 0.002 + 0.004 * r + (stun > 0 ? stun * 0.06 : 0);
     renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(null); renderer.render(postScene, postCam);
   }
   const loop = now => { requestAnimationFrame(loop); frame(now); };

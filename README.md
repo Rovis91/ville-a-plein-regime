@@ -38,6 +38,7 @@ puis ouvrir http://localhost:8123/.
 | M | couper / remettre la musique |
 | Échap ou P | menu pause (reprendre, recommencer, boîte, radio, musique, fantôme, quitter) |
 | R | recommencer |
+| Manette | stick ou croix : volant et menus · ZR ou B : gaz · ZL ou Y : frein · A : glisse · X : radio · L / R : rapports · + : pause · B : valider |
 
 Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/E sur un clavier QWERTY. Les autres commandes sont lues par la lettre tapée.
 
