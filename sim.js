@@ -413,5 +413,50 @@
     }
   }
 
-  Object.assign(G, { sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, tournee, BAREME, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, SURF, GL });
+  // --- fantômes ---
+  // Une trace = [x, y, z, cap, …] à cadence fixe (20 Hz dans le jeu). etire(trace, k) : la même, k fois plus lente (k < 1 : plus rapide), à la même cadence ; le cap tourne par le plus court.
+  function etire(tr, k) {
+    const n = tr.length / 4, o = []; if (n < 2) return tr.slice();
+    for (let j = 0; j / k <= n - 1 + 1e-9; j++) { const p = Math.min(n - 1, j / k), i = Math.min(n - 2, Math.floor(p)) * 4, f = p - i / 4;
+      for (let q = 0; q < 3; q++) o.push(tr[i + q] + (tr[i + 4 + q] - tr[i + q]) * f); o.push(tr[i + 3] + wrap(tr[i + 7] - tr[i + 3]) * f); }
+    return o;
+  }
+  // Tour de référence des médailles : le tour lancé du pilote automatique, parti avec une jauge de nitro pleine qu'il dépense en ligne droite (ce qu'un bon tour en gagne). Rend son temps et sa trace à 20 Hz.
+  function tourRef(T, dt = 1 / 120) {
+    const c = newCar(T), trace = []; let t = 0, t1 = 0, i = 0;
+    while (c.dist < 2 * T.n && t < 900) { step(c, autopilot(c, T), T, dt); t += dt; if (!t1 && c.dist >= T.n) { t1 = t; c.nitro = 1; } if (t1 && i++ % 6 === 0) trace.push(c.x, c.y, c.z, c.th); }
+    return { t: t - t1, trace };
+  }
+  // --- défi par lien ---
+  // Un défi = « version.carte.données » : la version de la physique (celle des clés de records, vpr7), l'identifiant de la carte, puis en base64 pour URL : le temps du tour (ms, 3 octets),
+  // les positions à 5 Hz (un point sur quatre de la trace à 20 Hz) quantifiées à 10 cm et le cap à 1/256 de tour, et 2 octets de contrôle.
+  // Compression : x et z en différences secondes (l'écart à la vitesse du point d'avant : presque toujours un octet), y et le cap en différences. On transporte des positions, jamais des commandes :
+  // la simulation ne donne pas exactement le même résultat d'un navigateur à l'autre. Les traces or des cartes (traces-or.js) sont dans le même format.
+  const DEFI_V = 7, DEFI_ERR = ['LIEN DE DEFI ILLISIBLE', "LIEN D'UNE AUTRE VERSION DU JEU", 'LIEN DE DEFI ABIME OU TRONQUE'];
+  const controle = (tete, B, n) => { let s = 7; for (let i = 0; i < tete.length; i++) s = (s * 31 + tete.charCodeAt(i)) & 65535; for (let i = 0; i < n; i++) s = (s * 31 + B[i]) & 65535; return s; };
+  function defiCode(carte, t, tr) {
+    const ms = Math.round(t * 1000), B = [ms & 255, ms >> 8 & 255, ms >> 16 & 255], p = [0, 0, 0, 0], d = [0, 0];
+    const vi = v => { v = v < 0 ? -2 * v - 1 : 2 * v; while (v > 127) { B.push(v % 128 + 128); v = Math.floor(v / 128); } B.push(v); }; // entier signé, 7 bits par octet
+    for (let i = 0; i + 3 < tr.length; i += 16) {
+      const q = [Math.round(tr[i] * 10), Math.round(tr[i + 2] * 10), Math.round(tr[i + 1] * 10), Math.round(tr[i + 3] * 128 / Math.PI) & 255];
+      for (let k = 0; k < 2; k++) { vi(q[k] - p[k] - d[k]); d[k] = q[k] - p[k]; } vi(q[2] - p[2]); B.push((q[3] - p[3]) & 255);
+      for (let k = 0; k < 4; k++) p[k] = q[k];
+    }
+    const tete = DEFI_V + '.' + carte + '.', s = controle(tete, B, B.length); B.push(s & 255, s >> 8);
+    return tete + btoa(String.fromCharCode(...B)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  // Rend { carte, t, trace à 20 Hz }, ou { err: message } pour un lien illisible, d'une autre version ou abîmé : jamais d'exception.
+  function defiLit(lien) {
+    const m = /^(\d+)\.([a-z0-9]+)\.([A-Za-z0-9_-]+)$/.exec(typeof lien === 'string' ? lien : ''); if (!m) return { err: DEFI_ERR[0] };
+    if (+m[1] !== DEFI_V) return { err: DEFI_ERR[1] };
+    let B; try { B = Array.from(atob(m[3].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)); } catch (e) { return { err: DEFI_ERR[2] }; }
+    const fin = B.length - 2; if (fin < 3 || controle(m[1] + '.' + m[2] + '.', B, fin) !== B[fin] + B[fin + 1] * 256) return { err: DEFI_ERR[2] };
+    let i = 3, ok = true; const tr = [], p = [0, 0, 0, 0], d = [0, 0];
+    const vi = () => { let v = 0, k = 1, b; do { if (i >= fin) { ok = false; return 0; } b = B[i++]; v += (b & 127) * k; k *= 128; } while (b > 127); return v % 2 ? -(v + 1) / 2 : v / 2; };
+    while (i < fin && ok) { for (let k = 0; k < 2; k++) { d[k] += vi(); p[k] += d[k]; } p[2] += vi(); if (i >= fin) { ok = false; break; } p[3] = (p[3] + B[i++]) & 255; tr.push(p[0] / 10, p[2] / 10, p[1] / 10, p[3] * Math.PI / 128); }
+    const t = (B[0] + B[1] * 256 + B[2] * 65536) / 1000;
+    return ok && tr.length >= 8 && t > 0 ? { carte: m[2], t, trace: etire(tr, 4) } : { err: DEFI_ERR[2] };
+  }
+
+  Object.assign(G, { DEFI_V, DEFI_ERR, defiCode, defiLit, etire, tourRef,sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, tournee, BAREME, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, SURF, GL });
 })(typeof window !== 'undefined' ? window : globalThis);

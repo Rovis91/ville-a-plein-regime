@@ -18,7 +18,7 @@ Prenez le volant d'une bête de 500 chevaux et lâchez-la dans les artères d'un
 
 ### 🏁 CINQ MODES DE JEU EXPLOSIFS !
 
-- **CONTRE-LA-MONTRE** : enchaînez les tours, battez vos records… puis battez votre propre **fantôme** !
+- **CONTRE-LA-MONTRE** : enchaînez les tours, battez vos records… et rattrapez le **fantôme** de la médaille que vous visez : **bronze**, **argent**, puis **or** !
 - **GLISSE** : 2 tours pour le style. Plus ça glisse vite, de travers et longtemps, plus ça paie… et le **multiplicateur** grimpe tant que vous enchaînez sans toucher un mur !
 - **COURSE** : 3 tours, 3 rivaux sans pitié. **KENJI**, **REI** et **JUN** ne vous feront aucun cadeau.
 - **ÉLIMINATION** : 4 voitures, 4 tours. À chaque passage sur la ligne, **le dernier sort**. Jusqu'au duel final !
@@ -98,6 +98,7 @@ puis ouvrir http://localhost:8123/.
 | A / E | rapport inférieur / supérieur (en manuelle) |
 | C | station de radio suivante |
 | M | couper / remettre la musique |
+| F | fantôme du contre-la-montre : bronze, argent, or, aucun, son propre record (au menu et en piste) |
 | Échap ou P | menu pause (reprendre, recommencer, boîte, radio, musique, fantôme, quitter) |
 | R | recommencer |
 | Manette | stick ou croix : volant et menus · ZR ou B : gaz · ZL ou Y : frein · A : glisse · X : nitro · clic du stick : radio · L / R : rapports · − : boîte manuelle / automatique · + : pause · B : valider |
@@ -115,6 +116,17 @@ La jauge de nitro (en bas à droite) remplace l'ancien boost automatique de sort
 X ou N la dépense : une jauge pleine pousse 3 secondes, gaz ouverts et roues au sol (rien en l'air), y compris au-delà du rupteur. Un choc franc contre un mur ou un camion la vide. Réglages : `NI` en tête de `sim.js`.
 
 Les médailles se mesurent toujours au tour lancé du pilote automatique, qui part avec une jauge pleine et la dépense en ligne droite. La physique ayant changé, les records d'avant la V2 (clés `vpr6.*`) ne comptent plus : le menu le signale une fois.
+
+### Fantôme des médailles
+
+En contre-la-montre, un fantôme roule avec le joueur. La touche F (au menu ou en piste) ou la ligne « fantôme » du menu de pause choisit lequel : **bronze**, **argent**, **or**, aucun, ou son propre **record**. Le choix est gardé par carte (clé `vpr7.<carte>.fantome`) ; au premier lancement, c'est la première médaille pas encore gagnée. Le fantôme porte la couleur de sa médaille (cyan pour le record), sur la piste comme sur la minicarte.
+
+- Un fantôme de médaille boucle son tour exactement au temps du seuil : le battre, c'est gagner la médaille. Le fantôme passe alors de lui-même à la médaille suivante, et après l'or au record du joueur.
+- **Bronze et argent** : la trace du tour de référence des médailles (`tourRef` dans `sim.js` : le pilote automatique, jauge pleine), ralentie au ratio de la médaille (`etire`). Calculée au chargement de la carte.
+- **Or** : le pilote automatique ne glisse pas, il ne sait pas faire un tour en or. Chaque carte a donc une trace de référence embarquée dans `traces-or.js`, ramenée au temps du seuil or. Faute de tours conduits à la main, ces traces viennent de la simulation : `node outils/traces-or.js` fait rouler un pilote qui glisse au frein à main et dépense sa nitro, balaie ses réglages et garde le meilleur tour lancé. Les neuf traces passent sous le seuil or ; huit sans toucher un mur, celle de `wangan` en en touchant un (aucun réglage essayé n'y passe sous l'or proprement). Pour remplacer une trace par un vrai tour, coller dans `traces-or.js` ce qui suit `#defi=` dans un lien de défi : c'est le même format.
+- À relancer si la physique ou un tracé change : `node outils/traces-or.js` (ou `node outils/traces-or.js wangan` pour une seule carte). `test-cartes.js` échoue si une trace sort de la route ou n'est plus sous le seuil or.
+
+Les médailles sont des temps de tour lancé : au premier tour, départ arrêté, le fantôme part devant.
 
 ### Mode Glisse
 
@@ -167,6 +179,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | `formes.js` | **catalogue des formes** : la géométrie de chaque objet, forme simple ou assemblage de boîtes à zones nommées. Ni texture, ni emplacement. Un assemblage posé est fondu en une géométrie par zone ; `insts()` (decors.js) le pose en nombre, une passe de dessin par zone. |
 | `decors.js` | **placement** des décors des autres cartes (forêt, baie, Paris, canal), une fonction par carte : où poser quelle forme avec quelle texture, par `h.pose`, `h.geo`, `h.mat`. Le placement de la piste et de la ville est dans `game.js`. |
 | `rythme.js` | **essai indépendant** : les aplats lumineux du décor battent avec la grosse caisse de la radio. Pour le retirer, supprimer sa ligne dans `index.html` ; pour comparer, ajouter `&rythme=0` à l'adresse. |
+| `traces-or.js` | trace de référence du fantôme or de chaque carte (produit par `outils/traces-or.js`) |
 | `test-cartes.js` | tests de toutes les cartes |
 | `propositions/` | la page de conception d'origine des cartes (historique) |
 | `samples.js` | sons de batterie encodés en base64 (généré depuis `samples/`) |

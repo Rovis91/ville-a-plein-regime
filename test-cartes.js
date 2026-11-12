@@ -1,8 +1,8 @@
 // node test-cartes.js — chaque carte de cartes.js passe dans la vraie physique : tracé valide, tour bouclé au pilote automatique, voiture plausible.
 // La ville a ses propres tests, plus complets, dans test.js (ses chiffres ne doivent pas bouger : records de la ville).
 const assert = require('assert'), THREE = require('./three.min.js');
-require('./cartes.js');
-const H = 1 / 120, deg = r => r * 180 / Math.PI; let surfTxt = '', surfCarte = '';
+require('./cartes.js'); require('./traces-or.js');
+const H = 1 / 120, deg = r => r * 180 / Math.PI; let surfTxt = '', surfCarte = '', lienMax = [0], orTxt = [];
 for (const M of CARTES) {
   globalThis.CARTE = M; surfCarte = ''; delete require.cache[require.resolve('./sim.js')]; require('./sim.js'); // sim.js lit la carte active à son chargement
   const T = buildTrack(THREE), { S, n, W } = T;
@@ -132,9 +132,20 @@ for (const M of CARTES) {
   const R = newRace(T); let wall = 0, bump = 0;
   while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && (Math.abs(x.d) <= S[x.idx].w || dansPlace(x.x, x.z)), M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }
   assert(R.done, M.id + ' : la course ne se termine pas');
+  // fantômes des médailles : le tour de référence est celui des médailles (tni) ; la trace or de la carte (traces-or.js) se relit, reste sur la route d'un bout à l'autre, part de la ligne, dure son temps, et ce temps est sous le seuil or
+  // lien de défi le plus long plausible : un tour au temps de bronze
+  { const ref = tourRef(T), med = M.med || [1.1, 1.03, 0.97], or = defiLit(TRACES_OR[M.id]), seuil = ref.t * med[2];
+    assert(ref.t === tni, `${M.id} : tourRef (${ref.t} s) n'est pas le tour de référence des médailles (${tni} s)`);
+    assert(!or.err && or.carte === M.id, `${M.id} : trace or illisible (${or.err}) : relancer node outils/traces-or.js`);
+    let hors = 0; for (let i = 0; i < or.trace.length; i += 4) { const x = or.trace[i], z = or.trace[i + 2]; let b = 0, bd = 1e9; for (let j = 0; j < n; j++) { const d = Math.hypot(S[j].x - x, S[j].z - z); if (d < bd) { bd = d; b = j; } } if (bd > S[b].w + 0.5 && !dansPlace(x, z)) hors++; }
+    assert(!hors && Math.hypot(or.trace[0] - S[0].x, or.trace[2] - S[0].z) < S[0].w + 3 && Math.abs((or.trace.length / 4 - 1) / 20 - or.t) < 0.25, `${M.id} : trace or hors de la route (${hors} points), loin de la ligne ou de mauvaise durée : relancer node outils/traces-or.js`);
+    assert(or.t <= seuil, `${M.id} : la trace or (${or.t} s) n'est pas sous le seuil or (${seuil} s)`);
+    const lien = defiCode(M.id, ref.t * med[0], etire(ref.trace, med[0])).length; if (lien > lienMax[0]) lienMax = [lien, M.id, ref.t * med[0]];
+    orTxt.push(`${M.id} ${or.t.toFixed(1)} s (seuil ${seuil.toFixed(1)})`); }
   const k = v => Math.round(v * 3.6);
   console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs${T.vert ? ', ' + vols + ' vols' : ''}, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} coups de nitro, ${hgl} chocs), pilote auto avec une jauge ${tni.toFixed(1)} s, à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture${surfCarte}`);
 }
+console.log(`OK  fantômes or : ${orTxt.join(' · ')} ; lien de défi le plus long : ${lienMax[0]} caractères (${lienMax[1]}, tour de ${lienMax[2].toFixed(1)} s au temps de bronze)`);
 // surfaces déclarées par une carte (champ surf : { fond, zones }) : cartes d'essai, le touge recouvert de chaque surface, puis avec une seule plaque de glace.
 // Le pilote automatique lit la même table : il boucle son tour lancé sans taper, plus lentement qu'au sec ; et la plaque n'existe que là où elle est déclarée, fondue sur ses bords.
 {

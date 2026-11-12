@@ -243,7 +243,35 @@ let elimTxt;
   elimTxt = `${E.laps} tours, sorties à ${sorties.reverse().map(c => nom(E, c) + ' ' + c.out.toFixed(2)).join(', ')} s, vainqueur ${nom(E, gagnant)} en ${gagnant.fin.toFixed(2)} s`;
 }
 
+// --- fantôme des médailles : la trace du tour de référence (pilote automatique, jauge pleine), ralentie au ratio de la médaille ---
+// une trace = [x, y, z, cap, …] à 20 Hz. Ralentie de 10 %, elle passe aux mêmes endroits 10 % plus tard, et finit au même point
 // ---------- relief : sauts, réceptions, murs roulables (sur la carte du barrage, qui les déclare) ----------
+{
+  const ref = tourRef(T), tr = ref.trace, pts = tr.length / 4, d = (a, i, b, j) => Math.hypot(a[i * 4] - b[j * 4], a[i * 4 + 2] - b[j * 4 + 2]);
+  assert(ref.t > 30 && ref.t < 40 && Math.abs((pts - 1) / 20 - ref.t) < 0.06, `tour de référence : ${ref.t} s pour ${pts} points à 20 Hz`);
+  assert(Math.hypot(tr[0] - S[0].x, tr[2] - S[0].z) < 5 && d(tr, 0, tr, pts - 1) < 5, 'la trace de référence ne part pas de la ligne ou n\'y revient pas');
+  const br = etire(tr, 1.1), nb = br.length / 4;
+  assert(Math.abs((nb - 1) / 20 - 1.1 * ref.t) < 0.11, `fantôme bronze : ${(nb - 1) / 20} s au lieu de ${1.1 * ref.t}`);
+  assert(d(br, 110, tr, 100) < 1e-6 && d(br, 220, tr, 200) < 1e-6 && d(br, nb - 1, tr, pts - 1) < 5 && d(br, 55, tr, 50) < 1e-6, 'fantôme bronze : pas aux mêmes endroits 10 % plus tard');
+  const vite = etire(tr, 0.5); assert(d(vite, 50, tr, 100) < 1e-6 && Math.abs(vite.length / 4 - pts / 2) <= 1, 'trace accélérée : deux fois plus courte');
+  // le cap tourne par le plus court : entre 3,1 et -3,1 rad on passe par pi, pas par zéro
+  const cap = etire([0, 0, 0, 3.1, 1, 0, 0, -3.1], 2)[7]; assert(Math.abs(Math.abs(cap) - Math.PI) < 0.05, 'cap interpolé par le mauvais côté : ' + cap);
+  var fantTxt = `référence ${ref.t.toFixed(2)} s (${pts} points), bronze ${((nb - 1) / 20).toFixed(2)} s`;
+  // --- défi par lien : le fragment porte version, carte, temps et positions à 5 Hz ; aller-retour à la précision de quantification (10 cm, 1,5°) ---
+  {
+    const lien = defiCode('ville', ref.t, tr), lu = defiLit(lien), w = a => Math.atan2(Math.sin(a), Math.cos(a));
+    assert(/^\d+\.ville\.[A-Za-z0-9_-]+$/.test(lien), 'lien de défi : caractères hors URL : ' + lien.slice(0, 40));
+    assert(!lu.err && lu.carte === 'ville' && Math.abs(lu.t - ref.t) < 0.001, 'lien de défi relu : ' + JSON.stringify(lu).slice(0, 80));
+    // un point sur quatre de la trace (5 Hz) est rendu à la quantification près ; entre deux, la trace relue suit l'originale à moins d'un mètre
+    let e5 = 0, ea = 0, e20 = 0; const nl = lu.trace.length / 4;
+    assert(nl > pts - 4 && nl <= pts, `trace relue : ${nl} points pour ${pts}`);
+    for (let i = 0; i < nl; i++) { const e = Math.max(Math.abs(lu.trace[i * 4] - tr[i * 4]), Math.abs(lu.trace[i * 4 + 1] - tr[i * 4 + 1]), Math.abs(lu.trace[i * 4 + 2] - tr[i * 4 + 2])); e20 = Math.max(e20, e);
+      if (i % 4 === 0) { e5 = Math.max(e5, e); ea = Math.max(ea, Math.abs(w(lu.trace[i * 4 + 3] - tr[i * 4 + 3]))); } }
+    assert(e5 <= 0.05 + 1e-9 && ea <= Math.PI / 256 + 1e-9 && e20 < 1, `aller-retour : ${e5} m et ${ea} rad aux points transmis, ${e20} m entre deux`);
+    fantTxt += ` ; lien de défi ${lien.length} caractères pour ${ref.t.toFixed(1)} s, écart ${(e5 * 100).toFixed(0)} cm aux points transmis, ${(e20 * 100).toFixed(0)} cm entre deux`;
+  }
+}
+
 {
   globalThis.CARTE = CARTES.find(m => m.id === 'barrage'); delete require.cache[require.resolve('./sim.js')]; require('./sim.js');
   const T = buildTrack(THREE), { S, n } = T, G = 9.81, v = c => Math.hypot(c.vx, c.vz), near = p => S.reduce((b, s, i) => Math.hypot(s.x - p[0], s.z - p[1]) < Math.hypot(S[b].x - p[0], S[b].z - p[1]) ? i : b, 0);
@@ -301,3 +329,4 @@ let elimTxt;
 console.log(`OK  course : IA seules ${laps.map(l => l.toFixed(2)).join(' / ')} s au tour (niveaux ${AI_LVL.join(' / ')}), dépassement en ${tpass.toFixed(1)} s, 3 tours à 4 IA : ${arr.map(c => R0(c) + ' ' + c.fin.toFixed(2)).join(', ')} (${walls} chocs mur, ${bumps} chocs voiture)`);
 console.log(`OK  élimination : ${elimTxt}`);
 console.log(`OK  glisse : ${glisseTxt}`);
+console.log(`OK  fantôme des médailles : ${fantTxt}`);
