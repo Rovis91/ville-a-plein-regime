@@ -34,10 +34,15 @@ for (const M of CARTES) {
   const vtop = Math.hypot(lance(999).vx, lance(999).vz), ext = rmin + W, v120 = 120 / 3.6, v200 = 200 / 3.6, glisse = v => go(lance(v), I(1, 0, 0, true), 0.3);
   const r120 = rayon(lance(v120), I(1, 1)), r120l = rayon(lance(v120), I(1, 0)), rtop = rayon(lance(vtop - 0.5), I(1, 1)), r240 = rayon(lance(240 / 3.6), I(1, 1));
   const gin = rayon(glisse(v200), I(1, 1, 0, true)), gn = rayon(glisse(v200), I(0, 1, 0, true)), gout = rayon(glisse(v200), I(-1, 1, 0, true)), g200 = rayon(lance(v200), I(1, 1));
-  // le volant commande une rotation : à 120 km/h, volant à fond, on tourne plus serré que le virage le plus serré de la carte élargi de la demi-route, et lever le pied resserre encore
-  assert(r120 < ext && r120l < 0.9 * r120, `${M.id} : à 120 km/h, rayon ${r120} m sur les gaz, ${r120l} m pied levé (virage de ${rmin} m, ${ext} m avec la demi-largeur)`);
-  // le rayon dépend peu de la vitesse : doubler la vitesse ne fait pas plus que le tripler (une limite d'adhérence le quadruplerait)
-  assert(r240 < 3 * r120, `${M.id} : rayon ${r120} m à 120 km/h, ${r240} m à 240`);
+  // braquage volant à fond sur les gaz, à 60, 120, 200 km/h et à la pointe : lacet établi (°/s), rayon (m), et temps pour traverser la route d'un mur à l'autre en partant le long du premier (s)
+  const braq = [60 / 3.6, v120, v200, vtop - 0.5].map(v => { const c = go(lance(v), I(1, 1), 0.5), w = c.yaw, r = Math.hypot(c.vx, c.vz) / w, d = lance(v), nx = -Math.sin(d.th), nz = Math.cos(d.th), x0 = d.x, z0 = d.z; let tt = 0;
+    while ((d.x - x0) * nx + (d.z - z0) * nz < 2 * (W - 1.1) && tt < 20) { go(d, I(1, 1), H); tt += H; } return [deg(w).toFixed(0), r.toFixed(0), tt.toFixed(2)]; });
+  // précision en ligne droite : à la pointe, volant à fond, la route ne se traverse pas en moins de 0,8 s, sur aucune carte
+  assert(BRAQ < 1 || braq[3][2] >= 0.8, `${M.id} : route traversée en ${braq[3][2]} s à la pointe`);
+  // le volant commande une rotation : à 120 km/h, volant à fond, pied levé on tourne plus serré que le virage le plus serré de la carte élargi de la demi-route, et sur les gaz presque (sur les routes étroites le lacet est plafonné : l'épingle se prend pied levé ou en glisse)
+  assert(r120l < ext && r120 < 1.2 * ext && r120l < 0.9 * r120, `${M.id} : à 120 km/h, rayon ${r120} m sur les gaz, ${r120l} m pied levé (virage de ${rmin} m, ${ext} m avec la demi-largeur)`);
+  // doubler la vitesse ne fait pas plus que quintupler le rayon (tripler là où le plafond de lacet ne joue pas : ville, wangan, canal)
+  assert(r240 < 5 * r120, `${M.id} : rayon ${r120} m à 120 km/h, ${r240} m à 240`);
   // mais à la vitesse de pointe, sans glisse, le virage le plus serré ne passe pas : il faut lever le pied, freiner ou glisser
   assert(rtop > ext, `${M.id} : à ${vtop * 3.6} km/h le rayon (${rtop} m) passe le virage le plus serré sans rien faire`);
   // glisse à 200 km/h (frein à main tenu) : volant vers l'intérieur elle serre plus que le virage le plus serré et bien plus qu'en adhérence ; au neutre puis vers l'extérieur elle ouvre, sans jamais changer de sens
@@ -89,7 +94,7 @@ for (const M of CARTES) {
     { const e = S.findIndex(s => Math.hypot(s.x - P.c[0], s.z - P.c[1]) < P.r) - 10, x = S.findIndex((s, k) => k > e + 20 && Math.hypot(s.x - P.c[0], s.z - P.c[1]) > P.r) + 40, Wp = [[P.c[0] - ux * 40, P.c[1] - uz * 40], [P.c[0] + ux * 40, P.c[1] + uz * 40], [S[x].x, S[x].z]];
       c = Object.assign(newCar(T), { x: S[e].x, z: S[e].z, idx: e, dist: e, th: Math.atan2(S[e].tz, S[e].tx), vx: S[e].tx * 25, vz: S[e].tz * 25 }); let k = 0, hh = 0;
       for (let i = 0; i < 20 / H && !(k === 2 && c.idx >= x - 10); i++) { if (k < 2 && Math.hypot(Wp[k][0] - c.x, Wp[k][1] - c.z) < 8) k++; const a = wrap(Math.atan2(Wp[k][1] - c.z, Wp[k][0] - c.x) - c.th);
-        step(c, { steer: Math.max(-1, Math.min(1, a * 3)), gas: 0.35, brake: 0, hand: false }, T, H); if (c.hit > 3) hh++; }
+        step(c, { steer: Math.max(-1, Math.min(1, a * 3)), gas: Math.abs(a) > 0.3 ? 0 : 0.35, brake: 0, hand: false }, T, H); if (c.hit > 3) hh++; } // pied levé pour les deux virages serrés : le lacet y gagne un quart
       assert(k === 2 && c.idx >= x - 10 && c.dist >= x - 10 && !hh, `${M.id} : traversée de la place par l'arche (étape ${k}, échantillon ${c.idx} sur ${x}, ${hh} chocs)`); }
     const [px, pz] = P.piles[0], wx = P.c[0] + px * Math.cos(P.a) + pz * Math.sin(P.a), wz = P.c[1] - px * Math.sin(P.a) + pz * Math.cos(P.a), ax = wx - 30;
     c = lance(ax, wz, 0); let hit = 0, dedans = 0;
@@ -103,7 +108,7 @@ for (const M of CARTES) {
   while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && (Math.abs(x.d) <= S[x.idx].w || dansPlace(x.x, x.z)), M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }
   assert(R.done, M.id + ' : la course ne se termine pas');
   const k = v => Math.round(v * 3.6);
-  console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} boosts, ${hgl} chocs), à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);
+  console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} boosts, ${hgl} chocs), à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; braquage à 60 / 120 / 200 / ${k(vtop)} km/h : ${braq.map(x => x[0]).join(' / ')} °/s, rayons ${braq.map(x => x[1]).join(' / ')} m, route (${2 * W} m) traversée en ${braq.map(x => x[2]).join(' / ')} s ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);
 }
 // radio : trois stations par carte ; une forme d'au moins 32 mesures faite de sections différentes ; timbres et batteries connus d'audio.js
 // (la variété à l'oreille se mesure dans le navigateur : bouton « Variété des stations » de ecoute.html, il n'y a pas de Web Audio sous node)

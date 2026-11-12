@@ -11,14 +11,19 @@
   // Conduite « kart » : le volant commande directement une vitesse de rotation (pas une force bridée par l'adhérence), donc le rayon de virage croît comme la vitesse et non comme son carré.
   //   w0, w1 = lacet volant à fond (rad/s) à l'arrêt et à vref (m/s, 250 km/h) : rayon = v / lacet. Calés sur la carte par buildTrack : à vref, le rayon vaut `large` fois (rayon du virage le plus serré + demi-largeur),
   //            donc à fond on ne passe pas ce virage en adhérence ; pied levé on s'en approche, en glisse volant dedans on le passe avec de la marge
+  //   wa, trav = lacet en adhérence à vref : celui de w1, plafonné pour qu'à vref, volant à fond, la route ne se traverse pas d'un mur à l'autre en moins de `trav` secondes. Sur les routes étroites à épingles
+  //            (touge, Paris) w0 reste calé sur l'épingle mais le lacet fond avec la vitesse ; en glisse le plafond ne joue pas (w0 → w1) : c'est elle qui passe les épingles à haute vitesse
   //   lift   = surcroît de lacet pied levé ou au frein : lâcher les gaz resserre
   //   din, dn, dout = lacet en glisse, en multiple du lacet d'adhérence : volant vers l'intérieur, au neutre, vers l'extérieur. Le volant ouvre ou ferme le rayon, jamais il n'inverse la glisse
   //   ang    = angle de dérive affiché en glisse (rad) ; tv = vitesse perdue en tournant (m/s² par rad/s de lacet) : presque rien, la glisse ne freine pas
-  const KT = { w0: 2.2, w1: 1.5, vref: 70, large: 2.2, lift: 1.25, din: 2.1, dn: 0.75, dout: 0.2, ang: 0.35, tv: 1 };
-  const omega = v => KT.w0 - (KT.w0 - KT.w1) * Math.min(1, v / KT.vref); // lacet volant à fond à la vitesse v, sur les gaz, sans glisse
-  const vturn = (a, k) => { const c = a / k; return KT.w1 * c >= KT.vref ? KT.w1 * c : KT.w0 * c / (1 + (KT.w0 - KT.w1) * c / KT.vref); }; // vitesse à laquelle la part a du braquage suffit pour une courbure k
+  const KT = { w0: 2.2, w1: 1.5, wa: 1.5, vref: 70, large: 2.2, trav: 0.77, lift: 1.25, din: 2.1, dn: 0.75, dout: 0.2, ang: 0.35, tv: 1 };
+  const omega = (v, gl) => KT.w0 - (KT.w0 - (gl ? KT.w1 : KT.wa)) * Math.min(1, v / KT.vref); // lacet volant à fond à la vitesse v, sur les gaz ; gl : loi de la glisse, sans le plafond
+  const vturn = (a, k) => { const c = a / k; return KT.wa * c >= KT.vref ? KT.wa * c : KT.w0 * c / (1 + (KT.w0 - KT.wa) * c / KT.vref); }; // vitesse à laquelle la part a du braquage suffit pour une courbure k
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+  // ?braq= (navigateur) ou BRAQ= (node) : 0 = braquage d'avant (lacet calé sur l'épingle à toute vitesse, clavier et stick bruts), 1 = plafond `trav` et commandes progressives (défaut) ; entre les deux, un mélange
+  // shortcut: réglage de comparaison, à figer une fois le braquage choisi (ici, buildTrack, et input() de game.js)
+  const bq = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('braq') : process.env.BRAQ, BRAQ = bq == null || bq === '' || isNaN(bq) ? 1 : clamp(+bq, 0, 1);
   // Pluie sur la route : m = (force − 1) / 2 (T.eau, 0 à force 1 ou en tunnel, 1 à force 3). La bruine (force 1, la ville) ne change rien : records intacts.
   //   vir = lacet perdu en courbe ; frein, trac = freinage et motricité perdus ; colle = rattrapage de la vitesse par le nez perdu (la voiture chasse)
   //   aquaplaning : au-dessus de vaq − dvaq·m (m/s), sur 4 m/s : jusqu'à aq de lacet en moins, et le rattrapage perd encore aqc
@@ -37,6 +42,7 @@
     // courbure signée (>0 = virage à droite), lissée sur ±3 échantillons
     S.forEach((s, i) => { const a = S[(i - 3 + n) % n], b = S[(i + 3) % n]; s.k = s.kl = (a.tx * b.tz - a.tz * b.tx) / (6 * len / n); });
     KT.w1 = KT.vref / (KT.large * (1 / Math.max(...S.map(s => Math.abs(s.k))) + W)); KT.w0 = 1.6 * KT.w1;
+    KT.wa = lerp(KT.w1, Math.min(KT.w1, 4 * (W - 1.1) / (KT.vref * KT.trav ** 2)), BRAQ); // traversée de 2 (W − 1,1) m au lacet w : t² = 4 (W − 1,1) / (v w)
     const near = p => { let b = 0, bd = 1e9; S.forEach((s, i) => { const d = (s.x - p[0]) ** 2 + (s.z - p[1]) ** 2; if (d < bd) { bd = d; b = i; } }); return b; };
     const at = i => near(PTS[i]), TUN = M.tun || [0, 0];
     // largeur variable : M.large = [[a, b, w], …] demi-largeur w entre les points a et b, raccordée sur 60 m de part et d'autre ; ailleurs W (s.w = demi-largeur à l'échantillon)
@@ -103,7 +109,7 @@
     if (!c.dd && inp.hand && sp > 12 && Math.abs(inp.steer) > 0.3) { c.dd = Math.sign(inp.steer); c.nDrift++; }
     if (c.dd && (!inp.hand || sp < 10)) { if (c.driftT > 0.6 && sp >= 10) { c.boost = Math.min(1.5, c.driftT * 0.8); c.nBoost++; c.comboMax = Math.max(c.comboMax, ++c.combo); } c.dd = 0; c.driftT = 0; } // glisse tenue plus de 0,6 s : boost à la sortie
     const m = eau(T, c.idx); c.aq = aqua(m, sp); // route mouillée : moins de lacet, encore moins en aquaplaning
-    const om = omega(sp) * Math.min(1, sp / 10) * (1 - PL.vir * m) * (1 - PL.aq * c.aq), sd = c.steer * (c.dd || 0);
+    const om = omega(sp, c.dd) * Math.min(1, sp / 10) * (1 - PL.vir * m) * (1 - PL.aq * c.aq), sd = c.steer * (c.dd || 0);
     const w = c.dd ? c.dd * om * lerp(KT.dn, sd > 0 ? KT.din : KT.dout, Math.abs(sd)) : c.steer * om * (inp.gas && !inp.brake ? 1 : KT.lift);
     c.yaw += (w - c.yaw) * Math.min(1, dt * 18); // un rien d'inertie : la réponse est quasi immédiate
     const dsa = ((c.dd || 0) * KT.ang * (1 + 0.2 * sd) - c.sa) * Math.min(1, dt * 6); c.sa += dsa;
@@ -192,10 +198,11 @@
     const e = wrap(Math.atan2(la.z + la.tx * (off || la.dl) - c.z, la.x - la.tz * (off || la.dl) - c.x) - c.th);
     let va = 1e9;
     // vitesse permise = celle de chaque virage de la trajectoire à venir, plus ce qu'on peut perdre en freinant d'ici là (10 m/s², 2 m par échantillon)
+    // là où le lacet est plafonné (KT.wa < KT.w1) il fond vite avec la vitesse : le pilote y garde plus de marge (1,3 fois le lacet sur les gaz ailleurs, jusqu'à 1,1)
     // sous la pluie : virages au lacet mouillé, sans dépasser le seuil d'aquaplaning là où il ne passerait plus, et freinage plus long
     const fr = 40 * (1 - PL.frein * eau(T, c.idx));
     for (let j = 0; j < 200; j++) {
-      const i = (c.idx + j) % n, m = eau(T, i), k = Math.abs(S[i].kl) + 1e-4, g = 1.3 * (1 - PL.vir * m), vq = PL.vaq - PL.dvaq * m;
+      const i = (c.idx + j) % n, m = eau(T, i), k = Math.abs(S[i].kl) + 1e-4, g = (1.3 - 0.3 * (1 - KT.wa / KT.w1)) * (1 - PL.vir * m), vq = PL.vaq - PL.dvaq * m;
       let v = vturn(g, k); if (m && v > vq) v = Math.max(vq, vturn(g * (1 - PL.aq * m) * 0.7, k)); // au-delà du seuil d'aquaplaning, avec de la marge : la voiture y chasse
       va = Math.min(va, Math.sqrt(v ** 2 + fr * j));
     }
@@ -290,5 +297,5 @@
     }
   }
 
-  Object.assign(G, { dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, PL });
+  Object.assign(G, { dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, PL, BRAQ });
 })(typeof window !== 'undefined' ? window : globalThis);
