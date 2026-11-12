@@ -43,6 +43,9 @@ Object.assign(TEXTURES, {
     for (let y = 8; y < 44; y += 12) for (let x = 2; x < 62; x += 8) { R(g, ['#f0ece0', '#e8c8c0', '#f4f0e8', '#c8d8e8'][alea() * 4 | 0], x, y, 7, 10); R(g, '#202020', x + 1, y + 1, 5, 2); R(g, ['#c83a2a', '#2a4a8a', '#404040'][alea() * 3 | 0], x + 1, y + 5, 5, 4); }
     R(g, '#0e2a1e', 0, 48, 64, 16);
   }],
+  // roof de péniche : bois verni à grosses fenêtres carrées et hublots, rideaux de couleur, quelques fenêtres allumées
+  roof: () => [64, 16, (g, { R, alea }) => { R(g, '#6a4a2a', 0, 0, 64, 16); for (let x = 0; x < 64; x += 2) R(g, '#5a3c22', x, 0, 1, 16);
+    for (let x = 3; x < 62; x += 8) { R(g, alea() < 0.3 ? '#ffd890' : '#24303a', x, 4, 5, 6); R(g, ['#c84a3a', '#e8d8a0', '#3a6a8a'][alea() * 3 | 0], x, 4, 1, 6); } R(g, '#2a2a2a', 0, 14, 64, 2); }],
   // pierre sculptée : figures en haut-relief, éclairées par-dessus (haut clair, bas ombré), sur fond de pierre de taille
   basRelief: () => [64, 64, (g, { R, alea, voile }) => {
     R(g, '#a89676', 0, 0, 64, 64);

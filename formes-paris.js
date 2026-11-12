@@ -15,6 +15,27 @@
     // kiosque à journaux : corps à panneaux, comptoir, toit en dôme à pans et lanternon
     kiosque: () => [['corps', 3, 2.6, 2.2, 0, 1.3, 0, null, 1], ['toit', 3.6, 0.25, 2.8, 0, 2.72, 0], ['toit', 3.1, 0.35, 2.3, 0, 3.0, 0], ['toit', 2.3, 0.35, 1.6, 0, 3.3, 0], ['toit', 1.3, 0.3, 0.9, 0, 3.58, 0],
       ['toit', 0.25, 0.7, 0.25, 0, 4.0, 0], ['comptoir', 2.4, 0.08, 0.5, 0, 1.1, 1.3], ['toit', 3.4, 0.08, 1.1, 0, 2.45, 1.55, [-0.3, 0, 0]]],
+    // pont de pierre sur la Seine, dans le repère de la route à l'entrée du tunnel (X en travers, positif côté ville ; Z vers l'arrière de la course) :
+    // culée côté ville, une arche par-dessus la voie sur berge, puis des arches surbaissées sur piles à avant-becs jusqu'à l'autre rive (L m) ; tablier à 12 m, parapets.
+    // y0 = altitude de l'eau sous la route (négatif). Zones : pierre, tablier (dessus de chaussée), fer (garde-corps, lampadaires)
+    pont: (L, y0) => {
+      const Z = 10, D = 16, B = [['pierre', 32, 13.5 - y0, D, 24.5, (13.5 + y0) / 2, Z, null, 1], ['tablier', L + 40, 0.3, D - 1.2, 40 - (L + 40) / 2, 13.65, Z], ['pierre', L + 40, 1.6, D, 40 - (L + 40) / 2, 12.7, Z, null, 1],
+        ...paire(sz => ['pierre', L + 40, 1.1, 0.6, 40 - (L + 40) / 2, 14.3, Z + sz * (D / 2 - 0.3)]), ['pierre', L + 41, 0.4, D + 0.8, 40 - (L + 40) / 2, 13.4, Z]];
+      const arche = (xa, xb, ys) => { const r = (xb - xa) / 2, m = (xa + xb) / 2; for (const a of [0.3, 0.6, 0.9, 1.2]) { const e = r * (1 - Math.cos(a)), y = ys + (12 - ys) * Math.sin(a) ** 0.8; B.push(...paire(sd => ['pierre', e, 12 - y, D, m + sd * (r - e / 2), (y + 12) / 2, Z])); } };
+      arche(-11, 8.5, 7); // par-dessus la voie sur berge
+      for (let x = -14, k = 0; x > -L; x -= 42, k++) {
+        B.push(['pierre', 6, 7 - y0 + 2, D, x, (7 + y0 - 2) / 2, Z, null, 1], ...paire(sz => ['pierre', 4.2, 7 - y0 + 2, 4.2, x, (7 + y0 - 2) / 2, Z + sz * (D / 2 + 1.4), [0, 0.785, 0]]));
+        if (x - 42 > -L) arche(x - 39, x - 3, 7);
+        B.push(...paire(sz => ['fer', 0.3, 5, 0.3, x, 16.5, Z + sz * (D / 2 - 0.3)]), ...paire(sz => ['lampe', 0.7, 0.8, 0.7, x, 19.2, Z + sz * (D / 2 - 0.3)]));
+      }
+      return B;
+    },
+    // péniche amarrée, origine à la ligne de flottaison, long dans l'axe X : coque noire, liston, pont de bois, timonerie à l'arrière, roof vitré, bacs de plantes
+    peniche: () => [['coque', 38, 2.4, 5.1, 0, -0.4, 0, null, 1], ['coque', 3, 2.4, 3.6, 19.5, -0.4, 0], ['liston', 38.2, 0.25, 5.3, 0, 0.85, 0], ['pont', 37, 0.1, 4.6, 0, 0.82, 0],
+      ['roof', 18, 1.6, 3.6, 2, 1.7, 0, null, 1], ['toit', 18.4, 0.15, 3.9, 2, 2.55, 0], ['roof', 4, 2.6, 3, -14.5, 2.2, 0, null, 1], ['toit', 4.4, 0.15, 3.4, -14.5, 3.55, 0],
+      ['plantes', 1.2, 0.7, 1.2, 14, 1.2, 1.5], ['plantes', 1.2, 0.9, 1.2, 15.8, 1.3, -1.4], ['plantes', 0.9, 0.6, 0.9, -8.5, 1.2, 1.7]],
+    // anneau d'amarrage de bronze scellé dans le mur de quai, origine au scellement, le mur est le plan X = 0, l'anneau pend vers -Y
+    anneau: () => [['fer', 0.25, 0.25, 0.25, 0, 0, 0], ...paire(sz => ['fer', 0.08, 0.5, 0.08, 0.12, -0.35, sz * 0.22]), ['fer', 0.08, 0.08, 0.5, 0.12, -0.6, 0]],
     // arc de triomphe : 45 m de large (X), 22 de profondeur (Z), 50 de haut. Grande arche de 14,6 m sous 29 m dans l'axe Z, arches latérales de 8,4 m sous 18,7 m dans l'axe X ;
     // quatre piles à socle et groupes sculptés, voûtes en gradins, corniche, frise, attique à écussons. Zones : pierre, relief (parties sculptées)
     arc: () => {
