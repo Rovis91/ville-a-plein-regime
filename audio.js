@@ -282,11 +282,12 @@
     station = (((i | 0) % ST.length) + ST.length) % ST.length;
     try { localStorage.setItem(RK(), station); } catch (e) { }
     if (!AC) { S16 = 60 / ST[station].bpm / 4; return; }
-    const t = AC.currentTime; // grésillement entre deux stations : la musique se coupe, friture qui balaie la bande, craquements
-    tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.setValueAtTime(0, t + 0.32); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.42); // shortcut: les nappes de l'ancienne station finissent de sonner après la friture (1 s au plus), à couper par un bus par station si ça s'entend
-    const f = nz(t, 0.36, 0.2, V.ui, 'bandpass', 900, 2); if (f) { f.frequency.exponentialRampToValueAtTime(3200, t + 0.16); f.frequency.exponentialRampToValueAtTime(1300, t + 0.34); }
-    for (let k = 0; k < 5; k++) nz(t + Math.random() * 0.3, 0.012, 0.25, V.ui, 'highpass', 2000);
-    if (!menu) retune(t + 0.34);
+    const t = AC.currentTime; // touche mécanique d'autoradio (enfoncement puis relâchement : clic sec, résonance de boîtier), bref grésillement, puis la station
+    for (const [dt, v] of [[0, 1], [0.09, 0.6]]) { nz(t + dt, 0.012, 0.9 * v, V.ui, 'bandpass', 2800, 1.5); nz(t + dt, 0.004, 0.5 * v, V.ui, 'highpass', 6000); osc('sine', 190, t + dt, 0.07, 0.35 * v, V.ui); osc('triangle', 620, t + dt, 0.03, 0.15 * v, V.ui); }
+    tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.setValueAtTime(0, t + 0.36); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.46); // shortcut: les nappes de l'ancienne station finissent de sonner après la friture (1 s au plus), à couper par un bus par station si ça s'entend
+    const f = nz(t + 0.14, 0.22, 0.2, V.ui, 'bandpass', 900, 2); if (f) { f.frequency.setValueAtTime(900, t + 0.14); f.frequency.exponentialRampToValueAtTime(3200, t + 0.24); f.frequency.exponentialRampToValueAtTime(1300, t + 0.36); }
+    for (let k = 0; k < 3; k++) nz(t + 0.14 + Math.random() * 0.2, 0.012, 0.25, V.ui, 'highpass', 2000);
+    if (!menu) retune(t + 0.38);
   }
   function carte(m) { // change de carte (banc d'écoute) : stations, ambiance et couleur du menu
     M = m; ST = M.radio; TH = M.th; station = 0;
