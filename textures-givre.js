@@ -9,15 +9,15 @@
       for (let i = 0; i < 36; i++) R(g, '#ffffff', alea() * 64 | 0, alea() * 64 | 0, 1, 1);
     }, 10],
     // glace vive sur la chaussée (14 m de large, 8 pixels par mètre) : sombre et lisse sur la neige claire, veines et fissures pâles, bords déchiquetés.
-    // L'alpha sert deux fois : 0 = pas de glace (pixel écarté par alphaTest), 0,5 = glace, que la lumière dynamique rend brillante comme une flaque.
+    // L'alpha sert deux fois : 0 = pas de glace (pixel écarté par alphaTest), 0,8 = glace, un peu luisante sous la lumière dynamique (plus brillante, elle renvoie le ciel et se confond de loin avec la neige).
     // bout = 1 : les 10 derniers mètres d'une plaque, en langues qui s'effilent vers le bas de la texture
     glaceVive: bout => [64, bout ? 80 : 256, (g, o) => {
-      const { R, alea, voile } = o, H = bout ? 80 : 256; R(g, '#1e3050', 0, 0, 64, H);
+      const { R, alea, voile } = o, H = bout ? 80 : 256; R(g, '#132240', 0, 0, 64, H);
       for (let i = 0; i < H * 2; i++) R(g, alea() < 0.5 ? '#182842' : '#2a4268', alea() * 64 | 0, alea() * H | 0, 1 + (alea() * 2 | 0), 3 + (alea() * 12 | 0)); // la glace est tirée dans le sens de la route
       voile(g, 0.5, () => { for (let i = 0; i < H / 20; i++) { let x = 6 + alea() * 52 | 0, y = alea() * H | 0; for (let k = 0; k < 26; k++) { R(g, '#b8d4f4', x, y, 1, 1); if (alea() < 0.5) x += alea() < 0.5 ? -1 : 1; y = (y + 1) % H; } } }); // fissures
       voile(g, 0.35, () => { for (let i = 0; i < H / 6; i++) R(g, '#dcecff', alea() * 62 | 0, alea() * H | 0, 2, 1); }); // givre accroché
       g.globalCompositeOperation = 'destination-out';
-      g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(0, 0, 64, H);
+      g.fillStyle = 'rgba(0,0,0,.2)'; g.fillRect(0, 0, 64, H);
       g.fillStyle = '#000';
       for (let y = 0; y < H; y += 4) { g.fillRect(0, y, 1 + (alea() * 5 | 0), 4); const w = 1 + (alea() * 5 | 0); g.fillRect(64 - w, y, w, 4); }
       if (bout) for (let x = 0; x < 64; x += 4) { const t = 14 + (alea() * 58 | 0); g.fillRect(x, t, 4, H - t); if (alea() < 0.5) g.fillRect(x + (alea() < 0.5 ? -2 : 4), t - 8, 2, 8); }
