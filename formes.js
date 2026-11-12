@@ -40,7 +40,7 @@
     // piste (W = demi-largeur de chaussée)
     portailTunnel: W => [['portail', 2 * W + 6, 4, 3, 0, 10, 0], ...paire(sd => ['portail', 3, 12, 3, sd * (W + 1.5), 6, 0])],
     // portique de départ, X en travers : deux pieds en treillis sur embases de béton hors des glissières, jambes de force, poutre treillis de 1,5 m (damier dessous),
-    // rampe de cinq feux sur chaque face, deux projecteurs par face inclinés vers la ligne, bandeau lumineux au nom de la carte ; damier au sol
+    // rampe de trois feux (ceux du décompte) sur chaque face, deux projecteurs par face inclinés vers la ligne, bandeau lumineux au nom de la carte ; damier au sol
     depart: W => {
       const xp = W + 2.2, L = 2 * xp + 1.5, dx = 2.8, dy = 2.7, jl = Math.hypot(dx, dy), ja = Math.atan2(dx, dy), th = 0.55;
       return [['sol', 2 * W, 0.06, 4, 0, 0, 0],
@@ -49,7 +49,7 @@
           ['acier', 0.22, jl, 0.22, sd * (xp - 0.75 - dx / 2), 4.5 + dy / 2, 0, [0, 0, sd * ja]]]).flat(),
         ['treillis', L, 1.5, 1.5, 0, 7.6, 0, null, 1], ...paire(a => paire(b => ['acier', L, 0.2, 0.2, 0, 7.6 + a * 0.75, b * 0.75])).flat(), ['damier', L - 1.5, 0.45, 1.6, 0, 6.95, 0],
         ['acier', 2 * W + 1.4, 1.9, 0.3, 0, 9.4, 0], ['nom', 2 * W + 1, 1.5, 0.4, 0, 9.4, 0],
-        ...paire(sz => [['boitier', 6.8, 1, 0.25, 0, 7.6, sz * 0.85], ...[-2, -1, 0, 1, 2].map(i => ['feu', 0.75, 0.75, 0.1, i * 1.3, 7.6, sz * 1.0]),
+        ...paire(sz => [['boitier', 5.6, 1.2, 0.25, 0, 7.6, sz * 0.85], ...[-1, 0, 1].map(i => ['feu' + (i + 1), 0.9, 0.9, 0.1, i * 1.7, 7.6, sz * 1.0]),
           ...paire(sx => { const x = sx * (W - 1.2), r = [sz * th, 0, 0]; return [['boitier', 1, 0.5, 0.7, x, 7.9, sz * 1.15, r], ['lampe', 0.85, 0.06, 0.55, x, 7.9 - 0.28 * Math.cos(th), sz * (1.15 - 0.28 * Math.sin(th)), r]]; }).flat()]).flat()];
     },
     portiquePub: W => [['ecran', 2 * W + 3, 4, 0.5, 0, 11.5, 0], ...paire(sd => ['beton', 0.8, 13.5, 0.8, sd * (W + 1.3), 6.75, 0])],

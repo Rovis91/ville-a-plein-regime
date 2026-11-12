@@ -322,13 +322,14 @@
       pose('portailTunnel', { portail: pm }, g, [0, 0, 0], W);
     }
   }
+  const FEUX = []; // les trois feux du portique, un par chiffre du décompte
   { // ligne et portique de départ
     const s = S[0], g = new THREE.Group(); g.position.set(s.x, s.y, s.z); g.rotation.y = across(s); scene.add(g);
     const css = n => '#' + n.toString(16).padStart(6, '0'), acc = css(TH.depart[0]), ossature = css(TH.depart[1]);
     pose('depart', {
       sol: mat('damierBande', { lum: 1, net: 1 }, TH.depart[2], 1), damier: mat('damierBande', { lum: 1, net: 1 }, TH.depart[2], 0.45),
       beton: mat('beton'), acier: mat('acier', { c: TH.depart[1] }), treillis: mat('treillisPortique', { alphaTest: 0.5, side: THREE.DoubleSide }, ossature),
-      nom: mat('bandeauNom', { lum: 1, net: 1 }, acc, M.nom, TH.depart[2]), boitier: mat('matGris'), feu: mat('feuRouge', { lum: 1 }), lampe: mat('lampe', { lum: 1 }),
+      nom: mat('bandeauNom', { lum: 1, net: 1 }, acc, M.nom, TH.depart[2]), boitier: mat('matGris'), feu0: FEUX[0] = mat('peinture', { lum: 1 }), feu1: FEUX[1] = mat('peinture', { lum: 1 }), feu2: FEUX[2] = mat('peinture', { lum: 1 }), lampe: mat('lampe', { lum: 1 }),
     }, g, [0, 0, 0], W);
     lum(0, s.x, s.y + 8, s.z, 0xfff2d0, 24, 1.3);
   }
@@ -771,6 +772,7 @@
       else if (k !== shown) { shown = k; SON.beep(440); }
     }
     if (goT > 0) goT -= dt;
+    FEUX.forEach((m, i) => m.color.setHex(goT > 0 ? 0x30ff60 : state === 'count' && shown && shown <= 3 - i ? 0xff2030 : 0x3a0810)); // décompte 3, 2, 1 : un feu de plus à chaque chiffre ; vert au GO
     const keyIn = input();
     const inp = state === 'race' ? (AUTO || raceEnd ? autopilot(car, T, 1, M.trafic && !race ? trafic(T, tTraf) : []) : keyIn) : { steer: 0, gas: 0, brake: 0, hand: false };
     let hit = 0, bump = 0;
