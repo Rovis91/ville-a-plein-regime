@@ -31,13 +31,16 @@
   // Terrain : un champ de hauteur qui passe par la route. Chaque sommet prend l'altitude des portions de route voisines (moyenne pondérée par
   // la distance) : la route se retrouve posée sur une pente, les lacets empilés deviennent des terrasses, un canal se creuse entre deux voies.
   // o = { pas, marge, mat, loin, chute (au-delà de `loin` mètres de la route, le sol descend de `chute` m par mètre), creux(x, z),
-  //       sol(s) = altitude du sol sous l'échantillon s quand la route n'est pas posée dessus (viaduc, pont) }
+  //       sol(s) = altitude du sol sous l'échantillon s quand la route n'est pas posée dessus (viaduc, pont),
+  //       sous = pente (touge seul) : plafonne chaque sommet sous toute la route proche, puis remonte de `sous` m par mètre ; les triangles ne passent plus sur une chaussée en contrebas (lacets) }
   // Renvoie hAt(x, z) = altitude du sol et dAt(x, z) = distance à la route, pour y poser le décor.
   function terrain(h, o) {
     const { THREE, S, W } = h, pas = o.pas, sol = o.sol || (s => s.y);
     let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const s of S) { x0 = Math.min(x0, s.x); x1 = Math.max(x1, s.x); z0 = Math.min(z0, s.z); z1 = Math.max(z1, s.z); }
     x0 -= o.marge; z0 -= o.marge; x1 += o.marge; z1 += o.marge;
     const nx = Math.ceil((x1 - x0) / pas) + 1, nz = Math.ceil((z1 - z0) / pas) + 1, Y = new Float32Array(nx * nz), D = new Float32Array(nx * nz), sub = S.filter((s, i) => i % 3 === 0).map(s => ({ x: s.x, z: s.z, g: sol(s), pose: sol(s) > s.y - 0.5 }));
+    const R = pas * 1.42 + W + 1, RC = R + 48, cases = new Map(); // R : distance max entre un sommet d'un triangle qui touche la chaussée et l'échantillon de route de ce point
+    if (o.sous) for (const s of S) { const c = Math.floor(s.x / RC) * 1e4 + Math.floor(s.z / RC); if (!cases.has(c)) cases.set(c, []); cases.get(c).push(s); } // la route rangée par cases de RC mètres
     const pos = new Float32Array(nx * nz * 3), uv = new Float32Array(nx * nz * 2), idx = [];
     for (let iz = 0; iz < nz; iz++) for (let ix = 0; ix < nx; ix++) {
       const x = x0 + ix * pas, z = z0 + iz * pas, k = iz * nx + ix; let sw = 0, sy = 0, dm = 1e18, pm = null;
@@ -46,7 +49,11 @@
       if (d < W + 1 && pm.pose) y -= 1.5; // sous la chaussée : on creuse, la route et ses murets cachent le raccord
       if (o.loin && d > o.loin) y -= (d - o.loin) * o.chute;
       if (o.creux) y -= o.creux(x, z);
-      Y[k] = y; D[k] = d; pos.set([x, y, z], k * 3); uv.set([x / 10, z / 10], k * 2);
+      if (o.sous && d < R) y = Math.max(y, pm.g - 1.7); // assez haut pour que le pied des murets ne flotte pas
+      if (o.sous && d < RC) for (let cz = -1; cz <= 1; cz++) for (let cx = -1; cx <= 1; cx++) for (const s of cases.get((Math.floor(x / RC) + cx) * 1e4 + Math.floor(z / RC) + cz) || []) {
+        const e = Math.hypot(s.x - x, s.z - z); if (e < RC) y = Math.min(y, s.y - 0.3 + Math.max(0, e - R) * o.sous); // au-delà de RC la remontée dépasse tout dénivelé de la carte
+      }
+      Y[k] = y; D[k] = d; pos.set([x, y, z], k * 3); uv.set(o.sous ? [(x + y) / 10, (z + y) / 10] : [x / 10, z / 10], k * 2); // touge : la texture suit aussi la hauteur, sans s'étirer sur les parois raides
       if (ix < nx - 1 && iz < nz - 1) idx.push(k, k + nx, k + 1, k + 1, k + nx, k + nx + 1);
     }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
@@ -58,22 +65,85 @@
     return { hAt: lire(Y), dAt: lire(D), box: [x0, z0, x1, z1] };
   }
 
+  // La mégapole de nuit en contrebas du touge, à l'ouest des lacets : un éventail de 1 050 à 2 300 m de leur milieu, hors brouillard.
+  // Tout en points (nets à toute distance, une passe de dessin par taille) : rues en quadrillage, grands axes à deux sens de feux, quartiers de tours
+  // (silhouettes sombres piquées de fenêtres, feu rouge au sommet) ; la baie et les parcs restent noirs. Son sol remonte doucement vers l'horizon
+  // pour que le tapis de lumières aille jusqu'à lui. Renvoie la matière des feux rouges, qui clignotent.
+  function ville(h) {
+    const { THREE } = h, C = [460, 430], A = [], B = [], F = [], R = []; // A : petits points ; B : axes ; F : fenêtres ; R : feux rouges
+    let sd = 91; const al = () => (sd = sd * 1664525 + 1013904223 >>> 0) / 4294967296; // hasard propre à la ville : ne décale pas rnd
+    const pol = (deg, r) => [C[0] + Math.cos(deg / 57.3) * r, C[1] + Math.sin(deg / 57.3) * r];
+    const alt = r => -110 + (r - 1050) * 0.075 + Math.max(0, r - 1900) * 0.08, y0 = (x, z) => alt(Math.hypot(x - C[0], z - C[1]));
+    const baie = pol(210, 2250), parcs = Array.from({ length: 16 }, () => [...pol(100 + al() * 160, 1150 + al() * 1100), 50 + al() * 90]);
+    const centres = [[172, 1350, 1], [150, 1850, 0.9], [190, 2050, 1], [132, 1500, 0.6], [238, 1450, 0.7], [115, 2100, 0.6]].map(([a, r, f]) => [...pol(a, r), f]);
+    const dans = (x, z) => { const r = Math.hypot(x - C[0], z - C[1]); return r > 1050 && r < 2300 && (x - C[0]) / r < -0.17 && ((x - baie[0]) / 650) ** 2 + ((z - baie[1]) / 450) ** 2 > 1 && parcs.every(([px, pz, pr]) => (x - px) ** 2 + (z - pz) ** 2 > pr * pr); };
+    const dens = (x, z) => Math.min(1, 0.4 + centres.reduce((a, [cx, cz, f]) => a + f * 0.7 * Math.exp(-((x - cx) ** 2 + (z - cz) ** 2) / 2.5e5), 0));
+    const met = (L, x, z, dy, c, k = 0.55 + al() * 0.45) => L.push(x, y0(x, z) + dy, z, (c >> 16 & 255) / 255 * k, (c >> 8 & 255) / 255 * k, (c & 255) / 255 * k);
+    const teinte = () => { const u = al(); return u < 0.68 ? 0xffa850 : u < 0.93 ? 0xe0e8ff : 0x8fd8ff; }; // sodium, LED, quelques néons
+    // quadrillage de rues, tourné : un lampadaire tous les 7 m ; une rue sur six est une avenue, plus claire et plus dense
+    const ca = Math.cos(0.35), sa = Math.sin(0.35);
+    for (const sens of [0, 1]) for (let u = -2600, k = 0; u < 2600; u += 55 + al() * 55, k++) {
+      const av = k % 6 === 0;
+      for (let v = -2600; v < 2600; v += av ? 4 : 7) {
+        const [a, b] = sens ? [u, v] : [v, u], x = C[0] + a * ca - b * sa, z = C[1] + a * sa + b * ca;
+        if (dans(x, z) && al() < dens(x, z)) met(av ? B : A, x, z, 1, av ? 0xffd090 : teinte());
+      }
+    }
+    // l'intérieur des îlots : fenêtres éparses, plus faibles
+    for (let k = 0; k < 30000; k++) { const [x, z] = pol(100 + al() * 160, 1050 + al() * 1250); if (dans(x, z) && al() < dens(x, z) - 0.25) met(A, x, z, 2 + al() * 12, al() < 0.8 ? 0xffd8a0 : 0xd0e0ff, 0.25 + al() * 0.35); }
+    // voies express : deux périphériques et quatre radiales, phares blancs d'un côté, feux rouges de l'autre
+    const voie = (pts, pas) => { for (let i = 0; i < pts.length - 1; i++) { const [x0, z0] = pts[i], [x1, z1] = pts[i + 1], L = Math.hypot(x1 - x0, z1 - z0), nx = (z1 - z0) / L * 6, nz = -(x1 - x0) / L * 6;
+      for (let t = 0; t < L; t += pas) { const x = x0 + (x1 - x0) * t / L, z = z0 + (z1 - z0) * t / L; if (!dans(x, z)) continue; if (al() < 0.7) met(B, x + nx, z + nz, 8, 0xfff4e0); if (al() < 0.7) met(B, x - nx, z - nz, 8, 0xff3020); } } };
+    for (const r of [1400, 1900]) voie(Array.from({ length: 41 }, (_, i) => pol(100 + i * 4, r)), 3.5);
+    for (const a of [125, 160, 200, 245]) voie([pol(a, 1060), pol(a + 4, 1700), pol(a - 3, 2290)], 3.5);
+    // la baie : un quai éclairé tout autour, des bateaux, un pont qui la traverse
+    const dansR = (x, z) => { const r = Math.hypot(x - C[0], z - C[1]); return r > 1050 && r < 2300; };
+    for (let t = 0; t < 6.283; t += 0.004) { const x = baie[0] + Math.cos(t) * 655, z = baie[1] + Math.sin(t) * 455; if (dansR(x, z)) met(B, x, z, 2, al() < 0.6 ? 0xffb860 : 0xffffff); }
+    for (let k = 0; k < 14; k++) { const t = al() * 6.283, q = al() * 0.8, x = baie[0] + Math.cos(t) * 650 * q, z = baie[1] + Math.sin(t) * 450 * q; if (dansR(x, z)) met(B, x, z, 1, [0xffffff, 0xff4030, 0x40ff80][k % 3]); }
+    { const x0 = baie[0] + Math.cos(0.9) * 655, z0 = baie[1] + Math.sin(0.9) * 455, x1 = baie[0] + Math.cos(2.6) * 655, z1 = baie[1] + Math.sin(2.6) * 455;
+      for (let t = 0; t <= 1; t += 0.004) { const x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t; if (dansR(x, z)) met(B, x, z, 30 + 20 * Math.sin(t * Math.PI), 0xffd890, 0.95); } }
+    // quartiers de tours : silhouettes sombres (elles cachent la ville derrière elles), fenêtres sur les trois faces tournées vers le col, feu rouge au sommet
+    const tours = [], lueur = () => { const u = al(), k = 0.6 + al() * 0.4; return u < 0.6 ? [k, k * 0.85, k * 0.6] : u < 0.9 ? [k * 0.8, k * 0.9, k] : [k * 0.4, k * 0.9, k]; };
+    for (const [cx, cz, f] of centres) for (let k = 0; k < 70 * f; k++) {
+      const a = al() * 6.283, d = Math.sqrt(-2 * Math.log(1 - al() * 0.99)) * 120, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
+      if (!dans(x, z)) continue;
+      const w = 22 + al() * 24, p = 22 + al() * 24, ht = 40 + f * 230 * Math.exp(-d * d / 3e4) * (0.4 + al() * 0.6), b = y0(x, z);
+      tours.push([x, b + ht / 2, z, w, ht, p]);
+      for (let e = 4; e < ht - 2; e += 6) {
+        for (let c = -p / 2 + 3; c < p / 2 - 1; c += 5.5) if (al() < 0.22) F.push(x + w / 2 + 0.4, b + e, z + c, ...lueur()); // face est, vers le col
+        for (const s of [-1, 1]) for (let c = -w / 2 + 3; c < w / 2 - 1; c += 5.5) if (al() < 0.15) F.push(x + c, b + e, z + s * (p / 2 + 0.4), ...lueur());
+      }
+      if (ht > 140) R.push(x, b + ht + 1, z, 1, 1, 1);
+    }
+    const sil = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0x04060a, fog: false }), Math.max(1, tours.length)), o = new THREE.Object3D();
+    tours.forEach((t, i) => { o.position.set(t[0], t[1], t[2]); o.scale.set(t[3], t[4], t[5]); o.updateMatrix(); sil.setMatrixAt(i, o.matrix); }); sil.count = tours.length; sil.frustumCulled = false; h.scene.add(sil);
+    const nuage = (L, size) => { // une passe de dessin : des points de taille fixe à l'écran, donc nets à toute distance. Élément : x, y, z, r, v, b
+      const g = new THREE.BufferGeometry(), n = L.length / 6, P = new Float32Array(n * 3), Q = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { P.set(L.slice(i * 6, i * 6 + 3), i * 3); Q.set(L.slice(i * 6 + 3, i * 6 + 6), i * 3); }
+      g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('color', new THREE.BufferAttribute(Q, 3));
+      const m = new THREE.PointsMaterial({ size, sizeAttenuation: false, fog: false, vertexColors: true }), pts = new THREE.Points(g, m); pts.frustumCulled = false; h.scene.add(pts); return m;
+    };
+    nuage(A, 1.5); nuage(B, 2); nuage(F, 1);
+    return nuage(R, 3); // la couleur de la matière multiplie celle des points : le tick la fait clignoter
+  }
+
   window.DECORS = {
     // ---------- Karasu-tōge : forêt de cèdres, glissières à catadioptres, et au sommet un carrefour : supérette de nuit, station-service, voitures garées ----------
     touge(h) {
       const { THREE, S, N, W, rnd } = h;
-      const g = terrain(h, { pas: 14, marge: 320, loin: 150, chute: 0.45, mat: h.mat('bruit', {}, '#0c1a14', ['#12261e', '#081410', '#16302a']) });
+      const g = terrain(h, { pas: 7, sous: 6, marge: 320, loin: 150, chute: 0.45, mat: h.mat('bruit', {}, '#0c1a14', ['#12261e', '#081410', '#16302a']) });
       // le carrefour : sur le plateau du sommet, côté extérieur. Une route de traverse y part, barrée.
       const ic = pt(h, 11), sc = S[ic], sd = g.dAt(...bord(sc, 1, 60)) > g.dAt(...bord(sc, -1, 60)) ? 1 : -1, [cx, cz] = bord(sc, sd, W + 22);
-      // cèdres : une rangée serrée le long de la route (le tunnel d'arbres), puis la forêt ; rien sur le carrefour
-      const arbres = [], libre = (x, z) => (x - cx) ** 2 + (z - cz) ** 2 > 46 * 46;
+      // cèdres : une rangée serrée le long de la route (le tunnel d'arbres), puis la forêt ; rien sur le carrefour.
+      // Dans les lacets, rien côté vallée (ouest) et des cèdres plus petits côté amont, dont la cime reste sous le regard du lacet du dessus ; de jeunes plants sur la pente en contrebas : on voit la ville par-dessus
+      const arbres = [], lacets = (x, z) => x > 372 && x < 552 && z > 300 && z < 560, plants = (x, z) => x > 100 && x < 552 && z > 260 && z < 640, libre = (x, z) => (x - cx) ** 2 + (z - cz) ** 2 > 46 * 46;
       for (let i = 0; i < N; i += 3) for (const side of [-1, 1]) {
         const [x, z] = bord(S[i], side, W + 4.5 + rnd() * 7);
-        if (g.dAt(x, z) > W + 3.5 && libre(x, z)) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, 0.8 + rnd() * 0.7]);
+        if (g.dAt(x, z) > W + 3.5 && libre(x, z) && !(lacets(x, z) && x < S[i].x - 3)) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, (0.8 + rnd() * 0.7) * (plants(x, z) && x < 545 ? (lacets(x, z) ? 0.75 : 0.4) : 1)]);
       }
       for (let k = 0; k < 2600; k++) {
         const x = g.box[0] + rnd() * (g.box[2] - g.box[0]), z = g.box[1] + rnd() * (g.box[3] - g.box[1]), d = g.dAt(x, z);
-        if (d > W + 6 && d < 230 && libre(x, z)) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, 0.9 + rnd() * 0.9]);
+        if (d > W + 6 && d < 230 && libre(x, z) && (!lacets(x, z) || (d < 17 && g.dAt(x - 2, z) < d))) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, (0.9 + rnd() * 0.9) * (lacets(x, z) ? 0.75 : plants(x, z) || (x > -100 && x < 552 && z > 200 && z < 700) ? 0.4 : 1)]);
       }
       const fûts = arbres.map(p => { const y0 = p[1] - 6; p[1] = y0 + 11 * p[4]; return [p[0], y0 + 2.6 * p[4], p[2], 0, p[4]]; }); // le houppier monte sur un fût nu, comme un vrai cèdre du Japon
       inst(h, h.geo('cedre'), h.mat('cedre'), arbres); inst(h, h.geo('tronc'), h.mat('tronc'), fûts);
@@ -102,12 +172,8 @@
       for (const dz of [-16.5, -13.5, -10.5, -7.5]) h.pose('cone', cone, gr, [X(41.5), 0.5, dz]);
       gr.updateMatrixWorld(); // la vitrine et l'auvent éclairent l'esplanade, la route et les voitures qui passent
       for (const [lx, lz, col, d] of [[27, -8, 0xdfefff, 46], [15, 15, 0xffe0a0, 34], [3, 0, 0xdfefff, 22]]) { const p = gr.localToWorld(new THREE.Vector3(X(lx), 4.5, lz)); h.lum(ic, p.x, p.y, p.z, col, d, 3); }
-      // la ville, tout en bas : un semis de points chauds hors brouillard
-      const P = [];
-      for (let i = 0; i < 900; i++) { const a = rnd() * 6.283, r = 500 + rnd() * rnd() * 1500; P.push(-500 + Math.cos(a) * r * 1.3, -190 - rnd() * 30, 200 + Math.sin(a) * r); }
-      const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-      const pts = new THREE.Points(pg, new THREE.PointsMaterial({ color: 0xffc070, size: 1.5, sizeAttenuation: false, fog: false })); pts.frustumCulled = false; h.scene.add(pts);
-      return (dt, now) => { cligno.color.setHex((now / 450 & 1) ? 0xff8c1a : 0x3a2008); };
+      const rouge = ville(h); // la mégapole en contrebas, à l'ouest des lacets
+      return (dt, now) => { cligno.color.setHex((now / 450 & 1) ? 0xff8c1a : 0x3a2008); rouge.color.setHex(now % 1500 < 700 ? 0xff2018 : 0x300404); };
     },
 
     // ---------- Wan-9 : la ville au nord, le chenal, l'île du port au sud. Voie rapide du front de mer, pont à haubans, quais à conteneurs,
