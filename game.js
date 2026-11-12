@@ -636,7 +636,7 @@
   let hidPad = null;
   const hidLire = e => {
     if (e.reportId !== 0x3f || !hidPad) return; const d = new Uint8Array(e.data.buffer, e.data.byteOffset), h = d[2], set = (i, v) => { hidPad.buttons[i].pressed = !!v; hidPad.buttons[i].value = v ? 1 : 0; };
-    for (let i = 0; i < 6; i++) set(i, d[0] & 1 << i); set(9, d[1] & 3);
+    [4, 0, 2, 5, 3, 1].forEach((b, i) => set(b, d[0] & 1 << i)); set(9, d[1] & 3); // bits A, X, B, Y, SL, SR -> rapport -, gaz et valider, frein, rapport +, radio, glisse (choix de l'auteur)
     hidPad.axes = [h > 0 && h < 4 ? 1 : h > 4 && h < 8 ? -1 : 0, h === 7 || h < 2 ? -1 : h > 2 && h < 6 ? 1 : 0];
   };
   const hidOuvre = async d => {

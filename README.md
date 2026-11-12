@@ -39,7 +39,7 @@ puis ouvrir http://localhost:8123/.
 | Échap ou P | menu pause (reprendre, recommencer, boîte, radio, musique, fantôme, quitter) |
 | R | recommencer |
 | Manette | stick ou croix : volant et menus · ZR ou B : gaz · ZL ou Y : frein · A : glisse · X : radio · L / R : rapports · + : pause · B : valider |
-| Joy-Con seul, à l'horizontale | touche J une fois pour l'autoriser (Chrome ou Edge) · stick : volant et menus · bouton du bas : gaz et valider · gauche : frein · droite : glisse · haut : radio · SL / SR : rapports · + ou − : pause |
+| Joy-Con seul, à l'horizontale | touche J une fois pour l'autoriser (Chrome ou Edge) · stick : volant et menus · X : gaz et valider · B : frein · SR : glisse · SL : radio · Y / A : rapport supérieur / inférieur · + ou − : pause |
 
 Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/E sur un clavier QWERTY. Les autres commandes sont lues par la lettre tapée.
 
