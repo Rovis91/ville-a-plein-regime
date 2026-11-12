@@ -118,16 +118,84 @@
     c.vf = vf; c.vl = vl;
   }
 
-  // Pilote automatique : sert au test node, au mode ?auto et à ramener la voiture après l'arrivée.
-  function autopilot(c, T) {
-    const S = T.S, n = T.n, sp = Math.hypot(c.vx, c.vz);
-    const la = S[(c.idx + 6 + Math.floor(sp * 0.35)) % n];
-    const e = wrap(Math.atan2(la.z - c.z, la.x - c.x) - c.th);
+  // Pilote automatique : sert au test node, au mode ?auto, à ramener la voiture après l'arrivée, et aux adversaires en course.
+  // lvl = niveau du pilote (1 = tour propre de référence ; plus bas = moins de gaz et virages plus lents).
+  // others = voitures à éviter : il se décale pour doubler une voiture plus lente, ne se rabat pas tant qu'elle est à sa hauteur, et freine s'il est bloqué derrière.
+  function autopilot(c, T, lvl = 1, others = []) {
+    const S = T.S, n = T.n, sp = Math.hypot(c.vx, c.vz), look = 6 + Math.floor(sp * 0.35);
+    let off = 0, vcap = 1e9, best = 1e9;
+    for (const o of others) {
+      if (o === c) continue;
+      const g = ((o.idx - c.idx + n + n / 2) % n) - n / 2, so = Math.hypot(o.vx, o.vz); // écart le long de la piste, en échantillons de 2 m
+      if (g < -3 || g > 8 + sp * 0.7 || g >= best || (g > 3 && so >= sp)) continue;
+      best = g;
+      let side = Math.abs(c.d - o.d) > 1 ? Math.sign(c.d - o.d) : o.d > 0 ? -1 : 1; // déjà d'un côté : y rester ; sinon passer là où il y a de la place
+      if (g > 3 && Math.abs(o.d + side * 3.4) > 5.5) side = -side; // pas la place de ce côté et encore derrière : passer de l'autre
+      const want = o.d + side * 3.4; // rester sur la trajectoire, sauf à moins de 3,4 m d'elle : alors s'en écarter d'autant
+      off = clamp(side > 0 ? Math.max(0, want) : Math.min(0, want), -5.5, 5.5);
+      // serré contre le mur à sa hauteur : céder ; bloqué derrière elle : freiner à temps et régler sa vitesse sur la sienne
+      vcap = g > 0 && Math.abs(want) > 5.5 ? so * 0.9 : g > 0 && Math.abs(c.d - o.d) < 2.4 && g * 2 - 7 < (sp * sp - so * so) / 28 ? so : 1e9;
+    }
+    const la = S[(c.idx + look) % n];
+    const e = wrap(Math.atan2(la.z + la.tx * off - c.z, la.x - la.tz * off - c.x) - c.th);
     let km = 0;
     for (let j = 0; j < 8 + sp * 0.7; j++) km = Math.max(km, Math.abs(S[(c.idx + j) % n].k));
-    const vt = Math.sqrt(1.5 * GRIP / (km + 1e-4));
-    return { steer: clamp(e * 3, -1, 1), gas: sp < vt ? 1 : 0, brake: sp > vt + 3 ? 1 : 0, hand: false };
+    const vt = Math.min(vcap, Math.sqrt(1.5 * GRIP / (km + 1e-4)) * lvl * (off ? 0.9 : 1)); // hors trajectoire, on passe moins vite
+    return { steer: clamp(e * 3, -1, 1), gas: sp < vt ? lvl : 0, brake: sp > vt + 3 ? 1 : 0, hand: false };
   }
 
-  Object.assign(G, { buildTrack, newCar, step, autopilot, TOP, CARD });
+  // ---------- Course contre des adversaires IA ----------
+  // API pour game.js (aucun rendu ici) :
+  //   R = newRace(T, laps = 3, lvls = AI_LVL)  crée la course. R.cars[0] = joueur (dernier sur la grille), R.cars[1..] = adversaires, le plus rapide en tête.
+  //   stepRace(R, inp, dt)                     avance toutes les voitures d'un pas (dt = 1/120). inp = commandes du joueur, comme step() ;
+  //                                            inp = null : le joueur est conduit par l'IA (mode ?auto, ou après son arrivée). Ne pas appeler pendant le décompte.
+  //   R.t = temps de course (s) ; R.done = true quand tout le monde est arrivé ; R.laps = nombre de tours.
+  //   Par voiture, en plus des champs de newCar() (x, z, th, vf, rpm, drift, hit...) :
+  //     c.pos  = place en direct (1 = premier)     c.lap = tour en cours (1..laps)
+  //     c.fin  = temps final (s), 0 tant qu'elle n'est pas arrivée ; après l'arrivée la voiture continue de rouler
+  //     c.bump = vitesse d'impact (m/s) d'un choc contre une autre voiture pendant ce pas, sinon 0 (c.hit reste le choc contre un mur)
+  //     c.dist = progression en échantillons de 2 m depuis la ligne (tours cumulés) ; c.lvl = niveau du pilote
+  //   raceOrder(R) = les voitures triées par place.
+  const AI_LVL = [0.99, 0.97, 0.95]; // niveau de chaque adversaire : le seul réglage de rythme (1 = tour propre du pilote automatique)
+  const CR = 1.1, CO = 1.2; // une voiture = 2 cercles de rayon CR, à ±CO m le long de son axe (4,6 m × 2,2 m)
+
+  function newRace(T, laps = 3, lvls = AI_LVL) {
+    const cars = [1, ...lvls].map((lvl, i) => {
+      const c = newCar(T), k = i ? i - 1 : lvls.length, j = T.n - 8 - 4 * k, s = T.S[j], d = k % 2 ? 3 : -3; // grille en quinconce, 8 m entre deux places
+      return Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, th: Math.atan2(s.tz, s.tx), idx: j, dist: -8 - 4 * k, d, lvl, pos: k + 1, lap: 1, fin: 0, bump: 0 });
+    });
+    return { T, cars, laps, t: 0, done: false };
+  }
+
+  const raceOrder = R => [...R.cars].sort((a, b) => (a.fin || 1e9) - (b.fin || 1e9) || b.dist - a.dist);
+
+  // Choc entre deux voitures de même masse : on les écarte de moitié chacune et on échange la vitesse le long de la normale (rebond de 20 %).
+  // La vitesse tangentielle est conservée : un contact latéral pousse sans freiner.
+  function collide(a, b) {
+    for (const i of [-CO, CO]) for (const j of [-CO, CO]) {
+      const dx = b.x + Math.cos(b.th) * j - a.x - Math.cos(a.th) * i, dz = b.z + Math.sin(b.th) * j - a.z - Math.sin(a.th) * i, d = Math.hypot(dx, dz);
+      if (d >= 2 * CR) continue;
+      const nx = d > 1e-6 ? dx / d : 1, nz = d > 1e-6 ? dz / d : 0, o = CR - d / 2, vn = (a.vx - b.vx) * nx + (a.vz - b.vz) * nz;
+      a.x -= nx * o; a.z -= nz * o; b.x += nx * o; b.z += nz * o;
+      if (vn > 0) { a.vx -= nx * vn * 0.6; a.vz -= nz * vn * 0.6; b.vx += nx * vn * 0.6; b.vz += nz * vn * 0.6; a.bump = b.bump = Math.max(a.bump, vn); }
+    }
+  }
+
+  function stepRace(R, inp, dt) {
+    const { T, cars } = R;
+    R.t += dt;
+    const ins = cars.map((c, i) => i || !inp ? autopilot(c, T, c.lvl, cars) : inp);
+    for (const c of cars) c.bump = 0;
+    // les chocs entre voitures d'abord, puis step() : les murs ont le dernier mot, aucune voiture ne peut être poussée hors piste
+    for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) collide(cars[i], cars[j]);
+    cars.forEach((c, i) => {
+      step(c, ins[i], T, dt);
+      c.lap = clamp(Math.floor(c.dist / T.n) + 1, 1, R.laps);
+      if (!c.fin && c.dist >= R.laps * T.n) c.fin = R.t;
+    });
+    raceOrder(R).forEach((c, i) => c.pos = i + 1);
+    R.done = cars.every(c => c.fin);
+  }
+
+  Object.assign(G, { buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, AI_LVL, TOP, CARD });
 })(typeof window !== 'undefined' ? window : globalThis);
