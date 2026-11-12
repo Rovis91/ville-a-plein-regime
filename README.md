@@ -1,4 +1,61 @@
-# Ville à plein régime
+<p align="center"><img src="icon.svg" width="96" alt="icône"></p>
+
+<h1 align="center">VILLE À PLEIN RÉGIME</h1>
+<p align="center"><b>夜間タイムアタック</b> · <i>contre-la-montre nocturne</i></p>
+
+<p align="center"><img src="docs/titre.png" alt="Écran titre"></p>
+
+<p align="center"><b>★ ★ ★ NOUVEAU ! ★ ★ ★</b><br>
+<b>LA NUIT EST À VOUS. LA VILLE AUSSI.</b></p>
+
+---
+
+### 🌃 Minuit. Les néons s'allument. Le compte-tours grimpe.
+
+Prenez le volant d'une bête de 500 chevaux et lâchez-la dans les artères d'une mégalopole cyberpunk qui ne dort jamais. Pluie, gratte-ciel, enseignes en katakana : chaque virage est une carte postale, chaque ligne droite une invitation à passer la sixième.
+
+<p align="center"><img src="docs/course-1.png" alt="En course, les adversaires dans les rétros"></p>
+
+### 🏁 DEUX MODES DE JEU EXPLOSIFS !
+
+- **CONTRE-LA-MONTRE** : enchaînez les tours, battez vos records… puis battez votre propre **fantôme** !
+- **COURSE** : 3 tours, 3 rivaux sans pitié. **KENJI**, **REI** et **JUN** ne vous feront aucun cadeau.
+
+<p align="center"><img src="docs/depart.png" alt="La grille de départ"></p>
+
+### ⚙️ UNE MÉCANIQUE DE PRO
+
+- Boîte **automatique ou manuelle** : passez vos rapports comme un vrai pilote !
+- **Frein à main** et glisses contrôlées : prenez les épingles en travers !
+- Physique inspirée d'une **vraie GT japonaise** : couple, rapports, aéro, tout y est !
+- Frottez les murs… et regardez voler les **étincelles** !
+
+<p align="center"><img src="docs/course-2.png" alt="233 km/h dans les rues de la ville"></p>
+
+### 📻 3 STATIONS DE RADIO EN DIRECT
+
+La bande-son est **composée en temps réel** et **réagit à votre conduite**. Plus vous appuyez, plus elle s'emballe ! Branchez-vous sur **NIGHT CITY FM** ou zappez d'une touche.
+
+<p align="center"><img src="docs/arrivee.png" alt="Classement à l'arrivée"></p>
+
+### 💾 AUCUNE INSTALLATION !
+
+Pas de disquette, pas de CD, pas de téléchargement de 40 Go. **Un navigateur, et c'est parti.**
+
+| | |
+|---|---|
+| 🎮 Genre | Course arcade |
+| 👤 Joueurs | 1 |
+| 🖥️ Plateforme | Tout navigateur moderne |
+| ⏱️ Chargement | Instantané |
+| 💰 Prix | **GRATUIT** |
+
+<p align="center"><b>DISPONIBLE DÈS MAINTENANT DANS TOUS LES BONS NAVIGATEURS.</b><br>
+<sub>Le pilotage nocturne doit se pratiquer en toute sécurité, sur écran uniquement.</sub></p>
+
+---
+
+# Pour les développeurs
 
 Jeu de course arcade solo, de nuit dans une ville cyberpunk en 3D pixelisée. Un circuit, une voiture, une radio à trois stations dont la musique réagit à la course. Deux modes, à choisir sur l'écran titre : contre-la-montre à tours enchaînés (records et fantôme), ou course de 3 tours contre 3 adversaires pilotés par l'ordinateur.
 
@@ -36,7 +93,9 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 
 | Fichier | Rôle |
 |---|---|
-| `index.html` | page, polices, ordre de chargement des scripts |
+| `index.html` | page, polices, icône, ordre de chargement des scripts |
+| `icon.svg` | icône de l'app (favicon) |
+| `docs/` | captures d'écran du README |
 | `sim.js` | **circuit et physique**, sans aucun rendu : tracé, voiture, moteur et boîte, glisse, murs, pilote automatique, course (adversaires, chocs entre voitures, classement). Partagé entre le jeu et les tests. |
 | `game.js` | tout le reste : rendu three.js, effets, audio, interface, commandes, boucle de jeu |
 | `samples.js` | sons de batterie encodés en base64 (généré depuis `samples/`) |
