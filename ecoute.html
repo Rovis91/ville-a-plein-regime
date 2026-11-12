@@ -97,10 +97,14 @@
     mi: ['mot', 'Mi-régime en charge', '4 500 tr/min, plein gaz', ['mot'], 11, () => course({ rpm: 0.55 })],
     haut: ['mot', 'Haut régime en charge', '7 500 tr/min, plein gaz', ['mot'], 10, () => course({ rpm: 0.94 })],
     reglable: ['mot', 'Moteur réglable', 'curseur de régime et case gaz ci-dessous', ['mot'], 10, () => course({ rpm: u.rpm, load: u.gaz ? 1 : 0, gas: u.gaz ? 1 : 0 })],
-    montee: ['mot', 'Montées de rapport', 'accélération, un rapport toutes les 2,5 s', ['mot'], 6, x => { const p = dents(x, 2.5), cut = p < 0.08; if (cut && !pulse.fait) pulse.up = pulse.fait = 1; if (!cut) pulse.fait = 0; return course({ rpm: 0.55 + 0.38 * p, load: cut ? 0 : 1 }); }],
-    retro: ['mot', 'Rétrogradages', 'freinage, un rapport toutes les 2,5 s', ['mot'], 6, x => { const p = dents(x, 2.5), cut = p < 0.08; if (cut && !pulse.fait) pulse.down = pulse.fait = 1; if (!cut) pulse.fait = 0; return course({ rpm: 0.8 - 0.3 * p, load: 0, gas: 0 }); }],
-    clac: ['mot', 'Clac de montée seul', 'sans le moteur', ['mot'], 2, null, () => SON.clac(false)],
-    clacD: ['mot', 'Clac de rétrogradage seul', 'sans le moteur', ['mot'], 2, null, () => SON.clac(true)],
+    montee: ['mot', 'Montées, boîte automatique', 'accélération, un rapport toutes les 2,5 s', ['mot'], 6, x => { const p = dents(x, 2.5), cut = p < 0.08; if (cut && !pulse.fait) pulse.up = pulse.fait = 1; if (!cut) pulse.fait = 0; return course({ rpm: 0.55 + 0.38 * p, load: cut ? 0 : 1 }); }],
+    retro: ['mot', 'Rétrogradages, boîte automatique', 'freinage, un rapport toutes les 2,5 s', ['mot'], 6, x => { const p = dents(x, 2.5), cut = p < 0.08; if (cut && !pulse.fait) pulse.down = pulse.fait = 1; if (!cut) pulse.fait = 0; return course({ rpm: 0.8 - 0.3 * p, load: 0, gas: 0 }); }],
+    monteeM: ['mot', 'Montées, boîte manuelle', 'le pilote passe le rapport au levier', ['mot'], 6, x => Object.assign(SC.montee[5](x), { manuel: 1 })],
+    retroM: ['mot', 'Rétrogradages, boîte manuelle', '', ['mot'], 6, x => Object.assign(SC.retro[5](x), { manuel: 1 })],
+    clac: ['mot', 'Automatique : montée seule', 'sans le moteur', ['mot'], 8, null, () => SON.clac(false)],
+    clacD: ['mot', 'Automatique : rétrogradage seul', 'sans le moteur', ['mot'], 8, null, () => SON.clac(true)],
+    levier: ['mot', 'Manuelle : montée seule', 'levier, sans le moteur', ['mot'], 6, null, () => SON.levier(false)],
+    levierD: ['mot', 'Manuelle : rétrogradage seul', 'levier, sans le moteur', ['mot'], 6, null, () => SON.levier(true)],
     petarade: ['mot', 'Pétarade', 'lever de pied à haut régime, sans le moteur', ['mot'], 16, null, () => SON.petarade()],
     derapL: ['pneu', 'Dérapage léger', 'petit angle', ['pneu'], 16, () => course({ slide: 0.3 })],
     derapF: ['pneu', 'Dérapage à fond', 'grand angle', ['pneu'], 12, () => course({ slide: 1 })],
@@ -127,7 +131,7 @@
   function etat(sc, x) {
     const o = sc && sc[5] ? sc[5](x) : { state: 'pause' }, r = o.r || 0;
     return { state: o.state, T: { h0: 500, h1: 700, n: 1000 }, hot: o.plein ? 1 : 0, tun: o.tun || 0, amb: o.amb || 0,
-      car: { vl: o.slide ? 4 + 14 * o.slide : 0, boost: 0, idx: o.plein ? 600 : 0, dist: 1, drift: !!o.drift, rub: o.rub || 0 },
+      car: { manual: !!o.manuel, vl: o.slide ? 4 + 14 * o.slide : 0, boost: 0, idx: o.plein ? 600 : 0, dist: 1, drift: !!o.drift, rub: o.rub || 0 },
       r, sp: o.sp || 0, gas: o.gas || 0, hit: 0, up: !!pulse.up, down: !!pulse.down, rpm: o.rpm || 0.2, load: o.load || 0, spool: o.spool || 0, stun: 0 };
   }
   const son = () => SON.ac && SON.live;
