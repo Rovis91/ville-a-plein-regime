@@ -1,7 +1,6 @@
 // node test.js — géométrie du circuit, tour complet au pilote auto, mécanique réaliste, glisse (déclenchement, tenue, rattrapage, boost), boîte manuelle.
 const assert = require('assert');
 const THREE = require('./three.min.js');
-if (process.env.TENUE) globalThis.TENUE = process.env.TENUE; // shortcut: essai d'un autre réglage de tenue de route (TENUE=glisse node test.js), à retirer avec le sélecteur de sim.js
 require('./sim.js');
 const T = buildTrack(THREE), { S, n, W } = T, H = 1 / 120;
 const run = (c, inp, sec) => { for (let i = 0; i < sec / H; i++) step(c, typeof inp === 'function' ? inp(c) : inp, T, H); };
@@ -112,7 +111,7 @@ assert(bump > 0.5 && b.d > 2.5, 'le contact latéral doit pousser: ' + b.d);
 assert(a.vf > 36 && Math.hypot(b.vx, b.vz) > 36, 'le contact latéral ne doit pas arrêter: ' + a.vf);
 
 // le tour d'une voiture seule ne doit pas bouger quand on touche à la course (records vpr5.* comparables)
-if (TENUE === 'vif') assert(Math.abs(t - 44.26) < 0.01 && Math.abs(td - 44.41) < 0.01, `le tour solo a changé: ${t} / ${tf} / ${td}`);
+assert(Math.abs(t - 44.17) < 0.01 && Math.abs(td - 44.15) < 0.01, `le tour solo a changé: ${t} / ${tf} / ${td}`);
 // les 3 niveaux d'IA, seuls : du plus rapide au plus lent, tous derrière le tour propre, à moins de 2 s
 const laps = AI_LVL.map(lvl => { const c = newCar(T); let t = 0; while (c.dist < n && t < 180) { step(c, autopilot(c, T, lvl), T, H); t += H; assert(c.hit < 3, 'IA seule dans le mur'); } return t; });
 assert(laps.every((l, i) => l > t && l < t + 2 && (!i || l > laps[i - 1] + 0.2)), 'rythme des IA hors plage: ' + laps);

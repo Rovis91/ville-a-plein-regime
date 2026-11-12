@@ -2,7 +2,6 @@
 // La ville a ses propres tests, plus complets, dans test.js (ses chiffres ne doivent pas bouger : records vpr5.*).
 const assert = require('assert'), THREE = require('./three.min.js');
 require('./cartes.js');
-if (process.env.TENUE) globalThis.TENUE = process.env.TENUE; // shortcut: essai d'un autre réglage de tenue de route (TENUE=glisse node test-cartes.js), à retirer avec le sélecteur de sim.js
 const H = 1 / 120, deg = r => r * 180 / Math.PI;
 for (const M of CARTES) {
   globalThis.CARTE = M; delete require.cache[require.resolve('./sim.js')]; require('./sim.js'); // sim.js lit la carte active à son chargement

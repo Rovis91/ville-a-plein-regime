@@ -9,18 +9,13 @@
   const torque = rpm => { const x = Math.max(0, Math.min(8, rpm / 1000)), i = Math.min(7, x | 0); return CARD.tq[i] + (CARD.tq[i + 1] - CARD.tq[i]) * (x - i); };
   // Points de contrôle (x,z) en mètres, sens horaire = virages à droite. Départ en [0]. HGT = altitude de chaque point.
   const SC = M.sc, HGT = M.pts.map(p => p[2]), PTS = M.pts.map(p => [p[0] * SC, p[1] * SC]);
-  // shortcut: sélecteur de tenue de route provisoire, pour comparer au clavier (?tenue=actuel|vif|glisse ; sous node : globalThis.TENUE). Une fois le choix fait : garder ses valeurs, supprimer TENUES et les branches « P ? … : … » (actuel = l'ancienne physique, P nul).
+  // Tenue de route (réglage « glisse », retenu au clavier) :
   //   bas   = surcroît d'adhérence à basse vitesse (×(1+bas) à l'arrêt, ×1 à TOP) : les épingles se passent plus vite, les grandes courbes rapides ne changent pas
   //   lift, frein = braquage maxi en part de l'adhérence, pied levé et au frein (0,95 sur les gaz) : au-dessus de 1 l'avant mord et l'arrière part ; gf = adhérence restante au frein
   //   ds    = surcroît de braquage en glisse ; ad = adhérence en glisse sur les gaz (+0,15 pied levé) ; kr = rappel du nez vers la trajectoire : angle tenu volant à fond ≈ (0,95·(1+ds) − ad) / kr rad
   //   po    = survirage à l'accélérateur des propulsions ; tr = vitesse perdue en glisse ; gl = part de la vitesse que les pneus en travers ne mangent pas (0 = physique : une glisse à 30° freine très fort)
-  const TENUES = {
-    actuel: null,
-    vif: { bas: 0.6, lift: 1, frein: 1.2, gf: 0.9, ds: 0.5, ad: 1, kr: 1.3, po: 0.3, tr: 0.15, gl: 0.5 },
-    glisse: { bas: 0.4, lift: 1.1, frein: 1.3, gf: 0.85, ds: 0.6, ad: 1, kr: 1.3, po: 0.4, tr: 0.12, gl: 0.7 },
-  };
-  const TENUE = [G.TENUE, G.location && new URLSearchParams(G.location.search).get('tenue'), 'glisse'].find(k => k in TENUES), P = TENUES[TENUE];
-  const grip = v => P ? GRIP * (1 + P.bas * Math.max(0, 1 - v / TOP)) : GRIP; // adhérence latérale à la vitesse v
+  const P = { bas: 0.4, lift: 1.1, frein: 1.3, gf: 0.85, ds: 0.6, ad: 1, kr: 1.3, po: 0.4, tr: 0.12, gl: 0.7 };
+  const grip = v => GRIP * (1 + P.bas * Math.max(0, 1 - v / TOP)); // adhérence latérale à la vitesse v
   const vturn = (a, k) => { let v = Math.sqrt(a * GRIP / k); for (let i = 0; i < 2; i++) v = Math.sqrt(a * grip(v) / k); return v; }; // vitesse de passage d'une courbure k, à la part a de l'adhérence
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
@@ -50,22 +45,21 @@
   // inp: {steer:-1..1 (droite>0), gas:0..1, brake:0..1, hand:bool}
   function step(c, inp, T, dt) {
     const S = T.S, n = T.n;
-    const vol = P ? 12 : 8; c.steer += clamp(inp.steer - c.steer, -vol * dt, vol * dt);
+    c.steer += clamp(inp.steer - c.steer, -12 * dt, 12 * dt);
     let fx = Math.cos(c.th), fz = Math.sin(c.th);
     let vf = c.vx * fx + c.vz * fz, vl = c.vz * fx - c.vx * fz;
     const sp = Math.abs(vf), hand = inp.hand && sp > 12;
     // Glisse continue : sl = part de glisse (0 = accroche, 1 = pleine dérive), beta = angle de dérive.
     // Le braquage donne plus de rotation en glisse ; un couple de rappel ramène le nez vers la trajectoire,
     // donc l'angle de dérive se règle au volant et la voiture se redresse seule quand on lâche.
-    const sl = clamp((Math.abs(vl) - 3) / 8, 0, 1), beta = Math.atan2(vl, Math.max(sp, 1));
+    const sl = clamp((Math.abs(vl) - 3) / 8, 0, 1);
     // le braquage maxi est bridé juste sous la limite d'adhérence : volant à fond sur les gaz = virage le plus serré possible, sans décrocher.
     // Transfert de charge : pied levé ou au frein, la bride monte, la voiture pivote plus que l'adhérence ne suit et l'arrière part.
     // En glisse, braquage et rappel sont proportionnels à adhérence / vitesse : l'angle tenu ne dépend ni de la carte ni de la vitesse.
     const g = grip(sp), gs = g / Math.max(sp, 10), wl = c.steer * Math.min(1, sp / 10), wlow = 2.3 - 1.3 * Math.min(1, sp / TOP);
-    let w = P ? wl * Math.min(wlow + sl, (inp.brake ? P.frein : inp.gas ? 0.95 : P.lift) * g / Math.max(sp, 1)) * (1 + P.ds * sl) + (clamp(vl / Math.max(sp, 1), -2, 2) * P.kr * sl + c.steer * P.po * (c.pw || 0)) * gs
-      : wl * Math.min(wlow, 0.95 * GRIP / Math.max(sp, 1)) * (1 + 0.6 * sl) + beta * 1.5 * sl;
+    let w = wl * Math.min(wlow + sl, (inp.brake ? P.frein : inp.gas ? 0.95 : P.lift) * g / Math.max(sp, 1)) * (1 + P.ds * sl) + (clamp(vl / Math.max(sp, 1), -2, 2) * P.kr * sl + c.steer * P.po * (c.pw || 0)) * gs;
     if (hand) w += c.steer * 0.9; // le frein à main fait pivoter
-    c.yaw += (w - c.yaw) * Math.min(1, dt * (P ? lerp(18, 8, sl) : lerp(14, 6, sl))); // inertie de lacet, plus marquée en glisse
+    c.yaw += (w - c.yaw) * Math.min(1, dt * lerp(18, 8, sl)); // inertie de lacet, plus marquée en glisse
     c.th += c.yaw * (Math.sign(vf) || 1) * dt;
     fx = Math.cos(c.th); fz = Math.sin(c.th);
     vf = c.vx * fx + c.vz * fz; vl = c.vz * fx - c.vx * fz;
@@ -99,15 +93,14 @@
     if (vf < -12) vf = -12;
     if (hand) vf -= Math.sign(vf) * 4 * dt;
     // traînée aérodynamique (½·ρ·Cd·A·v²), résistance au roulement, et un peu de vitesse perdue en glisse
-    vf -= (0.6 * CARD.cd * CARD.area * vf * Math.abs(vf) / CARD.mass + (Math.abs(vf) > 0.3 ? 0.15 : 0) * Math.sign(vf) + (P ? P.tr : 0.1) * Math.abs(vl) * Math.sign(vf)) * dt;
+    vf -= (0.6 * CARD.cd * CARD.area * vf * Math.abs(vf) / CARD.mass + (Math.abs(vf) > 0.3 ? 0.15 : 0) * Math.sign(vf) + P.tr * Math.abs(vl) * Math.sign(vf)) * dt;
     // adhérence latérale plafonnée (m/s²) : au-delà les pneus décrochent ; elle chute en glisse, au frein à main et au freinage appuyé
-    // (tenue « actuel » : elle chute aussi sur les gaz en propulsion ; les autres : en glisse elle reste entière, la voiture tourne serré de travers et y laisse de la vitesse)
-    const A = P ? g * lerp(1, P.ad + (inp.gas ? 0 : 0.15), sl) * (hand ? 0.35 : 1) * (inp.brake ? P.gf : 1)
-      : lerp(GRIP, GRIP * 0.95, sl) * (hand ? 0.35 : 1) * (inp.brake && sp > 25 ? 0.4 : 1) * tc;
+    // (en glisse elle reste entière : la voiture tourne serré de travers et y laisse de la vitesse)
+    const A = g * lerp(1, P.ad + (inp.gas ? 0 : 0.15), sl) * (hand ? 0.35 : 1) * (inp.brake ? P.gf : 1);
     const v0 = Math.hypot(vf, vl);
     vl += clamp(-vl * 25, -A, A) * dt;
     // arcade : jusqu'à 35° de dérive les pneus en travers font tourner la vitesse plus qu'ils ne la freinent ; au-delà ils freinent de plus en plus, et à 60° (tête-à-queue, voiture percutée) comme des vrais
-    if (P && v0 > 1) { const k = lerp(1, v0 / Math.max(Math.hypot(vf, vl), 1e-3), P.gl * clamp((0.87 - Math.abs(vl) / v0) / 0.3, 0, 1)); vf *= k; vl *= k; }
+    if (v0 > 1) { const k = lerp(1, v0 / Math.max(Math.hypot(vf, vl), 1e-3), P.gl * clamp((0.87 - Math.abs(vl) / v0) / 0.3, 0, 1)); vf *= k; vl *= k; }
     // une glisse tenue plus de 0,6 s donne un boost à la reprise d'adhérence
     c.slide = sl; c.drift = sl > 0.35;
     if (sl > 0.5) c.driftT += dt;
@@ -251,5 +244,5 @@
     }
   }
 
-  Object.assign(G, { buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, TOP, CARD, TENUE });
+  Object.assign(G, { buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, TOP, CARD });
 })(typeof window !== 'undefined' ? window : globalThis);
