@@ -25,6 +25,20 @@
   const PL = { vir: 0.15, frein: 0.3, trac: 0.25, colle: 0.5, vaq: 230 / 3.6, dvaq: 40 / 3.6, aq: 0.25, aqc: 0.3 };
   const aqua = (m, v) => m * clamp((v - PL.vaq + PL.dvaq * m) / 4, 0, 1);
   const eau = (T, i) => T.eau ? T.eau[i] : 0;
+  // Relief (cartes qui déclarent des sauts ou des murs roulables, sinon rien de tout cela ne joue) : la voiture a une hauteur c.y et une vitesse verticale c.vy.
+  //   Elle tombe à GRAV ; le sol la rattrape et lui donne sa propre vitesse verticale. À plus de DROOP du sol (débattement des suspensions) elle vole : ni volant, ni moteur, ni frein.
+  //   Réception : au-delà de LAND0 m/s d'impact contre le sol, LANDK de vitesse perdue par m/s, jusqu'à LANDX (se recevoir dans une descente ne coûte rien)
+  const GRAV = 9.81, DROOP = 0.1, LAND0 = 6, LANDK = 0.025, LANDX = 0.45;
+  // Mur roulable : hors du plat (s.pl), la route remonte en quart de tube de rayon s.rc. paroi = hauteur, pente = dy/dd signée (vers la droite), plafonnée à 78° en haut du tube
+  const tube = (s, d) => Math.min(Math.abs(d) - s.pl, 0.98 * s.rc);
+  const paroi = (s, d) => { const x = s.rc ? tube(s, d) : 0; return x > 0 ? s.rc - Math.sqrt(s.rc * s.rc - x * x) : 0; };
+  const pente = (s, d) => { const x = s.rc ? tube(s, d) : 0; return x > 0 ? Math.sign(d) * x / Math.sqrt(s.rc * s.rc - x * x) : 0; };
+  // Sol sous la voiture : altitude du ruban, continue d'un échantillon au suivant (k = décalage en échantillons, pour la caméra), plus la paroi
+  function sol(T, c, k = 0) {
+    const S = T.S, N = T.n; let i = c.idx, a = S[i], b = S[(i + 1) % N], u = ((c.x - a.x) * (b.x - a.x) + (c.z - a.z) * (b.z - a.z)) / ((b.x - a.x) ** 2 + (b.z - a.z) ** 2 || 1);
+    if (u < 0) { i = (i - 1 + N) % N; u = Math.max(0, u + 1); } u = Math.min(1, u); a = S[(i + k + N) % N]; b = S[(i + k + 1 + N) % N];
+    return a.y + (b.y - a.y) * u + paroi(S[c.idx], c.d);
+  }
 
   function buildTrack(THREE) {
     const curve = new THREE.CatmullRomCurve3(PTS.map((p, i) => new THREE.Vector3(p[0], HGT[i], p[1])), true, 'centripetal');
@@ -42,13 +56,22 @@
     // largeur variable : M.large = [[a, b, w], …] demi-largeur w entre les points a et b, raccordée sur 60 m de part et d'autre ; ailleurs W (s.w = demi-largeur à l'échantillon)
     S.forEach(s => s.w = W);
     for (const [a, b, w] of M.large || []) { const i0 = at(a), l = (at(b) - i0 + n) % n; for (let k = -30; k <= l + 30; k++) { const f = Math.min(1, (k + 30) / 30, (l + 30 - k) / 30), s = S[(i0 + k + n) % n]; s.w = Math.max(s.w, W + (w - W) * f * f * (3 - 2 * f)); } }
-    // la trajectoire du pilote automatique est la ligne de moindre courbure qui tient dans la route, à 2,1 m des murs, quelle que soit la largeur (extérieur, corde, extérieur).
+    // murs roulables : M.cuv = [[a, b, largeur, rayon], …] ajoute de chaque côté du plat, entre les points a et b, un quart de tube qui s'ouvre sur 40 m (s.pl = demi-largeur du plat, s.rc = rayon du tube)
+    S.forEach(s => { s.pl = s.w; s.rc = 0; });
+    for (const [a, b, B, R] of M.cuv || []) { const i0 = at(a), l = (at(b) - i0 + n) % n; for (let k = 0; k <= l; k++) { const f = Math.min(1, k / 20, (l - k) / 20), s = S[(i0 + k) % n]; s.rc = R; s.w = W + B * f * f * (3 - 2 * f); } }
+    // sauts : M.sauts = [[point, longueur, hauteur, fosse, profondeur], …] : un tremplin qui monte en parabole et finit net au point ; derrière, une fosse (facultative) dont on ressort par 16 m de rampe : saut raté = temps perdu, jamais bloqué
+    for (const [p, L, h, F = 0, P = 0] of M.sauts || []) { const i0 = at(p), nl = Math.round(L / 2), nf = Math.round(F / 2);
+      for (let k = 1; k <= nl; k++) S[(i0 - nl + k + n) % n].y += h * (k / nl) ** 2;
+      for (let k = 1; k <= nf; k++) S[(i0 + k) % n].y -= P * Math.min(1, (nf - k) / 8); }
+    const vert = !!(M.sauts || M.cuv);
+    if (vert) S.forEach((s, i) => { const b = S[(i + 1) % n]; s.sl = (b.y - s.y) / Math.hypot(b.x - s.x, b.z - s.z); });
+    // la trajectoire du pilote automatique est la ligne de moindre courbure qui tient dans la route, à 2,1 m des murs (ou du pied des parois : elle reste sur le plat), quelle que soit la largeur (extérieur, corde, extérieur).
     // Un point tous les 8 m, chacun ramené là où ses 4 voisins le voudraient pour que la ligne tourne le moins possible ; puis sa courbure, par le cercle passant par 3 points.
     {
       const m = 4, N = Math.floor(n / m), D = new Float64Array(N), pt = (i, d) => { const s = S[(i + n) % n]; return [s.x - s.tz * d, s.z + s.tx * d]; }, pj = j => pt((j + N) % N * m, D[(j + N) % N]);
       for (let it = 0; it < 6000; it++) for (let j = 0; j < N; j++) {
         const s = S[j * m], a = pj(j - 1), b = pj(j + 1), a2 = pj(j - 2), b2 = pj(j + 2);
-        D[j] = clamp(-((4 * (a[0] + b[0]) - a2[0] - b2[0]) / 6 - s.x) * s.tz + ((4 * (a[1] + b[1]) - a2[1] - b2[1]) / 6 - s.z) * s.tx, 3.2 - s.w, s.w - 3.2);
+        D[j] = clamp(-((4 * (a[0] + b[0]) - a2[0] - b2[0]) / 6 - s.x) * s.tz + ((4 * (a[1] + b[1]) - a2[1] - b2[1]) / 6 - s.z) * s.tx, 3.2 - s.pl, s.pl - 3.2);
       }
       S.forEach((s, i) => { const j = Math.floor(i / m) % N, f = i / m - Math.floor(i / m); s.dl = D[j] + (D[(j + 1) % N] - D[j]) * f; });
       S.forEach((s, i) => { const a = pt(i - m, S[(i - m + n) % n].dl), b = pt(i, s.dl), c = pt(i + m, S[(i + m) % n].dl), ux = b[0] - a[0], uz = b[1] - a[1], vx = c[0] - b[0], vz = c[1] - b[1];
@@ -61,14 +84,15 @@
     const pluie = Float32Array.from(S, (_, i) => pz ? Math.max(0, ...pz.map(([z, f]) => z(i) * f)) : M.th.pluie ? 1 : 0);
     const eau = pluie.map((p, i) => clamp((p - 1) / 2, 0, 1) * (M.tun ? 1 - tz(i) : 1));
     // tun : la carte a un tunnel, de t0 à t1 ; h0-h1 : secteur « chaud » pour la musique ; sp : les deux temps intermédiaires (indices d'échantillons)
-    return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, eau };
+    return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, eau, vert };
   }
 
   function newCar(T) {
     const i = T.n - 8, s = T.S[i]; // 16 m avant la ligne
     return { x: s.x, z: s.z, th: Math.atan2(s.tz, s.tx), vx: 0, vz: 0, steer: 0, yaw: 0, idx: i, dist: -8, d: 0, hit: 0, vf: 0, vl: 0,
       drift: false, slide: 0, driftT: 0, dd: 0, sa: 0, boost: 0, stun: 0, nDrift: 0, nBoost: 0, nWall: 0, combo: 0, comboMax: 0, // n… : bilan de glisse (glisses, boosts, chocs mur, boosts enchaînés sans choc)
-      manual: false, gear: 0, lastGear: 0, shiftT: 0, rpm: CARD.idle };
+      manual: false, gear: 0, lastGear: 0, shiftT: 0, rpm: CARD.idle,
+      y: s.y, vy: 0, air: false, airT: 0, land: 0 }; // relief : hauteur, vitesse verticale, en l'air, durée du vol en cours, vitesse d'impact à la réception (un seul pas)
   }
 
   // Contact avec un mur : N = normale unitaire vers le mur, o = enfoncement, T = sens du mur dans le sens de la marche, sgT = côté du mur par rapport à T
@@ -92,8 +116,9 @@
   const dansPlace = (x, z) => !!M.place && Math.hypot(x - M.place.c[0], z - M.place.c[1]) < M.place.r; // sur la place, on roule partout
 
   // inp: {steer:-1..1 (droite>0), gas:0..1, brake:0..1, hand:bool}
-  function step(c, inp, T, dt) {
-    const S = T.S, n = T.n;
+  // un pas de conduite, roues au sol
+  function roule(c, inp, T, dt) {
+    const S = T.S;
     c.steer += clamp(inp.steer - c.steer, -12 * dt, 12 * dt);
     let fx = Math.cos(c.th), fz = Math.sin(c.th);
     let vf = c.vx * fx + c.vz * fz, vl = c.vz * fx - c.vx * fz;
@@ -143,7 +168,18 @@
     c.slide = Math.min(1, Math.abs(c.sa) / KT.ang); c.drift = !!c.dd;
     if (c.dd) c.driftT += dt;
     c.vx = fx * vf - fz * vl; c.vz = fz * vf + fx * vl;
-    c.x += c.vx * dt; c.z += c.vz * dt;
+    c.x += c.vx * dt; c.z += c.vz * dt; c.vf = vf; c.vl = vl;
+  }
+  // un pas en l'air : la voiture garde son cap et sa vitesse, moins la traînée ; gaz tenus, le moteur prend ses tours à vide
+  function vole(c, inp, dt) {
+    const k = 1 - 0.6 * CARD.cd * CARD.area * Math.hypot(c.vx, c.vz) / CARD.mass * dt;
+    c.vx *= k; c.vz *= k; c.x += c.vx * dt; c.z += c.vz * dt; c.yaw = 0; c.airT += dt;
+    if (inp.gas) c.rpm += (CARD.red - c.rpm) * Math.min(1, dt * 6);
+  }
+
+  function step(c, inp, T, dt) {
+    const S = T.S, n = T.n;
+    if (c.air) vole(c, inp, dt); else roule(c, inp, T, dt);
     // position sur la piste + murs (impossible de couper : un tour bouclé est toujours valide)
     let b = c.idx, bd = 1e9;
     // sur la place on coupe où l'on veut : on cherche l'échantillon le plus proche bien plus loin devant
@@ -167,7 +203,17 @@
         mur(c, Nx, Nz, CR - d, -Nz * t, Nx * t, -t, 0, dt);
       }
     }
-    c.vf = vf; c.vl = vl;
+    // relief : chute libre, sauf si le sol est là
+    const g = sol(T, c);
+    if (!T.vert) { c.y = g; return; }
+    const vy = c.vy - GRAV * dt, y = c.y + vy * dt, sg = (c.x - s.x) * s.tx + (c.z - s.z) * s.tz < 0 ? S[(b - 1 + n) % n] : s, vg = sg.sl * (c.vx * sg.tx + c.vz * sg.tz); c.land = 0; // sg : le tronçon de ruban sous la voiture ; vg : la vitesse verticale que sa pente donne à la voiture (la paroi n'y compte pas : y monter ne lance pas en l'air)
+    const p = pente(s, c.d);
+    if (y > g && (c.airT || !p)) { c.y = y; c.vy = vy; c.air = y - g > DROOP; return; } // (sur une paroi on ne décolle pas : la vitesse y plaque la voiture, elle suit la surface)
+    if (c.airT) { c.land = vg - vy; const k = 1 - clamp((c.land - LAND0) * LANDK, 0, LANDX); c.vx *= k; c.vz *= k; c.airT = 0; }
+    c.y = g; c.vy = vg; c.air = false;
+    // sur une paroi, la gravité tire vers le bas de la pente : en travers de la voiture elle la fait tourner (c'est le virage relevé qui porte), dans son axe elle la freine en montée et la relance en descente
+    // et les pneus, écrasés contre le béton, tournent d'autant plus fort : le lacet du volant y gagne le facteur de charge 1 / cos(pente)
+    if (p) { const a = -GRAV * p; c.vx += nx * a * dt; c.vz += nz * a * dt; c.th += ((nz * Math.cos(c.th) - nx * Math.sin(c.th)) * a / Math.max(4, Math.hypot(c.vx, c.vz)) + c.yaw * (Math.sqrt(1 + p * p) - 1)) * dt; }
   }
 
   // Pilote automatique : sert au test node, au mode ?auto, à ramener la voiture après l'arrivée, et aux adversaires en course.
@@ -225,7 +271,7 @@
   function newRace(T, laps = 3, lvls = AI_LVL, el = 0) {
     const cars = [1, ...lvls].map((lvl, i) => {
       const c = newCar(T), k = i ? i - 1 : lvls.length, j = T.n - 8 - 4 * k, s = T.S[j], d = k % 2 ? 3 : -3; // grille en quinconce, 8 m entre deux places
-      return Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, th: Math.atan2(s.tz, s.tx), idx: j, dist: -8 - 4 * k, d, lvl, pos: k + 1, lap: 1, fin: 0, bump: 0 });
+      return Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, y: s.y, th: Math.atan2(s.tz, s.tx), idx: j, dist: -8 - 4 * k, d, lvl, pos: k + 1, lap: 1, fin: 0, bump: 0 });
     });
     return { T, cars, laps, el, t: 0, done: false };
   }
@@ -235,6 +281,7 @@
   // Choc entre deux voitures de même masse : on les écarte de moitié chacune et on échange la vitesse le long de la normale (rebond de 20 %).
   // La vitesse tangentielle est conservée : un contact latéral pousse sans freiner.
   function collide(a, b) {
+    if (Math.abs(a.y - b.y) > 1.5) return; // l'une passe au-dessus de l'autre
     for (const i of [-CO, CO]) for (const j of [-CO, CO]) {
       const dx = b.x + Math.cos(b.th) * j - a.x - Math.cos(a.th) * i, dz = b.z + Math.sin(b.th) * j - a.z - Math.sin(a.th) * i, d = Math.hypot(dx, dz);
       if (d >= 2 * CR) continue;
@@ -290,5 +337,5 @@
     }
   }
 
-  Object.assign(G, { dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, PL });
+  Object.assign(G, { sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, PL });
 })(typeof window !== 'undefined' ? window : globalThis);

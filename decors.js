@@ -176,6 +176,35 @@
   }
 
   window.DECORS = {
+    // ---------- Roche-Sourde : un barrage-voûte en plein midi. Alpage et sapins, sommets enneigés, le parement de la voûte au-dessus du virage relevé, le déversoir sous le second tremplin ----------
+    barrage(h) {
+      const { THREE, S, N, W, rnd } = h, mur = s => paroi(s, s.w);
+      const iD = pt(h, 20), sD = S[iD], xD = sD.x - 19; // le déversoir : un chenal du lac vers la vallée, que la piste franchit par sa fosse
+      const chenal = (x, z) => Math.abs(x - xD) < 21 && z > sD.z - 150 ? 6.5 : 0, lac = (x, z) => z > 520 ? Math.min(30, (z - 520) * 0.5) : 0;
+      const g = terrain(h, { pas: 8, marge: 460, loin: 70, chute: -0.3, creux: (x, z) => Math.max(chenal(x, z), lac(x, z)), mat: h.mat('bruit', {}, '#6c8c4c', ['#5c7c42', '#7c9c5a', '#8c8c82', '#586c44']) });
+      const eau = h.mat('eauVive', { rep: [12, 60] }), eauLac = h.mat('eauVive', { rep: [90, 60] });
+      boite(h, eau, 40, 0.3, 700, xD, sD.y - 7.05, sD.z + 200); boite(h, eauLac, 1500, 0.3, 900, 500, 14, 990);
+      // la voûte : le mur roulable extérieur du grand virage se prolonge en parement, jusqu'à 42 m, couronné d'un chemin de ronde
+      const beton = h.mat('parement', { side: THREE.DoubleSide }), i0 = S.findIndex(s => s.rc), nC = S.filter(s => s.rc).length, f = s => (s.w - W) / 10, ht = s => mur(s) + 1 + 41 * f(s) * f(s);
+      h.ribbon(i0, nC, s => -s.w - 0.3, s => mur(s) - 2, s => -s.w - 0.3, ht, beton, 16).castShadow = true;
+      h.ribbon(i0, nC, s => -s.w - 0.3, ht, s => -s.w - 7, ht, beton, 16); h.ribbon(i0, nC, s => -s.w - 7, ht, s => -s.w - 7, () => -10, beton, 16);
+      h.pose('tourPrise', { beton: h.mat('beton'), vitre: h.mat('peinture', { c: 0x2a4a5a }) }, h.scene, [584, 14, 540]);
+      // portiques des tremplins, 30 m avant le bout
+      const peau = { acier: h.mat('acier'), banderole: h.mat('banderoleSaut', { lum: 1, side: THREE.DoubleSide }) };
+      for (const [p] of h.M.sauts) h.pose('portiqueSaut', peau, repere(h, S[(pt(h, p) - 15 + N) % N]), [0, 0, 0], W);
+      // ligne à haute tension qui descend de la centrale, le long de la ligne droite
+      for (let x = -200; x <= 760; x += 160) h.pose('pyloneHT', { acier: h.mat('acier') }, h.scene, [x, g.hAt(x, -60), -60]);
+      // sapins : par bouquets sur l'alpage, jamais sur la route ni dans le chenal
+      const arbres = [];
+      for (let k = 0; k < 1500; k++) { const x = g.box[0] + rnd() * (g.box[2] - g.box[0]), z = g.box[1] + rnd() * (g.box[3] - g.box[1]), d = g.dAt(x, z);
+        if (d > 26 && !chenal(x, z) && !lac(x, z) && Math.sin(x * 0.02) + Math.cos(z * 0.027) + rnd() > 0.9) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, 0.7 + rnd() * 0.8]); }
+      const futs = arbres.map(p => { const y0 = p[1] - 6; p[1] = y0 + 10 * p[4]; return [p[0], y0 + 2.4 * p[4], p[2], 0, p[4]]; });
+      inst(h, h.geo('cedre'), h.mat('cedre'), arbres); inst(h, h.geo('tronc'), h.mat('tronc'), futs);
+      // les sommets, en couronne à plus d'un kilomètre
+      const pics = []; for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283 + rnd() * 0.2, r = 1150 + rnd() * 500, l = 520 + rnd() * 420; pics.push([300 + Math.cos(a) * r, 40, 200 + Math.sin(a) * r, rnd() * 1.5, l, 380 + rnd() * 330, l]); }
+      inst(h, h.geo('pic'), h.mat('rocNeige', { fog: false }), pics);
+      return dt => { eau.map.offset.y -= dt * 0.9; eauLac.map.offset.x += dt * 0.01; }; // le déversoir coule
+    },
     // ---------- Karasu-tōge : forêt de cèdres, glissières à catadioptres, et au sommet un carrefour : supérette de nuit, station-service, voitures garées ----------
     touge(h) {
       const { THREE, S, N, W, rnd } = h;

@@ -13,13 +13,18 @@ for (const M of CARTES) {
   assert(cross > 2 * W + 8, `${M.id} : la piste se recoupe (${cross})`);
   assert(T.sp[0] < T.sp[1] && T.h0 < T.h1 && (!T.tun || T.t0 < T.t1), `${M.id} : secteurs dans le désordre`);
   // deux tours au pilote automatique : le second, lancé, donne les chiffres
-  let c = newCar(T), t = 0, t1 = 0, hits = 0, vmax = 0, vmin = 1e9;
+  // relief : sans saut ni mur roulable déclarés, la voiture ne quitte jamais le sol ; avec, elle ne passe jamais dessous, et le tour lancé compte au moins un vol par tremplin, sans réception qui casse la vitesse
+  let c = newCar(T), t = 0, t1 = 0, hits = 0, vmax = 0, vmin = 1e9, vols = 0, dur = 0;
+  assert(T.vert === !!(M.sauts || M.cuv), M.id + ' : relief actif à tort');
   while (c.dist < 2 * n && t < 900) {
-    step(c, autopilot(c, T), T, H); t += H; assert((Math.abs(c.d) <= S[c.idx].w || dansPlace(c.x, c.z)) && Number.isFinite(c.x));
+    const av = c.air; step(c, autopilot(c, T), T, H); t += H; assert((Math.abs(c.d) <= S[c.idx].w || dansPlace(c.x, c.z)) && Number.isFinite(c.x));
+    assert(T.vert ? c.y >= sol(T, c) - 1e-9 : !c.air && c.y === sol(T, c), M.id + ' : la voiture quitte le sol ou passe dessous');
+    if (c.dist >= n) { if (c.air && !av) vols++; if (c.land > 9) dur++; }
     if (c.dist >= n) { if (!t1) t1 = t; const v = Math.hypot(c.vx, c.vz); vmax = Math.max(vmax, v); vmin = Math.min(vmin, v); if (c.hit > 3) hits++; }
   }
   assert(c.dist >= 2 * n, `${M.id} : le pilote automatique ne boucle pas le tour`);
   assert(hits <= 2, `${M.id} : le pilote automatique tape les murs (${hits})`);
+  assert(vols >= (M.sauts || []).length && !dur, `${M.id} : ${vols} vols au tour lancé pour ${(M.sauts || []).length} tremplins, ${dur} réceptions dures`);
   // départ arrêté, gaz à fond : 0 à 100 km/h plausible, et la boîte auto monte tous les rapports utiles sans rester au rupteur
   c = newCar(T); let t100 = 0;
   for (let i = 0; i < 8 / H && !t100; i++) { step(c, { steer: 0, gas: 1, brake: 0, hand: false }, T, H); if (c.vf >= 100 / 3.6) t100 = (i + 1) * H; assert(c.rpm <= CARD.red + 200); }
@@ -103,7 +108,7 @@ for (const M of CARTES) {
   while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && (Math.abs(x.d) <= S[x.idx].w || dansPlace(x.x, x.z)), M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }
   assert(R.done, M.id + ' : la course ne se termine pas');
   const k = v => Math.round(v * 3.6);
-  console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} boosts, ${hgl} chocs), à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);
+  console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs${T.vert ? ', ' + vols + ' vols' : ''}, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} boosts, ${hgl} chocs), à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);
 }
 // radio : trois stations par carte ; une forme d'au moins 32 mesures faite de sections différentes ; timbres et batteries connus d'audio.js
 // (la variété à l'oreille se mesure dans le navigateur : bouton « Variété des stations » de ecoute.html, il n'y a pas de Web Audio sous node)
