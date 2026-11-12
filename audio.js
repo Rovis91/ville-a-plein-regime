@@ -22,7 +22,7 @@
 
   // musique de menu : une boucle calme par carte (accords de 4 mesures, nappe, arpège de cloches) ; aucune batterie
   const MENU = {
-    ville: { bpm: 72, v: 1.55, pad: 'choir', arp: '0...2...1...3...', CH: [[50, 57, 60, 65], [46, 53, 57, 62], [48, 55, 58, 63], [45, 52, 57, 61]] },
+    ville: { bpm: 72, v: 1.55, pad: 'choir', arp: '0...2...1...3...', CH: [[50, 57, 60, 65], [46, 53, 57, 62], [48, 55, 58, 64], [45, 52, 57, 61]] },
     touge: { bpm: 80, v: 1.05, pad: 'epFM', arp: '0.2...3...1.2...', CH: [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59]] },
     wangan: { bpm: 84, v: 1.84, pad: 'super', arp: '0.1.2.3.2.1.3.2.', CH: [[52, 59, 62, 66], [48, 55, 59, 64], [45, 52, 55, 59], [47, 54, 57, 62]] },
     paris: { bpm: 90, v: 1.6, pad: 'strings', arp: '..0..2..3..1..2.', CH: [[54, 57, 61, 64], [47, 51, 54, 57], [52, 56, 59, 63], [49, 52, 56, 59]] },
@@ -56,9 +56,9 @@
     const H = (n, f) => Array.from({ length: n }, (_, i) => f(i + 1));
     W = { pulse: mk(H(40, n => Math.sin(n * Math.PI * 0.12) / n * 2)), // impulsion étroite : clavinet, basse séquencée, guitare étouffée
       organ: mk([1, 0.8, 0.5, 0.35, 0, 0.25, 0, 0.2]), // tirettes d'orgue
-      vox: mk(H(32, n => Math.exp(-((n - 4) ** 2) / 6) + 0.6 * Math.exp(-((n - 11) ** 2) / 10) + 0.3 / n)), // voyelle : chœur, voix hachée
+      vox: mk(H(32, n => [7, 11, 13, 14].includes(n) ? 0 : Math.exp(-((n - 4) ** 2) / 6) + 0.6 * Math.exp(-((n - 9) ** 2) / 8) + 0.3 / n)), // voyelle : chœur, voix hachée (sans les partiels 7, 11, 13, 14, qui sonnent faux contre la gamme)
       reed: mk(H(24, n => (n % 2 ? 1 : 0.35) / n ** 0.8)), // anche : saxophone, contrôleur à vent
-      glass: mk([1, 0, 0, 0.5, 0, 0, 0.35, 0, 0, 0, 0.2]) }; // verre : partiels espacés
+      glass: mk([1, 0, 0.3, 0.5, 0, 0.25, 0, 0.3, 0, 0, 0, 0.12]) }; // verre : octaves et quintes seulement
   }
   // Un timbre : o oscillateurs [onde, demi-tons, cents, niveau] · uni / sp unisson désaccordé · fm [rapport, indice, durée, reste] modulation de
   // fréquence · a d s r enveloppe · flt [type, départ, fin, durée, Q, suit la note] · form formants de talkbox · nz bruit [type, f, Q, niveau, durée] ·
@@ -72,7 +72,7 @@
     bSlap: { o: [['pulse'], ['sawtooth', 0, 6, 0.5]], flt: ['lowpass', 5000, 500, 0.07, 6], nz: ['bandpass', 2500, 2, 0.25, 0.012], d: 0.2, s: 0.25, lv: 1.2 }, // claquée
     bPick: { o: [['triangle'], ['pulse', 0, 0, 0.4]], flt: ['lowpass', 2200, 400, 0.1, 2], nz: ['bandpass', 1800, 2, 0.15, 0.01], d: 0.22, s: 0.35, lv: 1.4 }, // basse électrique au médiator
     bMoog: { o: [['sawtooth'], ['triangle', 0, 5], ['sine', -12, 0, 0.5]], flt: ['lowpass', 700, 350, 0.2, 3], s: 0.8, gl: 0.07, len: 1, lv: 1.3 }, // ronde, à portamento
-    bReese: { o: [['sawtooth', 0, -24], ['sawtooth', 0, 24], ['sine', 0, 0, 0.9]], flt: ['lowpass', 600, 380, 1, 2], s: 1, r: 0.08, len: 1, lv: 1.2 }, // scies qui battent
+    bReese: { o: [['sawtooth', 0, -14], ['sawtooth', 0, 14], ['sine', 0, 0, 0.9]], flt: ['lowpass', 600, 380, 1, 2], s: 1, r: 0.08, len: 1, lv: 1.2 }, // scies qui battent
     bOff: { o: [['sawtooth', 0, -6], ['square', 0, 6]], flt: ['lowpass', 1800, 250, 0.1, 5], d: 0.12, s: 0.1, lv: 1.2 }, // pincée, à contretemps
     bSeq: { o: [['pulse'], ['sine', 0, 0, 0.8]], flt: ['lowpass', 1500, 300, 0.08, 3], d: 0.1, s: 0.2, lv: 1.3 }, // impulsion séquencée
     bFuzz: { o: [['sawtooth'], ['sawtooth', 7, 6, 0.7], ['square', 12, -5, 0.5]], s: 0.9, len: 1, bus: 'fuzz' }, // riff de guitare saturée
@@ -93,7 +93,7 @@
     pluck: { o: [['sawtooth', 0, -7], ['sawtooth', 0, 7]], flt: ['lowpass', 6000, 500, 0.12, 3], d: 0.15, ec: 0.4, rv: 0.15 },
     pulseArp: { o: [['pulse']], d: 0.12, ec: 0.35, pan: -0.2 },
     seqArp: { o: [['sawtooth']], flt: ['lowpass', 3000, 600, 0.1, 8], d: 0.12, ec: 0.3, pan: 0.2 },
-    bell: { o: [['sine']], fm: [3.01, 1.2, 0.3, 0.05], d: 0.9, ec: 0.4, rv: 0.3, lv: 1.2 },
+    bell: { o: [['sine']], fm: [3, 1.2, 0.3, 0.05], d: 0.9, ec: 0.4, rv: 0.3, lv: 1.2 },
     fmMetal: { o: [['sine']], fm: [1.41, 4, 0.2, 0.3], d: 0.25, rv: 0.3, lv: 1.2 }, // métal inharmonique
     // thèmes
     ldSaw: { o: [['sawtooth', 0, -10], ['sawtooth', 0, 10]], flt: ['lowpass', 5000, 5000, 1, 0.7], s: 0.8, vib: [5.5, 8, 0.2], ec: 0.3, rv: 0.2, lv: 0.08 },
@@ -249,7 +249,7 @@
     if (d && (x = on('p')) && (c = pat(st.p, x)[q]) !== '.') dPerc(hum(), 1, K, c);
     if (d && (x = on('b'))) { const rif = pat(st.b.v, x), rf = rif[q];
       if (rf != null && rf !== R) { let n = 1; while (q + n < 16 && rif[q + n] == null) n++; // tenue jusqu'à la note suivante
-        const P = PATCH[st.b.p], f = hz(root + rf); tone(st.b.p, f, t, S16 * n * (P.len || 0.9), lerp(0.27, 0.38, mix) * (P.lv || 1), strip.b.in, lastB); lastB = f; } }
+        const P = PATCH[st.b.p], f = hz(st.bPar ? root + rf : juste(root + rf, pr.OK[bar % pr.OK.length])); tone(st.b.p, f, t, S16 * n * (P.len || 0.9), lerp(0.27, 0.38, mix) * (P.lv || 1), strip.b.in, lastB); lastB = f; } }
     else if (!d && q % 8 === 0) tone(st.b.p, hz(root + 12), t, S16 * 6, 0.25, strip.b.in);
     if (st.d && (!d || on('d'))) { const P = PATCH[st.d[0]];
       if (q === 0) for (const n of ch) tone(st.d[0], hz(n + (st.d[1] || 0)), t, S16 * 16.5, 0.05 * (P.lv || 1), strip.d.in);
@@ -265,6 +265,7 @@
     if (st.sweep) swF.frequency.setTargetAtTime(big ? 16000 : 350 * 2 ** (3.6 * (0.5 - 0.5 * Math.cos(Math.PI * (s % 128) / 64))), t, 0.08); // filtre balayé sur 8 mesures, grand ouvert dans le secteur chaud
     else swF.frequency.setTargetAtTime(sec.lo && !big ? 400 * 30 ** pos : 20000, t, 0.05); // section filtrée : le passe-bas s'ouvre au fil de la section
   }
+  const juste = (n, ok) => ok.has(((n % 12) + 12) % 12) ? n : ok.has(((n - 1) % 12 + 12) % 12) ? n - 1 : n + 1; // note recalée sur la gamme et l'accord de la mesure : jamais de fausse note de basse
   const lvl = () => menu ? (MENU[M.id] || MENU.ville).v : ST[station].vol || 1; // niveau de la station : réglé par mesure pour que toutes sortent au même volume
   function retune(t) { // (re)cale le séquenceur, le bus et les tranches de mixage sur la station ou sur la boucle de menu
     const st = ST[station], mn = MENU[M.id] || MENU.ville; S16 = 60 / (menu ? mn.bpm : st.bpm) / 4; t0 = nextT = t; stp = !menu && drums ? 64 : 0; lastN = lastB = 0; // en course, une station prise en route commence au premier couplet, pas à l'introduction
@@ -342,13 +343,13 @@
     bsat = shaper(5, gain(0.5, duckG));
     const fz = filt('peaking', 1000, 1, filt('lowpass', 2600, 0.7, gain(0.3, duckG))); fz.gain.value = 5; fuzz = gain(6, shaper(8, fz)); // guitare : écrêtage, puis baffle
     acid = filt('lowpass', 1900, 12, duckG);
-    // réverbération de la musique (pièce de 1,3 s), écho rythmique filtré, chorus (deux retards modulés, un par côté)
+    // réverbération de la musique (pièce de 1,3 s), écho rythmique filtré, chorus (deux retards modulés, un par côté, ± 8 cents : assez pour élargir, pas pour désaccorder)
     const mr = AC.createConvolver(), mi = AC.createBuffer(2, AC.sampleRate * 1.3, AC.sampleRate);
     for (let c = 0; c < 2; c++) { const x = mi.getChannelData(c); for (let i = 0; i < x.length; i++) x[i] = (Math.random() * 2 - 1) * Math.exp(-i / AC.sampleRate / 0.28); }
     mr.buffer = mi; mrevG = gain(0.2, tuneG); mr.connect(mrevG); revIn = gain(1, mr); drumRv = gain(0.05, revIn); drumG.connect(drumRv);
     dly = AC.createDelay(1); dlyFb = gain(0.42, dly); dly.connect(filt('lowpass', 3500, 0.5, dlyFb)); dly.connect(duckG); echoIn = gain(1, dly);
     choIn = AC.createGain();
-    for (const sg of [-1, 1]) { const dl = AC.createDelay(0.1), p = AC.createStereoPanner(), l = AC.createOscillator(); dl.delayTime.value = 0.022 + 0.004 * sg; p.pan.value = 0.8 * sg; l.frequency.value = 0.6 + 0.15 * sg; l.connect(gain(0.003, dl.delayTime)); l.start(); choIn.connect(dl); dl.connect(p); p.connect(duckG); }
+    for (const sg of [-1, 1]) { const dl = AC.createDelay(0.1), p = AC.createStereoPanner(), l = AC.createOscillator(); dl.delayTime.value = 0.022 + 0.004 * sg; p.pan.value = 0.8 * sg; l.frequency.value = 0.6 + 0.15 * sg; l.connect(gain(0.0012, dl.delayTime)); l.start(); choIn.connect(dl); dl.connect(p); p.connect(duckG); }
     // une tranche par partie : hachage, panoramique, envois vers réverbération, écho et chorus (réglés par le timbre de la station)
     for (const k of ['b', 'd', 'c', 'g', 'a', 'l']) { const pan = AC.createStereoPanner(), rv = gain(0, revIn), ec = gain(0, echoIn), ch = gain(0, choIn), gate = gain(1, pan); pan.connect(duckG); pan.connect(rv); pan.connect(ec); pan.connect(ch); strip[k] = { in: gain(MX[k], gate), gate, pan, rv, ec, ch }; }
     waves();
