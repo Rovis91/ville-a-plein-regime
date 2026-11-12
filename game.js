@@ -833,7 +833,7 @@
     ghostM.visible = ghostOn && state === 'race' && !race && !!ghost && g0 + 7 < ghost.length;
     if (ghostM.visible) { ghostM.position.set(lerp(ghost[g0], ghost[g0 + 4], gf), lerp(ghost[g0 + 1], ghost[g0 + 5], gf) + 0.6, lerp(ghost[g0 + 2], ghost[g0 + 6], gf)); ghostM.rotation.y = -(ghost[g0 + 3] + wrap(ghost[g0 + 7] - ghost[g0 + 3]) * gf); }
     fxFrame(dt, now, sp, inp, hit, fx, fz);
-    SON.frame(dt, { state, car, T, tour: race ? Math.max(0, Math.floor(car.dist / N)) : 0, tours: race ? race.laps : 0, hot: hot(car.idx, 50), tun: lm, amb: ambAt(car.idx), r, sp, gas, hit, bump, up: up > 0, down: up < 0, rpm, load, spool, stun });
+    SON.frame(dt, { state, car, T, tour: race ? Math.min(race.laps - 1, Math.max(0, Math.floor(car.dist / N))) : 0, tours: race ? race.laps : 0, hot: hot(car.idx, 50), tun: lm, amb: ambAt(car.idx), r, sp, gas, hit, bump, up: up > 0, down: up < 0, rpm, load, spool, stun });
 
     // alerte de virage serré, lue sur la courbure à venir
     let wk = 0;
