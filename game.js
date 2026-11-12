@@ -86,9 +86,9 @@
   const hudC = document.createElement('canvas'), hg = hudC.getContext('2d'), hudT = new THREE.CanvasTexture(hudC);
   hudT.minFilter = hudT.magFilter = THREE.NearestFilter;
   const post = new THREE.ShaderMaterial({
-    uniforms: { t: { value: rt.texture }, h: { value: hudT }, amt: { value: 0 }, ab: { value: 0 }, res: { value: 270 }, bloom: { value: TH.bloom }, scan: { value: TH.scan }, px: { value: new THREE.Vector2(1 / 480, 1 / 270) } },
+    uniforms: { t: { value: rt.texture }, h: { value: hudT }, amt: { value: 0 }, ab: { value: 0 }, vig: { value: 0 }, res: { value: 270 }, bloom: { value: TH.bloom }, scan: { value: TH.scan }, px: { value: new THREE.Vector2(1 / 480, 1 / 270) } },
     vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0., 1.); }',
-    fragmentShader: `uniform sampler2D t, h; uniform float amt, ab, res, bloom, scan; uniform vec2 px; varying vec2 v;
+    fragmentShader: `uniform sampler2D t, h; uniform float amt, ab, vig, res, bloom, scan; uniform vec2 px; varying vec2 v;
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); } // matrice de Bayer 4×4, par récurrence
       void main(){
         vec2 c0 = vec2(.5, .42), d = v - c0; float l = length(d); vec3 c = vec3(0.);
@@ -103,7 +103,7 @@
         ${QUANT ? `vec2 q = v / px; c = floor(c * ${QUANT}. + (b2(.5 * q) * .25 + b2(q) - .5) * ${TRAME.toFixed(2)} + .5) / ${QUANT}.; // couleurs réduites et tramées, sur la grille de pixels du jeu` : ''}
         vec4 hd = texture2D(h, v); c = mix(c, hd.rgb, hd.a);
         c *= 1. - scan * mod(floor(v.y * res), 2.); // scanlines calées sur la grille
-        c *= 1. - .9 * l * l;                       // vignette
+        c *= max(0., 1. - (.9 + .7 * vig) * l * l);  // vignette, resserrée pendant la nitro
         gl_FragColor = vec4(c, 1.);
       }`,
   });
@@ -112,7 +112,7 @@
   if (ST) { // passe finale des styles : la scène telle quelle, l'effet du style, le HUD (toujours sur sa grille de 270 lignes), une vignette légère
     if (ST.z) { rt.depthTexture = new THREE.DepthTexture(1, 1); rt.depthTexture.type = THREE.UnsignedIntType; }
     Object.assign(post.uniforms, { dz: { value: rt.depthTexture }, ecr: { value: new THREE.Vector2(1, 1) }, pal: { value: PAL.map(c => new THREE.Color(c)) } });
-    post.fragmentShader = `uniform sampler2D t, h, dz; uniform float amt; uniform vec2 px, ecr; uniform vec3 pal[5]; varying vec2 v;
+    post.fragmentShader = `uniform sampler2D t, h, dz; uniform float amt, vig; uniform vec2 px, ecr; uniform vec3 pal[5]; varying vec2 v;
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); }
       float bayer(vec2 q){ return b2(.5 * q) * .25 + b2(q) - .5; }
       float lum(vec3 c){ return dot(c, vec3(.3, .59, .11)); }
@@ -124,7 +124,7 @@
         vec2 u = v; ${ST.pre || ''}
         vec3 c = texture2D(t, u).rgb; ${ST.fx || ''}
         vec4 hd = texture2D(h, u); c = mix(c, hd.rgb, hd.a); ${ST.fin || ''}
-        ${ST.brut ? '' : 'vec2 d = v - vec2(.5, .42); c *= 1. - .35 * dot(d, d);'}
+        ${ST.brut ? '' : 'vec2 d = v - vec2(.5, .42); c *= max(0., 1. - (.35 + .7 * vig) * dot(d, d));'}
         gl_FragColor = vec4(c, 1.);
       }`;
   }
@@ -634,7 +634,7 @@
   const fmt = t => `${t / 60 | 0}'${String(t % 60 | 0).padStart(2, '0')}"${String(t * 100 % 100 | 0).padStart(2, '0')}`;
   let lookA = 0, lookP = 0, lookT = 0; // caméra libre à la souris : angle autour de la voiture, hauteur en plus, délai avant retour
   addEventListener('mousemove', e => { if (state !== 'race' && state !== 'count') return; lookA = clamp(lookA + e.movementX * 0.006, -Math.PI, Math.PI); lookP = clamp(lookP + e.movementY * 0.03, -1, 5); lookT = 2.5; });
-  let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, cth = car.th, lm = 0, carY = S[car.idx].y, pitch = 0, roll = 0, result = null, manual = pref('vpr.boite', 'a') === 'm';
+  let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, cth = car.th, lm = 0, carY = S[car.idx].y, pitch = 0, roll = 0, nit = 0, result = null, manual = pref('vpr.boite', 'a') === 'm';
   // secteurs (entrée et sortie de l'échangeur) et fantôme du record : [x, y, z, cap] à 20 Hz
   // mode : 'solo' (contre-la-montre à tours enchaînés), 'glisse' (deux tours, à points : le score est tenu par sim.js, voir GL), 'course' (3 tours contre les IA de sim.js) 'elim' (course à élimination : le dernier sort à chaque passage de ligne) ou 'tournee' (toutes les cartes à la suite, voir plus bas) ; race = la course en cours, sinon null
   const MODES = ['solo', 'glisse', 'course', 'elim', 'tournee'], AVEC_IA = ['course', 'elim', 'tournee'], enCourse = () => AVEC_IA.includes(mode);
@@ -1055,7 +1055,8 @@
     const y0 = yAt(car), ySol = k => clamp(yAt(car, k), y0 - 2.5, y0 + 2.5) + air;
     cam.position.set(px + (Math.random() - 0.5) * shake, ySol(-3) + (M.camH || 3.2) + lookP - 0.5 * r + (Math.random() - 0.5) * shake, pz);
     cam.lookAt(car.x + cx * 10, ySol(5) + 1.1, car.z + cz * 10); cam.rotateZ(-0.6 * roll);
-    cam.fov = 62 + 26 * r + 3 * car.slide + (car.boost > 0 ? 6 : 0);
+    nit = clamp(nit + (car.boost > 0 ? dt / 0.7 : -dt / 1.1), 0, 1); const nitE = nit * nit * (3 - 2 * nit); // nitro : 0,7 s pour entrer, 1,1 s pour sortir, départ et arrivée en douceur (champ élargi et vignette)
+    cam.fov = 62 + 26 * r + 3 * car.slide + 6 * nitE; post.uniforms.vig.value = nitE;
     const vue = window.__g.vue; // shortcut: debug console seulement, __g.vue = [angle° autour de la voiture, distance, hauteur] pour inspecter le modèle ; à remplacer par un vrai mode photo si on en veut un
     if (vue) { const a = car.th + vue[0] * Math.PI / 180; cam.position.set(car.x + Math.cos(a) * vue[1], carY + vue[2], car.z + Math.sin(a) * vue[1]); cam.lookAt(car.x, carY + 0.7, car.z); cam.fov = 45; }
     cam.updateProjectionMatrix();
