@@ -5,53 +5,71 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Banc d'écoute — Ville à plein régime</title>
 <style>
-  body { margin: 0; padding: 16px; background: #0b0b10; color: #e8e8e4; font: 15px/1.45 system-ui, sans-serif; }
-  main { max-width: 860px; margin: auto; }
-  h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 15px; margin: 22px 0 8px; color: #fcee0a; text-transform: uppercase; letter-spacing: .06em; }
+  body { margin: 0; padding: 0 16px 40px; background: #0b0b10; color: #e8e8e4; font: 15px/1.45 system-ui, sans-serif; }
+  main { max-width: 900px; margin: auto; }
+  header { position: sticky; top: 0; background: #0b0b10; padding: 12px 0 10px; border-bottom: 1px solid #2a2a38; z-index: 2; }
+  h1 { font-size: 18px; margin: 0 0 8px; } h2 { font-size: 14px; margin: 22px 0 8px; color: #fcee0a; text-transform: uppercase; letter-spacing: .06em; }
   p { margin: 4px 0 10px; color: #a8a8b4; }
-  button, select { font: inherit; color: inherit; background: #1c1c28; border: 1px solid #3a3a4c; border-radius: 6px; padding: 7px 12px; margin: 0 6px 6px 0; cursor: pointer; }
+  button { font: inherit; color: inherit; background: #1c1c28; border: 1px solid #3a3a4c; border-radius: 6px; padding: 7px 12px; margin: 0 6px 6px 0; cursor: pointer; text-align: left; vertical-align: top; }
   button:hover { border-color: #00f0ff; } button.on { background: #00505a; border-color: #00f0ff; }
   button small { display: block; color: #a8a8b4; font-size: 11px; }
+  #stop { background: #5a1018; border-color: #ff003c; font-weight: 600; }
   label { display: inline-flex; align-items: center; gap: 8px; margin: 0 16px 8px 0; }
-  .fam label { display: flex; } .fam span.n { width: 190px; } .fam output { width: 44px; font-variant-numeric: tabular-nums; color: #fcee0a; font-weight: 600; }
+  .fam label { display: flex; } .fam span.n { width: 230px; } output { min-width: 44px; font-variant-numeric: tabular-nums; color: #fcee0a; font-weight: 600; }
   input[type=range] { width: 220px; accent-color: #00f0ff; }
-  table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; } td, th { padding: 3px 10px; border-bottom: 1px solid #2a2a38; text-align: right; } td:first-child, th:first-child { text-align: left; }
-  #voile { position: fixed; inset: 0; background: rgba(8, 8, 12, .92); display: grid; place-items: center; } #voile button { font-size: 20px; padding: 16px 28px; }
+  #vu { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  #barre { position: relative; flex: 1 1 260px; height: 18px; background: #1c1c28; border: 1px solid #3a3a4c; border-radius: 4px; overflow: hidden; }
+  #niv { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, #00a8b8, #fcee0a 80%, #ff003c); } #tenue { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; left: 0; }
+  #db { width: 150px; font-variant-numeric: tabular-nums; } #voyant { width: 12px; height: 12px; border-radius: 50%; background: #3a3a4c; } #voyant.on { background: #40ff80; box-shadow: 0 0 8px #40ff80; }
+  #quoi { color: #a8a8b4; margin-top: 6px; min-height: 1.4em; } #quoi b { color: #e8e8e4; }
+  table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; } td, th { padding: 3px 10px; border-bottom: 1px solid #2a2a38; text-align: right; } td:first-child, th:first-child { text-align: left; } td.ok { color: #40ff80; } td.ko { color: #ff003c; font-weight: 600; }
+  #voile { position: fixed; inset: 0; background: rgba(8, 8, 12, .94); display: grid; place-items: center; z-index: 3; } #voile button { font-size: 20px; padding: 16px 28px; }
 </style>
 </head>
 <body>
 <main>
-<h1>Banc d'écoute</h1>
-<p>Tout ce que le jeu fait entendre, sans conduire. Les curseurs de volume affichent leur valeur : dictez-les pour qu'ils deviennent les réglages du jeu (1,00 = réglage actuel).</p>
-
-<h2>Volumes par famille</h2>
-<div class="fam" id="fam"></div>
+<header>
+  <h1>Banc d'écoute</h1>
+  <div id="vu"><span id="voyant" title="du signal sort"></span><div id="barre"><div id="niv"></div><div id="tenue"></div></div><span id="db">silence</span><button id="stop">■ Tout arrêter</button></div>
+  <div id="quoi">Rien ne joue. Cliquez un son : il joue seul, tout le reste est coupé.</div>
+</header>
 
 <h2>Carte</h2>
 <div id="cartes"></div>
 
 <h2>Musique</h2>
-<div id="stations"></div>
+<div id="g-mus"></div>
 <label><input type="checkbox" id="plein"> secteur chaud (arrangement plein)</label>
-<label><input type="checkbox" id="glisse"> en glisse (ligne acide)</label>
-<label><input type="checkbox" id="tunnel"> dans un tunnel</label>
-<label><input type="checkbox" id="pause"> jeu en pause</label><br>
-<label>vitesse <input type="range" id="vit" min="0" max="1" step="0.01" value="0.7"><output></output></label>
+<label><input type="checkbox" id="glisse"> en glisse</label>
+<label><input type="checkbox" id="tunnel"> dans un tunnel</label><br>
+<label>vitesse <input type="range" id="vit" min="0" max="1" step="0.01" value="0.85"><output></output></label>
 
-<h2>Ambiance du lieu</h2>
-<p>Elle joue en continu sous le reste. Bouton « seul » de la famille Ambiance pour l'isoler ; les événements (grillons, oiseaux, corne de navire, hélicoptère, sirène) reviennent au hasard.</p>
-<button data-fx="evenement">Événement du lieu maintenant</button><button data-fx="tonnerre">Tonnerre</button>
+<h2>Moteur et boîte</h2>
+<div id="g-mot"></div>
+<label>régime <input type="range" id="rpm" min="0.1" max="1" step="0.01" value="0.6"><output></output></label>
+<label><input type="checkbox" id="gaz" checked> en charge (gaz)</label>
 
-<h2>Bruitages</h2>
-<label>régime moteur <input type="range" id="rpm" min="0.1" max="1" step="0.01" value="0.3"><output></output></label>
-<label><input type="checkbox" id="gaz"> gaz</label><br>
-<label>angle de glisse (dérapage) <input type="range" id="slide" min="0" max="1" step="0.01" value="0"><output></output></label><br>
-<button data-fx="choc">Choc</button><button data-fx="grosChoc">Gros choc</button><button data-fx="frottement">Frottement (maintenir)</button><button data-fx="boost">Boost</button>
-<button data-fx="rapport">Passage de rapport</button><button data-fx="petarade">Pétarade (lever de pied)</button><button data-fx="bip">Bip du décompte</button><button data-fx="depart">Départ</button><button data-fx="record">Record</button><button data-fx="pasRecord">Tour sans record</button>
+<h2>Pneus</h2>
+<div id="g-pneu"></div>
+<label>angle de glisse <input type="range" id="slide" min="0" max="1" step="0.01" value="0.6"><output></output></label>
 
-<h2>Niveaux mesurés</h2>
-<p>Rendu hors ligne de chaque source seule, sur 8 s, à la sortie du jeu. RMS et crête en dB pleine échelle (0 = écrêtage).</p>
-<button id="mesurer">Mesurer la carte affichée</button><button id="mesurerTout">Mesurer les 5 cartes</button>
+<h2>Chocs</h2>
+<div id="g-choc"></div>
+
+<h2>Vent et ambiance du lieu</h2>
+<div id="g-amb"></div>
+
+<h2>Interface</h2>
+<div id="g-ui"></div>
+
+<h2>Tout ensemble, comme en course</h2>
+<p>Le mélange réel du jeu, sans amplification. Les curseurs règlent chaque famille ; dictez leurs valeurs pour qu'elles deviennent les réglages du jeu (1,00 = réglage actuel).</p>
+<div id="g-mix"></div>
+<div class="fam" id="fam"></div>
+
+<h2>Vérifications</h2>
+<p>« Auto-test » joue chaque bouton une seconde et vérifie qu'un signal sort. « Mesurer » rend chaque son seul, hors ligne, au niveau réel du jeu (sans l'amplification du banc) : RMS et crête en dB (0 = écrêtage).</p>
+<button id="autotest">Auto-test des boutons</button><button id="mesurer">Mesurer la carte affichée</button><button id="mesurerTout">Mesurer les 5 cartes</button>
 <div id="mesures"></div>
 </main>
 <div id="voile"><button id="go">Allumer le son</button></div>
@@ -61,77 +79,134 @@
 <script src="audio.js"></script>
 <script>
 (() => {
-  const $ = id => document.getElementById(id), FAM = { mus: 'Musique', mot: 'Moteur', pneu: 'Pneus (dérapage)', choc: 'Chocs, frottement, boost, bips', amb: 'Ambiance et vent' };
-  let M = CARTE, menu = true, solo = null;
-  const pulse = {}, held = {}; // déclencheurs d'une image, boutons maintenus
-  const etat = { plein: false, glisse: false, tunnel: false, pause: false, gaz: false, vit: 0.7, rpm: 0.3, slide: 0 };
-  // l'état de course simulé, au format de SON.frame : c'est le vrai code du jeu qui joue
-  const frameState = (s = etat, p = pulse, h = held) => ({
-    state: s.pause ? 'pause' : menu ? 'title' : 'race', T: { h0: 500, h1: 700, n: 1000 }, hot: s.plein ? 1 : 0, tun: s.tunnel ? 1 : 0,
-    car: { vl: s.slide ? 4 + 14 * s.slide : 0, boost: p.boost ? 1 : 0, idx: s.plein ? 600 : 0, dist: 1, drift: s.glisse, rub: h.frottement ? 1 : 0 },
-    r: s.vit, sp: s.vit * 80, gas: p.petarade ? 0 : s.gaz || p.gazAvant ? 1 : 0, hit: p.grosChoc ? 12 : p.choc ? 6 : 0, up: !!p.rapport,
-    rpm: p.petarade || p.gazAvant ? 0.9 : s.rpm, load: s.gaz ? 1 : 0, spool: p.petarade ? 1 : s.rpm, stun: 0 });
-  setInterval(() => { // setInterval et non requestAnimationFrame : continue quand la fenêtre est masquée
-    if (!SON.ac || !SON.live) return; // pas pendant une mesure hors ligne
-    if (pulse.petarade === 1) { pulse.petarade = 0; pulse.gazAvant = 1; SON.frame(1 / 60, frameState()); pulse.gazAvant = 0; pulse.petarade = 2; } // une image plein gaz, puis le lever de pied
-    SON.frame(1 / 60, frameState()); for (const k in pulse) pulse[k] = 0;
-  }, 16);
+  const $ = id => document.getElementById(id);
+  const FAM = { mus: 'Musique', mot: 'Moteur et boîte', pneu: 'Pneus (dérapage)', vent: 'Vent', amb: 'Ambiance du lieu', choc: 'Chocs, frottement, boost', ui: 'Interface (bips, jingle, radio)' };
+  let M = CARTE, scene = null, t0 = 0;
+  const u = { plein: false, glisse: false, tunnel: false, gaz: true, vit: 0.85, rpm: 0.6, slide: 0.6 }; // réglages de la page
+  const pulse = {}; // déclencheurs d'une seule image (montée ou descente de rapport)
 
-  function volumes() { for (const k in FAM) { const v = +$('v-' + k).value; $('o-' + k).textContent = v.toFixed(2).replace('.', ','); SON.volume(k, solo && solo !== k ? 0 : v); $('s-' + k).className = solo === k ? 'on' : ''; } }
-  for (const k in FAM) $('fam').insertAdjacentHTML('beforeend', `<label><span class="n">${FAM[k]}</span><input type="range" id="v-${k}" min="0" max="2" step="0.05" value="1"><output id="o-${k}"></output><button id="s-${k}">seul</button></label>`);
-  for (const k in FAM) { $('v-' + k).oninput = volumes; $('s-' + k).onclick = e => { e.preventDefault(); solo = solo === k ? null : k; volumes(); }; }
+  // Une scène = un son joué seul : [groupe, titre, sous-titre, familles ouvertes, amplification d'écoute (dB), état de course simulé (x = secondes depuis le clic), action au clic]
+  // L'état est au format de SON.frame : c'est le vrai code du jeu qui joue. « pause » = voiture muette, pour les sons ponctuels.
+  const course = (o = {}) => Object.assign({ state: 'race', r: 0.85, sp: 68, rpm: 0.6, load: 1, gas: 1, spool: 0.6 }, o);
+  const dents = (x, p) => (x % p) / p; // rampe 0→1 qui se répète
+  const SC = {
+    menu: ['mus', 'Musique de menu', 'boucle calme, couleur de la carte', ['mus'], 0, () => ({ state: 'title' })],
+    st0: ['mus', '', '', ['mus'], 0, () => musique()], st1: ['mus', '', '', ['mus'], 0, () => musique()], st2: ['mus', '', '', ['mus'], 0, () => musique()],
+    ralenti: ['mot', 'Ralenti', 'à l\'arrêt, sans charge', ['mot'], 28, () => course({ r: 0, sp: 0, rpm: 0.12, load: 0, gas: 0 })],
+    mi: ['mot', 'Mi-régime en charge', '4 500 tr/min, plein gaz', ['mot'], 14, () => course({ rpm: 0.55 })],
+    haut: ['mot', 'Haut régime en charge', '7 500 tr/min, plein gaz', ['mot'], 14, () => course({ rpm: 0.94 })],
+    reglable: ['mot', 'Moteur réglable', 'curseur de régime et case gaz ci-dessous', ['mot'], 14, () => course({ rpm: u.rpm, load: u.gaz ? 1 : 0, gas: u.gaz ? 1 : 0 })],
+    montee: ['mot', 'Montées de rapport', 'accélération, un rapport toutes les 2,5 s', ['mot'], 14, x => { const p = dents(x, 2.5), cut = p < 0.08; if (cut && !pulse.fait) pulse.up = pulse.fait = 1; if (!cut) pulse.fait = 0; return course({ rpm: 0.55 + 0.38 * p, load: cut ? 0 : 1 }); }],
+    retro: ['mot', 'Rétrogradages', 'freinage, un rapport toutes les 2,5 s', ['mot'], 14, x => { const p = dents(x, 2.5), cut = p < 0.08; if (cut && !pulse.fait) pulse.down = pulse.fait = 1; if (!cut) pulse.fait = 0; return course({ rpm: 0.8 - 0.3 * p, load: 0, gas: 0 }); }],
+    clac: ['mot', 'Clac de boîte seul', 'sans le moteur', ['mot'], 14, null, () => SON.clac()],
+    petarade: ['mot', 'Pétarade', 'lever de pied à haut régime, sans le moteur', ['mot'], 10, null, () => SON.petarade()],
+    derapL: ['pneu', 'Dérapage léger', 'petit angle', ['pneu'], 16, () => course({ slide: 0.3 })],
+    derapF: ['pneu', 'Dérapage à fond', 'grand angle', ['pneu'], 12, () => course({ slide: 1 })],
+    derapR: ['pneu', 'Dérapage réglable', 'curseur d\'angle ci-dessous', ['pneu'], 12, () => course({ slide: u.slide })],
+    choc: ['choc', 'Choc', 'contact contre le mur', ['choc'], 10, null, () => SON.choc(6)],
+    grosChoc: ['choc', 'Gros choc', '', ['choc'], 6, null, () => SON.choc(12)],
+    frott: ['choc', 'Frottement', 'la voiture longe le mur', ['choc'], 12, () => course({ rub: 1 })],
+    boost: ['choc', 'Boost', 'sortie de glisse', ['choc'], 8, null, () => SON.boost()],
+    ventM: ['amb', 'Vent à mi-vitesse', '', ['vent'], 18, () => course({ r: 0.5, sp: 40 })],
+    ventF: ['amb', 'Vent à fond', '', ['vent'], 12, () => course({ r: 1, sp: 80 })],
+    lieu: ['amb', 'Ambiance du lieu', 'telle qu\'on l\'entend dans sa zone, à l\'arrêt', ['amb'], 16, () => course({ r: 0, sp: 0, amb: 1 })],
+    evt: ['amb', 'Événement du lieu', 'grillons, oiseaux, corne, hélicoptère ou sirène selon la carte', ['amb'], 16, () => course({ r: 0, sp: 0, amb: 1 }), () => SON.evenement()],
+    tonnerre: ['amb', 'Tonnerre', 'orage de la ville', ['amb'], 10, null, () => SON.tonnerre()],
+    bip: ['ui', 'Bip du décompte', '', ['ui'], 6, null, () => SON.beep(440)],
+    depart: ['ui', 'Bip de départ', '', ['ui'], 6, null, () => SON.beep(880)],
+    record: ['ui', 'Jingle : record', '', ['ui'], 6, null, () => SON.stinger(true)],
+    pasRecord: ['ui', 'Jingle : pas de record', '', ['ui'], 6, null, () => SON.stinger(false)],
+    radio: ['ui', 'Changement de station', 'le bruit seul, sans la musique', ['ui'], 6, null, () => SON.setStation(SON.station + 1)],
+    tout: ['mix', 'Course complète', 'musique, moteur, pneus, vent, ambiance : le mélange du jeu', Object.keys(FAM), 0, x => Object.assign(musique(), { rpm: 0.55 + 0.4 * dents(x, 4), load: 1, gas: 1, spool: 0.8, amb: 1, slide: u.glisse ? u.slide : 0 })],
+  };
+  const musique = () => course({ r: u.vit, sp: u.vit * 80, plein: u.plein, drift: u.glisse, tun: u.tunnel ? 1 : 0, rpm: 0.2, load: 0, gas: 0 });
+  // état complet envoyé à SON.frame
+  function etat(sc, x) {
+    const o = sc && sc[5] ? sc[5](x) : { state: 'pause' }, r = o.r || 0;
+    return { state: o.state, T: { h0: 500, h1: 700, n: 1000 }, hot: o.plein ? 1 : 0, tun: o.tun || 0, amb: o.amb || 0,
+      car: { vl: o.slide ? 4 + 14 * o.slide : 0, boost: 0, idx: o.plein ? 600 : 0, dist: 1, drift: !!o.drift, rub: o.rub || 0 },
+      r, sp: o.sp || 0, gas: o.gas || 0, hit: 0, up: !!pulse.up, down: !!pulse.down, rpm: o.rpm || 0.2, load: o.load || 0, spool: o.spool || 0, stun: 0 };
+  }
+  const son = () => SON.ac && SON.live;
+  setInterval(() => { if (!son()) return; SON.frame(1 / 60, etat(scene, SON.ac.currentTime - t0)); pulse.up = pulse.down = 0; }, 16); // setInterval : continue fenêtre masquée
 
-  function stations() {
+  function volumes() { for (const k in FAM) { const v = +$('v-' + k).value; $('o-' + k).textContent = v.toFixed(2).replace('.', ','); if (son()) SON.volume(k, scene && scene[3].includes(k) ? v : 0); } }
+  function jouer(id) {
+    if (!son()) return;
+    const sc = SC[id]; scene = sc; t0 = SON.ac.currentTime; pulse.fait = 0;
+    if (/^st\d$/.test(id)) { if (SON.station !== +id[2]) SON.setStation(+id[2]); }
+    volumes(); SON.moniteur(10 ** (sc[4] / 20));
+    if (sc[6]) sc[6]();
+    for (const b of document.querySelectorAll('[data-sc]')) b.className = b.dataset.sc === id ? 'on' : '';
+    $('quoi').innerHTML = `En écoute : <b>${titre(id)}</b>` + (sc[4] ? ` — amplifié de <b>+${sc[4]} dB</b> pour l'écoute seule (en jeu, ce son est ${sc[4]} dB plus bas)` : ' — au niveau réel du jeu');
+  }
+  function stop() { scene = null; if (son()) { volumes(); SON.moniteur(1); } for (const b of document.querySelectorAll('[data-sc]')) b.className = ''; $('quoi').textContent = 'Rien ne joue. Cliquez un son : il joue seul, tout le reste est coupé.'; }
+  const titre = id => /^st\d$/.test(id) ? M.radio[+id[2]].name + ' ' + M.radio[+id[2]].fq : SC[id][1];
+  const sous = id => /^st\d$/.test(id) ? M.radio[+id[2]].genre.toLowerCase() + ' · ' + M.radio[+id[2]].bpm + ' bpm' : SC[id][2];
+  function boutons() {
     $('cartes').innerHTML = CARTES.map(c => `<button data-c="${c.id}" class="${c === M ? 'on' : ''}">${c.nom}</button>`).join('');
-    $('stations').innerHTML = `<button data-s="-1" class="${menu ? 'on' : ''}">Musique de menu<small>boucle calme, couleur de la carte</small></button>` +
-      M.radio.map((s, i) => `<button data-s="${i}" class="${!menu && SON.station === i ? 'on' : ''}">${s.name} ${s.fq}<small>${s.genre.toLowerCase()} · ${s.bpm} bpm</small></button>`).join('');
+    for (const g of ['mus', 'mot', 'pneu', 'choc', 'amb', 'ui', 'mix']) $('g-' + g).innerHTML = Object.keys(SC).filter(id => SC[id][0] === g).map(id => `<button data-sc="${id}" class="${scene === SC[id] ? 'on' : ''}">${titre(id)}<small>${sous(id)}</small></button>`).join('');
   }
-  $('cartes').onclick = e => { const id = e.target.closest('button')?.dataset.c; if (!id) return; M = CARTES.find(c => c.id === id); SON.carte(M); stations(); };
-  $('stations').onclick = e => { const b = e.target.closest('button'); if (!b) return; const i = +b.dataset.s; menu = i < 0; if (!menu) SON.setStation(i); stations(); };
-  for (const id of ['plein', 'glisse', 'tunnel', 'pause', 'gaz']) $(id).onchange = e => { etat[id] = e.target.checked; };
-  for (const id of ['vit', 'rpm', 'slide']) { const el = $(id), out = el.nextElementSibling; (el.oninput = () => { etat[id] = +el.value; out.textContent = (+el.value).toFixed(2).replace('.', ','); })(); }
-  const FX = { tonnerre: () => SON.tonnerre(), bip: () => SON.beep(440), depart: () => { SON.beep(880); SON.crash(); }, record: () => SON.stinger(true), pasRecord: () => SON.stinger(false), evenement: () => SON.evenement() };
-  for (const b of document.querySelectorAll('[data-fx]')) { const k = b.dataset.fx;
-    b.onpointerdown = () => { held[k] = 1; FX[k] ? FX[k]() : pulse[k] = 1; }; b.onpointerup = b.onpointerleave = () => { held[k] = 0; }; }
-  $('go').onclick = () => { SON.init(); volumes(); stations(); $('voile').remove(); };
+  document.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.sc) jouer(b.dataset.sc); else if (b.dataset.c) { stop(); M = CARTES.find(c => c.id === b.dataset.c); SON.carte(M); boutons(); } });
+  for (const k in FAM) $('fam').insertAdjacentHTML('beforeend', `<label><span class="n">${FAM[k]}</span><input type="range" id="v-${k}" min="0" max="2" step="0.05" value="1"><output id="o-${k}"></output></label>`);
+  for (const k in FAM) $('v-' + k).oninput = volumes;
+  for (const id of ['plein', 'glisse', 'tunnel', 'gaz']) $(id).onchange = e => { u[id] = e.target.checked; };
+  for (const id of ['vit', 'rpm', 'slide']) { const el = $(id), out = el.nextElementSibling; (el.oninput = () => { u[id] = +el.value; out.textContent = (+el.value).toFixed(2).replace('.', ','); })(); }
+  $('stop').onclick = stop;
+  $('go').onclick = () => { SON.init(); stop(); boutons(); $('voile').remove(); };
 
-  // mesure : chaque source seule dans un contexte hors ligne, piloté pas à pas par le même SON.frame
-  const dB = v => v > 1e-6 ? (20 * Math.log10(v)).toFixed(1) : '-inf';
-  async function rendre(carte, seul, s, opt = {}) {
-    const sr = 44100, dur = 8, ctx = new OfflineAudioContext(2, sr * dur, sr), saved = { menu, station: SON.station };
-    SON.carte(carte); SON.init(ctx); await SON.pret; menu = !!opt.menu; if (opt.station != null) SON.setStation(opt.station);
-    for (const k in FAM) SON.volume(k, !seul || seul === k ? 1 : 0);
-    const st = Object.assign({ plein: false, glisse: false, tunnel: false, pause: false, gaz: false, vit: 0.7, rpm: 0.3, slide: 0 }, s);
-    const pas = t => { const p = {}; if (opt.chocs && Math.round(t * 20) % 10 === 0) p.grosChoc = 1; for (let i = 0; i < 3; i++) SON.frame(1 / 60, frameState(st, i ? {} : p, opt.held || {})); SON.pump(); };
-    pas(0); for (let t = 0.05; t < dur; t += 0.05) ctx.suspend(t).then(() => { pas(t); ctx.resume(); });
-    const buf = await ctx.startRendering(); let sum = 0, peak = 0, n = 0;
-    for (let c = 0; c < 2; c++) { const x = buf.getChannelData(c); for (let i = sr * 2; i < x.length; i++) { sum += x[i] * x[i]; peak = Math.max(peak, Math.abs(x[i])); n++; } } // les 2 premières secondes (attaques, filtres qui s'ouvrent) sont écartées
-    menu = saved.menu; return { rms: dB(Math.sqrt(sum / n)), crete: dB(peak) };
+  // vumètre : ce qui sort vraiment de la page (après l'amplification d'écoute)
+  const dB = v => v > 1e-6 ? 20 * Math.log10(v) : -120, fmt = v => v < -100 ? '-inf' : v.toFixed(1);
+  let tenue = -120, crete = -120; const buf = new Float32Array(2048);
+  setInterval(() => {
+    if (!son() || !SON.vu) return;
+    SON.vu.getFloatTimeDomainData(buf); let s = 0, p = 0; for (const x of buf) { s += x * x; p = Math.max(p, Math.abs(x)); }
+    const rms = dB(Math.sqrt(s / buf.length)); crete = dB(p); tenue = Math.max(tenue - 0.6, crete);
+    const pos = v => Math.max(0, Math.min(100, (v + 60) / 60 * 100)) + '%';
+    $('niv').style.width = pos(rms); $('tenue').style.left = pos(tenue); $('voyant').className = crete > -50 ? 'on' : '';
+    $('db').textContent = crete > -70 ? `${fmt(rms)} dB · crête ${fmt(tenue)}` : 'silence';
+  }, 50);
+
+  // auto-test : chaque bouton joue 1,2 s ; il doit sortir une crête d'au moins -30 dB
+  const attendre = ms => new Promise(ok => setTimeout(ok, ms));
+  async function autotest() {
+    const L = [];
+    for (const id of Object.keys(SC)) { jouer(id); let max = -120; for (let i = 0; i < (id === 'evt' || id === 'tonnerre' ? 60 : 24); i++) { await attendre(50); max = Math.max(max, crete); } L.push({ son: titre(id), crete: fmt(max), ok: max >= -30 }); }
+    stop(); window.__autotest = L;
+    $('mesures').innerHTML = '<table><tr><th>bouton</th><th>crête sortie (dB)</th><th></th></tr>' + L.map(l => `<tr><td>${l.son}</td><td>${l.crete}</td><td class="${l.ok ? 'ok' : 'ko'}">${l.ok ? 'OK' : 'KO'}</td></tr>`).join('') + '</table>';
+    return L;
   }
+  // mesure : chaque scène seule dans un contexte hors ligne, au niveau réel du jeu, pilotée pas à pas par le même SON.frame
+  async function rendre(carte, id, dur = 8) {
+    const sr = 44100, ctx = new OfflineAudioContext(2, sr * dur, sr), sc = SC[id], mem = Object.assign({}, u);
+    SON.carte(carte); SON.init(ctx); await SON.pret; if (/^st\d$/.test(id)) SON.setStation(+id[2]);
+    for (const k in FAM) SON.volume(k, sc[3].includes(k) ? 1 : 0);
+    pulse.fait = 0; let coups = 0;
+    const pas = t => { if (sc[6] && id !== 'radio' && t >= 2 + coups) { coups++; sc[6](); } for (let i = 0; i < 3; i++) { SON.frame(1 / 60, etat(sc, t + i / 60)); pulse.up = pulse.down = 0; } SON.pump(); }; // sons ponctuels : un par seconde à partir de 2 s
+    pas(0); for (let t = 0.05; t < dur; t += 0.05) ctx.suspend(t).then(() => { pas(t); ctx.resume(); });
+    const b = await ctx.startRendering(); let sum = 0, peak = 0, n = 0;
+    for (let c = 0; c < 2; c++) { const x = b.getChannelData(c); for (let i = sr * 2; i < x.length; i++) { sum += x[i] * x[i]; peak = Math.max(peak, Math.abs(x[i])); n++; } } // les 2 premières secondes (attaques, filtres qui s'ouvrent) sont écartées
+    Object.assign(u, mem); return { carte: carte.id, source: titreDe(carte, id), fam: sc[3].length > 1 ? 'tout' : sc[3][0], rms: fmt(dB(Math.sqrt(sum / n))), crete: fmt(dB(peak)) };
+  }
+  const titreDe = (c, id) => /^st\d$/.test(id) ? c.radio[+id[2]].genre.toLowerCase() : SC[id][1];
   async function mesurer(carte) {
     const L = [];
-    const add = async (nom, seul, s, opt) => L.push(Object.assign({ carte: carte.id, source: nom }, await rendre(carte, seul, s, opt)));
-    for (let i = 0; i < carte.radio.length; i++) { const n = carte.radio[i].genre.toLowerCase();
-      await add('musique ' + n + ', léger', 'mus', { vit: 0.6 }, { station: i }); await add('musique ' + n + ', plein', 'mus', { plein: true, vit: 0.9 }, { station: i }); }
-    await add('musique de menu', 'mus', {}, { menu: true });
-    await add('moteur au ralenti', 'mot', { rpm: 0.15, vit: 0 }); await add('moteur plein gaz, haut régime', 'mot', { rpm: 0.95, gaz: true });
-    await add('dérapage à fond', 'pneu', { slide: 1, vit: 0.8 }); await add('dérapage léger', 'pneu', { slide: 0.3, vit: 0.8 });
-    await add('frottement contre le mur', 'choc', { vit: 0.8 }, { held: { frottement: 1 } }); await add('gros chocs répétés', 'choc', { vit: 0.8 }, { chocs: 1 });
-    await add("ambiance à l'arrêt", 'amb', { vit: 0 }); await add('ambiance + vent à fond', 'amb', { vit: 1 });
-    for (let i = 0; i < carte.radio.length; i++) await add('TOUT ENSEMBLE, pire cas, ' + carte.radio[i].genre.toLowerCase(), null, { plein: true, vit: 1, rpm: 0.95, gaz: true, slide: 1, glisse: true, tunnel: !!carte.tun }, { station: i, chocs: 1, held: { frottement: 1 } });
-    return L;
+    for (const id of Object.keys(SC)) { if (id === 'radio' || id === 'reglable' || id === 'derapR') continue;
+      if (/^st\d$/.test(id) || id === 'tout') for (const plein of [false, true]) { u.plein = plein; u.glisse = id === 'tout' && plein; const l = await rendre(carte, id); l.source += plein ? ', plein' : ', léger'; L.push(l); }
+      else L.push(await rendre(carte, id)); }
+    u.plein = $('plein').checked; u.glisse = $('glisse').checked; return L;
   }
   async function lancer(cartes) {
-    $('mesures').textContent = 'Mesure en cours…'; const L = [], m0 = M, snap = Object.entries(localStorage).filter(([k]) => k.startsWith('vpr.radio')); // la mesure ne doit pas changer la station mémorisée
+    stop(); $('mesures').textContent = 'Mesure en cours…'; const L = [], m0 = M, snap = Object.entries(localStorage).filter(([k]) => k.startsWith('vpr.radio')); // la mesure ne doit pas changer la station mémorisée
     for (const c of cartes) L.push(...await mesurer(c));
     for (const k of Object.keys(localStorage)) if (k.startsWith('vpr.radio')) localStorage.removeItem(k); for (const [k, v] of snap) localStorage.setItem(k, v);
-    SON.carte(m0); SON.init(); volumes(); stations(); window.__mesures = L;
-    $('mesures').innerHTML = '<table><tr><th>carte</th><th>source</th><th>RMS (dB)</th><th>crête (dB)</th></tr>' + L.map(l => `<tr><td>${l.carte}</td><td>${l.source}</td><td>${l.rms}</td><td>${l.crete}</td></tr>`).join('') + '</table>';
+    SON.carte(m0); SON.init(); stop(); boutons(); window.__mesures = L;
+    $('mesures').innerHTML = '<table><tr><th>carte</th><th>source</th><th>famille</th><th>RMS (dB)</th><th>crête (dB)</th></tr>' + L.map(l => `<tr><td>${l.carte}</td><td>${l.source}</td><td>${l.fam}</td><td>${l.rms}</td><td>${l.crete}</td></tr>`).join('') + '</table>';
     return L;
   }
-  $('mesurer').onclick = () => lancer([M]); $('mesurerTout').onclick = () => lancer(CARTES);
-  window.__banc = { lancer, mesurer, rendre };
-  stations();
+  $('autotest').onclick = autotest; $('mesurer').onclick = () => lancer([M]); $('mesurerTout').onclick = () => lancer(CARTES);
+  window.__banc = { lancer, mesurer, rendre, autotest, jouer, stop, SC, u };
+  boutons(); volumes();
 })();
 </script>
 </body>

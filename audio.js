@@ -1,19 +1,20 @@
 // Ville à plein régime — audio : tout est synthétisé (bande-son originale et adaptative). Stations de chaque carte : RADIO dans cartes.js.
 // Interface (window.SON) : init() au premier geste · frame(dt, e) à chaque image · setStation(i), toggleMusic(), carte(M), volume(famille, v) ·
 // beep(f), crash(), stinger(rec), tonnerre() · lus par le jeu : station, nom, fq, genre, musicOn, beat, pulse, ana · banc d'écoute et mesure :
-// init(contexte hors ligne), pump(), pret, live, vol, stations, evenement() · prises de test : ac, out, smp.
+// init(contexte hors ligne), pump(), pret, live, vol, stations, evenement(), moniteur(gain), vu, et les bruitages ponctuels clac(), choc(v),
+// boost(), petarade() · prises de test : ac, out, smp.
 // Chaîne : voix → (batterie | bus pompé → filtre balayé → saturation de bus) → coupure de station → musique oui/non → filtre de vitesse et de
-// tunnel → famille « mus » → master → compresseur. Familles réglables : mus, mot (moteur), pneu, choc (chocs, frottement, boost, bips), amb.
+// tunnel → famille « mus » → master → compresseur. Familles réglables : mus, mot (moteur, boîte), pneu, vent, amb (lieu), choc (chocs, frottement, boost), ui (bips, jingle, radio).
 (() => {
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const hz = m => 440 * 2 ** ((m - 69) / 12), R = -99; // R : silence dans un thème (voir mel() dans cartes.js)
   let M = CARTE, ST = M.radio, TH = M.th;
-  let AC, live = true, timer, pret = Promise.resolve(), ana, master, musicG, tuneG, drumG, musF, padF, padG, duckG, swF, busDry, busDrv, arpIn, leadIn, acid, fuzz, kdrv, bsat, bclean, dly, dlyFb, rev, musSend, motSend, nbuf;
+  let AC, live = true, timer, pret = Promise.resolve(), ana, master, musicG, tuneG, drumG, musF, padF, padG, duckG, swF, busDry, busDrv, arpIn, leadIn, acid, fuzz, kdrv, bsat, bclean, dly, dlyFb, rev, musSend, motSend, nbuf, outG, vu;
   let t0 = 0, nextT = 0, stp = 0, musicOn = true, lastHit = 0, lastN = 0, lastB = 0, menu = true;
-  const vol = { mus: 1, mot: 1, pneu: 1, choc: 1, amb: 1 }, V = {}; // volume par famille (banc d'écoute) et leurs nœuds
+  const vol = { mus: 1, mot: 1, pneu: 1, vent: 1, amb: 1, choc: 1, ui: 1 }, V = {}; // volume par famille (banc d'écoute) et leurs nœuds
   // état musical piloté par la course : mix = secteur chaud, inten = vitesse, driftL = glisse, drums/lead = sections
   let mix = 0, inten = 0, driftL = 0, drums = 0, lead = false, wasIn = false, wasNear = false, wasBoost = false, lastGas = 0;
-  let eng, sq, scrubG, scrapeG, windG, ambBed, ambT = 2;
+  let eng, sq, scrubG, scrapeG, windG, ambBed, ambT = 2, uiF;
   const RK = () => 'vpr.radio' + (M.id === 'ville' ? '' : '.' + M.id); // dernière station écoutée, par carte
   let station = 0, S16 = 60 / ST[0].bpm / 4;
 
@@ -132,7 +133,7 @@
     nz(t, 1.4, 0.28, drumG, 'highpass', 4500);
     const o = osc('sine', 70, t, 0.7, 0.8, drumG); o && o.frequency.exponentialRampToValueAtTime(30, t + 0.5);
   }
-  const stinger = up => AC && (up ? [69, 73, 76, 81, 85] : [69, 64, 60, 57]).forEach((n, i) => osc('square', hz(n), AC.currentTime + i * 0.09, 0.5, 0.12, arpIn));
+  const stinger = up => AC && (up ? [69, 73, 76, 81, 85] : [69, 64, 60, 57]).forEach((n, i) => osc('square', hz(n), AC.currentTime + i * 0.09, 0.5, 0.12, uiF));
 
   function schedMenu(s, t) {
     const mn = MENU[M.id] || MENU.ville, bar = s >> 4, q = s % 16, ch = mn.CH[bar % mn.CH.length], a = mn.arp[q];
@@ -196,8 +197,8 @@
     if (!AC) { S16 = 60 / ST[station].bpm / 4; return; }
     const t = AC.currentTime; // grésillement entre deux stations : la musique se coupe, friture qui balaie la bande, craquements
     tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.setValueAtTime(0, t + 0.32); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.42); // shortcut: les nappes de l'ancienne station finissent de sonner après la friture (1 s au plus), à couper par un bus par station si ça s'entend
-    const f = nz(t, 0.36, 0.2, musF, 'bandpass', 900, 2); if (f) { f.frequency.exponentialRampToValueAtTime(3200, t + 0.16); f.frequency.exponentialRampToValueAtTime(1300, t + 0.34); }
-    for (let k = 0; k < 5; k++) nz(t + Math.random() * 0.3, 0.012, 0.25, musF, 'highpass', 2000);
+    const f = nz(t, 0.36, 0.2, V.ui, 'bandpass', 900, 2); if (f) { f.frequency.exponentialRampToValueAtTime(3200, t + 0.16); f.frequency.exponentialRampToValueAtTime(1300, t + 0.34); }
+    for (let k = 0; k < 5; k++) nz(t + Math.random() * 0.3, 0.012, 0.25, V.ui, 'highpass', 2000);
     if (!menu) retune(t + 0.34);
   }
   function carte(m) { // change de carte (banc d'écoute) : stations, ambiance et couleur du menu
@@ -234,7 +235,8 @@
     if (AC && live && !ctx) return AC.resume();
     if (AC && live) AC.close();
     AC = ctx || new (window.AudioContext || window.webkitAudioContext)(); live = !ctx;
-    const comp = AC.createDynamicsCompressor(); comp.connect(gain(0.67, AC.destination)); // marge après le compresseur : mesuré, aucune crête au-dessus de -3 dB
+    const comp = AC.createDynamicsCompressor(); outG = gain(0.67, AC.destination); comp.connect(outG); // marge après le compresseur : mesuré, aucune crête au-dessus de -3 dB
+    vu = AC.createAnalyser(); vu.fftSize = 2048; outG.connect(vu); // ce qui sort vraiment, pour le vumètre du banc d'écoute
     lastHit = 0; ambT = 2;
     master = gain(0.9, comp); ana = AC.createAnalyser(); ana.fftSize = 64; master.connect(ana);
     for (const k in vol) V[k] = gain(vol[k], master);
@@ -270,11 +272,17 @@
     ns.connect(b1); ns.connect(b2); sq = { g: sqG, b1, b2 };
     scrubG = gain(0, V.pneu); ns.connect(filt('lowpass', 160, 0.7, scrubG));
     scrapeG = gain(0, V.choc); ns.connect(filt('bandpass', 1700, 1.2, scrapeG)); ns.connect(filt('lowpass', 260, 0.7, gain(1.5, scrapeG))); // frottement contre le mur : tôle + grondement
-    windG = gain(0, V.amb); ns.connect(filt('lowpass', 400, 0.5, windG));
+    uiF = filt('lowpass', 3000, 0.5, V.ui);
+    windG = gain(0, V.vent); ns.connect(filt('lowpass', 400, 0.5, windG));
     buildAmb(); retune(AC.currentTime + 0.1); tuneG.gain.value = lvl();
     if (live) { AC.resume(); timer = timer || setInterval(() => live && pump(), 30); }
   }
-  const beep = f => AC && osc('square', f, AC.currentTime, 0.25, 0.2, V.choc);
+  const beep = f => AC && osc('square', f, AC.currentTime, 0.25, 0.2, V.ui);
+  // bruitages ponctuels : appelés par audioFrame, et un par un par le banc d'écoute
+  function clac(t = AC.currentTime) { osc('triangle', 80, t, 0.06, 0.07, V.mot); } // clac de boîte ; la coupure de poussée vient de la physique
+  function choc(hit, t = AC.currentTime) { nz(t, 0.25, Math.min(0.6, hit * 0.04), V.choc, 'lowpass', 400); }
+  function boostFx(t = AC.currentTime) { const o = osc('sawtooth', 220, t, 0.5, 0.1, filt('lowpass', 3000, 0.5, V.choc)); o.frequency.exponentialRampToValueAtTime(880, t + 0.4); const w = nz(t, 0.6, 0.08, V.choc, 'bandpass', 500, 1.5); w.frequency.exponentialRampToValueAtTime(4000, t + 0.5); } // boost de sortie de glisse : sifflement + souffle
+  function petarade(spool = 1, t = AC.currentTime) { nz(t, 0.25, 0.04 * spool, V.mot, 'bandpass', 1400, 1.5); for (let i = 0; i < 3; i++) nz(t + 0.08 + Math.random() * 0.4, 0.035, 0.12, V.mot, 'lowpass', 900); } // lever de pied à haut régime
   // e : état de la course pour cette image — { state, car, T, hot (0..1 dans le secteur chaud), tun (0..1 dans le tunnel), r (vitesse 0..1), sp, gas, hit, up (rapport monté), rpm, load, spool, stun }
   function audioFrame(dt, e) {
     if (!AC) return;
@@ -283,20 +291,20 @@
     const t = AC.currentTime, racing = state === 'race', k = (p, v, tc = 0.04) => p.setTargetAtTime(v, t, tc);
     if ((state === 'title') !== menu) { menu = !menu; retune(t + 0.05); tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.3); } // menu ↔ course : la boucle de menu laisse la place à la station
     // moteur (discret sous la musique) : coupure au passage de rapport, timbre selon la charge, turbo, pétarades au lever de pied
-    if (up) osc('triangle', 80, t, 0.06, 0.07, V.mot); // clac de boîte ; la coupure de poussée vient de la physique
+    if (up) clac(t);
     const f = rpm * CARD.red / 40 * CARD.son; // la moitié de la fréquence d'allumage d'un 6 cylindres (3 explosions par tour) : même montée en régime, une octave plus grave
     k(eng.a.frequency, f); k(eng.b.frequency, f / 2); k(eng.c.frequency, f * 2); k(eng.lfo.frequency, f / 3);
     k(eng.lp.frequency, 180 + rpm * 320 + load * 380); k(eng.drive.gain, 0.35 + 0.5 * load); k(eng.lfoG.gain, 0.1 + 0.15 * load); // filtre bas : le grave domine
     k(eng.out.gain, state === 'title' ? 0.004 : 0.007 + 0.012 * load + 0.004 * rpm); // volontairement sous la musique
-    if (lastGas && !gas && racing && rpm > 0.55 && spool > 0.5) { nz(t, 0.25, 0.04 * spool, V.mot, 'bandpass', 1400, 1.5); for (let i = 0; i < 3; i++) nz(t + 0.08 + Math.random() * 0.4, 0.035, 0.12, V.mot, 'lowpass', 900); }
+    if (lastGas && !gas && racing && rpm > 0.55 && spool > 0.5) petarade(spool, t);
     lastGas = gas;
     // pneus : rien en appui normal ; le feulement monte lentement avec l'angle de glisse, en volume plus qu'en hauteur
     const slip = Math.abs(car.vl), a = sp > 8 ? clamp((slip - 4) / 14, 0, 1) : 0, fq = 380 + 150 * a + 10 * Math.sin(t * 21);
     k(sq.b1.frequency, fq, 0.05); k(sq.b2.frequency, fq * 1.52, 0.05); k(sq.g.gain, 0.22 * a, 0.2);
     k(scrubG.gain, 0.5 * clamp(slip / 12, 0, 1) * r, 0.08); k(windG.gain, 0.22 * r * r, 0.1);
     k(scrapeG.gain, car.rub ? 0.05 + 0.1 * r : 0, 0.05);
-    if (hit > 3 && t - lastHit > 0.15) { lastHit = t; nz(t, 0.25, Math.min(0.6, hit * 0.04), V.choc, 'lowpass', 400); }
-    if (car.boost > 0 && !wasBoost) { const o = osc('sawtooth', 220, t, 0.5, 0.1, filt('lowpass', 3000, 0.5, V.choc)); o.frequency.exponentialRampToValueAtTime(880, t + 0.4); const w = nz(t, 0.6, 0.08, V.choc, 'bandpass', 500, 1.5); w.frequency.exponentialRampToValueAtTime(4000, t + 0.5); } // boost de sortie de glisse : sifflement + souffle
+    if (hit > 3 && t - lastHit > 0.15) { lastHit = t; choc(hit, t); }
+    if (car.boost > 0 && !wasBoost) boostFx(t);
     wasBoost = car.boost > 0;
     // ambiance du lieu : s'efface dans le tunnel ; événements espacés au hasard
     k(ambBed.gain, 1 - 0.85 * tun, 0.3); if ((ambT -= dt) < 0) ambT = ambEvent(t + 0.05);
@@ -323,6 +331,8 @@
     toggleMusic() { musicOn = !musicOn; if (AC) musicG.gain.value = musicOn ? 1 : 0; },
     volume(fam, v) { vol[fam] = v; if (V[fam]) V[fam].gain.value = v; },
     evenement: () => { ambT = 0; }, get live() { return live; },
+    clac: () => AC && clac(), choc: v => AC && choc(v), boost: () => AC && boostFx(), petarade: () => AC && petarade(),
+    moniteur(v) { if (outG) outG.gain.value = 0.67 * v; }, get vu() { return vu; }, // gain d'écoute du banc : sans effet sur le jeu
     get vol() { return vol; }, get pret() { return pret; }, get stations() { return ST; },
     get station() { return station; }, get nom() { return ST[station].name; }, get fq() { return ST[station].fq; }, get genre() { return ST[station].genre; }, get musicOn() { return musicOn; },
     get beat() { return AC ? Math.max(0, (AC.currentTime - t0) / (4 * S16)) : 0; }, // temps écoulés depuis le début de la station, calés sur le kick
