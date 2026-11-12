@@ -161,6 +161,38 @@ assert(arr[3].fin - arr[0].fin < 8, 'course trop étalée: ' + arr.map(c => c.fi
 R = newRace(T, 1); while (!R.cars.slice(1).every(c => c.fin) && R.t < 100) stepRace(R, I(0, 0), H);
 assert(R.cars[0].pos === 4 && !R.cars[0].fin && !R.done && R.t < 60, 'course à 1 tour avec joueur immobile');
 
+// ---------- course à élimination : autant de tours que de voitures ; à chaque passage de ligne du meneur à partir de la fin du tour 2, la dernière sort ----------
+let elimTxt;
+{
+  const nom = (R, c) => R.cars.indexOf(c) ? 'IA' + R.cars.indexOf(c) : 'joueur', vivantes = R => R.cars.filter(c => !c.out);
+  const E = newRace(T, 3, AI_LVL, 0, { elim: true }), sorties = []; let tetes = 0, pt = 0;
+  assert(E.laps === 4 && E.cars.every(c => !c.out), 'élimination : autant de tours que de voitures, toutes en piste au départ');
+  while (!E.done && E.t < 400) {
+    stepRace(E, null, H);
+    const tete = Math.floor(Math.max(...E.cars.map(c => c.dist)) / n); if (tete > pt) { pt = tete; tetes++; }
+    for (const c of E.cars) if (c.out && !sorties.includes(c)) {
+      sorties.push(c);
+      assert(pt >= 2, `élimination : ${nom(E, c)} sort au premier tour (${E.t} s)`);
+      assert(c.pos === E.cars.length - sorties.length + 1 && c.dist === Math.min(...[c, ...vivantes(E)].map(x => x.dist)), `élimination : ${nom(E, c)} sort sans être dernière`);
+      assert(sorties.length === pt - 1, `élimination : ${sorties.length} sorties après ${pt} passages du meneur`);
+    }
+    for (const c of E.cars) assert(fin(c) && Math.abs(c.d) <= W, 'élimination : NaN ou voiture hors piste');
+  }
+  const [gagnant] = vivantes(E);
+  assert(E.done && sorties.length === 3 && vivantes(E).length === 1 && gagnant.fin && gagnant.dist >= 4 * n, `élimination non terminée (${sorties.length} sorties, ${E.t} s)`);
+  assert.deepStrictEqual(raceOrder(E), [gagnant, ...sorties.reverse()], "élimination : le classement final doit être l'ordre inverse des sorties");
+  raceOrder(E).forEach((c, i) => assert(c.pos === i + 1));
+  // la voiture sortie se range : elle ralentit, ne touche plus personne, et le pilote automatique des autres ne s'en occupe plus
+  const der = sorties[2], ts = der.out; while (E.t < ts + 6) { stepRace(E, null, H); assert(!der.bump && Math.abs(der.d) <= W); }
+  assert(Math.hypot(der.vx, der.vz) < 3 && Math.abs(der.d) > 3, `élimination : la voiture sortie doit se ranger sur le côté (${Math.hypot(der.vx, der.vz)} m/s, à ${der.d} m de l'axe)`);
+  const R2 = newRace(T, 3, [1], 0, { elim: true }), [p, q] = R2.cars; at(p, 60, 0, 40); at(q, 62, 0, 0); q.out = 1; for (let i = 0; i < 1 / H; i++) { stepRace(R2, I(0, 1), H); assert(!p.bump, 'une voiture sortie ne doit plus gêner'); }
+  // un joueur qui ne touche à rien : épargné au premier passage du meneur, sorti au deuxième ; la course se finit sans lui
+  const F = newRace(T, 3, AI_LVL, 0, { elim: true }); let passages = 0, pp = 0, vu = 0;
+  while (!F.done && F.t < 400) { stepRace(F, I(0, 0), H); const k = Math.floor(Math.max(...F.cars.map(c => c.dist)) / n); if (k > pp) { pp = k; passages++; } if (F.cars[0].out && !vu) vu = passages; }
+  assert(vu === 2 && F.done && F.cars[0].pos === 4 && !F.cars[0].fin, `élimination : joueur immobile sorti au passage ${vu} du meneur`);
+  elimTxt = `${E.laps} tours, sorties à ${sorties.reverse().map(c => nom(E, c) + ' ' + c.out.toFixed(2)).join(', ')} s, vainqueur ${nom(E, gagnant)} en ${gagnant.fin.toFixed(2)} s`;
+}
+
 // ---------- relief : sauts, réceptions, murs roulables (sur la carte du barrage, qui les déclare) ----------
 {
   globalThis.CARTE = CARTES.find(m => m.id === 'barrage'); delete require.cache[require.resolve('./sim.js')]; require('./sim.js');
@@ -217,3 +249,4 @@ assert(R.cars[0].pos === 4 && !R.cars[0].fin && !R.done && R.t < 60, 'course à 
   console.log(`OK  relief (barrage) : sauts à 108 / 162 / 216 km/h = ${s30.d.toFixed(0)} / ${s45.d.toFixed(0)} / ${s60.d.toFixed(0)} m (${s60.t.toFixed(2)} s, ${s60.hmax.toFixed(1)} m de haut, impact ${s60.land.toFixed(1)} m/s), fosse franchie en ${ok.t.toFixed(1)} s, ratée en ${rate.t.toFixed(1)} s ; virage relevé : propre ${propre.t.toFixed(2)} s (mini ${(propre.vmin * 3.6) | 0} km/h), par le mur ${parMur.t.toFixed(2)} s (mini ${(parMur.vmin * 3.6) | 0} km/h, ${parMur.ymax.toFixed(1)} m de haut)`);
 }
 console.log(`OK  course : IA seules ${laps.map(l => l.toFixed(2)).join(' / ')} s au tour (niveaux ${AI_LVL.join(' / ')}), dépassement en ${tpass.toFixed(1)} s, 3 tours à 4 IA : ${arr.map(c => R0(c) + ' ' + c.fin.toFixed(2)).join(', ')} (${walls} chocs mur, ${bumps} chocs voiture)`);
+console.log(`OK  élimination : ${elimTxt}`);

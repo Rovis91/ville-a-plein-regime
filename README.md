@@ -20,6 +20,7 @@ Prenez le volant d'une bête de 500 chevaux et lâchez-la dans les artères d'un
 
 - **CONTRE-LA-MONTRE** : enchaînez les tours, battez vos records… puis battez votre propre **fantôme** !
 - **COURSE** : 3 tours, 3 rivaux sans pitié. **KENJI**, **REI** et **JUN** ne vous feront aucun cadeau.
+- **ÉLIMINATION** : 4 voitures, 4 tours. À chaque passage sur la ligne, **le dernier sort**. Jusqu'au duel final !
 
 <p align="center"><img src="docs/depart.png" alt="La grille de départ"></p>
 
@@ -113,6 +114,12 @@ X ou N la dépense : une jauge pleine pousse 3 secondes, gaz ouverts et roues au
 
 Les médailles se mesurent toujours au tour lancé du pilote automatique, qui part avec une jauge pleine et la dépense en ligne droite. La physique ayant changé, les records d'avant la V2 (clés `vpr6.*`) ne comptent plus : le menu le signale une fois.
 
+### Course à élimination
+
+Variante de la course, au menu des modes (« ÉLIMINATION », aux trois difficultés). Il y a autant de tours que de voitures. Chaque fois que le meneur passe la ligne, à partir de la fin du tour 2, la voiture classée dernière sort : elle se range sur le côté, clignote et disparaît, sans plus gêner personne. Le premier tour est protégé, le dernier se joue à deux. Un bandeau rouge prévient le joueur tant qu'il est dernier. Le classement final est l'ordre inverse des sorties.
+
+Dans `sim.js` : `newRace(T, tours, niveaux, élastique, { elim: true })` ; une voiture sortie porte `c.out` (le temps de sa sortie), et `raceOrder(R)` donne le classement.
+
 Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/E sur un clavier QWERTY. Les autres commandes sont lues par la lettre tapée.
 
 ## Fichiers
@@ -147,7 +154,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 node test.js
 ```
 
-Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, la jauge de nitro (remplissage, poussée, choc, vol), l'aspiration et la course contre IA. Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
+Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, la jauge de nitro (remplissage, poussée, choc, vol), l'aspiration, la course contre IA et la course à élimination (personne ne sort au premier tour, classement = ordre inverse des sorties). Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
 
 ```bash
 node test-cartes.js
