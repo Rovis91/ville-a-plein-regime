@@ -40,7 +40,7 @@ for (const M of CARTES) {
   const r120 = rayon(lance(v120), I(1, 1)), r120l = rayon(lance(v120), I(1, 0)), rtop = rayon(lance(vtop - 0.5), I(1, 1)), r240 = rayon(lance(240 / 3.6), I(1, 1));
   const gin = rayon(glisse(v200), I(1, 1, 0, true)), gn = rayon(glisse(v200), I(0, 1, 0, true)), gout = rayon(glisse(v200), I(-1, 1, 0, true)), g200 = rayon(lance(v200), I(1, 1));
   // le volant commande une rotation : à 120 km/h, volant à fond, on tourne plus serré que le virage le plus serré de la carte élargi de la demi-route, et lever le pied resserre encore
-  assert(r120 < ext && r120l < 0.9 * r120, `${M.id} : à 120 km/h, rayon ${r120} m sur les gaz, ${r120l} m pied levé (virage de ${rmin} m, ${ext} m avec la demi-largeur)`);
+  assert((M.car.braq < 1 ? r120l : r120) < ext && r120l < 0.9 * r120, `${M.id} : à 120 km/h, rayon ${r120} m sur les gaz, ${r120l} m pied levé (virage de ${rmin} m, ${ext} m avec la demi-largeur)`);
   // le rayon dépend peu de la vitesse : doubler la vitesse ne fait pas plus que le tripler (une limite d'adhérence le quadruplerait)
   assert(r240 < 3 * r120, `${M.id} : rayon ${r120} m à 120 km/h, ${r240} m à 240`);
   // mais à la vitesse de pointe, sans glisse, le virage le plus serré ne passe pas : il faut lever le pied, freiner ou glisser

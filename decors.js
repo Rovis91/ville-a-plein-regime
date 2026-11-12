@@ -272,11 +272,13 @@
       h.ribbon(iG, nG, -W, -2, W, -2, beton, 8); // le tablier (ses flancs sont les murets de la route), sur deux piles
       inst(h, h.geo('pileViaduc'), beton, [1, 2].map(k => { const s = S[iG + Math.round(nG * k / 3)], y0 = g.hAt(s.x, s.z) - 2; return [s.x, (s.y - 2 + y0) / 2, s.z, h.across(s), 1, s.y - 2 - y0, 0.5]; }));
       // la glace vive : partout où la route en est (T.surf, la table de la physique), une plaque sombre et luisante posée sur la neige tassée, les deux bouts en langues
-      const opt = { alphaTest: 0.1, gloss: 0.7, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, vive = i => T.surf[(i + N) % N].vir > 0.4;
+      const opt = { alphaTest: 0.1, gloss: 0.1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, vive = i => T.surf[(i + N) % N].vir > 0.4;
       const plaque = h.mat('glaceVive', opt, 0), debut = h.mat('glaceVive', opt, 1), fin = h.mat('glaceVive', { ...opt, rep: [1, -1] }, 1), B = 5; // B échantillons (10 m) par bout
       for (let i = 0; i < N; i++) if (vive(i) && !vive(i - 1)) { let n = 1; while (vive(i + n)) n++;
         const pose = (i0, cnt, m, v) => h.ribbon((i0 + N) % N, cnt, -W + 0.3, 0.03, W - 0.3, 0.03, m, v);
         pose(i, B, debut, 2 * B); pose(i + B, n - 2 * B, plaque, 32); pose(i + n - B, B, fin, 2 * B); }
+      // congères : la neige repoussée par le chasse-neige fait un mur clair de chaque côté, plus haut que la glissière (le bord de la route se lit de loin) ; rien sur le pont
+      h.ribbon((iG + nG) % N, N - nG, -(W + 3.5), 2.4, -(W + 0.1), 1.2, neige, 10); h.ribbon((iG + nG) % N, N - nG, W + 0.1, 1.2, W + 3.5, 2.4, neige, 10);
       // la falaise du départ, côté montagne : elle garde la route à l'ombre du point 2 au point 3 ; une marche de roche givrée, la neige reprend au-dessus
       { const i0 = pt(h, 2), n = (pt(h, 3) - i0 + N) % N, m = S[(i0 + (n >> 1)) % N], ht = s => 3 + 17 * Math.max(0, 1 - (Math.hypot(s.x - m.x, s.z - m.z) / (n + 30)) ** 2);
         h.ribbon((i0 - 20 + N) % N, n + 40, W + 3, -1, W + 8, ht, h.mat('rocGivre', { side: THREE.DoubleSide }), 16); h.ribbon((i0 - 20 + N) % N, n + 40, W + 8, ht, W + 60, s => ht(s) + 10, neige, 10); }
@@ -284,15 +286,29 @@
       const arbres = [], bois = x => x < -90, iB = pt(h, 24), nB = (pt(h, 28) - iB + N) % N;
       for (let k = 0; k < nB; k += 3) for (const sd of [-1, 1]) { const [x, z] = bord(S[(iB + k) % N], sd, W + 5 + rnd() * 8); if (bois(x) && g.dAt(x, z) > W + 4) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, 0.8 + rnd() * 0.7]); }
       for (let k = 0; k < 2200; k++) { const x = g.box[0] + rnd() * (g.box[2] - g.box[0]), z = g.box[1] + rnd() * (g.box[3] - g.box[1]), d = g.dAt(x, z), y = g.hAt(x, z);
-        if (d > 15 && d < 260 && y - 0.25 * Math.max(0, d - 80) < 100 && !gorge(x, z) && (bois(x) ? rnd() < 0.9 : Math.sin(x * 0.02) + Math.cos(z * 0.027) + rnd() > 1.15)) arbres.push([x, y + 6, z, rnd() * 6, 0.7 + rnd() * 0.8]); }
+        if (d > 12 && d < 260 && y - 0.25 * Math.max(0, d - 80) < 100 && !gorge(x, z) && (bois(x) ? rnd() < 0.9 : Math.sin(x * 0.02) + Math.cos(z * 0.027) + rnd() > 0.85)) arbres.push([x, y + 6, z, rnd() * 6, 0.7 + rnd() * 0.8]); }
       const futs = arbres.map(p => { const y0 = p[1] - 6; p[1] = y0 + 10 * p[4]; return [p[0], y0 + 2.4 * p[4], p[2], 0, p[4]]; });
       inst(h, h.geo('cedre'), h.mat('sapinNeige'), arbres); inst(h, h.geo('tronc'), h.mat('tronc'), futs);
-      // jalons à neige au ras des congères, tous les 24 m : le seul balisage du col, leur bague s'allume dans les phares
-      const jalons = []; for (let i = 0; i < N; i += 12) for (const sd of [-1, 1]) { const [x, z] = bord(S[i], sd, W + 0.5); jalons.push([x, S[i].y, z]); }
+      // jalons à neige au ras des congères, tous les 24 m, tous les 12 m en virage : le seul balisage du col, leur bague s'allume dans les phares
+      const jalons = []; for (let i = 0; i < N; i += Math.abs(S[i].k) > 0.008 ? 6 : 12) for (const sd of [-1, 1]) { const [x, z] = bord(S[i], sd, W + 0.5); jalons.push([x, S[i].y, z]); }
       insts(h, 'jalon', { piquet: h.mat('cone'), bague: h.mat('catadioptre', { lum: 1, retro: 2.5 }) }, jalons);
       // le refuge du col, côté aval, fenêtres allumées, et le panneau du col
       const iR = pt(h, 19), gR = repere(h, S[iR]), [lx, lz] = bord(S[iR], -1, W + 9);
-      h.pose('refuge', { pierre: h.mat('pierre', { c: 0x8a92a4 }), mur: h.mat('planches', { c: 0x9a7a5a }), toit: neige, fenetre: h.mat('vitrine', { lum: 1, c: 0xffc070 }), porte: h.mat('planches', { c: 0x4a3626 }) }, gR, [-(W + 17), 0, 0]);
+      const peauR = { pierre: h.mat('pierre', { c: 0x8a92a4 }), mur: h.mat('planches', { c: 0x9a7a5a }), toit: neige, fenetre: h.mat('vitrine', { lum: 1, c: 0xffc070 }), porte: h.mat('planches', { c: 0x4a3626 }) };
+      h.pose('refuge', peauR, gR, [-(W + 17), 0, 0]);
+      // deux voitures ensevelies devant le refuge : il ne dépasse que les vitres et les roues
+      const auto = { caisse: neige, vitre: h.mat('vitreSombre'), feuRouge: h.mat('feuRouge'), feuBlanc: h.mat('lampe'), chassis: h.mat('matGris'), roue: h.mat('roue'), pneu: h.mat('pneu') };
+      for (const [dz, a] of [[11, 1.4], [16, 1.75]]) { const v = new THREE.Group(); v.position.set(-(W + 8), -0.15, dz); v.rotation.y = a; gR.add(v); h.pose('voitureGaree', auto, v); }
+      // le hameau du fond de vallée, dans la boucle du départ : six chalets aux fenêtres allumées, pignon vers la route
+      insts(h, 'refuge', peauR, [[28, -1, 30], [29, 1, 26], [29, -1, 48], [30, -1, 28], [0, -1, 34], [1, 1, 30]].map(([p, sd, o]) => { const s = S[pt(h, p)], [x, z] = bord(s, sd, W + o); return [x, g.hAt(x, z) - 0.8, z, h.across(s) + (sd > 0 ? Math.PI : 0)]; }));
+      // le col est fermé : les barrières ont été poussées sur le bas-côté après le départ, leur feu orange allumé
+      for (const dz of [0, 4]) h.pose('barriere', { rayures: h.mat('rayures', LUM), clignotant: h.mat('clignotant', LUM) }, repere(h, S[14]), [W + 5, 0.6, dz]);
+      // la ligne à haute tension traverse la vallée d'est en ouest, entre le départ et les lacets
+      for (let x = -160; x <= 640; x += 160) if (g.dAt(x, 140) > 20) h.pose('pyloneHT', { acier: h.mat('acier') }, h.scene, [x, g.hAt(x, 140), 140]);
+      // rochers qui percent la neige : les mêmes pyramides que les sommets, petites, plus nombreuses là-haut où il n'y a plus d'arbres
+      const rocs = []; for (let k = 0; k < 900 && rocs.length < 70; k++) { const x = g.box[0] + rnd() * (g.box[2] - g.box[0]), z = g.box[1] + rnd() * (g.box[3] - g.box[1]), d = g.dAt(x, z), y = g.hAt(x, z), l = 5 + rnd() * 14;
+        if (d > l + 14 && d < 220 && !gorge(x, z) && rnd() < (y > 80 ? 0.9 : 0.25)) rocs.push([x, y - 1, z, rnd() * 1.5, l, l * (0.6 + rnd() * 0.9), l * (0.7 + rnd() * 0.6)]); }
+      inst(h, h.geo('pic'), h.mat('rocNeige'), rocs);
       h.lum(iR, lx, S[iR].y + 3, lz, 0xffb060, 45, 1.3);
       h.pose('panneauCol', { poteau: h.mat('acier'), plaque: h.mat('ecrit', { retro: 1.5 }, 128, 42, '#1c3fa8', '#f4f8ff', 'COL DE L\'ECHINE · 1922 m', 10) }, gR, [-(W + 4), 0, -16]);
       // les sommets, en couronne à plus d'un kilomètre, bleus dans le petit jour

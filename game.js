@@ -86,9 +86,9 @@
   const hudC = document.createElement('canvas'), hg = hudC.getContext('2d'), hudT = new THREE.CanvasTexture(hudC);
   hudT.minFilter = hudT.magFilter = THREE.NearestFilter;
   const post = new THREE.ShaderMaterial({
-    uniforms: { t: { value: rt.texture }, h: { value: hudT }, amt: { value: 0 }, ab: { value: 0 }, res: { value: 270 }, bloom: { value: TH.bloom }, scan: { value: TH.scan }, px: { value: new THREE.Vector2(1 / 480, 1 / 270) } },
+    uniforms: { t: { value: rt.texture }, h: { value: hudT }, amt: { value: 0 }, ab: { value: 0 }, vig: { value: 0 }, res: { value: 270 }, bloom: { value: TH.bloom }, scan: { value: TH.scan }, px: { value: new THREE.Vector2(1 / 480, 1 / 270) } },
     vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0., 1.); }',
-    fragmentShader: `uniform sampler2D t, h; uniform float amt, ab, res, bloom, scan; uniform vec2 px; varying vec2 v;
+    fragmentShader: `uniform sampler2D t, h; uniform float amt, ab, vig, res, bloom, scan; uniform vec2 px; varying vec2 v;
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); } // matrice de Bayer 4×4, par récurrence
       void main(){
         vec2 c0 = vec2(.5, .42), d = v - c0; float l = length(d); vec3 c = vec3(0.);
@@ -103,7 +103,7 @@
         ${QUANT ? `vec2 q = v / px; c = floor(c * ${QUANT}. + (b2(.5 * q) * .25 + b2(q) - .5) * ${TRAME.toFixed(2)} + .5) / ${QUANT}.; // couleurs réduites et tramées, sur la grille de pixels du jeu` : ''}
         vec4 hd = texture2D(h, v); c = mix(c, hd.rgb, hd.a);
         c *= 1. - scan * mod(floor(v.y * res), 2.); // scanlines calées sur la grille
-        c *= 1. - .9 * l * l;                       // vignette
+        c *= max(0., 1. - (.9 + .7 * vig) * l * l);  // vignette, resserrée pendant la nitro
         gl_FragColor = vec4(c, 1.);
       }`,
   });
@@ -112,7 +112,7 @@
   if (ST) { // passe finale des styles : la scène telle quelle, l'effet du style, le HUD (toujours sur sa grille de 270 lignes), une vignette légère
     if (ST.z) { rt.depthTexture = new THREE.DepthTexture(1, 1); rt.depthTexture.type = THREE.UnsignedIntType; }
     Object.assign(post.uniforms, { dz: { value: rt.depthTexture }, ecr: { value: new THREE.Vector2(1, 1) }, pal: { value: PAL.map(c => new THREE.Color(c)) } });
-    post.fragmentShader = `uniform sampler2D t, h, dz; uniform float amt; uniform vec2 px, ecr; uniform vec3 pal[5]; varying vec2 v;
+    post.fragmentShader = `uniform sampler2D t, h, dz; uniform float amt, vig; uniform vec2 px, ecr; uniform vec3 pal[5]; varying vec2 v;
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); }
       float bayer(vec2 q){ return b2(.5 * q) * .25 + b2(q) - .5; }
       float lum(vec3 c){ return dot(c, vec3(.3, .59, .11)); }
@@ -124,7 +124,7 @@
         vec2 u = v; ${ST.pre || ''}
         vec3 c = texture2D(t, u).rgb; ${ST.fx || ''}
         vec4 hd = texture2D(h, u); c = mix(c, hd.rgb, hd.a); ${ST.fin || ''}
-        ${ST.brut ? '' : 'vec2 d = v - vec2(.5, .42); c *= 1. - .35 * dot(d, d);'}
+        ${ST.brut ? '' : 'vec2 d = v - vec2(.5, .42); c *= max(0., 1. - (.35 + .7 * vig) * dot(d, d));'}
         gl_FragColor = vec4(c, 1.);
       }`;
   }
@@ -214,7 +214,7 @@
   const SUNC = new THREE.Color(TH.sun[0]).multiplyScalar(TH.sun[1]);
   const LUX = { uLP: { value: Array.from({ length: NL }, () => new THREE.Vector4(0, 0, 0, 1)) }, uLC: { value: Array.from({ length: NL }, () => new THREE.Color(0)) },
     uHP: { value: new V3() }, uHD: { value: new V3(1, 0, 0) }, uHC: { value: new THREE.Color(0xfff2d0).multiplyScalar(TH.phares * 1.25 * LUM_GAIN) }, uBox: { value: new THREE.Matrix4() },
-    uSunD: { value: SD }, uSunC: { value: new THREE.Color() }, uSky: { value: new THREE.Color() }, uN: { value: 0 }, uRes: { value: new THREE.Vector2() } };
+    uSunD: { value: SD }, uCam: { value: cam.position }, uSunC: { value: new THREE.Color() }, uSky: { value: new THREE.Color() }, uN: { value: 0 }, uRes: { value: new THREE.Vector2() } };
   const LU_V = `{ vec4 lw = vec4(transformed, 1.);
     #ifdef USE_INSTANCING
       lw = instanceMatrix * lw;
@@ -227,7 +227,7 @@
     }
     `;
   const LU_H = `#define NL ${NL}
-    uniform vec4 uLP[NL]; uniform vec3 uLC[NL]; uniform vec3 uHP, uHD, uHC, uSunD, uSunC, uSky; uniform mat4 uBox; uniform float uGloss, uRetro; uniform int uN; varying vec3 vLw;
+    uniform vec4 uLP[NL]; uniform vec3 uLC[NL]; uniform vec3 uHP, uHD, uHC, uSunD, uSunC, uSky, uCam; uniform mat4 uBox; uniform float uGloss, uRetro; uniform int uN; varying vec3 vLw;
     float luOmbre(vec3 p, vec3 d) { // 0 si la boîte de la voiture coupe le segment p → p + d ; un point dans la boîte ou à sa surface n'est pas ombré
       vec3 o = (uBox * vec4(p, 1.)).xyz, iv = 1. / (mat3(uBox) * d + 1e-5), t0 = (-1. - o) * iv, t1 = (1. - o) * iv, mn = min(t0, t1), mx = max(t0, t1);
       float a = max(max(mn.x, mn.y), mn.z), b = min(min(mx.x, mx.y), mx.z);
@@ -235,7 +235,7 @@
     }
     `;
   const LU_F = `{
-      vec3 n = normalize(cross(dFdx(vLw), dFdy(vLw))), v = normalize(cameraPosition - vLw);
+      vec3 n = normalize(cross(dFdx(vLw), dFdy(vLw))), v = normalize(uCam - vLw); // uCam et non cameraPosition : three r128 ne le renseigne pas pour les matériaux Basic et Lambert (il reste à l'origine du monde)
       if (dot(n, v) < 0.) n = -n;
       float g = uGloss + (1. - diffuseColor.a) * 2., plat = step(.8, n.y);
       vec3 dif = vec3(0.), spe = vec3(0.); vec2 rh = normalize(reflect(-v, n).xz + 1e-4);
@@ -568,6 +568,9 @@
     g.traverse(o => { if (o.material === carMat) o.material = m; else if (o.material === brakeMat) o.material = b; });
     g.visible = false; g.userData.y = 0; scene.add(g); return g;
   });
+  // feux arrière des adversaires et des camions : deux points rouges de taille fixe à l'écran, hors brouillard (au-delà de 60 m la caisse ne fait plus que quelques pixels et rien ne l'éclaire)
+  const feuxGeo = new THREE.BufferGeometry(), feuxP = new Float32Array(6 * Math.max(3, M.trafic || 0)); feuxGeo.setAttribute('position', new THREE.BufferAttribute(feuxP, 3));
+  const feux = new THREE.Points(feuxGeo, new THREE.PointsMaterial({ color: 0xff2030, size: 4, sizeAttenuation: false, fog: false })); feux.frustumCulled = false; scene.add(feux);
 
   // ---------- fusion du décor fixe : une passe de dessin par matière, au lieu d'une par objet ----------
   // Tout maillage simple, opaque et immobile est fondu avec ceux de la même matière (mêmes ombres) en une seule géométrie, en coordonnées du monde : l'image est la même,
@@ -645,7 +648,7 @@
   const fmt = t => `${t / 60 | 0}'${String(t % 60 | 0).padStart(2, '0')}"${String(t * 100 % 100 | 0).padStart(2, '0')}`;
   let lookA = 0, lookP = 0, lookT = 0; // caméra libre à la souris : angle autour de la voiture, hauteur en plus, délai avant retour
   addEventListener('mousemove', e => { if (state !== 'race' && state !== 'count') return; lookA = clamp(lookA + e.movementX * 0.006, -Math.PI, Math.PI); lookP = clamp(lookP + e.movementY * 0.03, -1, 5); lookT = 2.5; });
-  let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, cth = car.th, lm = 0, carY = S[car.idx].y, pitch = 0, roll = 0, result = null, manual = pref('vpr.boite', 'a') === 'm';
+  let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, cth = car.th, lm = 0, carY = S[car.idx].y, pitch = 0, roll = 0, nit = 0, result = null, manual = pref('vpr.boite', 'a') === 'm';
   // secteurs (entrée et sortie de l'échangeur) et fantôme du record : [x, y, z, cap] à 20 Hz
   // mode : 'solo' (contre-la-montre à tours enchaînés), 'glisse' (deux tours, à points : le score est tenu par sim.js, voir GL), 'course' (3 tours contre les IA de sim.js) 'elim' (course à élimination : le dernier sort à chaque passage de ligne) ou 'tournee' (toutes les cartes à la suite, voir plus bas) ; race = la course en cours, sinon null
   const MODES = ['solo', 'glisse', 'course', 'elim', 'tournee'], AVEC_IA = ['course', 'elim', 'tournee'], enCourse = () => AVEC_IA.includes(mode);
@@ -934,7 +937,7 @@
       if (race) race.cars.forEach((c, i) => i && !partie(c) && dot(c.x, c.z, OPP[i - 1][1]));
       R(hg, '#08080c', mx + MM.px(car.x) - 3, my + MM.pz(car.z) - 3, 7, 7); R(hg, blink ? Y : '#ffffff', mx + MM.px(car.x) - 2, my + MM.pz(car.z) - 2, 5, 5); // le joueur : plus gros, cerné de noir, clignotant
     }
-    if (race && !raceEnd && state === 'race') { const pris = []; // repère au-dessus de chaque adversaire : à 270 lignes, une voiture lointaine ne fait que quelques pixels
+    if (race && !raceEnd && state === 'race') { const pris = [...(warn ? [[cx, 62, 170]] : []), ...(car.boost > 0 || car.asp > 0.15 ? [[cx, 82, 100]] : [])]; // les bandeaux du centre sont déjà pris ; repère au-dessus de chaque adversaire : à 270 lignes, une voiture lointaine ne fait que quelques pixels
       cam.updateMatrixWorld();
       race.cars.forEach((c, i) => {
         const dx = c.x - cam.position.x, dz = c.z - cam.position.z, f = dx * Math.cos(cth) + dz * Math.sin(cth);
@@ -1066,7 +1069,8 @@
     const y0 = yAt(car), ySol = k => clamp(yAt(car, k), y0 - 2.5, y0 + 2.5) + air;
     cam.position.set(px + (Math.random() - 0.5) * shake, ySol(-3) + (M.camH || 3.2) + lookP - 0.5 * r + (Math.random() - 0.5) * shake, pz);
     cam.lookAt(car.x + cx * 10, ySol(5) + 1.1, car.z + cz * 10); cam.rotateZ(-0.6 * roll);
-    cam.fov = 62 + 26 * r + 3 * car.slide + (car.boost > 0 ? 6 : 0);
+    nit = clamp(nit + (car.boost > 0 ? dt / 0.7 : -dt / 1.1), 0, 1); const nitE = nit * nit * (3 - 2 * nit); // nitro : 0,7 s pour entrer, 1,1 s pour sortir, départ et arrivée en douceur (champ élargi et vignette)
+    cam.fov = 62 + 26 * r + 3 * car.slide + 6 * nitE; post.uniforms.vig.value = nitE;
     const vue = window.__g.vue; // shortcut: debug console seulement, __g.vue = [angle° autour de la voiture, distance, hauteur] pour inspecter le modèle ; à remplacer par un vrai mode photo si on en veut un
     if (vue) { const a = car.th + vue[0] * Math.PI / 180; cam.position.set(car.x + Math.cos(a) * vue[1], carY + vue[2], car.z + Math.sin(a) * vue[1]); cam.lookAt(car.x, carY + 0.7, car.z); cam.fov = 45; }
     cam.updateProjectionMatrix();
@@ -1088,7 +1092,11 @@
     if (L.neon) put(car.x, carY + 0.3, car.z, NEONC, 5.5, NUIT * (0.8 + 0.4 * pulse)); // néon de bas de caisse
     // les deux véhicules les plus proches (adversaires, ou camions du trafic) : phares devant, feux rouges derrière
     const d2 = c => (c.x - car.x) ** 2 + (c.z - car.z) ** 2;
-    for (const c of (race ? race.cars.slice(1).filter(c => !partie(c)) : M.trafic && state === 'race' ? trafic(T, tTraf).slice() : []).sort((a, b) => d2(a) - d2(b)).slice(0, 2)) {
+    const veh = race ? race.cars.slice(1).filter(c => !partie(c)) : M.trafic && state !== 'title' ? trafic(T, tTraf).slice() : [];
+    veh.forEach((c, i) => { const ax = Math.cos(c.th), az = Math.sin(c.th), k = c.lane === undefined, ar = k ? ENCt.x / 2 + 0.05 : 6.5, l = k ? ENCt.z / 2 - 0.3 : 1; // sur l'arrière de la caisse, ou de la remorque
+      for (const s of [-1, 1]) feuxP.set(tmp.set(c.x - ax * ar - az * l * s, c.y + (k ? 0.7 : 1.3), c.z - az * ar + ax * l * s).lerp(cam.position, 0.01).toArray(), i * 6 + (s + 1) * 1.5); }); // 1 % vers la caméra : de loin, la profondeur ne distingue plus le feu de la caisse
+    feuxGeo.setDrawRange(0, veh.length * 2); feuxGeo.attributes.position.needsUpdate = true;
+    for (const c of veh.sort((a, b) => d2(a) - d2(b)).slice(0, 2)) {
       const ax = Math.cos(c.th), az = Math.sin(c.th), y = c.y, av = c.lane === undefined ? 6.5 : 10, ar = c.lane === undefined ? 3.4 : 7; // un camion est plus long
       put(c.x + ax * av, y + 0.8, c.z + az * av, PHARE, 14, 3 * NUIT); put(c.x - ax * ar, y + 0.7, c.z - az * ar, ROUGE, 9, 1.4 * NUIT);
     }
