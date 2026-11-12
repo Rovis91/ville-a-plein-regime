@@ -27,6 +27,7 @@ Prenez le volant d'une bête de 500 chevaux et lâchez-la dans les artères d'un
 
 - Boîte **automatique ou manuelle** : passez vos rapports comme un vrai pilote !
 - **Frein à main** et glisses contrôlées : prenez les épingles en travers !
+- **Nitro** : une jauge à remplir en prenant des risques, à dépenser où vous voulez
 - Physique inspirée d'une **vraie GT japonaise** : couple, rapports, aéro, tout y est !
 - Frottez les murs… et regardez voler les **étincelles** !
 
@@ -89,14 +90,28 @@ puis ouvrir http://localhost:8123/.
 | Haut / bas, gauche / droite, Entrée | menu principal : carte, mode, boîte, démarrer |
 | ↑ ↓ ← → ou ZQSD | accélérer, freiner, tourner |
 | Espace | frein à main (déclenche la glisse) |
+| X ou N | nitro : dépense la jauge (gaz ouverts, roues au sol) |
 | G | boîte automatique / manuelle |
 | A / E | rapport inférieur / supérieur (en manuelle) |
 | C | station de radio suivante |
 | M | couper / remettre la musique |
 | Échap ou P | menu pause (reprendre, recommencer, boîte, radio, musique, fantôme, quitter) |
 | R | recommencer |
-| Manette | stick ou croix : volant et menus · ZR ou B : gaz · ZL ou Y : frein · A : glisse · X : radio · L / R : rapports · − : boîte manuelle / automatique · + : pause · B : valider |
-| Joy-Con seul, à l'horizontale | touche J une fois pour l'autoriser (Chrome ou Edge) · stick : volant et menus · bouton de droite : gaz et valider · gauche : boîte manuelle / automatique · haut / bas : rapport supérieur / inférieur · SR : glisse · SL : radio · + ou − : pause |
+| Manette | stick ou croix : volant et menus · ZR ou B : gaz · ZL ou Y : frein · A : glisse · X : nitro · clic du stick : radio · L / R : rapports · − : boîte manuelle / automatique · + : pause · B : valider |
+| Joy-Con seul, à l'horizontale | touche J une fois pour l'autoriser (Chrome ou Edge) · stick : volant et menus · bouton de droite : gaz et valider · gauche : boîte manuelle / automatique · haut / bas : rapport supérieur / inférieur · SR : glisse · SL : nitro · clic du stick : radio · + ou − : pause |
+
+### Nitro et aspiration
+
+La jauge de nitro (en bas à droite) remplace l'ancien boost automatique de sortie de glisse. Elle se remplit :
+
+- en tenant une glisse (plus elle dure et plus elle va vite, plus elle remplit) ;
+- en frottant un mur sans le taper ;
+- en doublant un camion au ras, sans le toucher ;
+- en roulant dans l'aspiration d'un rival, en course (on y gagne aussi de la vitesse ; les rivaux en profitent autant).
+
+X ou N la dépense : une jauge pleine pousse 3 secondes, gaz ouverts et roues au sol (rien en l'air), y compris au-delà du rupteur. Un choc franc contre un mur ou un camion la vide. Réglages : `NI` en tête de `sim.js`.
+
+Les médailles se mesurent toujours au tour lancé du pilote automatique, qui part avec une jauge pleine et la dépense en ligne droite. La physique ayant changé, les records d'avant la V2 (clés `vpr6.*`) ne comptent plus : le menu le signale une fois.
 
 Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/E sur un clavier QWERTY. Les autres commandes sont lues par la lettre tapée.
 
@@ -132,7 +147,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 node test.js
 ```
 
-Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, le boost et la course contre IA. Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
+Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, la jauge de nitro (remplissage, poussée, choc, vol), l'aspiration et la course contre IA. Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
 
 ```bash
 node test-cartes.js
@@ -175,7 +190,9 @@ Dans `cartes.js`, pour chaque carte :
 | `radio` | les stations (`RADIO`, en tête de `cartes.js`) : tempo, batterie, timbres, couleur, progressions, motifs, thèmes, sections et forme · `amb` : les zones où l'on entend l'ambiance du lieu |
 | `th` | le thème : ciel, brume, lumières, couleurs de route, style et couleurs de l'interface |
 | `th.pluie` | `1` = pluie partout ; ou des zones `[point a, point b, force]` (1 = pluie normale ; au-delà, averse : plus de gouttes, traînées plus longues ; Wan-9 : averse de force 3 sur le port, rien avant la sortie du pont), coupée en tunnel. Calculée une fois par `buildTrack` (`T.pluie`, lue par le dessin et le son) |
-| Pluie sur la conduite | `PL` en tête de `sim.js` : tout part de `m = (force − 1) / 2` (`T.eau`, nul en tunnel), donc la force 1 (la ville) ne change rien. `vir` lacet en courbe, `frein` et `trac` freinage et motricité, `colle` retard de la vitesse sur le nez (la voiture chasse), `vaq`/`dvaq`/`aq`/`aqc` aquaplaning au-delà de 230 − 40·m km/h. Le pilote auto et les IA en tiennent compte (virages et freinage, marge au-dessus du seuil d'aquaplaning). Wan-9 : +6 % au tour |
+| Surfaces | `SURF` en tête de `sim.js` : un jeu de coefficients par surface (`sec`, `mouille`, `glace`, `neige`, `terre`) : `vir` lacet perdu en courbe, `frein` et `trac` freinage et motricité, `colle` retard de la vitesse sur le nez (la voiture chasse), `vaq`/`aq`/`aqc` aquaplaning, `roul` frein de roulement, `gl` glisse qui part plus tôt. `buildTrack` en tire `T.surf[i]`, le jeu de coefficients de chaque échantillon (fondu aux bords des zones). Le pilote auto et les IA lisent la même table (virages, freinage) |
+| `surf` | surface de la route : `{ fond: 'neige', zones: [[point a, point b, 'glace', force], …] }` (`fond` partout, zones par-dessus, fondues sur 20 m ; `force` de 0 à 1, 1 par défaut). Aucune des six cartes n'en déclare ; `test-cartes.js` l'essaie sur une copie du touge |
+| Pluie sur la conduite | une averse est la surface `mouille` dosée par `(force − 1) / 2`, nulle en tunnel : la force 1 (la ville) ne change rien. Aquaplaning au-delà de 230 − 40·m km/h. Wan-9 : +6 % au tour |
 | Pluie au son | `pluieFrame` d'`audio.js`, famille « pluie » (bouton « Pluie » d'`ecoute.html`) : rideau étouffé par la carrosserie, qui suit la force (`T.pluie`) et la vitesse, coupé en tunnel ; gerbe grave en aquaplaning (`car.aq`) |
 | `trafic` | nombre de camions sur la route |
 | `sauts`, `cuv` | le relief (carte Roche-Sourde) : tremplins `[point, longueur, hauteur, fosse, profondeur]` et murs roulables `[a, b, largeur, rayon]`. Déclarer l'un ou l'autre donne à la voiture une hauteur et une gravité (`GRAV`, `DROOP`, `LAND0`, `LANDK`, `LANDX` en tête de `sim.js` : pesanteur, débattement avant de « voler », seuil et pente de la perte de vitesse à la réception). Sans eux, la carte reste à plat comme avant. |
@@ -199,7 +216,7 @@ Dans `game.js` :
 | `const pauseItems` | entrées du menu pause |
 | `const OPP = [` | noms et couleurs des adversaires |
 
-Les records, le fantôme et les préférences sont stockés dans le navigateur sous les clés `vpr5.*` pour la ville et `vpr5.<carte>.*` pour les autres. Quand la physique change au point de rendre les anciens temps incomparables, incrémenter ce préfixe.
+Les records, le fantôme et les préférences sont stockés dans le navigateur sous les clés `vpr7.*` pour la ville et `vpr7.<carte>.*` pour les autres. Quand la physique change au point de rendre les anciens temps incomparables, incrémenter ce préfixe.
 
 Pour régénérer `samples.js` après avoir changé un son dans `samples/`, réencoder chaque fichier `.ogg` en base64 dans l'objet `window.SMP`.
 

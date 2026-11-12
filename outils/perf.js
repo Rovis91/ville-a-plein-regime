@@ -41,7 +41,7 @@ export async function tour({ images = 0 } = {}) {
 
 export async function suite() { // lancé par ?perf : chaque carte à son tour
   const charge = Math.round(performance.now()), ids = CARTES.map(m => m.id), i = ids.indexOf(__g.M.id), Q = new URLSearchParams(location.search);
-  if (!Q.get('carte') || __g.mode !== 'course') { localStorage.setItem('vpr6.mode', '"course"'); localStorage.removeItem('vpr.perf'); location.href = location.pathname + '?perf&auto&carte=' + ids[0]; return; }
+  if (!Q.get('carte') || __g.mode !== 'course') { localStorage.setItem('vpr7.mode', '"course"'); localStorage.removeItem('vpr.perf'); location.href = location.pathname + '?perf&auto&carte=' + ids[0]; return; }
   const tout = JSON.parse(localStorage.getItem('vpr.perf') || '[]'), r = await tour(); r.chargement = charge; // chargement : ms entre l'ouverture de la page et le jeu prêt
   tout.push(r); localStorage.setItem('vpr.perf', JSON.stringify(tout));
   if (i + 1 < ids.length) location.href = location.pathname + '?perf&auto&carte=' + ids[i + 1];
