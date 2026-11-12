@@ -212,6 +212,9 @@
     nz(t, 1.4, 0.28 * v, drumG, 'highpass', 4500);
     const o = osc('sine', 70, t, 0.7, 0.8 * v, drumG); o && o.frequency.exponentialRampToValueAtTime(30, t + 0.5);
   }
+  // arrivée de course : un coup de cymbale, un accord tenu, puis une phrase selon la place (fanfare qui monte pour le premier, montée courte pour le podium, chute pour le dernier)
+  const arrivee = pos => { if (!AC) return; const t = AC.currentTime; crash(t, 0.7); for (const n of [57, 64, 69, 73]) osc('triangle', hz(n), t, 1.8, 0.1, uiF);
+    (pos === 1 ? [69, 73, 76, 81, 85, 88, 93] : pos < 4 ? [69, 73, 76, 81] : [69, 64, 60, 57]).forEach((n, i, a) => osc('square', hz(n), t + 0.15 + i * 0.1, i === a.length - 1 ? 0.9 : 0.4, 0.12, uiF)); };
   const stinger = up => AC && (up ? [69, 73, 76, 81, 85] : [69, 64, 60, 57]).forEach((n, i) => osc('square', hz(n), AC.currentTime + i * 0.09, 0.5, 0.12, uiF));
 
   // ---------- séquenceur ----------
@@ -429,14 +432,14 @@
     mix += ((racing ? e.hot : 0) - mix) * Math.min(1, dt * 3);
     inten += (r - inten) * Math.min(1, dt * 2); driftL += ((car.drift ? 1 : 0) - driftL) * Math.min(1, dt * 6);
     // la musique s'ouvre avec la vitesse ; un gros choc l'étouffe ; dans un tunnel elle est étouffée et réverbérée, et le moteur résonne
-    k(musF.frequency, stun > 0 ? 350 : Math.min(state === 'title' ? 7000 : 1500 * 12 ** Math.min(1, inten * 1.4 + mix), lerp(18000, 2500, tun)), 0.08);
+    k(musF.frequency, stun > 0 ? 350 : e.fini ? 900 : Math.min(state === 'title' ? 7000 : 1500 * 12 ** Math.min(1, inten * 1.4 + mix), lerp(18000, 2500, tun)), 0.08);
     k(musSend.gain, 0.7 * tun, 0.2); k(motSend.gain, 2.5 * tun, 0.2);
     k(strip.d.in.gain, MX.d * lerp(1, 0.7, mix), 0.1);
   }
 
   document.addEventListener('visibilitychange', () => { if (AC && live) document.hidden ? AC.suspend() : AC.resume(); }); // pas de musique hachée ni de moteur figé en arrière-plan
   window.SON = {
-    init: initAudio, frame: audioFrame, setStation, carte, pump, beep, stinger,
+    init: initAudio, frame: audioFrame, setStation, carte, pump, beep, stinger, arrivee,
     crash: () => AC && crash(),
     tonnerre: () => { if (!AC) return; const t = AC.currentTime + 0.4; nz(t, 2.4, 0.5, V.amb, 'lowpass', 140); nz(t, 1.2, 0.12, V.amb, 'bandpass', 600, 0.6); }, // grondement + craquement dans le médium
     toggleMusic() { musicOn = !musicOn; if (AC) musicG.gain.value = musicOn ? 1 : 0; },

@@ -543,15 +543,23 @@
   let mode = pref('vpr6.mode', '') === '"course"' ? 'course' : 'solo', race = null, raceEnd = false; // le mode est mémorisé une fois pour toutes les cartes
   let si = 0, cur = [], bestSpl = store.get('splits'), ghost = store.get('ghost'), recG = [], splitMsg = null, lapN = 1, rLap = 0, rLapT = 0, prev = 'race', psel = 0, ghostOn = !!store.get('ghostOn');
   const keys = {}, H = 1 / 120;
+  let diff = clamp(+pref('vpr6.diff', 1) | 0, 0, DIFF.length - 1); // difficulté du mode course (DIFF de sim.js)
+  // médailles du contre-la-montre : le tour lancé du pilote automatique sert de référence ; M.med = [bronze, argent, or] en multiples de ce temps
+  const REF = (() => { const c = newCar(T); let t = 0, t1 = 0; while (c.dist < 2 * N && t < 900) { step(c, autopilot(c, T), T, H); t += H; if (!t1 && c.dist >= N) t1 = t; } return t - t1; })();
+  const MED = M.med || [1.1, 1.03, 0.97], MEDN = ['BRONZE', 'ARGENT', 'OR'], MEDC = ['#c87a3a', '#c8ccd4', '#ffd23a'];
+  const medal = t => t ? MED.filter(k => t <= REF * k).length : 0; // 0 aucune, 1 bronze, 2 argent, 3 or
+  let lap0 = [0, 0, 0], bestLap = 0; // compteurs de glisse au début du tour (glisses, boosts, murs) ; meilleur tour du joueur en course
+  const bilan = () => { const b = [car.nDrift - lap0[0], car.nBoost - lap0[1], car.nWall - lap0[2], car.comboMax]; lap0 = [car.nDrift, car.nBoost, car.nWall]; car.comboMax = car.combo; return b; };
 
   function start() {
     SON.init(); accueil = false;
-    race = mode === 'course' ? newRace(T) : null; raceEnd = false;
+    race = mode === 'course' ? newRace(T, 3, AI_LVL.map(l => l * DIFF[diff].k), DIFF[diff].el) : null; raceEnd = false; lap0 = [0, 0, 0]; bestLap = 0;
     car = race ? race.cars[0] : newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 3; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1; rLap = 0; rLapT = 0; result = null;
   }
   function finish() { // tour bouclé : on l'enregistre, on affiche son temps 4 s, et le chrono repart aussitôt pour un tour lancé
-    const rec = !best || tRace < best; result = { rec, diff: best ? tRace - best : 0, t: tRace, n: lapN, T: 4 };
-    if (rec) { best = tRace; bestSpl = cur; ghost = recG; store.set('best', best); store.set('splits', cur); store.set('ghost', ghost); }
+    const rec = !best || tRace < best; result = { rec, first: !best, diff: best ? tRace - best : 0, t: tRace, n: lapN, T: 5, b: bilan() };
+    if (rec && AUTO) best = tRace; else if (rec) { // le pilote automatique (?auto) n'enregistre rien
+      best = tRace; bestSpl = cur; ghost = recG; store.set('best', best); store.set('splits', cur); store.set('ghost', ghost); }
     SON.stinger(rec);
     lapN++; car.dist -= N; tRace = 0; si = 0; cur = []; recG = [];
   }
@@ -572,7 +580,9 @@
       const id = CARTES[(CARTES.indexOf(M) + d + CARTES.length) % CARTES.length].id;
       setPref('vpr.carte', id); try { sessionStorage.setItem('vpr.menu', 1); } catch (e) { }
       location.href = location.pathname + '?carte=' + id;
-    } else if (msel === 1) { mode = mode === 'solo' ? 'course' : 'solo'; setPref('vpr6.mode', JSON.stringify(mode)); }
+    } else if (msel === 1) { // contre-la-montre, puis la course à chaque difficulté
+      const k = ((mode === 'solo' ? 0 : diff + 1) + d + DIFF.length + 1) % (DIFF.length + 1);
+      mode = k ? 'course' : 'solo'; if (k) diff = k - 1; setPref('vpr6.mode', JSON.stringify(mode)); setPref('vpr6.diff', diff); }
     else if (msel === 2) { manual = !manual; car.manual = manual; setPref('vpr.boite', manual ? 'm' : 'a'); }
     else start();
   }
@@ -589,6 +599,7 @@
       else if (e.code === 'Enter' || e.code === 'Space') pauseAct();
       return;
     }
+    if (e.code === 'Escape' && raceEnd) { toMenu(); return; } // course finie : retour direct au menu
     if ((e.code === 'Escape' || key === 'p') && (state === 'race' || state === 'count')) { prev = state; state = 'pause'; psel = 0; return; }
     if (state === 'title') {
       const dx = (e.code === 'ArrowRight' || e.code === 'KeyD' ? 1 : 0) - (e.code === 'ArrowLeft' || e.code === 'KeyA' ? 1 : 0);
@@ -636,8 +647,9 @@
   const MM = (() => {
     let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const s of S) { x0 = Math.min(x0, s.x); x1 = Math.max(x1, s.x); z0 = Math.min(z0, s.z); z1 = Math.max(z1, s.z); }
     const w = 84, h = 56, k = Math.min((w - 4) / (x1 - x0), (h - 4) / (z1 - z0)), c = document.createElement('canvas'), g = c.getContext('2d');
+    const kx = Math.min((w - 4) / (x1 - x0), k * 2.5), kz = Math.min((h - 4) / (z1 - z0), k * 2.5); // un tracé très allongé (canal) est étiré jusqu'à 2,5 fois sur son petit axe, sinon il tient en quelques pixels
     c.width = w; c.height = h;
-    const px = x => Math.round((w - (x1 - x0) * k) / 2 + (x - x0) * k), pz = z => Math.round((h - (z1 - z0) * k) / 2 + (z - z0) * k);
+    const px = x => Math.round((w - (x1 - x0) * kx) / 2 + (x - x0) * kx), pz = z => Math.round((h - (z1 - z0) * kz) / 2 + (z - z0) * kz);
     for (const s of S) R(g, '#e8e8e4', px(s.x), pz(s.z), 1, 1);
     R(g, RD, px(S[0].x) - 2, pz(S[0].z) - 2, 5, 5); // ligne de départ
     return { c, px, pz };
@@ -655,23 +667,24 @@
     }
     if (state === 'title') { // menu principal : la carte tourne derrière, on choisit carte, mode et boîte
       R(hg, 'rgba(8,8,12,.45)', 0, 0, HW, HH);
-      if (HU.sur[0]) txt(HU.sur[0], cx, 8, 16, C, 'center', 0, JP); txt(HU.sur[1], cx, 30, 8, C, 'center');
+      if (HU.sur[0]) txt(HU.sur[0], cx, 6, 16, C, 'center', 0, JP); txt(mode === 'course' ? 'COURSE · 3 TOURS' : HU.sur[1], cx, 27, 8, C, 'center');
       txt(HU.titre[0], cx, 44, 24, Y, 'center', 2); txt(HU.titre[1], cx, 70, 24, Y, 'center', 2);
-      panel(cx - 160, 100, 320, 130);
-      [['CARTE', M.nom + '  ' + (CARTES.indexOf(M) + 1) + '/' + CARTES.length], ['MODE', mode === 'course' ? 'COURSE CONTRE 3 IA' : 'CONTRE-LA-MONTRE'], ['BOITE', manual ? 'MANUELLE' : 'AUTO']].forEach(([l, v], i) => {
+      panel(cx - 160, 100, 320, 140);
+      [['CARTE', M.nom + '  ' + (CARTES.indexOf(M) + 1) + '/' + CARTES.length], ['MODE', mode === 'course' ? 'COURSE : ' + DIFF[diff].nom : 'CONTRE-LA-MONTRE'], ['BOITE', manual ? 'MANUELLE' : 'AUTO']].forEach(([l, v], i) => {
         const on = msel === i, y = 108 + i * 15;
         txt((on ? '> ' : '  ') + l, cx - 152, y, 8, on ? Y : '#e8e8e4'); txt(on ? '< ' + v + ' >' : v, cx + 152, y, 8, on ? Y : C, 'right');
       });
       if (msel === 3) { if (blink) tag('> DEMARRER <', cx, 152, Y); } else txt('DEMARRER', cx, 155, 8, '#e8e8e4', 'center');
       hg.drawImage(MM.c, cx - 152, 170); // le tracé, puis la fiche de la carte
-      [CARD.nom, (T.len / 1000).toFixed(1).replace('.', ',') + ' KM   ' + (M.trafic ? 'TRAFIC' : T.tun ? 'TUNNEL' : 'CIEL OUVERT'), mode === 'course' ? '3 TOURS, DEPART EN GRILLE' : 'RECORD ' + (best ? fmt(best) : '--'), SON.nom + ' ' + SON.fq].forEach((l, i) => txt(l, cx - 58, 174 + i * 13, 8, i ? '#e8e8e4' : C));
-      txt('HAUT/BAS : CHOISIR  GAUCHE/DROITE : CHANGER', cx, 238, 8, '#e8e8e4', 'center'); txt('FLECHES / ZQSD : PILOTER   ESPACE : GLISSE', cx, 251, 8, '#e8e8e4', 'center');
+      [CARD.nom, (T.len / 1000).toFixed(1).replace('.', ',') + ' KM   ' + (M.trafic ? 'TRAFIC' : T.tun ? 'TUNNEL' : 'CIEL OUVERT'), mode === 'course' ? '3 TOURS CONTRE 3 IA' : 'RECORD ' + (best ? fmt(best) : '--'), SON.nom.includes(parseInt(SON.fq)) ? SON.nom : SON.nom + ' ' + SON.fq].forEach((l, i) => txt(l, cx - 58, 174 + i * 13, 8, i ? '#e8e8e4' : C));
+      if (mode !== 'course') { const m = medal(best); if (m) txt(MEDN[m - 1], cx + 152, 200, 8, MEDC[m - 1], 'right'); if (m < 3) txt('VISE ' + MEDN[m] + ' ' + fmt(REF * MED[m]), cx - 58, 226, 8, MEDC[m]); } // médaille acquise, et la prochaine à aller chercher
+      txt('HAUT/BAS : CHOISIR  GAUCHE/DROITE : CHANGER', cx, 245, 8, '#e8e8e4', 'center'); txt('FLECHES / ZQSD : PILOTER   ESPACE : GLISSE', cx, 257, 8, '#e8e8e4', 'center');
       hudT.needsUpdate = true; return;
     }
     // chrono
     panel(6, 6, 132, 50); txt(race ? 'TOUR ' + car.lap + '/' + race.laps : 'TOUR ' + lapN, 12, 11, 8, C); if (HU.jp) txt(HU.jp[0], 132, 6, 16, C, 'right', 0, JP);
     txt(fmt(tRace), 12, 24, 16, Y, 'left', 1); txt(race ? 'PLACE ' + car.pos + '/' + race.cars.length : best ? 'REC ' + fmt(best) : 'REC --', 12, 44, 8, RD);
-    if (race && !raceEnd) txt(car.pos + '/' + race.cars.length, cx, 8, 16, Y, 'center', 1);
+    if (race && !raceEnd && state !== 'count' && goT <= 0) txt(car.pos + '/' + race.cars.length, cx, 8, 16, Y, 'center', 1);
     // vitesse
     panel(HW - 126, HH - 64, 120, 58); txt('KM/H', HW - 120, HH - 59, 8, C); if (HU.jp) txt(HU.jp[1], HW - 12, HH - 64, 16, C, 'right', 0, JP);
     txt(String(sp * 3.6 | 0), HW - 10, HH - 42, 32, Y, 'right', 1);
@@ -691,36 +704,45 @@
       panel(HW - 102, 40, 96, 68); hg.drawImage(MM.c, mx, my); // 96 de large : ne touche pas les bandeaux centraux même en 4:3 (HW = 360)
       if (ghostM.visible) dot(ghostM.position.x, ghostM.position.z, C);
       if (race) race.cars.forEach((c, i) => i && dot(c.x, c.z, OPP[i - 1][1]));
-      dot(car.x, car.z, Y);
+      R(hg, '#08080c', mx + MM.px(car.x) - 3, my + MM.pz(car.z) - 3, 7, 7); R(hg, blink ? Y : '#ffffff', mx + MM.px(car.x) - 2, my + MM.pz(car.z) - 2, 5, 5); // le joueur : plus gros, cerné de noir, clignotant
     }
-    if (race && !raceEnd && state !== 'title') { // repère au-dessus de chaque adversaire : à 270 lignes, une voiture lointaine ne fait que quelques pixels
+    if (race && !raceEnd && state === 'race') { const pris = []; // repère au-dessus de chaque adversaire : à 270 lignes, une voiture lointaine ne fait que quelques pixels
       cam.updateMatrixWorld();
       race.cars.forEach((c, i) => {
         const dx = c.x - cam.position.x, dz = c.z - cam.position.z, f = dx * Math.cos(cth) + dz * Math.sin(cth);
         if (!i || f < 3 || f > 400) return; // derrière la caméra ou trop loin
         tmp.set(c.x, opps[i - 1].userData.y + 2.4, c.z).project(cam);
         const [name, col] = OPP[i - 1], x = Math.round((tmp.x + 1) / 2 * HW), y = Math.round((1 - tmp.y) / 2 * HH), w = name.length * 8 + 4;
-        R(hg, 'rgba(8,8,12,.75)', x - w / 2, y - 14, w, 11); txt(name, x, y - 12, 8, col, 'center'); R(hg, col, x - 2, y - 2, 5, 3); R(hg, col, x - 1, y + 1, 3, 2);
+        let ly = y - 14; while (pris.some(p => Math.abs(p[0] - x) < (p[2] + w) / 2 + 2 && Math.abs(p[1] - ly) < 12)) ly -= 12; pris.push([x, ly, w]); // deux étiquettes au même endroit : la seconde monte d'un cran
+        R(hg, 'rgba(8,8,12,.75)', x - w / 2, ly, w, 11); txt(name, x, ly + 2, 8, col, 'center'); R(hg, col, x - 2, y - 2, 5, 3); R(hg, col, x - 1, y + 1, 3, 2);
       });
     }
-    if (car.boost > 0) tag('BOOST', cx, 82, C);
+    if (car.boost > 0) tag('BOOST' + (car.combo > 1 ? ' x' + car.combo : ''), cx, 82, C);
+    if (car.dd || car.boost > 0) { // jauge de boost : elle se charge en glisse (rien avant le repère : 0,6 s), puis se vide pendant le boost
+      const bx = HW - 126, by = HH - 74, f = car.dd ? Math.min(1, car.driftT / 1.875) : car.boost / 1.5;
+      R(hg, HU.fond, bx, by, 120, 8); R(hg, car.dd && car.driftT < 0.6 ? '#6a6a78' : car.dd ? C : Y, bx + 2, by + 2, Math.round(116 * f), 4); R(hg, '#ffffff', bx + 2 + Math.round(116 * 0.32), by + 1, 1, 6);
+    }
     if (splitMsg && (splitMsg.T -= dt) > 0) tag('S' + (splitMsg.i + 1) + ' ' + (splitMsg.d == null ? fmt(splitMsg.t) : (splitMsg.d <= 0 ? '-' : '+') + Math.abs(splitMsg.d).toFixed(2)), cx, 102, splitMsg.d == null ? Y : splitMsg.d <= 0 ? C : RD); // écart au record à chaque secteur
     if (warn && blink) tag(warn > 0 ? '! VIRAGE DROITE >>' : '<< VIRAGE GAUCHE !', cx, 62, Y);
     // écrans
-    if (state === 'count' && shown) txt(String(shown), cx, 90, 64, Y, 'center', 3);
-    else if (goT > 0) txt('GO', cx, 90, 64, Y, 'center', 3);
+    if (state === 'count' && shown || goT > 0) { const s = goT > 0 ? 'GO' : String(shown); R(hg, HU.fond, cx - 20 - s.length * 30, 6, 40 + s.length * 60, 78); txt(s, cx + 4, 14, 64, Y, 'center', 3); } // sur un fond, en haut : ni le portique ni les voitures ne passent derrière
     if (result && state !== 'title' && (result.T -= dt) > 0) { // résultat du tour qu'on vient de boucler, sans arrêter la course
-      tag('TOUR ' + result.n + '  ' + fmt(result.t), cx, 28, Y); if (result.pos) tag('PLACE ' + result.pos + '/' + result.of, cx, 44, C); else tag(result.rec ? 'NOUVEAU RECORD' : '+' + result.diff.toFixed(2) + ' S', cx, 44, result.rec ? C : RD);
+      tag('TOUR ' + result.n + '  ' + fmt(result.t), cx, 28, Y); if (result.pos) tag('PLACE ' + result.pos + '/' + result.of, cx, 44, C); else tag(result.first ? 'PREMIER TEMPS' : result.rec ? 'NOUVEAU RECORD' : '+' + result.diff.toFixed(2) + ' S', cx, 44, result.rec ? C : RD);
+      const b = result.b, m = medal(result.t), L = [];
+      if (!race) L.push(m < 3 ? [MEDN[m] + ' A -' + (result.t - REF * MED[m]).toFixed(2), MEDC[m]] : ['TOUR EN OR', MEDC[2]]); // ce qui manquait à ce tour pour la médaille suivante
+      if (b) L.push(['GLISSES ' + b[0], '#e8e8e4'], ['BOOSTS ' + b[1] + (b[3] > 1 ? '  SERIE ' + b[3] : ''), C], ['MURS ' + b[2], b[2] ? RD : '#e8e8e4']);
+      panel(6, 60, 132, 8 + L.length * 11); L.forEach(([s, c], i) => txt(s, 12, 65 + i * 11, 8, c));
     }
     if (raceEnd && state === 'race') { // arrivée : classement, complété à mesure que les autres passent la ligne
-      panel(cx - 134, 60, 268, 132); txt('ARRIVEE : ' + car.pos + (car.pos === 1 ? 'ER' : 'E'), cx, 68, 16, Y, 'center', 1);
-      raceOrder(race).forEach((c, i) => { const j = race.cars.indexOf(c); txt((i + 1) + '. ' + (j ? OPP[j - 1][0] : 'VOUS'), cx - 96, 96 + i * 16, 8, j ? OPP[j - 1][1] : Y); txt(c.fin ? fmt(c.fin) : '--', cx + 96, 96 + i * 16, 8, j ? '#e8e8e4' : Y, 'right'); });
-      txt('ENTREE : REJOUER   ECHAP : PAUSE', cx, 172, 8, C, 'center');
+      panel(cx - 150, 52, 300, 166); txt('ARRIVEE : ' + car.pos + (car.pos === 1 ? 'ER' : 'E'), cx, 60, 16, Y, 'center', 1); const t1 = raceOrder(race)[0].fin;
+      raceOrder(race).forEach((c, i) => { const j = race.cars.indexOf(c); txt((i + 1) + '. ' + (j ? OPP[j - 1][0] : 'VOUS'), cx - 138, 86 + i * 15, 8, j ? OPP[j - 1][1] : Y); txt(c.fin ? fmt(c.fin) : 'EN PISTE', cx + 50, 86 + i * 15, 8, j ? '#e8e8e4' : Y, 'right'); if (i && c.fin) txt('+' + (c.fin - t1).toFixed(2), cx + 138, 86 + i * 15, 8, j ? '#e8e8e4' : Y, 'right'); });
+      txt('MEILLEUR TOUR ' + fmt(bestLap), cx, 152, 8, C, 'center'); txt('GLISSES ' + car.nDrift + '  BOOSTS ' + car.nBoost + '  MURS ' + car.nWall, cx, 166, 8, '#e8e8e4', 'center'); txt('NIVEAU ' + DIFF[diff].nom, cx, 180, 8, '#e8e8e4', 'center');
+      txt('ENTREE : REJOUER   ECHAP : MENU', cx, 200, 8, C, 'center');
     }
     if (state === 'pause') {
-      R(hg, 'rgba(8,8,12,.86)', 0, 0, HW, HH); txt('PAUSE', cx, 36, 32, Y, 'center', 2);
+      R(hg, 'rgba(8,8,12,.95)', 0, 0, HW, HH); txt('PAUSE', cx, 36, 32, Y, 'center', 2);
       pauseItems().forEach((s, i) => i === psel ? tag('> ' + s + ' <', cx, 92 + i * 20, Y) : txt(s, cx, 95 + i * 20, 8, '#e8e8e4', 'center'));
-      txt('HAUT / BAS : CHOISIR   ENTREE : VALIDER', cx, 228, 8, C, 'center');
+      txt('HAUT / BAS : CHOISIR   ENTREE : VALIDER', cx, 246, 8, C, 'center');
     }
     hudT.needsUpdate = true;
   }
@@ -753,7 +775,7 @@
       bump = Math.max(bump, car.bump || 0); hit = Math.max(hit, car.hit, bump); // shortcut: un choc entre voitures réutilise les effets du choc mur (étincelles côté mur), à séparer si ça se voit
       if (state === 'race' && !raceEnd) {
         tRace += H; tTraf += H;
-        if (race) { if (car.fin) { raceEnd = true; tRace = car.fin; car.manual = false; SON.stinger(car.pos === 1); } }
+        if (race) { if (car.fin) { raceEnd = true; tRace = car.fin; car.manual = false; SON.arrivee(car.pos); } }
         else if (car.dist >= N) finish();
       }
     }
@@ -826,7 +848,7 @@
 
     if (state === 'race' && race) { // course : même bandeau « tour + temps » qu'en contre-la-montre, avec la place (le dernier tour est couvert par le classement d'arrivée)
       const ln = Math.floor(car.dist / N);
-      if (ln > rLap && ln < race.laps) { result = { n: ln, t: race.t - rLapT, pos: car.pos, of: race.cars.length, T: 4 }; rLap = ln; rLapT = race.t; }
+      if (ln > rLap && ln <= race.laps) { const lt = (car.fin || race.t) - rLapT; bestLap = bestLap ? Math.min(bestLap, lt) : lt; if (ln < race.laps) result = { n: ln, t: lt, pos: car.pos, of: race.cars.length, T: 5, b: bilan() }; rLap = ln; rLapT = race.t; }
     }
     if (state === 'race' && !race) {
       while (recG.length / 4 <= tRace * 20) recG.push(+car.x.toFixed(2), +carY.toFixed(2), +car.z.toFixed(2), +car.th.toFixed(3));
@@ -836,7 +858,7 @@
     ghostM.visible = ghostOn && state === 'race' && !race && !!ghost && g0 + 7 < ghost.length;
     if (ghostM.visible) { ghostM.position.set(lerp(ghost[g0], ghost[g0 + 4], gf), lerp(ghost[g0 + 1], ghost[g0 + 5], gf) + 0.6, lerp(ghost[g0 + 2], ghost[g0 + 6], gf)); ghostM.rotation.y = -(ghost[g0 + 3] + wrap(ghost[g0 + 7] - ghost[g0 + 3]) * gf); }
     fxFrame(dt, now, sp, inp, hit, fx, fz);
-    SON.frame(dt, { state, car, T, hot: hot(car.idx, 50), tun: lm, amb: ambAt(car.idx), r, sp, gas, hit, bump, up: up > 0, down: up < 0, rpm, load, spool, stun });
+    SON.frame(dt, { state, car, T, hot: hot(car.idx, 50), tun: lm, amb: ambAt(car.idx), r, sp, gas, hit, bump, up: up > 0, down: up < 0, rpm, load, spool, stun, fini: raceEnd }); // fini : la radio s'efface derrière le tableau d'arrivée
 
     // alerte de virage serré, lue sur la courbure à venir
     let wk = 0;

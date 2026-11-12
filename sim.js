@@ -208,8 +208,8 @@
     R.t += dt;
     const p = cars[0], rub = c => Math.min(LVL_MAX, c.lvl * (1 - R.el * clamp((c.dist - p.dist) / 150, -1, 1)));
     // une voiture arrivée lève le pied : elle finit son tour au ralenti au lieu de repartir à fond
-    const ins = cars.map((c, i) => i || !inp ? autopilot(c, T, c.fin ? 0.45 : i ? rub(c) : c.lvl, cars) : inp);
-    for (const c of cars) c.bump = 0;
+    const ins = cars.map((c, i) => i || !inp ? autopilot(c, T, c.fin ? 0.6 : i ? rub(c) : c.lvl, cars) : inp);
+    for (const c of cars) c.bump = 0; ins.forEach((p, i) => { const c = cars[i]; if (c.fin && (i || !inp) && Math.hypot(c.vx, c.vz) > 28) { p.gas = 0; p.brake = Math.max(p.brake, 0.3); } }); // tour d'honneur à 100 km/h
     // les chocs entre voitures d'abord, puis step() : les murs ont le dernier mot, aucune voiture ne peut être poussée hors piste
     for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) collide(cars[i], cars[j]);
     cars.forEach((c, i) => {
