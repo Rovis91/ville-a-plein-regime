@@ -23,16 +23,26 @@
   #db { width: 150px; font-variant-numeric: tabular-nums; } #voyant { width: 12px; height: 12px; border-radius: 50%; background: #3a3a4c; } #voyant.on { background: #40ff80; box-shadow: 0 0 8px #40ff80; }
   #quoi { color: #a8a8b4; margin-top: 6px; min-height: 1.4em; } #quoi b { color: #e8e8e4; }
   table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; } td, th { padding: 3px 10px; border-bottom: 1px solid #2a2a38; text-align: right; } td:first-child, th:first-child { text-align: left; } td.ok { color: #40ff80; } td.ko { color: #ff003c; font-weight: 600; }
+  #avis table { width: 100%; } #avis td { text-align: left; vertical-align: middle; } #avis td.c { color: #fcee0a; font-weight: 600; padding-top: 12px; border: 0; }
+  #avis button { margin: 0 4px 0 0; padding: 4px 9px; } #avis button.ok.on { background: #14532d; border-color: #40ff80; } #avis button.ko.on { background: #5a1018; border-color: #ff003c; }
+  #avis input[type=text], #bilanTxt { font: inherit; color: inherit; background: #14141c; border: 1px solid #3a3a4c; border-radius: 6px; padding: 5px 8px; width: 100%; box-sizing: border-box; }
+  #avis tr.joue td { background: #10262a; }
   #voile { position: fixed; inset: 0; background: rgba(8, 8, 12, .94); display: grid; place-items: center; z-index: 3; } #voile button { font-size: 20px; padding: 16px 28px; }
 </style>
 </head>
 <body>
 <main>
 <header>
-  <h1>Banc d'écoute</h1>
+  <h1>Banc d'écoute <small style="font-weight:400;color:#a8a8b4;font-size:12px">version chocs-3</small></h1>
   <div id="vu"><span id="voyant" title="du signal sort"></span><div id="barre"><div id="niv"></div><div id="tenue"></div></div><span id="db">silence</span><button id="stop">■ Tout arrêter</button></div>
   <div id="quoi">Rien ne joue. Cliquez un son : il joue seul, tout le reste est coupé.</div>
 </header>
+
+<h2>Validation des musiques</h2>
+<p>Une ligne par musique. ▶ la joue seule ; « plein » passe au refrain du secteur chaud. Marquez-la validée ou à changer, écrivez ce qui ne va pas, puis « Copier le bilan » et collez-le dans la conversation. Vos avis restent enregistrés dans ce navigateur.</p>
+<div id="avis"></div>
+<button id="bilan">Copier le bilan</button><button id="raz">Effacer mes avis</button>
+<textarea id="bilanTxt" readonly rows="6" style="display:none"></textarea>
 
 <h2>Carte</h2>
 <div id="cartes"></div>
@@ -41,7 +51,10 @@
 <div id="g-mus"></div>
 <label><input type="checkbox" id="plein"> secteur chaud (arrangement plein)</label>
 <label><input type="checkbox" id="glisse"> en glisse</label>
-<label><input type="checkbox" id="tunnel"> dans un tunnel</label><br>
+<label><input type="checkbox" id="tunnel"> dans un tunnel</label>
+<label>tour de course <select id="tour"><option value="-1">hors course</option><option value="0">1 sur 3 (sobre)</option><option value="1">2 sur 3</option><option value="2">3 sur 3 (un demi-ton plus haut)</option></select></label>
+<label><input type="checkbox" id="mur"> frôle le mur (la musique sature)</label>
+<button id="chocMus">Choc (coup de grosse caisse et de basse)</button><br>
 <label>vitesse <input type="range" id="vit" min="0" max="1" step="0.01" value="0.85"><output></output></label>
 
 <h2>Moteur et boîte</h2>
@@ -62,6 +75,13 @@
 <h2>Interface</h2>
 <div id="g-ui"></div>
 
+<h2>Chocs sur la musique</h2>
+<p>La station en cours continue de jouer ; chaque bouton rejoue un événement de course par-dessus, avec le ralentissement qui suit.</p>
+<div id="evts">
+  <button data-ev="choc">Choc brut contre un mur</button><button data-ev="petit">Petit choc</button><button data-ev="frott">Frottement seul (1,5 s)</button>
+  <button data-ev="chocFrott">Choc puis frottement</button><button data-ev="voiture">Choc entre voitures</button><button data-ev="ralenti">Ralentir sans choc</button>
+</div>
+
 <h2>Tout ensemble, comme en course</h2>
 <p>Le mélange réel du jeu, sans amplification. Les curseurs règlent chaque famille ; dictez leurs valeurs pour qu'elles deviennent les réglages du jeu (1,00 = réglage actuel).</p>
 <div id="g-mix"></div>
@@ -75,15 +95,13 @@
 </main>
 <div id="voile"><button id="go">Allumer le son</button></div>
 
-<script src="cartes.js"></script>
-<script src="samples.js"></script>
-<script src="audio.js"></script>
+<script>/* le serveur local laisse le navigateur garder d'anciens fichiers : on charge toujours les scripts du jour */ for (const f of ["cartes.js", "samples.js", "audio.js"]) document.write('<script src="' + f + "?v=" + Date.now() + '"><\/script>');</script>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
   const FAM = { mus: 'Musique', mot: 'Moteur et boîte', pneu: 'Pneus (dérapage)', vent: 'Vent', amb: 'Ambiance du lieu', choc: 'Chocs, frottement, boost', ui: 'Interface (bips, jingle, radio)' };
   let M = CARTE, scene = null, t0 = 0;
-  const u = { plein: false, glisse: false, tunnel: false, gaz: true, vit: 0.85, rpm: 0.6, slide: 0.6 }; // réglages de la page
+  const u = { tour: -1, plein: false, glisse: false, tunnel: false, mur: false, gaz: true, vit: 0.85, rpm: 0.6, slide: 0.6 }; // réglages de la page
   const pulse = {}; // déclencheurs d'une seule image (montée ou descente de rapport)
 
   // Une scène = un son joué seul : [groupe, titre, sous-titre, familles ouvertes, amplification d'écoute (dB), état de course simulé (x = secondes depuis le clic), action au clic]
@@ -97,10 +115,14 @@
     mi: ['mot', 'Mi-régime en charge', '4 500 tr/min, plein gaz', ['mot'], 11, () => course({ rpm: 0.55 })],
     haut: ['mot', 'Haut régime en charge', '7 500 tr/min, plein gaz', ['mot'], 10, () => course({ rpm: 0.94 })],
     reglable: ['mot', 'Moteur réglable', 'curseur de régime et case gaz ci-dessous', ['mot'], 10, () => course({ rpm: u.rpm, load: u.gaz ? 1 : 0, gas: u.gaz ? 1 : 0 })],
-    montee: ['mot', 'Montées de rapport', 'accélération, un rapport toutes les 2,5 s', ['mot'], 6, x => { const p = dents(x, 2.5), cut = p < 0.08; if (cut && !pulse.fait) pulse.up = pulse.fait = 1; if (!cut) pulse.fait = 0; return course({ rpm: 0.55 + 0.38 * p, load: cut ? 0 : 1 }); }],
-    retro: ['mot', 'Rétrogradages', 'freinage, un rapport toutes les 2,5 s', ['mot'], 6, x => { const p = dents(x, 2.5), cut = p < 0.08; if (cut && !pulse.fait) pulse.down = pulse.fait = 1; if (!cut) pulse.fait = 0; return course({ rpm: 0.8 - 0.3 * p, load: 0, gas: 0 }); }],
-    clac: ['mot', 'Clac de montée seul', 'sans le moteur', ['mot'], 2, null, () => SON.clac(false)],
-    clacD: ['mot', 'Clac de rétrogradage seul', 'sans le moteur', ['mot'], 2, null, () => SON.clac(true)],
+    montee: ['mot', 'Montées, boîte automatique', 'accélération, un rapport toutes les 2,5 s', ['mot'], 6, x => { const p = dents(x, 2.5), cut = p < 0.08; if (cut && !pulse.fait) pulse.up = pulse.fait = 1; if (!cut) pulse.fait = 0; return course({ rpm: 0.55 + 0.38 * p, load: cut ? 0 : 1 }); }],
+    retro: ['mot', 'Rétrogradages, boîte automatique', 'freinage, un rapport toutes les 2,5 s', ['mot'], 6, x => { const p = dents(x, 2.5), cut = p < 0.08; if (cut && !pulse.fait) pulse.down = pulse.fait = 1; if (!cut) pulse.fait = 0; return course({ rpm: 0.8 - 0.3 * p, load: 0, gas: 0 }); }],
+    monteeM: ['mot', 'Montées, boîte manuelle', 'le pilote passe le rapport au levier', ['mot'], 3, x => Object.assign(SC.montee[5](x), { manuel: 1 })],
+    retroM: ['mot', 'Rétrogradages, boîte manuelle', '', ['mot'], 3, x => Object.assign(SC.retro[5](x), { manuel: 1 })],
+    clac: ['mot', 'Automatique : montée seule', 'sans le moteur', ['mot'], 8, null, () => SON.clac(false)],
+    clacD: ['mot', 'Automatique : rétrogradage seul', 'sans le moteur', ['mot'], 8, null, () => SON.clac(true)],
+    levier: ['mot', 'Manuelle : montée seule', 'levier, sans le moteur', ['mot'], 3, null, () => SON.levier(false)],
+    levierD: ['mot', 'Manuelle : rétrogradage seul', 'levier, sans le moteur', ['mot'], 3, null, () => SON.levier(true)],
     petarade: ['mot', 'Pétarade', 'lever de pied à haut régime, sans le moteur', ['mot'], 16, null, () => SON.petarade()],
     derapL: ['pneu', 'Dérapage léger', 'petit angle', ['pneu'], 16, () => course({ slide: 0.3 })],
     derapF: ['pneu', 'Dérapage à fond', 'grand angle', ['pneu'], 12, () => course({ slide: 1 })],
@@ -120,18 +142,32 @@
     record: ['ui', 'Jingle : record', '', ['ui'], 8, null, () => SON.stinger(true)],
     pasRecord: ['ui', 'Jingle : pas de record', '', ['ui'], 8, null, () => SON.stinger(false)],
     radio: ['ui', 'Changement de station', 'touche mécanique puis grésillement, sans la musique', ['ui'], 0, null, () => SON.setStation(SON.station + 1)],
+    gliss: ['mus', 'Glisse puis boost', 'sur la station en cours, en boucle : 2,5 s de glisse (palier à 0,6 s), boost, retour', ['mus', 'pneu', 'choc'], 0, x => { const p = x % 9, g = p > 2 && p < 4.5; return Object.assign(musique(), { dd: g ? 1 : 0, driftT: g ? p - 2 : 0, drift: g, slide: g ? 0.8 : 0, boost: p >= 4.5 && p < 6 ? 1 : 0 }); }],
+    glissR: ['mus', 'Glisse ratée', 'trop courte pour le boost (0,4 s) : la musique ne doit presque pas bouger', ['mus', 'pneu', 'choc'], 0, x => { const p = x % 5, g = p > 2 && p < 2.4; return Object.assign(musique(), { dd: g ? 1 : 0, driftT: g ? p - 2 : 0, drift: g, slide: g ? 0.6 : 0 }); }],
+    essai: ['ess', 'Essai de choc', '', ['mus', 'choc'], 0, x => essaiEtat()],
     tout: ['mix', 'Course complète', 'musique, moteur, pneus, vent, ambiance : le mélange du jeu', Object.keys(FAM), 0, x => Object.assign(musique(), { rpm: 0.55 + 0.4 * dents(x, 4), load: 1, gas: 1, spool: 0.8, amb: 1, slide: u.glisse ? u.slide : 0 })],
   };
-  const musique = () => course({ r: u.vit, sp: u.vit * 80, plein: u.plein, drift: u.glisse, tun: u.tunnel ? 1 : 0, rpm: 0.2, load: 0, gas: 0 });
+  // essais : un événement de course rejoué sur la musique (choc, frottement, contact), avec le ralentissement qui suit
+  let ess = null;
+  function essaiEtat() { // x : secondes depuis l'événement
+    const o = musique(), x = ess ? SON.ac.currentTime - ess.t : 99, T = ess ? ess.type : '', dur = T === 'petit' || T === 'voiture' ? 1.5 : 3;
+    const frotte = (T === 'frott' && x < 1.5) || (T === 'chocFrott' && x > 0.05 && x < 1.3);
+    const creux = T === 'choc' || T === 'chocFrott' ? 0.3 : T === 'ralenti' ? 0.25 : T === 'petit' ? 0.65 : T === 'voiture' ? 0.7 : T === 'frott' ? 0.75 : 1; // la voiture ralentit puis reprend sa vitesse
+    o.r = x < dur ? u.vit * (creux + (1 - creux) * x / dur) : u.vit; o.sp = o.r * 80; o.rub = frotte ? 1 : o.rub;
+    if (ess && !ess.fait) { ess.fait = 1; o.hitV = T === 'choc' || T === 'chocFrott' ? 12 : T === 'petit' ? 5 : 0; o.bump = T === 'voiture' ? 2 : 0; }
+    o.stun = (T === 'choc' || T === 'chocFrott') && x < 0.7 ? 0.7 - x : 0;
+    return o;
+  }
+  const musique = () => course({ r: u.vit, sp: u.vit * 80, plein: u.plein, drift: u.glisse, tun: u.tunnel ? 1 : 0, rub: u.mur ? 1 : 0, rpm: 0.2, load: 0, gas: 0 });
   // état complet envoyé à SON.frame
   function etat(sc, x) {
     const o = sc && sc[5] ? sc[5](x) : { state: 'pause' }, r = o.r || 0;
-    return { state: o.state, T: { h0: 500, h1: 700, n: 1000 }, hot: o.plein ? 1 : 0, tun: o.tun || 0, amb: o.amb || 0,
-      car: { vl: o.slide ? 4 + 14 * o.slide : 0, boost: 0, idx: o.plein ? 600 : 0, dist: 1, drift: !!o.drift, rub: o.rub || 0 },
-      r, sp: o.sp || 0, gas: o.gas || 0, hit: 0, up: !!pulse.up, down: !!pulse.down, rpm: o.rpm || 0.2, load: o.load || 0, spool: o.spool || 0, stun: 0 };
+    return { state: o.state, tour: Math.max(0, u.tour), tours: u.tour < 0 ? 0 : 3, T: { h0: 500, h1: 700, n: 1000 }, hot: o.plein ? 1 : 0, tun: o.tun || 0, amb: o.amb || 0,
+      car: { manual: !!o.manuel, dd: o.dd || 0, driftT: o.driftT || 0, vl: o.slide ? 4 + 14 * o.slide : 0, boost: o.boost || 0, idx: o.plein ? 600 : 0, dist: 1, drift: !!o.drift, rub: o.rub || 0 },
+      r, sp: o.sp || 0, gas: o.gas || 0, hit: o.hitV || (pulse.hit ? 9 : 0), bump: o.bump || 0, up: !!pulse.up, down: !!pulse.down, rpm: o.rpm || 0.2, load: o.load || 0, spool: o.spool || 0, stun: o.stun || 0 };
   }
   const son = () => SON.ac && SON.live;
-  setInterval(() => { if (!son()) return; SON.frame(1 / 60, etat(scene, SON.ac.currentTime - t0)); pulse.up = pulse.down = 0; }, 16); // setInterval : continue fenêtre masquée
+  setInterval(() => { if (!son()) return; SON.frame(1 / 60, etat(scene, SON.ac.currentTime - t0)); pulse.up = pulse.down = pulse.hit = 0; }, 16); // setInterval : continue fenêtre masquée
 
   function volumes() { for (const k in FAM) { const v = +$('v-' + k).value; $('o-' + k).textContent = v.toFixed(2).replace('.', ','); if (son()) SON.volume(k, scene && scene[3].includes(k) ? v : 0); } }
   function jouer(id) {
@@ -150,12 +186,40 @@
     $('cartes').innerHTML = CARTES.map(c => `<button data-c="${c.id}" class="${c === M ? 'on' : ''}">${c.nom}</button>`).join('');
     for (const g of ['mus', 'mot', 'pneu', 'choc', 'amb', 'ui', 'mix']) $('g-' + g).innerHTML = Object.keys(SC).filter(id => SC[id][0] === g).map(id => `<button data-sc="${id}" class="${scene === SC[id] ? 'on' : ''}">${titre(id)}<small>${sous(id)}</small></button>`).join('');
   }
-  document.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.sc) jouer(b.dataset.sc); else if (b.dataset.c) { stop(); M = CARTES.find(c => c.id === b.dataset.c); SON.carte(M); boutons(); } });
+  // validation : avis par musique, gardés dans le navigateur
+  let AV = {}; try { AV = JSON.parse(localStorage.getItem('vpr.avis') || '{}'); } catch (e) { }
+  const garde = () => { try { localStorage.setItem('vpr.avis', JSON.stringify(AV)); } catch (e) { } };
+  const pistes = () => CARTES.flatMap(c => [...c.radio.map((r, i) => ({ k: c.id + ':' + i, c, i, nom: r.name + ' ' + r.fq, genre: r.genre.toLowerCase() + ' · ' + r.bpm + ' bpm' })), { k: c.id + ':m', c, i: -1, nom: 'Musique de menu', genre: 'boucle calme' }]);
+  let enEcoute = null;
+  function avis() {
+    let h = '<table>', carte = null;
+    for (const p of pistes()) { const a = AV[p.k] || {};
+      if (p.c !== carte) { carte = p.c; h += '<tr><td class="c" colspan="4">' + p.c.nom + '</td></tr>'; }
+      h += '<tr class="' + (enEcoute === p.k ? 'joue' : '') + '"><td style="white-space:nowrap"><button data-av="' + p.k + '">▶</button>' + (p.i >= 0 ? '<button data-av="' + p.k + '" data-plein="1">▶ plein</button>' : '') + '</td><td><b>' + p.nom + '</b><br><small style="color:#a8a8b4">' + p.genre + '</small></td>' +
+        '<td style="white-space:nowrap"><button class="ok' + (a.v === 1 ? ' on' : '') + '" data-v="' + p.k + ':1">Validée</button><button class="ko' + (a.v === 0 ? ' on' : '') + '" data-v="' + p.k + ':0">À changer</button></td>' +
+        '<td style="width:45%"><input type="text" data-n="' + p.k + '" placeholder="ce qui ne va pas, ce que vous voulez" value="' + (a.n || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"></td></tr>'; }
+    $('avis').innerHTML = h + '</table>';
+  }
+  $('avis').addEventListener('input', e => { const k = e.target.dataset.n; if (k) { (AV[k] = AV[k] || {}).n = e.target.value; garde(); } });
+  function bilan() {
+    const L = pistes().map(p => { const a = AV[p.k] || {}; return p.c.id + ' — ' + p.nom + ' (' + p.genre + ') : ' + (a.v === 1 ? 'VALIDÉE' : a.v === 0 ? 'À CHANGER' : 'pas encore jugée') + (a.n ? ' — ' + a.n : ''); }).join('\n');
+    $('bilanTxt').style.display = 'block'; $('bilanTxt').value = L; $('bilanTxt').select();
+    if (navigator.clipboard) navigator.clipboard.writeText(L).then(() => { $('bilan').textContent = 'Bilan copié'; setTimeout(() => { $('bilan').textContent = 'Copier le bilan'; }, 2000); }, () => { });
+    return L;
+  }
+  $('bilan').onclick = bilan; $('raz').onclick = () => { if (confirm('Effacer tous vos avis ?')) { AV = {}; garde(); avis(); } };
+  document.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.ev) { if (!son()) return; if (scene !== SC.essai) jouer('essai'); ess = { type: b.dataset.ev, t: SON.ac.currentTime };
+      $('quoi').innerHTML = 'Déclenché sur la musique : <b>' + b.textContent + '</b>'; b.className = 'on'; setTimeout(() => { b.className = ''; }, 600); return; }
+    if (b.dataset.av) { const [id, i] = b.dataset.av.split(':'), c = CARTES.find(x => x.id === id); if (c !== M) { stop(); M = c; SON.carte(M); }
+      u.plein = !!b.dataset.plein; $('plein').checked = u.plein; enEcoute = b.dataset.av; jouer(i === 'm' ? 'menu' : 'st' + i); boutons(); avis(); return; }
+    if (b.dataset.v) { const k = b.dataset.v.slice(0, -2), v = +b.dataset.v.slice(-1); AV[k] = AV[k] || {}; AV[k].v = AV[k].v === v ? undefined : v; garde(); avis(); return; } if (b.dataset.sc) jouer(b.dataset.sc); else if (b.dataset.c) { stop(); M = CARTES.find(c => c.id === b.dataset.c); SON.carte(M); boutons(); } });
   for (const k in FAM) $('fam').insertAdjacentHTML('beforeend', `<label><span class="n">${FAM[k]}</span><input type="range" id="v-${k}" min="0" max="2" step="0.05" value="1"><output id="o-${k}"></output></label>`);
   for (const k in FAM) $('v-' + k).oninput = volumes;
-  for (const id of ['plein', 'glisse', 'tunnel', 'gaz']) $(id).onchange = e => { u[id] = e.target.checked; };
+  $('chocMus').onclick = () => { pulse.hit = 1; }; $('tour').onchange = e => { u.tour = +e.target.value; };
+  for (const id of ['plein', 'glisse', 'tunnel', 'mur', 'gaz']) $(id).onchange = e => { u[id] = e.target.checked; };
   for (const id of ['vit', 'rpm', 'slide']) { const el = $(id), out = el.nextElementSibling; (el.oninput = () => { u[id] = +el.value; out.textContent = (+el.value).toFixed(2).replace('.', ','); })(); }
-  $('stop').onclick = stop;
+  $('stop').onclick = () => { stop(); enEcoute = null; avis(); };
   $('go').onclick = () => { SON.init(); stop(); boutons(); $('voile').remove(); };
 
   // vumètre : ce qui sort vraiment de la page (après l'amplification d'écoute)
@@ -185,7 +249,7 @@
     SON.carte(carte); SON.init(ctx); await SON.pret; if (/^st\d$/.test(id)) SON.setStation(+id[2]);
     for (const k in FAM) SON.volume(k, sc[3].includes(k) ? 1 : 0);
     pulse.fait = 0; let coups = 0;
-    const pas = t => { if (sc[6] && id !== 'radio' && t >= 2 + coups) { coups++; sc[6](); } for (let i = 0; i < 3; i++) { SON.frame(1 / 60, etat(sc, t + i / 60)); pulse.up = pulse.down = 0; } SON.pump(); }; // sons ponctuels : un par seconde à partir de 2 s
+    const pas = t => { if (sc[6] && id !== 'radio' && t >= 2 + coups) { coups++; sc[6](); } for (let i = 0; i < 3; i++) { SON.frame(1 / 60, etat(sc, t + i / 60)); pulse.up = pulse.down = pulse.hit = 0; } SON.pump(); }; // sons ponctuels : un par seconde à partir de 2 s
     pas(0); for (let t = 0.05; t < dur; t += 0.05) ctx.suspend(t).then(() => { pas(t); ctx.resume(); });
     const b = await ctx.startRendering(); let sum = 0, peak = 0, n = 0;
     for (let c = 0; c < 2; c++) { const x = b.getChannelData(c); for (let i = sr * 2; i < x.length; i++) { sum += x[i] * x[i]; peak = Math.max(peak, Math.abs(x[i])); n++; } } // les 2 premières secondes (attaques, filtres qui s'ouvrent) sont écartées
@@ -238,8 +302,8 @@
   }
   $('variete').onclick = variete;
   $('autotest').onclick = autotest; $('mesurer').onclick = () => lancer([M]); $('mesurerTout').onclick = () => lancer(CARTES);
-  window.__banc = { lancer, mesurer, rendre, autotest, variete, profil, corr, jouer, stop, SC, u };
-  boutons(); volumes();
+  window.__banc = { bilan, avis, lancer, mesurer, rendre, autotest, variete, profil, corr, jouer, stop, SC, u };
+  boutons(); volumes(); avis();
 })();
 </script>
 </body>

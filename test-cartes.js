@@ -79,6 +79,7 @@ for (const M of CARTES) {
 // radio : trois stations par carte ; une forme d'au moins 32 mesures faite de sections différentes ; timbres et batteries connus d'audio.js
 // (la variété à l'oreille se mesure dans le navigateur : bouton « Variété des stations » de ecoute.html, il n'y a pas de Web Audio sous node)
 const SRC = require('fs').readFileSync(__dirname + '/audio.js', 'utf8'), seen = new Set();
+const GAMME = { mineur: [0, 2, 3, 5, 7, 8, 10], majeur: [0, 2, 4, 5, 7, 9, 11] }, NOMS = ['do', 'do#', 'ré', 'mib', 'mi', 'fa', 'fa#', 'sol', 'lab', 'la', 'sib', 'si'];
 for (const M of CARTES) {
   assert(M.radio.length === 3, M.id + ' : il faut trois stations');
   for (const s of M.radio) {
@@ -92,6 +93,18 @@ for (const M of CARTES) {
     assert(!s.d || SRC.includes(' ' + s.d[0] + ': { o: [['), w + 'nappe inconnue');
     for (const k in s.sec) for (const p in s.sec[k]) if ('kshpbdcgal'.includes(p)) { assert(s[p], w + 'section ' + k + ' : partie absente ' + p); const v = s[p].v || (p === 'd' ? [0] : s[p]); assert(s.sec[k][p].v < v.length, w + 'section ' + k + ' : variante inconnue ' + p + s.sec[k][p].v); }
     for (const v of (s.l || { v: [] }).v) for (const b of v) for (const n of b) assert(n == null || n === -99 || (n >= 55 && n <= 105), w + 'note de thème ' + n);
+    // justesse : les accords hors gamme sont déclarés (emprunts) ; chaque note de thème, et chaque note de basse telle qu'audio.js la recale, appartient
+    // à la gamme ou à l'accord de sa mesure, dans toutes les sections et à toutes leurs places dans la forme
+    const sc = GAMME[s.gamme].map(i => (s.key + i) % 12), pc = n => ((n % 12) + 12) % 12, nom = n => NOMS[pc(n)];
+    s.prog.forEach((pr, p) => pr.CH.forEach((ch, i) => assert(ch.every(n => sc.includes(pc(n))) || (s.emprunts || '').split(' ').includes(s.accords[p][i]), w + 'accord hors gamme non déclaré : ' + s.accords[p][i])));
+    for (const k in s.sec) for (let fi = 0; fi < s.form.length; fi++) if (s.form[fi] === k || (k === s.hot && s.form[fi] !== 'e')) for (let b = fi * 4; b < fi * 4 + 4; b++) {
+      const sec = s.sec[k], pr = s.prog[sec.P || 0], ok = pr.OK[b % pr.OK.length], root = pr.ROOT[b % pr.ROOT.length], ou = ' (section ' + k + ', mesure ' + (b + 1) + ', accord ' + s.accords[sec.P || 0][b % pr.CH.length] + ')';
+      if (sec.l) for (const n of s.l.v[sec.l.v][b % s.l.v[sec.l.v].length]) assert(n == null || n === -99 || ok.has(pc(n)), w + 'thème, fausse note ' + nom(n) + ou);
+      if (sec.b) for (const n of s.b.v[sec.b.v][b % s.b.v[sec.b.v].length]) { if (n == null || n === -99) continue;
+        if (s.bPar) assert(s.bPar.includes(n) || s.bPar.includes(n - 12), w + 'basse parallèle, intervalle non prévu ' + n + ou);
+        else { const j = ok.has(pc(root + n)) ? root + n : ok.has(pc(root + n - 1)) ? root + n - 1 : root + n + 1; assert(ok.has(pc(j)), w + 'basse impossible à recaler ' + nom(root + n) + ou); } }
+    }
   }
 }
-console.log('OK  radio   ' + CARTES.map(M => M.radio.map(s => s.genre.toLowerCase()).join(' / ')).join(' · '));
+assert(/const juste = \(n, ok\) => ok\.has/.test(SRC), 'audio.js ne recale plus la basse');
+console.log('OK  radio   justesse vérifiée (thèmes, basses, accords) · ' + CARTES.map(M => M.radio.map(s => s.genre.toLowerCase()).join(' / ')).join(' · '));
