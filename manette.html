@@ -13,6 +13,7 @@
 <body>
 <h1>Diagnostic manette</h1>
 <p>Clique dans cette page, puis appuie sur <b>chaque</b> bouton de la manette et bouge le stick. Ensuite : <button id="copie">Copier le rapport</button> <span id="fait"></span></p>
+<p>Si aucune manette n'apparaît : <button id="hid">Test direct (WebHID)</button> choisis le Joy-Con dans la fenêtre de Chrome, puis appuie sur ses boutons.</p>
 <pre id="vue" aria-live="off"></pre>
 <script>
 // Page autonome : montre ce que le navigateur voit des manettes, sans rien supposer de leur disposition.
@@ -35,9 +36,21 @@ function rapport() {
       L.push('  axe ' + n + ' : ' + x.toFixed(2).padStart(5) + '   (vu de ' + m[0].toFixed(2) + ' à ' + m[1].toFixed(2) + ')' + (m[1] - m[0] > 0.3 ? '  ← bouge' : '')); });
     L.push('');
   });
+  L.push('Test direct WebHID : ' + (!navigator.hid ? 'API absente' : hid.nom ? '« ' + hid.nom + ' » · ' + hid.n + ' rapports reçus · dernier : ' + hid.der : hid.etat), '');
   L.push('Journal :', ...(journal.length ? journal : ['  (aucun événement)']));
   return L.join('\n');
 }
+// Lecture brute du périphérique, sans passer par l'API Gamepad : dit si Chrome reçoit quelque chose du Joy-Con.
+const hid = { etat: 'pas lancé', nom: '', n: 0, der: '-' };
+document.getElementById('hid').onclick = async () => {
+  try {
+    const [d] = await navigator.hid.requestDevice({ filters: [{ vendorId: 0x057e }] }); // 0x057e = Nintendo
+    if (!d) { hid.etat = 'aucun périphérique Nintendo proposé ou choisi'; return; }
+    if (!d.opened) await d.open();
+    hid.nom = d.productName + ' (pid 0x' + d.productId.toString(16) + ')';
+    d.oninputreport = e => { hid.n++; hid.der = 'id 0x' + e.reportId.toString(16) + ' : ' + [...new Uint8Array(e.data.buffer)].slice(0, 12).map(x => x.toString(16).padStart(2, '0')).join(' '); };
+  } catch (e) { hid.etat = 'erreur : ' + e.message; }
+};
 const vue = document.getElementById('vue');
 (function boucle() { vue.textContent = rapport(); requestAnimationFrame(boucle); })();
 document.getElementById('copie').onclick = async () => {
