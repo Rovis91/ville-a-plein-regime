@@ -187,12 +187,12 @@
     const pousse = inp.nitro && inp.gas && c.nitro > 0 ? 1 : 0; if (pousse && !c.boost) c.nBoost++;
     let acc = 0;
     if (c.shiftT > 0) c.shiftT -= dt;
-    else if (wr > CARD.red && !pousse) acc = -6 * Math.sign(vf); // surrégime : rupteur et gros frein moteur
+    else if (wr > CARD.red && !(pousse && c.gear === CARD.ratios.length - 1)) acc = -6 * Math.sign(vf); // surrégime : rupteur et gros frein moteur
     else {
       const tqe = inp.gas * torque(er) - (1 - inp.gas) * (20 + 0.01 * er) * Math.sign(vf); // couple moteur, ou frein moteur pied levé
       acc = Math.min(CARD.trac * (1 - Q.trac), tqe * ratio * CARD.final * CARD.eff / CARD.wheel / CARD.mass); // plafonné par la motricité (~1,1 g en 4 roues motrices, moins en propulsion)
     }
-    c.boost = pousse; // (la nitro passe le rupteur : elle pousse aussi une voiture au bout de son dernier rapport)
+    c.boost = pousse; // (sur le dernier rapport la nitro passe le rupteur : elle pousse aussi une voiture en bout de course ; sur les autres le rupteur tient, sinon une 1re tenue en boîte manuelle garderait tout son couple au-delà du régime maxi)
     if (pousse) { c.nitro = Math.max(0, c.nitro - dt / NI.dur); acc += NI.acc; }
     if (c.stun > 0) { c.stun -= dt; if (acc > 0) acc *= 0.2; }
     vf += acc * dt;

@@ -71,6 +71,9 @@ assert(c.nitro > 0.02 && c.nitro < 0.5, 'la glisse tenue doit remplir la jauge d
   assert(ecart(vide, temoin) === 0 && !vide.boost, 'nitro sans jauge : aucun effet');
   assert(mi.boost && mi.nitro > 0.3 && mi.nitro < 0.9, 'la jauge doit se vider peu à peu pendant la poussée: ' + mi.nitro);
   assert(avec.nitro === 0 && !avec.boost && avec.dist > sans.dist + 15 && avec.vf > sans.vf + 5, `la nitro doit faire gagner du terrain en ligne droite: ${avec.dist * 2} m contre ${sans.dist * 2} m, ${avec.vf} contre ${sans.vf} m/s`);
+  // boîte manuelle : la nitro ne passe le rupteur que sur le dernier rapport ; tenue en 1re, elle ne fait pas dépasser les 72 km/h du rupteur
+  const m1 = newCar(T); m1.manual = true; m1.nitro = 1; run(m1, { ...I(0, 1), nitro: true }, 3);
+  assert(m1.gear === 0 && m1.vf * 3.6 < 80, `nitro en 1re : ${m1.vf * 3.6} km/h, le rupteur ne tient plus`);
   // un choc franc contre le mur vide la jauge
   const c = newCar(T); c.nitro = 1; run(c, I(0, 1), 4);
   const s = S[c.idx], th = Math.atan2(s.tz, s.tx) + 0.9, v0 = c.vf, o = W - 1.3 - c.d; c.x += -s.tz * o; c.z += s.tx * o; c.th = th; c.vx = Math.cos(th) * v0; c.vz = Math.sin(th) * v0;

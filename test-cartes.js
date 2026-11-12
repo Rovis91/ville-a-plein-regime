@@ -88,10 +88,10 @@ for (const M of CARTES) {
   // sans surface déclarée, la route est sèche partout (T.surf[i] === SURF.sec), sauf sous une averse
   assert(T.surf.length === n); assert(M.surf ||T.surf.every(q => q === SURF.sec) === !(Array.isArray(M.th.pluie) && M.th.pluie.some(z => z[2] > 1)), M.id + ' : route mouillée là où il ne pleut pas fort');
   if (T.surf.some(q => q !== SURF.sec)) {
-    const E = T.surf; T.surf = null; const [sec] = tour(c => autopilot(c, T)); T.surf = E;
+    const E = T.surf; T.surf = null; const [sec, , hsec] = tour(c => autopilot(c, T)); T.surf = E;
     if (!M.surf) assert(lap > 1.02 * sec && lap < 1.12 * sec, `${M.id} : tour sous la pluie ${lap} s, au sec ${sec} s`);
-    // surface déclarée (neige, glace, terre) : la carte se conduit autrement qu'au sec, sans tourner à la patinoire. Le tour perd de 8 à 35 % (sur fond de terre, qui tourne presque comme le sec : de -5 à 35 %), et la glace vive, s'il y en a, reste par plaques : moins du quart du tour
-    else { const gl = T.surf.filter(q => q.vir > 0.45).length / n; surfCarte = `, ${((lap / sec - 1) * 100).toFixed(0)} % plus lent qu'au sec (${sec.toFixed(1)} s), glace vive sur ${(gl * 100).toFixed(0)} % du tour`;
+    // surface déclarée (neige, glace, terre) : la carte se conduit autrement qu'au sec, sans tourner à la patinoire. Le tour perd de 8 à 35 % (sur fond de terre : de -5 à 35 %, car la carte est étroite et réglée pour la terre ; au sec le pilote automatique y arrive trop vite, tape et perd plus qu'il ne gagne : le nombre de chocs au sec est affiché), et la glace vive, s'il y en a, reste par plaques : moins du quart du tour
+    else { const gl = T.surf.filter(q => q.vir > 0.45).length / n; surfCarte = `, ${((lap / sec - 1) * 100).toFixed(0)} % plus lent qu'au sec (${sec.toFixed(1)} s${hsec ? ', où le pilote automatique tape ' + hsec + ' fois' : ''}), glace vive sur ${(gl * 100).toFixed(0)} % du tour`;
       assert(lap > (M.surf.fond === 'terre' ? 0.95 : 1.08) * sec && lap < 1.35 * sec && gl < 0.25, `${M.id} : tour ${lap} s${surfCarte}`); }
   }
   // surfaces (table SURF) : lancée au sec puis posée sur chaque surface, en plan ouvert. Distance de freinage depuis 200 km/h, rayon volant à fond à 120 km/h, vitesse perdue en 2 s pied levé depuis 100 km/h

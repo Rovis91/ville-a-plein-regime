@@ -696,10 +696,10 @@
 
   function start() {
     SON.init(); accueil = false; if (anciens) { anciens = false; setPref('vpr7.vu', 1); }
-    clos(); tnFin = null;
+    clos();
     if (mode === 'tournee' && CARTES[tnOu().manche] !== M) { // la manche se court sur une autre carte : on y va sans recharger, et la course part à l'arrivée (vpr.go)
-      if (!cible) { cible = CARTES[tnOu().manche]; try { sessionStorage.setItem('vpr.go', 1); } catch (e) { } changeCarte(); } return; }
-    race = enCourse() ? newRace(T, 3, AI_LVL.map(l => l * DIFF[diff].k), DIFF[diff].el, { elim: mode === 'elim', grille: mode === 'tournee' && tournee(tnOu().pts).grille }) : null; raceEnd = false; glFin = null; lap0 = [0, 0, 0]; bestLap = 0;
+      if (!cible) { cible = CARTES[tnOu().manche]; try { sessionStorage.setItem('vpr.go', 1); } catch (e) { } changeCarte(); } return; } // (tnFin reste en place le temps que la carte arrive : un second appui sur Entrée ne recompte pas la manche)
+    tnFin = null; race = enCourse() ? newRace(T, 3, AI_LVL.map(l => l * DIFF[diff].k), DIFF[diff].el, { elim: mode === 'elim', grille: mode === 'tournee' && tournee(tnOu().pts).grille }) : null; raceEnd = false; glFin = null; lap0 = [0, 0, 0]; bestLap = 0;
     car = race ? race.cars[0] : newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 3; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1; rLap = 0; rLapT = 0; result = null;
   }
   function finish() { // tour bouclé : on l'enregistre, on affiche son temps 4 s, et le chrono repart aussitôt pour un tour lancé
@@ -891,7 +891,7 @@
       if (!enCourse()) { const gl = mode === 'glisse', m = gl ? medG(bestG) : medal(best); if (m) txt(MEDN[m - 1], cx + 152, 196, 8, MEDC[m - 1], 'right'); if (m < 3) txt('VISE ' + MEDN[m] + ' ' + (gl ? GLM[m] + ' PTS' : fmt(REF * MED[m])), cx - 58, 218, 8, MEDC[m]);
         if (!gl) txt('F : FANTOME ' + nomF(), cx - 58, 229, 8, fant ? FANTC[fant] : '#e8e8e4'); } // médaille acquise, et la prochaine à aller chercher
       txt('HAUT/BAS : CHOISIR  GAUCHE/DROITE : CHANGER', cx, 245, 8, '#e8e8e4', 'center'); txt('FLECHES / ZQSD   ESPACE : GLISSE   X : NITRO', cx, 257, 8, '#e8e8e4', 'center');
-      if (defiErr) tag(defiErr, cx, 88, RD); else if (DEFI) tag('DEFI : ' + fmt(DEFI.t) + ' A BATTRE', cx, 88, FANTC[5]); else if (anciens) tag('NITRO : RECORDS REMIS A ZERO', cx, 88, Y);
+      if (defiErr) tag(defiErr, cx, 25, RD); else if (DEFI) tag('DEFI : ' + fmt(DEFI.t) + ' A BATTRE', cx, 25, FANTC[5]); else if (anciens) tag('NITRO : RECORDS REMIS A ZERO', cx, 25, Y); // à la place du sous-titre : plus bas, le bandeau mordait sur le titre
       hudT.needsUpdate = true; return;
     }
     // chrono
@@ -949,7 +949,7 @@
     // écrans
     if (mode === 'tournee' && state === 'count') tag('MANCHE ' + (tnOu().manche + 1) + '/' + CARTES.length, cx, 88, C);
     if (state === 'count' && shown || goT > 0) { const s = goT > 0 ? 'GO' : String(shown); R(hg, HU.fond, cx - 20 - s.length * 30, 6, 40 + s.length * 60, 78); txt(s, cx + 4, 14, 64, Y, 'center', 3); } // sur un fond, en haut : ni le portique ni les voitures ne passent derrière
-    if (result && state !== 'title' && (result.T -= dt) > 0) { // résultat du tour qu'on vient de boucler, sans arrêter la course
+    if (result && state !== 'title' && !(race && raceEnd) && (result.T -= dt) > 0) { // résultat du tour qu'on vient de boucler, sans arrêter la course
       tag('TOUR ' + result.n + '  ' + fmt(result.t), cx, 28, Y); if (result.pos) tag('PLACE ' + result.pos + '/' + result.of, cx, 44, C); else tag(result.first ? 'PREMIER TEMPS' : result.rec ? 'NOUVEAU RECORD' : '+' + result.diff.toFixed(2) + ' S', cx, 44, result.rec ? C : RD);
       const b = result.b, m = medal(result.t), L = [];
       if (!race) L.push(m < 3 ? [MEDN[m] + ' A -' + (result.t - REF * MED[m]).toFixed(2), MEDC[m]] : ['TOUR EN OR', MEDC[2]]); // ce qui manquait à ce tour pour la médaille suivante
