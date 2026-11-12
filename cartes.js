@@ -6,7 +6,7 @@
 //   W demi-largeur de route (m) · grip adhérence latérale maxi (m/s²) · sc échelle du tracé · pts [x, z, altitude], sens horaire, départ en [0]
 //   tun [a, b] tunnel entre deux points (ou null) · chaud [a, b] secteur où la musique se déchaîne · sect [a, b] les deux temps intermédiaires
 //   anticipe : le pilote automatique calcule sa distance de freinage (indispensable dès qu'il y a une épingle)
-//   trafic : nombre de camions à doubler · car : la voiture (format CARD de sim.js) · radio : stations (format ST de game.js) · th : thème
+//   rivaux : prénoms des trois adversaires du mode course (sinon ceux de la ville) · trafic : nombre de camions à doubler · car : la voiture (format CARD de sim.js) · radio : stations (format ST de game.js) · th : thème
 (function (G) {
   const _ = null;
   // voiture : up / down = régimes de passage de la boîte auto ; trac = accélération maxi que les pneus passent au sol (m/s²) ;
@@ -83,7 +83,7 @@
         hud: { y: '#ffffff', c: '#ffb85a', r: '#ff2a3a', fond: 'rgba(10,84,52,.92)', style: 'panneau', split: 0, jp: ['周回', '速度'], sur: ['湾岸九号線', 'LIGNE DE BAIE'], titre: ['WAN-9', 'BAYSHORE'] } } },
 
     // Paris à l'aube : circuit de rues, relances entre des angles, pavés.
-    { id: 'paris', nom: 'PREMIER METRO', W: 7, grip: 19, sc: 1, tun: [27, 30], chaud: [13, 22], sect: [12, 25], anticipe: 1,
+    { id: 'paris', nom: 'PREMIER METRO', rivaux: ['LUCIE', 'MARC', 'INES'], W: 7, grip: 19, sc: 1, tun: [27, 30], chaud: [13, 22], sect: [12, 25], anticipe: 1,
       pts: [[0, 0, 0], [200, 0, 0], [330, 15, 0], [424, 70, 0], [476, 70, 0], [515, 37, 0], [524, -13, 0], [498, -57, 0], [430, -160, 0], [420, -300, 2], [450, -390, 4], [540, -420, 6], [700, -420, 8], [810, -435, 12], [880, -480, 19], [860, -545, 26], [800, -590, 31], [830, -660, 37], [930, -670, 42], [1020, -630, 44], [1070, -540, 38], [1040, -410, 26], [1085, -280, 14], [1060, -150, 4], [1100, 0, 0], [1090, 140, -2], [1010, 225, -4], [800, 240, -6], [600, 250, -12], [400, 250, -12], [200, 240, -6], [0, 240, -3], [-150, 225, 0], [-235, 150, 0], [-235, 60, 0], [-150, 0, 0]],
       // Renault 5 Maxi Turbo (1985, Groupe B) : 4 cylindres turbo 1,5 L, 350 ch, 905 kg, moteur central arrière, propulsion (rapports estimés)
       car: car({ nom: 'RENAULT 5 MAXI TURBO', ratios: [3.36, 2.06, 1.38, 1.06, 0.82], final: 3.89, wheel: 0.29, mass: 980, idle: 1000, red: 7500, cd: 0.40, area: 1.9,
@@ -99,7 +99,7 @@
         hud: { y: '#ffffff', c: '#ffd05a', r: '#ff6a5a', fond: 'rgba(24,44,110,.92)', style: 'plaque', split: 0, jp: null, sur: [null, 'PARIS · 5 H 30'], titre: ['PREMIER', 'METRO'] } } },
 
     // Canal de Los Angeles à l'heure dorée : béton mouillé, très large, la carte de la glisse.
-    { id: 'canal', nom: 'CANAL 6', W: 15, grip: 15, sc: 1, tun: null, chaud: [1, 8], sect: [7, 19], anticipe: 1,
+    { id: 'canal', nom: 'CANAL 6', rivaux: ['DRE', 'ROSA', 'CAL'], W: 15, grip: 15, sc: 1, tun: null, chaud: [1, 8], sect: [7, 19], anticipe: 1,
       pts: [[0, 0, -8], [250, -80, -8], [500, 90, -8], [750, -80, -8], [1000, 90, -8], [1250, -80, -8], [1500, 60, -8], [1720, 40, -8], [1825, 123, -5], [1828, 168, -3], [1803, 206, -1], [1760, 220, 2], [1500, 230, 4], [1300, 290, 4], [1100, 220, 4], [900, 290, 4], [700, 220, 4], [500, 290, 4], [300, 220, 4], [50, 240, 4], [-170, 230, 2], [-256, 156, -1], [-270, 110, -3], [-256, 64, -5], [-170, -10, -8]],
       // Dodge Viper GTS (1996) : V10 de 8,0 L, 450 ch à 5200 tr/min, 664 N·m à 3700, 1535 kg, propulsion, boîte T56 (rapports à vérifier sur fiche)
       car: car({ nom: 'DODGE VIPER GTS', ratios: [2.66, 1.78, 1.30, 1.00, 0.74, 0.50], final: 3.07, wheel: 0.333, mass: 1610, idle: 800, red: 6000, cd: 0.35, area: 1.9,

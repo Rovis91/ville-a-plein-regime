@@ -19,7 +19,7 @@ for (const M of CARTES) {
     if (c.dist >= n) { if (!t1) t1 = t; const v = Math.hypot(c.vx, c.vz); vmax = Math.max(vmax, v); vmin = Math.min(vmin, v); if (c.hit > 3) hits++; if (c.drift) slid += H; }
   }
   assert(c.dist >= 2 * n, `${M.id} : le pilote automatique ne boucle pas le tour`);
-  if (process.env.DBG) console.log(M.id, hits); else assert(hits <= 2, `${M.id} : le pilote automatique tape les murs (${hits})`);
+  assert(hits <= 2, `${M.id} : le pilote automatique tape les murs (${hits})`);
   // départ arrêté, gaz à fond : 0 à 100 km/h plausible, et la boîte auto monte tous les rapports utiles sans rester au rupteur
   c = newCar(T); let t100 = 0;
   for (let i = 0; i < 8 / H && !t100; i++) { step(c, { steer: 0, gas: 1, brake: 0, hand: false }, T, H); if (c.vf >= 100 / 3.6) t100 = (i + 1) * H; assert(c.rpm <= CARD.red + 200); }
@@ -35,6 +35,10 @@ for (const M of CARTES) {
     let hit = 0; for (let i = 0; i < 4 / H; i++) { step(c, { steer: 0, gas: 0, brake: 0, hand: false }, T, H); hitTrafic(c, T, i * H); hit = Math.max(hit, c.hit); }
     assert(hit > 5 && Math.hypot(c.vx, c.vz) > 5, `${M.id} : le camion ne pousse pas la voiture (${hit})`);
   }
+  // course : 3 tours à 4 pilotes automatiques sur le tracé de la carte ; tout le monde arrive, personne ne sort ni ne reste bloqué
+  const R = newRace(T); let wall = 0, bump = 0;
+  while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && Math.abs(x.d) <= W, M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }
+  assert(R.done, M.id + ' : la course ne se termine pas');
   const lap = t - t1, k = v => Math.round(v * 3.6);
-  console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs, ${slid.toFixed(1)} s de glisse, 0-100 en ${t100.toFixed(1)} s`);
+  console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs, ${slid.toFixed(1)} s de glisse, 0-100 en ${t100.toFixed(1)} s ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);
 }

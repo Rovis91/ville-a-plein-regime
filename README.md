@@ -90,7 +90,7 @@ Dans `cartes.js`, pour chaque carte :
 | `th` | le thème : ciel, brume, lumières, couleurs de route, style et couleurs de l'interface |
 | `trafic` | nombre de camions sur la route |
 
-Dans `sim.js`, `TOP` est la vitesse de référence pour le braquage et les effets visuels.
+Dans `sim.js` : `TOP` est la vitesse de référence pour le braquage et les effets visuels, `AI_LVL` le niveau de chaque adversaire du mode course (1 = tour propre du pilote automatique).
 
 Dans `game.js` :
 
@@ -103,6 +103,7 @@ Dans `game.js` :
 | `cam.fov =` | grand-angle de la caméra selon la vitesse |
 | `function drawHUD(` | toute l'interface et les écrans |
 | `const pauseItems` | entrées du menu pause |
+| `const OPP = [` | noms et couleurs des adversaires |
 
 Les records, le fantôme et les préférences sont stockés dans le navigateur sous les clés `vpr5.*` pour la ville et `vpr5.<carte>.*` pour les autres. Quand la physique change au point de rendre les anciens temps incomparables, incrémenter ce préfixe.
 
