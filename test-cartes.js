@@ -69,6 +69,14 @@ for (const M of CARTES) {
     let hit = 0; for (let i = 0; i < 4 / H; i++) { step(c, { steer: 0, gas: 0, brake: 0, hand: false }, T, H); hitTrafic(c, T, i * H); hit = Math.max(hit, c.hit); }
     assert(hit > 5 && Math.hypot(c.vx, c.vz) > 5, `${M.id} : le camion ne pousse pas la voiture (${hit})`);
   }
+  // pluie : la bruine (force 1) ne change rien ; une averse ralentit le pilote automatique de 2 à 12 % sans l'envoyer dans les murs, et allonge le freinage
+  assert(!T.eau.some(Boolean) === !(Array.isArray(M.th.pluie) && M.th.pluie.some(z => z[2] > 1)), M.id + ' : route mouillée là où il ne pleut pas fort');
+  if (T.eau.some(Boolean)) {
+    const E = T.eau; T.eau = null; const [sec] = tour(c => autopilot(c, T)); T.eau = E;
+    assert(lap > 1.02 * sec && lap < 1.12 * sec, `${M.id} : tour sous la pluie ${lap} s, au sec ${sec} s`);
+    const frein = e => { TO.eau = [e]; const c = lance(v200); let d = 0; while (c.vf > 1) { go(c, I(0, 0, 1), H); d += c.vf * H; } TO.eau = null; return d; };
+    assert(frein(1) > 1.2 * frein(0), M.id + ' : le freinage sous la pluie doit être plus long');
+  }
   // course : 3 tours à 4 pilotes automatiques sur le tracé de la carte ; tout le monde arrive, personne ne sort ni ne reste bloqué
   const R = newRace(T); let wall = 0, bump = 0;
   while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && Math.abs(x.d) <= S[x.idx].w, M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }

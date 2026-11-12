@@ -7,6 +7,7 @@ const run = (c, inp, sec) => { for (let i = 0; i < sec / H; i++) step(c, typeof 
 const I = (steer, gas, brake = 0, hand = false) => ({ steer, gas, brake, hand });
 
 const rmin = 1 / Math.max(...S.map(s => Math.abs(s.k)));
+assert(!T.eau.some(Boolean), "la bruine de la ville ne doit pas mouiller la route (records)");
 assert(rmin > 25, 'rayon mini trop serré: ' + rmin);
 for (let i = 0; i < n; i++) for (let j = i + 40; j < n; j++) {
   if (n - j + i < 40) continue;
