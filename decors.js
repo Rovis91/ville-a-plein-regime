@@ -631,35 +631,24 @@
       const pot = []; for (let i = 0; i < N; i += 6) for (const sd of [-1, 1]) { const [x, z] = bord(S[i], sd, W + 0.2); pot.push([x, S[i].y + h.TH.murH + 2.1, z, 0, 1, 0.86, 1]); }
       inst(h, h.geo('poteauGrillage'), acier, pot);
 
-      // --- l'anneau des tribunes : un rectangle aux bouts arrondis autour du tracé, des modules de 42 m tournés vers la piste ---
-      const XA = -120, XB = 1640, ZC = 110, R0 = 222, PAS = 42, trib = [[], []], projo = [];
-      const module = (x, z, ox, oz, k) => {
-        const a = Math.atan2(ox, oz), c = Math.cos(a), sn = Math.sin(a);
-        if (![-21, 0, 21].every(u => g.dAt(x + u * c, z - u * sn) > W + 10)) return; // trop près d'une autre portion de piste
-        const y = Math.min(g.hAt(x, z), g.hAt(x + 30 * ox, z + 30 * oz)) - 0.6; trib[k % 3 === 0 ? 1 : 0].push([x, y, z, a]);
-        const px = x - 12 * ox, pz = z - 12 * oz, i = near(h, px, pz); // les projecteurs éclairent la piste devant la tribune
-        if (Math.hypot(S[i].x - px, S[i].z - pz) < 70) projo.push([i, px, y + 30, pz]);
-      };
-      let k = 0;
-      for (let x = XA; x <= XB; x += PAS, k++) if (Math.abs(x - 930) > 50) { module(x, ZC - R0, 0, -1, k); module(x, ZC + R0, 0, 1, k + 1); } // une entrée au milieu de chaque ligne droite
-      const na = Math.round(Math.PI * R0 / PAS);
-      for (let j = 1; j < na; j++, k++) { const t = -Math.PI / 2 + j * Math.PI / na, ox = Math.cos(t), oz = Math.sin(t); module(XB + R0 * ox, ZC + R0 * oz, ox, oz, k); module(XA - R0 * ox, ZC + R0 * oz, -ox, oz, k + 1); }
-      const foule = net(h.mat('foule', {}, '#4a4250', '#e83f8c')), foule2 = net(h.mat('foule', {}, '#3e3848', '#2aa39a'));
-      const peauT = { beton, banderole: h.mat('banderole'), foule, foule2, escalier: h.mat('marches'), loge: h.mat('loges', LUM), acier, toit: h.mat('toleToit'), lampe, drapeau: h.mat('damier', { lum: 1, net: 1, side: THREE.DoubleSide }, '#f4f0e0') };
-      trib.forEach((l, m) => insts(h, 'tribune', peauT, l, { a: [m] }));
-      // gradins provisoires à 55 % dans les renflements (piste loin de l'anneau, herbe du milieu) : tout le tour reste bordé de public
-      const dansAnneau = (x, z) => (x > XA && x < XB ? Math.abs(z - ZC) : Math.hypot(x - (x < XA ? XA : XB), z - ZC)) < R0 - 6, prov = [];
-      const ecrans = [[240, 70], [1250, 110], [1600, 140]], libreE = (x, z) => ecrans.every(([cx, cz]) => Math.hypot(x - cx, z - cz) > 45);
-      for (let i = 0; i < N; i += 12) for (const sd of [-1, 1]) { // des deux côtés, hors des virages serrés ; côté stands, on laisse la place aux garages
-        const s = S[i], ox = -s.tz * sd, oz = s.tx * sd, [x, z] = bord(s, sd, W + 14), bx = x + 30 * ox, bz = z + 30 * oz;
-        if (Math.abs(s.k) > 0.006 || (sd > 0 && (i > N - 130 || i < 100))) continue;
-        if ([-12, 12].every(u => g.dAt(x + u * oz, z - u * ox) > W + 10) && g.dAt(bx, bz) > W + 10 && dansAnneau(bx, bz) && libreE(bx, bz) && libreE(x, z))
-          prov.push([x, Math.min(g.hAt(x, z), g.hAt(x + 16 * ox, z + 16 * oz)) - 0.4, z, Math.atan2(ox, oz), 0.55]);
+      // --- les tribunes suivent la piste par l'extérieur, sans trou : un module de 14 m tous les 7 échantillons. Il s'élargit à l'extérieur des courbes
+      // pour refermer l'éventail, et perd de la profondeur (75 %, 50 %) là où une autre portion de piste passe derrière ; un sur quatre porte un mât ---
+      const trib = [[], []], PAS = 7, PROF = 53;
+      const pied = i => { const s = S[i % N]; return [...bord(s, -1, W + 12), s.tz, -s.tx]; }; // façade et direction du fond (côté gauche = extérieur de l'ovale)
+      for (let i = 0, k = 0; i < N; i += PAS, k++) {
+        const [x, z, ox, oz] = pied(i), sc = [1, 0.75, 0.5].find(c => [0, 0.35, 0.7, 1].every(f => g.dAt(x + f * PROF * c * ox, z + f * PROF * c * oz) > W + 9));
+        if (!sc || ![-7, 7].every(u => g.dAt(x + u * oz, z - u * ox) > W + 9)) continue;
+        const [x2, z2, ox2, oz2] = pied(i + PAS), large = Math.max(1, Math.hypot(x2 + 40 * sc * ox2 - x - 40 * sc * ox, z2 + 40 * sc * oz2 - z - 40 * sc * oz) / 14 + 0.05);
+        const y = Math.min(g.hAt(x, z), g.hAt(x + 20 * sc * ox, z + 20 * sc * oz)) - 0.6, mat = k % 4 === 0 ? 1 : 0;
+        trib[mat].push([x, y, z, Math.atan2(ox, oz), large, sc, sc]);
+        if (mat) { const s = S[i], [lx, lz] = bord(s, -1, W + 2); h.lum(i, lx, s.y + 20, lz, 0xfff0d8, 50, 0.5); } // le mât éclaire la piste ; au couchant, un appoint
       }
-      insts(h, 'tribune', peauT, prov, { a: [0] });
-      projo.forEach(([i, x, y, z]) => h.lum(i, x, y, z, 0xfff0d8, 70, 0.55)); // au couchant, un appoint : plus fort, la chaussée blanchit
+      const foule = net(h.mat('foule', {}, '#4a4250', '#e83f8c')), foule2 = net(h.mat('foule', {}, '#3e3848', '#2aa39a'));
+      const peauT = { beton, banderole: h.mat('banderole', {}, 0), banderole2: h.mat('banderole', {}, 2), foule, foule2, escalier: h.mat('marches'), loge: h.mat('loges', LUM), acier, toit: h.mat('toleToit'), lampe, drapeau: h.mat('damier', { lum: 1, net: 1, side: THREE.DoubleSide }, '#f4f0e0') };
+      trib.forEach((l, m) => insts(h, 'tribune', peauT, l, { a: [m] }));
+      const ecrans = [[240, 70], [1250, 110], [1600, 140]];
 
-      // --- le parking autour de l'anneau : des milliers de voitures, des camping-cars au bout des virages ---
+      // --- le parking derrière les tribunes : des milliers de voitures, des camping-cars au bout des virages ---
       const autos = [], cc = [], COUL = [0xf4f0e0, 0x1a1a1e, 0xc8102e, 0x9aa0a8, 0x1848c8, 0x5a5e66, 0xd8d0c0, 0x2a5a3a, 0xffc04a];
       const lots = [[-260, 1780, -240, -178], [-260, 1780, 398, 460], [1960, 2100, -200, 420], [-580, -440, -200, 420]], dalles = [];
       lots.forEach(([x0, x1, z0, z1], n) => {
@@ -670,12 +659,16 @@
           autos.push([x, g.hAt(x, z) + 0.65, z + ((z | 0) % 2 ? 2.4 : -2.4), 1.5708, 1, 1, 1, COUL[(r * 977 | 0) % COUL.length]]);
         }
       });
-      // et dans l'herbe du milieu, derrière les gradins provisoires, des camping-cars par grappes : le public qui campe à l'intérieur de l'ovale
+      // et dans l'herbe du milieu, le public qui campe : deux rangées de camping-cars le long du grillage intérieur, par groupes, puis des grappes plus loin
       const poly = S.filter((s, i) => i % 8 === 0), dedans = (x, z) => { let c = false; for (let a = 0, b = poly.length - 1; a < poly.length; b = a++) { const p = poly[a], q = poly[b]; if ((p.z > z) !== (q.z > z) && x < (q.x - p.x) * (z - p.z) / (q.z - p.z) + p.x) c = !c; } return c; };
       const libre = (x, z) => [[20, 60, 140], ...ecrans.map(([a, b]) => [a, b, 30])].every(([cx, cz, r]) => Math.hypot(x - cx, z - cz) > r);
+      for (let i = 100; i < N - 130; i += 4) for (const off of [W + 19, W + 28]) {
+        const s = S[i], [x, z] = bord(s, 1, off); if ((i >> 2) % 8 === 0) continue; // un passage tous les 8 camping-cars
+        if (dedans(x, z) && g.dAt(x, z) > off - 1.5 && libre(x, z)) cc.push([x, g.hAt(x, z), z, Math.atan2(-s.tz, s.tx), 1, 1, 1, COUL[(i * 7 + off | 0) % COUL.length]]);
+      }
       for (let n = 0; n < 70; n++) {
         const x0 = -150 + rnd() * 1900, z0 = -60 + rnd() * 340, a = rnd() * 3.14;
-        for (let m = 0; m < 6; m++) { const x = x0 + Math.cos(a) * m * 4, z = z0 - Math.sin(a) * m * 4; if (dedans(x, z) && g.dAt(x, z) > W + 50 && libre(x, z)) cc.push([x, g.hAt(x, z), z, a + 1.5708, 1, 1, 1, COUL[(n + m) % COUL.length]]); }
+        for (let m = 0; m < 6; m++) { const x = x0 + Math.cos(a) * m * 4, z = z0 - Math.sin(a) * m * 4; if (dedans(x, z) && g.dAt(x, z) > W + 45 && libre(x, z)) cc.push([x, g.hAt(x, z), z, a + 1.5708, 1, 1, 1, COUL[(n + m) % COUL.length]]); }
       }
       const ma = inst(h, h.geo('auto'), h.mat('laque'), autos); autos.forEach((p, i) => ma.setColorAt(i, new THREE.Color(p[7]))); ma.instanceColor.needsUpdate = true;
       [inst(h, h.geo('bloc'), h.mat('parking'), dalles), ma, ...insts(h, 'campingCar', { caisse: h.mat('campingCar'), bande: h.mat('peinture', { c: 0xffffff }), vitre: h.mat('vitreSombre'), pneu: h.mat('pneu') }, cc, { teinte: 'bande' })]

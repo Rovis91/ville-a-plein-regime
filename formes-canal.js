@@ -4,16 +4,15 @@
   const A1 = Math.atan2(14, 24), A2 = Math.atan2(16, 22); // pentes des gradins bas et haut
   const B = (w, h, d, H = h) => { const g = new THREE.BoxGeometry(w, h, d); g.userData.dim = [w, H, d]; return g; };
   Object.assign(FORMES, {
-    // tribune de 42 m : podium à banderole, gradins bas (foule), escaliers, loges vitrées, gradins hauts (foule2), mur du fond, toit en porte-à-faux
-    // sur fermes d'acier, rampe de projecteurs sous le bord du toit, drapeau à damier ; mat = 1 ajoute un mât de projecteurs de 64 m au bout
-    tribune: mat => [['beton', 42, 3, 2, 0, 1.5, 1], ['banderole', 42, 1.6, 0.2, 0, 1.7, -0.05],
-      ['foule', 42, 0.6, 27.8, 0, 10, 14, [-A1, 0, 0], 1], ...[-14, 0, 14].map(x => ['escalier', 1.4, 0.8, 27.8, x, 10, 14, [-A1, 0, 0]]),
-      ['loge', 42, 4, 3, 0, 19, 27.5], ['beton', 42, 1, 6, 0, 21.5, 28], ['banderole', 42, 1.2, 0.2, 0, 22.6, 24.9],
-      ['foule2', 42, 0.6, 27.2, 0, 30, 39, [-A2, 0, 0], 1], ...[-7, 7].map(x => ['escalier', 1.4, 0.8, 27.2, x, 30, 39, [-A2, 0, 0]]),
-      ['beton', 42, 40, 2, 0, 20, 51, null, 1], ...[-20.5, 20.5].flatMap(x => [['acier', 1, 6, 1, x, 43, 51], ['acier', 0.8, 3, 34, x, 48.2, 36]]),
-      ['toit', 44, 0.8, 34, 0, 46.4, 36, null, 1], ['lampe', 40, 0.6, 0.8, 0, 45.6, 19.6],
-      ['acier', 0.25, 9, 0.25, -18, 51.3, 51.5], ['drapeau', 3, 2, 0.1, -16.4, 54.6, 51.5],
-      ...(mat ? [['acier', 1.4, 64, 1.4, 21, 32, 54, null, 1], ['acier', 10, 0.6, 2, 21, 61.7, 54], ['lampe', 9, 4, 0.8, 21, 64, 53.4]] : [])],
+    // module de tribune de L m, posé côte à côte le long de la piste : podium à banderole, gradins bas (foule), escalier au bord, loges vitrées,
+    // gradins hauts (foule2), mur du fond, toit en porte-à-faux sur ferme d'acier, rampe de projecteurs ; mat = 1 : drapeau à damier et mât de projecteurs de 64 m
+    tribune: (mat, L = 14) => [['beton', L, 3, 2, 0, 1.5, 1], ['banderole', L, 1.6, 0.2, 0, 1.7, -0.05],
+      ['foule', L, 0.6, 27.8, 0, 10, 14, [-A1, 0, 0], 1], ['escalier', 1.4, 0.8, 27.8, 0.7 - L / 2, 10, 14, [-A1, 0, 0]],
+      ['loge', L, 4, 3, 0, 19, 27.5], ['beton', L, 1, 6, 0, 21.5, 28], ['banderole2', L, 1.2, 0.2, 0, 22.6, 24.9],
+      ['foule2', L, 0.6, 27.2, 0, 30, 39, [-A2, 0, 0], 1], ['escalier', 1.4, 0.8, 27.2, 0.7 - L / 2, 30, 39, [-A2, 0, 0]],
+      ['beton', L, 40, 2, 0, 20, 51, null, 1], ['acier', 1, 6, 1, 0.5 - L / 2, 43, 51], ['acier', 0.8, 3, 34, 0.5 - L / 2, 48.2, 36],
+      ['toit', L + 0.6, 0.8, 34, 0, 46.4, 36, null, 1], ['lampe', L - 1, 0.6, 0.8, 0, 45.6, 19.6],
+      ...(mat ? [['acier', 0.25, 9, 0.25, 2 - L / 2, 51.3, 51.5], ['drapeau', 3, 2, 0.1, 3.6 - L / 2, 54.6, 51.5], ['acier', 1.4, 64, 1.4, L / 2, 32, 54, null, 1], ['acier', 10, 0.6, 2, L / 2, 61.7, 54], ['lampe', 9, 4, 0.8, L / 2, 64, 53.4]] : [])],
     // poteau du grillage de protection
     poteauGrillage: () => B(0.25, 5, 0.25),
     // garage des stands : box, rideau levé, enseigne d'équipe, toit
