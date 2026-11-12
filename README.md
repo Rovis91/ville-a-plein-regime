@@ -1,6 +1,16 @@
 # Ville à plein régime
 
-Jeu de course arcade solo, contre-la-montre de nuit dans une ville cyberpunk en 3D pixelisée. Un circuit, une voiture, une radio à trois stations dont la musique réagit à la course.
+Jeu de course arcade solo, contre-la-montre en 3D pixelisée. Cinq cartes, chacune avec son tracé, sa voiture, sa radio, son décor et son interface ; la musique réagit à la course.
+
+| Carte | Conduite | Voiture | Radio |
+|---|---|---|---|
+| Ville à plein régime | viaduc et échangeur de nuit, presque tout à fond | Nismo GT-R Z-tune | darksynth, house, breakbeat |
+| Karasu-tōge | col de montagne : montée rapide, quatre épingles en descente | Mazda RX-7 Spirit R | eurobeat |
+| Wan-9 | autoroute de baie à 270 km/h, boucle serrée, camions à doubler | Toyota Supra RZ | trance |
+| Premier métro | rues de Paris à l'aube, relances entre des angles | Renault 5 Maxi Turbo | disco spatiale |
+| Canal 6 | canal de Los Angeles au couchant, large et glissant | Dodge Viper GTS | g-funk |
+
+On change de carte à l'écran-titre avec gauche / droite (la page se recharge), ou par l'adresse : `?carte=touge`, `wangan`, `paris`, `canal`, `ville`.
 
 Tout tourne dans le navigateur, sans étape de build ni dépendance à installer.
 
@@ -36,8 +46,12 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | Fichier | Rôle |
 |---|---|
 | `index.html` | page, polices, ordre de chargement des scripts |
-| `sim.js` | **circuit et physique**, sans aucun rendu : tracé, voiture, moteur et boîte, glisse, murs, pilote automatique. Partagé entre le jeu et les tests. |
-| `game.js` | tout le reste : rendu three.js, effets, audio, interface, commandes, boucle de jeu |
+| `cartes.js` | **les cartes**, en données : tracé, largeur, adhérence, voiture, stations de radio, thème (couleurs, ciel, lumière, interface). Ajouter une carte commence ici. |
+| `sim.js` | **physique**, sans aucun rendu : piste, moteur et boîte, glisse, murs, pilote automatique, course contre IA, trafic. Partagé entre le jeu et les tests. |
+| `game.js` | rendu three.js, décor de la ville, effets, audio, interface, commandes, boucle de jeu |
+| `decors.js` | décors des autres cartes (forêt, baie, Paris, canal) : une fonction par carte |
+| `test-cartes.js` | tests de toutes les cartes |
+| `propositions/` | la page de conception d'origine des cartes (historique) |
 | `samples.js` | sons de batterie encodés en base64 (généré depuis `samples/`) |
 | `samples/` | sons de Roland TR-808 d'origine et leur note d'auteur |
 | `fonts/` | polices pixel |
@@ -52,27 +66,36 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 node test.js
 ```
 
-Vérifie la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse et le boost.
+Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, le boost et la course contre IA. Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
+
+```bash
+node test-cartes.js
+```
+
+Passe chaque carte dans la physique : tracé sans recoupement, tour bouclé au pilote automatique, 0 à 100 km/h plausible, glisse au frein à main, trafic. Affiche longueur, temps au tour et vitesses de chaque carte.
 
 Dans le navigateur, `?auto` fait conduire le pilote automatique, et `window.__g` expose l'état du jeu pour le débogage.
 
 ## Où régler quoi
 
-Dans `sim.js`, en haut du fichier :
+Dans `cartes.js`, pour chaque carte :
 
-| Constante | Effet |
+| Champ | Effet |
 |---|---|
-| `GRIP` | adhérence en virage. Plus haut : la voiture tourne plus serré et il faut moins freiner. |
-| `SC` | échelle du tracé. Plus petit : virages plus serrés, tour plus court. |
-| `PTS`, `HGT` | points de contrôle et altitudes du circuit |
-| `CARD` | la voiture : rapports de boîte, courbe de couple, masse, aérodynamique |
-| `TOP` | vitesse de référence pour le braquage et les effets visuels |
+| `grip` | adhérence en virage (m/s²). 44 sur la ville (arcade), 15 à 24 ailleurs (proche d'une vraie voiture en pneus de course). Plus haut : on tourne plus serré, on freine moins. |
+| `W`, `sc`, `pts` | demi-largeur de route, échelle et points de contrôle `[x, z, altitude]` du tracé |
+| `tun`, `chaud`, `sect` | tunnel, secteur où la musique se déchaîne, temps intermédiaires (indices de points) |
+| `car` | la voiture : rapports de boîte, courbe de couple, masse, aérodynamique, motricité, silhouette |
+| `radio` | les stations : tempo, accords, motifs de batterie et de basse, thème |
+| `th` | le thème : ciel, brume, lumières, couleurs de route, style et couleurs de l'interface |
+| `trafic` | nombre de camions sur la route |
+
+Dans `sim.js`, `TOP` est la vitesse de référence pour le braquage et les effets visuels.
 
 Dans `game.js` :
 
 | Chercher | Effet |
 |---|---|
-| `const ST = [` | les stations de radio : tempo, accords, motifs de batterie et de basse |
 | `function sched(` | le séquenceur musical et ses couches adaptatives |
 | `function audioFrame(` | son du moteur, des pneus, du vent, et pilotage de la musique par la course |
 | `post.uniforms.amt.value` | intensité du flou de vitesse |
@@ -81,7 +104,7 @@ Dans `game.js` :
 | `function drawHUD(` | toute l'interface et les écrans |
 | `const pauseItems` | entrées du menu pause |
 
-Les records, le fantôme et les préférences sont stockés dans le navigateur sous les clés `vpr5.*`. Quand la physique change au point de rendre les anciens temps incomparables, incrémenter ce préfixe.
+Les records, le fantôme et les préférences sont stockés dans le navigateur sous les clés `vpr5.*` pour la ville et `vpr5.<carte>.*` pour les autres. Quand la physique change au point de rendre les anciens temps incomparables, incrémenter ce préfixe.
 
 Pour régénérer `samples.js` après avoir changé un son dans `samples/`, réencoder chaque fichier `.ogg` en base64 dans l'objet `window.SMP`.
 
@@ -106,7 +129,8 @@ Le jeu est un site statique : il suffit de servir le dossier tel quel. Sur GitHu
 - **three.js** r128, licence MIT.
 - **Polices** Press Start 2P et DotGothic16, licence SIL Open Font.
 - **Sons de TR-808** : enregistrés par Michael Fischer (Technopolis, 1994) et distribués gratuitement par leur auteur, sans licence formelle. Voir `samples/TR808.TXT`. À vérifier ou à remplacer avant toute diffusion commerciale.
-- **Données de la voiture** : fiche technique de la Nismo Skyline GT-R Z-tune (rapports de boîte, couple, puissance, masse). La forme de la courbe de couple, le Cx et les pertes de transmission sont des estimations.
+- **Données des voitures** : fiche technique de la Nismo Skyline GT-R Z-tune (rapports de boîte, couple, puissance, masse). La forme de la courbe de couple, le Cx et les pertes de transmission sont des estimations. Les fiches des quatre autres voitures (Mazda RX-7 Spirit R, Toyota Supra RZ, Renault 5 Maxi Turbo, Dodge Viper GTS) sont saisies de mémoire, et les rapports de boîte de la Renault 5 sont estimés : à vérifier sur fiche constructeur.
+- **Cartes** : tracés, décors et noms originaux, inspirés de lieux réels et de l'ambiance de films et de mangas, sans en reprendre les circuits, personnages ni visuels.
 - **Musique** : compositions originales, synthétisées en direct.
 
 Le code du jeu n'a pas encore de licence : à choisir avant de rendre le dépôt public.

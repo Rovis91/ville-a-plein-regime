@@ -1,22 +1,13 @@
 // Piste + physique pures (sans rendu) : partagées par le jeu et par `node test.js`.
 (function (G) {
-  const W = 9, TOP = 55; // demi-largeur de route (m) ; vitesse de référence (m/s) pour le braquage et les effets visuels
-  const GRIP = 44; // adhérence latérale maxi (m/s²) : à fond on ne passe que les courbes de plus de 70 m de rayon, le reste se freine
-  // Mécanique : données constructeur de la Nismo Skyline GT-R Z-tune (R34, 6 cylindres en ligne biturbo « Z2 » de 2,8 L, boîte Getrag 6 rapports).
-  const CARD = {
-    ratios: [3.827, 2.360, 1.685, 1.312, 1.000, 0.793], final: 3.545, // démultiplications
-    wheel: 0.326, mass: 1675, eff: 0.85, // rayon de roue (m) ; 1600 kg + pilote ; ~15 % de pertes de transmission (4 roues motrices)
-    idle: 950, red: 8000, cd: 0.34, area: 2.1, // ralenti, zone rouge (tr/min) ; aérodynamique
-    tq: [0, 200, 330, 450, 520, 540, 535, 505, 420], // couple (N·m) tous les 1000 tr/min : 540 N·m à 5200, 500 ch à 6800 (forme de la courbe estimée)
-  };
+  if (!G.CARTES) require('./cartes.js'); // node : le navigateur charge cartes.js avant ce fichier
+  // Tout ce qui dépend de la carte active (tracé, largeur, adhérence, voiture) vient de cartes.js ; voir ses commentaires pour le détail des champs.
+  const M = G.CARTE, W = M.W, TOP = 55; // demi-largeur de route (m) ; vitesse de référence (m/s) pour le braquage et les effets visuels
+  const GRIP = M.grip; // adhérence latérale maxi (m/s²) : 44 sur la ville (arcade : à fond on passe tout ce qui fait plus de 70 m de rayon), 15 à 24 ailleurs
+  const CARD = M.car; // mécanique : fiche technique de la voiture de la carte
   const torque = rpm => { const x = Math.max(0, Math.min(8, rpm / 1000)), i = Math.min(7, x | 0); return CARD.tq[i] + (CARD.tq[i + 1] - CARD.tq[i]) * (x - i); };
-  // Points de contrôle (x,z) en mètres, sens horaire = virages à droite. Départ en [0].
-  // HGT = altitude de chaque point : bosse sur la grande courbe, plongée dans l'échangeur, remontée vers la ligne.
-  const HGT = [0, 0, 4, 10, 12, 6, -2, -10, -14, -14, -10, -4, 2, 8, 6, 2, 0];
-  const SC = 0.85; // échelle du tracé : plus petit = virages plus serrés pour une même voiture
-  const PTS = [[0, 0], [220, 0], [420, 10], [560, 90], [600, 240], [520, 370], [360, 400], [230, 340], [110, 400],
-    [0, 520], [-150, 560], [-300, 500], [-360, 360], [-300, 240], [-380, 120], [-330, 10], [-180, 0]].map(p => [p[0] * SC, p[1] * SC]);
-  const TUN = [6, 12]; // l'échangeur couvert va de PTS[6] à PTS[12]
+  // Points de contrôle (x,z) en mètres, sens horaire = virages à droite. Départ en [0]. HGT = altitude de chaque point.
+  const SC = M.sc, HGT = M.pts.map(p => p[2]), PTS = M.pts.map(p => [p[0] * SC, p[1] * SC]);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -31,7 +22,9 @@
     // courbure signée (>0 = virage à droite), lissée sur ±3 échantillons
     S.forEach((s, i) => { const a = S[(i - 3 + n) % n], b = S[(i + 3) % n]; s.k = (a.tx * b.tz - a.tz * b.tx) / (6 * len / n); });
     const near = p => { let b = 0, bd = 1e9; S.forEach((s, i) => { const d = (s.x - p[0]) ** 2 + (s.z - p[1]) ** 2; if (d < bd) { bd = d; b = i; } }); return b; };
-    return { S, n, W, len, t0: near(PTS[TUN[0]]), t1: near(PTS[TUN[1]]) };
+    const at = i => near(PTS[i]), TUN = M.tun || [0, 0];
+    // tun : la carte a un tunnel, de t0 à t1 ; h0-h1 : secteur « chaud » pour la musique ; sp : les deux temps intermédiaires (indices d'échantillons)
+    return { S, n, W, len, tun: !!M.tun, t0: at(TUN[0]), t1: at(TUN[1]), h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at) };
   }
 
   function newCar(T) {
@@ -64,8 +57,8 @@
     const K = CARD.final * 30 / (Math.PI * CARD.wheel), av = Math.abs(vf); // tr/min par m/s, pour un rapport de 1
     if (!c.manual && av < 3) c.gear = c.lastGear = 0; // quasi à l'arrêt : la boîte auto revient directement en 1re
     if (!c.manual && c.shiftT <= 0) {
-      if (av * K * CARD.ratios[c.gear] > 7500 && c.gear < 5) c.gear++;
-      else if (c.gear > 0 && av * K * CARD.ratios[c.gear - 1] < 6200) c.gear--;
+      if (av * K * CARD.ratios[c.gear] > CARD.up && c.gear < CARD.ratios.length - 1) c.gear++;
+      else if (c.gear > 0 && av * K * CARD.ratios[c.gear - 1] < CARD.down) c.gear--;
     }
     if (c.gear !== c.lastGear) { c.shiftT = 0.25; c.lastGear = c.gear; }
     const ratio = CARD.ratios[c.gear], wr = av * K * ratio, er = Math.max(wr, c.gear === 0 && inp.gas ? 3500 : CARD.idle); // en 1re, l'embrayage patine vers 3500 tr/min au démarrage
@@ -75,8 +68,10 @@
     else if (wr > CARD.red) acc = -6 * Math.sign(vf); // surrégime : rupteur et gros frein moteur
     else {
       const tqe = inp.gas * torque(er) - (1 - inp.gas) * (20 + 0.01 * er) * Math.sign(vf); // couple moteur, ou frein moteur pied levé
-      acc = Math.min(11, tqe * ratio * CARD.final * CARD.eff / CARD.wheel / CARD.mass); // plafonné par la motricité (~1,1 g en 4 roues motrices)
+      acc = Math.min(CARD.trac, tqe * ratio * CARD.final * CARD.eff / CARD.wheel / CARD.mass); // plafonné par la motricité (~1,1 g en 4 roues motrices, moins en propulsion)
     }
+    // propulsion : ce que les roues arrière donnent en motricité, elles ne l'ont plus en latéral (cercle d'adhérence) : gaz à fond en bas rapport = survirage
+    const tc = CARD.rwd && acc > 0 ? Math.sqrt(Math.max(0.2, 1 - (acc / CARD.trac) ** 2)) : 1;
     if (c.boost > 0) { c.boost -= dt; if (inp.gas) acc += 6; }
     if (c.stun > 0) { c.stun -= dt; if (acc > 0) acc *= 0.2; }
     vf += acc * dt;
@@ -87,7 +82,7 @@
     // traînée aérodynamique (½·ρ·Cd·A·v²), résistance au roulement, et un peu de vitesse perdue en glisse
     vf -= (0.6 * CARD.cd * CARD.area * vf * Math.abs(vf) / CARD.mass + (Math.abs(vf) > 0.3 ? 0.15 : 0) * Math.sign(vf) + 0.1 * Math.abs(vl) * Math.sign(vf)) * dt;
     // adhérence latérale plafonnée (m/s²) : au-delà les pneus décrochent ; elle chute en glisse, au frein à main et au freinage appuyé
-    const A = lerp(GRIP, GRIP * 0.95, sl) * (hand ? 0.35 : 1) * (inp.brake && sp > 25 ? 0.4 : 1);
+    const A = lerp(GRIP, GRIP * 0.95, sl) * (hand ? 0.35 : 1) * (inp.brake && sp > 25 ? 0.4 : 1) * tc;
     vl += clamp(-vl * 25, -A, A) * dt;
     // une glisse tenue plus de 0,6 s donne un boost à la reprise d'adhérence
     c.slide = sl; c.drift = sl > 0.35;
@@ -122,7 +117,7 @@
   // lvl = niveau du pilote (1 = tour propre de référence ; plus bas = moins de gaz et virages plus lents).
   // others = voitures à éviter : il se décale pour doubler une voiture plus lente, ne se rabat pas tant qu'elle est à sa hauteur, et freine s'il est bloqué derrière.
   function autopilot(c, T, lvl = 1, others = []) {
-    const S = T.S, n = T.n, sp = Math.hypot(c.vx, c.vz), look = 6 + Math.floor(sp * 0.35);
+    const S = T.S, n = T.n, sp = Math.hypot(c.vx, c.vz), look = M.anticipe ? 4 + Math.floor(sp * 0.2) : 6 + Math.floor(sp * 0.35);
     let off = 0, vcap = 1e9, best = 1e9;
     for (const o of others) {
       if (o === c) continue;
@@ -138,10 +133,14 @@
     }
     const la = S[(c.idx + look) % n];
     const e = wrap(Math.atan2(la.z + la.tx * off - c.z, la.x - la.tz * off - c.x) - c.th);
-    let km = 0;
+    let km = 0, va = 1e9;
     for (let j = 0; j < 8 + sp * 0.7; j++) km = Math.max(km, Math.abs(S[(c.idx + j) % n].k));
-    const vt = Math.min(vcap, Math.sqrt(1.5 * GRIP / (km + 1e-4)) * lvl * (off ? 0.9 : 1)); // hors trajectoire, on passe moins vite
-    return { steer: clamp(e * 3, -1, 1), gas: sp < vt ? lvl : 0, brake: sp > vt + 3 ? 1 : 0, hand: false };
+    // cartes à épingles : vitesse permise = celle de chaque virage à venir, plus ce qu'on peut perdre en freinant d'ici là (10 m/s², 2 m par échantillon)
+    if (M.anticipe) for (let j = 0; j < 200; j++) va = Math.min(va, Math.sqrt(0.85 * GRIP / (Math.abs(S[(c.idx + j) % n].k) + 1e-4) + 40 * j));
+    const vt = Math.min(vcap, (M.anticipe ? va : Math.sqrt(1.5 * GRIP / (km + 1e-4))) * lvl * (off ? 0.9 : 1)); // hors trajectoire, on passe moins vite
+    const st = clamp(e * 3, -1, 1);
+    // en propulsion le pilote dose : moins de gaz tant que le volant est braqué, sinon l'arrière décroche en sortie d'épingle
+    return { steer: st, gas: sp < vt ? lvl * (CARD.rwd ? 1 - 0.75 * Math.min(1, Math.abs(st) * 1.5) : 1) : 0, brake: sp > vt + 3 ? 1 : 0, hand: false };
   }
 
   // ---------- Course contre des adversaires IA ----------
@@ -197,5 +196,33 @@
     R.done = cars.every(c => c.fin);
   }
 
-  Object.assign(G, { buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, AI_LVL, TOP, CARD });
+  // ---------- Trafic (cartes qui en ont : champ trafic de cartes.js) ----------
+  // Des camions à vitesse constante sur trois files. Leur position ne dépend que du temps écoulé depuis le départ : même trafic à chaque essai.
+  // trafic(T, t) renvoie la liste (objets réutilisés : x, y, z, th, idx, d, vx, vz), utilisable aussi comme `others` du pilote automatique.
+  // hitTrafic(c, T, t) : choc voiture contre camion. Le camion ne bouge pas ; la voiture est repoussée et le choc est signalé dans c.hit, comme un mur.
+  const TRUCKS = Array.from({ length: M.trafic || 0 }, (_, i) => ({ lane: [-4.6, 0, 4.6][(i * 2) % 3], v: 25 + (i * 7 % 5) * 1.5, x: 0, y: 0, z: 0, th: 0, idx: 0, d: 0, vx: 0, vz: 0 }));
+  function trafic(T, t) {
+    const S = T.S, n = T.n;
+    TRUCKS.forEach((k, i) => {
+      const p = (i / TRUCKS.length * n + 40 + k.v * t / 2) % n, j = p | 0, f = p - j, a = S[j], b = S[(j + 1) % n];
+      k.idx = j; k.d = k.lane; k.th = Math.atan2(a.tz, a.tx); k.vx = a.tx * k.v; k.vz = a.tz * k.v;
+      k.x = lerp(a.x, b.x, f) - a.tz * k.lane; k.z = lerp(a.z, b.z, f) + a.tx * k.lane; k.y = lerp(a.y, b.y, f);
+    });
+    return TRUCKS;
+  }
+  function hitTrafic(c, T, t) {
+    for (const k of trafic(T, t)) {
+      if (Math.abs(((k.idx - c.idx + T.n + T.n / 2) % T.n) - T.n / 2) > 12) continue;
+      const kx = Math.cos(k.th), kz = Math.sin(k.th), cx = Math.cos(c.th), cz = Math.sin(c.th);
+      for (const i of [-4, 0, 4]) for (const j of [-1.2, 1.2]) { // camion = 3 cercles de 1,4 m, voiture = 2 cercles de 1,1 m
+        const dx = c.x + cx * j - k.x - kx * i, dz = c.z + cz * j - k.z - kz * i, d = Math.hypot(dx, dz);
+        if (d >= 2.5 || d < 1e-6) continue;
+        const nx = dx / d, nz = dz / d, vn = -((c.vx - k.vx) * nx + (c.vz - k.vz) * nz);
+        c.x += nx * (2.5 - d); c.z += nz * (2.5 - d);
+        if (vn > 0) { c.vx += nx * vn * 1.2; c.vz += nz * vn * 1.2; c.hit = Math.max(c.hit, vn); if (vn > 3) { c.driftT = 0; c.boost = 0; c.stun = 0.8; } }
+      }
+    }
+  }
+
+  Object.assign(G, { buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, TOP, CARD });
 })(typeof window !== 'undefined' ? window : globalThis);
