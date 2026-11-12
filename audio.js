@@ -7,14 +7,15 @@
 // couleur de la station (3 bandes) → musique oui/non → filtre de vitesse et de tunnel → famille « mus » → master → compresseur. Familles réglables : mus, mot (moteur, boîte), pneu, vent, amb (lieu), choc (chocs, frottement, boost), ui (bips, jingle, radio).
 (() => {
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const hz = m => 440 * 2 ** ((m - 69) / 12), R = -99, OUT = 0.56, CLAC = 0.6, LEV = 1; // R : silence dans un thème (voir mel() dans cartes.js)
+  let TR = 0; // transposition du dernier tour, en demi-tons
+  const hz = m => 440 * 2 ** ((m + TR - 69) / 12), R = -99, OUT = 0.56, CLAC = 0.6, LEV = 1; // R : silence dans un thème (voir mel() dans cartes.js)
   let M = CARTE, ST = M.radio, TH = M.th;
   let AC, live = true, timer, pret = Promise.resolve(), ana, master, musicG, tuneG, drumG, musF, duckG, swF, busDry, busDrv, acid, fuzz, kdrv, bsat, dly, dlyFb, eqL, eqM, eqH, mrevG, drumRv, revIn, echoIn, choIn, mbuf, secG, drumF, gritDry, gritWet, rev, musSend, motSend, nbuf, outG, vu;
   let t0 = 0, nextT = 0, stp = 0, musicOn = true, lastHit = 0, lastN = 0, lastB = 0, menu = true;
   const vol = { mus: 1, mot: 1, pneu: 1, vent: 1, amb: 1, choc: 1, ui: 1 }, V = {}; // volume par famille (banc d'écoute) et leurs nœuds
   // état musical piloté par la course : mix = secteur chaud, inten = vitesse, driftL = glisse, drums = batterie, fin = dernier secteur
   const MX = { b: 1, d: 1.6, c: 2, g: 2, a: 2, l: 1.6 }; // niveau de chaque tranche : le médium et l'aigu ne doivent pas disparaître sous la basse
-  let bigS = false, lastFill = -9, sortie = -1, grit = 0, curRoot = 33; const was = {}; // refrain en cours ; dernière relance ; parties qui jouaient à la mesure précédente
+  let bigS = false, lastFill = -9, sortie = -1, grit = 0, curRoot = 33, lap = 1, lapN = -1; const was = {}; // lap : 0 premier tour (sobre), 1 normal, 2 dernier tour (le plus intense) ; // refrain en cours ; dernière relance ; parties qui jouaient à la mesure précédente
   let W = {}; const strip = {}; // ondes sur mesure ; tranches de mixage par partie (b basse, d nappe, c g accords, a arpège, l thème)
   let mix = 0, inten = 0, driftL = 0, drums = 0, fin = false, wasIn = false, wasNear = false, wasBoost = false, lastGas = 0;
   let eng, sq, scrubG, scrapeG, windG, ambBed, ambT = 2, inZone = false, uiF;
@@ -237,7 +238,8 @@
     else if (sortie === bar >> 2 && !st.sec[key].k) key = st.form[1]; // en sortant du secteur chaud on retombe sur un couplet, jamais sur un break : pas de trou // secteur chaud : le refrain, et sa variation quand la forme y arrive
     const sec = st.sec[key], pr = st.prog[sec.P || 0], ch = pr.CH[bar % pr.CH.length], root = pr.ROOT[bar % pr.ROOT.length], pos = ((bar & 3) * 16 + q) / 64; // pos : avancement dans la section
     curRoot = root;
-    const on = p => { const x = st[p] && sec[p]; return x && (!x.big || big) ? x : null; }, pat = (v, x) => { const b = v[x.v % v.length]; return b[bar % b.length]; };
+    // premier tour du mode course : ni thème ni percussions hors du secteur chaud
+    const on = p => { const x = st[p] && sec[p]; return x && (!x.big || big) && !(lap === 0 && !big && (p === 'l' || p === 'p')) ? x : null; }, pat = (v, x) => { const b = v[x.v % v.length]; return b[bar % b.length]; };
     const hum = () => K.hum ? t + Math.random() * K.hum : t; // jeu humain : les batteries acoustiques ne tombent pas pile
     const suite = st.sec[big && nxt !== 'e' ? st.hot : nxt], dur = S16 * 16; // la section qui vient ; durée d'une mesure
     const fillN = (bar & 3) === 3 && K.fill && sec.k && suite.k ? (nxt !== st.form[fi] ? 8 : 4) : 0, fill = d && fillN && q >= 16 - fillN;
@@ -264,7 +266,7 @@
     if (d && (bar & 3) === 0 && q === 0 && key === st.hot && lastFill === bar - 1) crash(t, 0.35); // cymbale d'entrée de refrain, seulement au bout d'une relance de batterie
     if (fill) lastFill = bar;
     if (!d) { if (q % 4 === 2) dHat(t, 0.5, K, 'x'); } // seul tic-tac pendant le décompte
-    else if ((x = on('h')) && (c = pat(st.h, x)[q]) !== '.') dHat(hum(), big ? 1 : 0.8, K, c);
+    else if ((x = on('h')) && (c = pat(st.h, x)[q]) !== '.') dHat(hum(), big || lap === 2 ? 1 : 0.8, K, c);
     if (d && (x = on('p')) && (c = pat(st.p, x)[q]) !== '.') dPerc(hum(), 1, K, c);
     if (d && (x = on('b'))) { const rif = pat(st.b.v, x), rf = rif[q];
       if (rf != null && rf !== R) { let n = 1; while (q + n < 16 && rif[q + n] == null) n++; // tenue jusqu'à la note suivante
@@ -279,7 +281,7 @@
     if (d && (x = on('l'))) { const L = pat(st.l.v, x), N = L[q];
       if (N != null && N !== R) { let n = 1; while (q + n < 16 && L[q + n] == null) n++;
         tone(st.l.p, hz(N), t, S16 * n * 1.05, PATCH[st.l.p].lv * (st.lV || 1), strip.l.in, lastN && hz(lastN)); lastN = N;
-        if (fin) osc('triangle', hz(N + 12), t, S16 * n, 0.04, strip.l.in); } }
+        if (fin || lap === 2) osc('triangle', hz(N + 12), t, S16 * n, 0.04, strip.l.in); } } // dernier secteur, dernier tour : thème doublé à l'octave
     if (driftL > 0.3) osc('sawtooth', hz(ch[(q * 2) % 3] + 24), t, 0.1, 0.07 * driftL, acid); // ligne acide tant qu'on glisse
     if (st.sweep) swF.frequency.setTargetAtTime(big ? 16000 : 350 * 2 ** (3.6 * (0.5 - 0.5 * Math.cos(Math.PI * (s % 128) / 64))), t, big ? 0.6 : 0.15); // filtre balayé sur 8 mesures, grand ouvert dans le secteur chaud
     else swF.frequency.setTargetAtTime(sec.lo && !big ? 400 * 30 ** pos : 20000, t, 0.25); // section filtrée : le passe-bas s'ouvre au fil de la section
@@ -423,7 +425,7 @@
   function choc(hit, t = AC.currentTime) { const v = Math.min(0.6, hit * 0.04); nz(t, 0.25, v, V.choc, 'lowpass', 400); nz(t, 0.07, v * 0.7, V.choc, 'bandpass', 1200, 0.8); } // coup sourd + claquement de tôle, pour qu'il s'entende sur de petits haut-parleurs
   function boostFx(t = AC.currentTime) { const o = osc('sawtooth', 220, t, 0.5, 0.1, filt('lowpass', 3000, 0.5, V.choc)); o.frequency.exponentialRampToValueAtTime(880, t + 0.4); const w = nz(t, 0.6, 0.08, V.choc, 'bandpass', 500, 1.5); w.frequency.exponentialRampToValueAtTime(4000, t + 0.5); } // boost de sortie de glisse : sifflement + souffle
   function petarade(spool = 1, t = AC.currentTime) { nz(t, 0.25, 0.04 * spool, V.mot, 'bandpass', 1400, 1.5); for (let i = 0; i < 3; i++) nz(t + 0.08 + Math.random() * 0.4, 0.035, 0.12, V.mot, 'lowpass', 900); } // lever de pied à haut régime
-  // e : état de la course pour cette image — { state, car, T, hot (0..1 dans le secteur chaud), tun (0..1 dans le tunnel), amb (0..1 dans une zone d'ambiance), r (vitesse 0..1), sp, gas, hit, bump (choc entre voitures, m/s), up / down (rapport monté / descendu), rpm, load, spool, stun }
+  // e : état de la course pour cette image — { state, car, T, hot (0..1 dans le secteur chaud), tour / tours (tour en cours à partir de 0, nombre de tours ; 0 hors mode course), tun (0..1 dans le tunnel), amb (0..1 dans une zone d'ambiance), r (vitesse 0..1), sp, gas, hit, bump (choc entre voitures, m/s), up / down (rapport monté / descendu), rpm, load, spool, stun }
   function audioFrame(dt, e) {
     if (!AC) return;
     const { state, car, T, r, sp, gas, hit, up, rpm, load, spool, stun } = e, N = T.n, tun = e.tun || 0, CARD = M.car;
@@ -456,6 +458,10 @@
     if (TH.alarme && inside && !wasIn && racing) for (let i = 0; i < 6; i++) osc('square', i % 2 ? 660 : 880, t + 0.25 + i * 0.18, 0.16, 0.07, strip.a.in); // sirène d'alarme à l'entrée
     wasNear = near; wasIn = inside;
     if (racing && !drums && !menu) { stp = 64; nextT = Math.max(nextT, t); for (const p of 'kbdcgal') was[p] = true; bigS = false; } // le départ est un événement de course : tout entre franchement // départ : on saute l'introduction, la course s'ouvre sur le premier couplet (l'introduction revient quand la forme boucle)
+    // au fil des tours du mode course (e.tour, e.tours) : premier tour sobre, puis l'arrangement complet, et le dernier tour un demi-ton plus haut ; le passage de ligne est un événement de course, la cymbale le marque
+    const nl = !e.tours ? 1 : e.tour <= 0 ? 0 : e.tour >= e.tours - 1 ? 2 : 1;
+    if (racing && e.tours && e.tour !== lapN) { if (lapN >= 0 && e.tour > lapN) crash(t, 0.5); lapN = e.tour; } if (!racing) lapN = -1;
+    lap = racing ? nl : 1; TR = lap === 2 ? 1 : 0;
     drums = racing ? 1 : 0; fin = racing && !inside && car.idx >= T.h1 && car.dist > 0;
     mix += ((racing ? e.hot : 0) - mix) * Math.min(1, dt * 3);
     inten += (r - inten) * Math.min(1, dt * 2); driftL += ((car.drift ? 1 : 0) - driftL) * Math.min(1, dt * 6);

@@ -42,6 +42,7 @@
 <label><input type="checkbox" id="plein"> secteur chaud (arrangement plein)</label>
 <label><input type="checkbox" id="glisse"> en glisse</label>
 <label><input type="checkbox" id="tunnel"> dans un tunnel</label>
+<label>tour de course <select id="tour"><option value="-1">hors course</option><option value="0">1 sur 3 (sobre)</option><option value="1">2 sur 3</option><option value="2">3 sur 3 (un demi-ton plus haut)</option></select></label>
 <label><input type="checkbox" id="mur"> frôle le mur (la musique sature)</label>
 <button id="chocMus">Choc (coup de grosse caisse et de basse)</button><br>
 <label>vitesse <input type="range" id="vit" min="0" max="1" step="0.01" value="0.85"><output></output></label>
@@ -85,7 +86,7 @@
   const $ = id => document.getElementById(id);
   const FAM = { mus: 'Musique', mot: 'Moteur et boîte', pneu: 'Pneus (dérapage)', vent: 'Vent', amb: 'Ambiance du lieu', choc: 'Chocs, frottement, boost', ui: 'Interface (bips, jingle, radio)' };
   let M = CARTE, scene = null, t0 = 0;
-  const u = { plein: false, glisse: false, tunnel: false, mur: false, gaz: true, vit: 0.85, rpm: 0.6, slide: 0.6 }; // réglages de la page
+  const u = { tour: -1, plein: false, glisse: false, tunnel: false, mur: false, gaz: true, vit: 0.85, rpm: 0.6, slide: 0.6 }; // réglages de la page
   const pulse = {}; // déclencheurs d'une seule image (montée ou descente de rapport)
 
   // Une scène = un son joué seul : [groupe, titre, sous-titre, familles ouvertes, amplification d'écoute (dB), état de course simulé (x = secondes depuis le clic), action au clic]
@@ -132,7 +133,7 @@
   // état complet envoyé à SON.frame
   function etat(sc, x) {
     const o = sc && sc[5] ? sc[5](x) : { state: 'pause' }, r = o.r || 0;
-    return { state: o.state, T: { h0: 500, h1: 700, n: 1000 }, hot: o.plein ? 1 : 0, tun: o.tun || 0, amb: o.amb || 0,
+    return { state: o.state, tour: Math.max(0, u.tour), tours: u.tour < 0 ? 0 : 3, T: { h0: 500, h1: 700, n: 1000 }, hot: o.plein ? 1 : 0, tun: o.tun || 0, amb: o.amb || 0,
       car: { manual: !!o.manuel, vl: o.slide ? 4 + 14 * o.slide : 0, boost: 0, idx: o.plein ? 600 : 0, dist: 1, drift: !!o.drift, rub: o.rub || 0 },
       r, sp: o.sp || 0, gas: o.gas || 0, hit: pulse.hit ? 9 : 0, up: !!pulse.up, down: !!pulse.down, rpm: o.rpm || 0.2, load: o.load || 0, spool: o.spool || 0, stun: 0 };
   }
@@ -159,7 +160,7 @@
   document.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.sc) jouer(b.dataset.sc); else if (b.dataset.c) { stop(); M = CARTES.find(c => c.id === b.dataset.c); SON.carte(M); boutons(); } });
   for (const k in FAM) $('fam').insertAdjacentHTML('beforeend', `<label><span class="n">${FAM[k]}</span><input type="range" id="v-${k}" min="0" max="2" step="0.05" value="1"><output id="o-${k}"></output></label>`);
   for (const k in FAM) $('v-' + k).oninput = volumes;
-  $('chocMus').onclick = () => { pulse.hit = 1; };
+  $('chocMus').onclick = () => { pulse.hit = 1; }; $('tour').onchange = e => { u.tour = +e.target.value; };
   for (const id of ['plein', 'glisse', 'tunnel', 'mur', 'gaz']) $(id).onchange = e => { u[id] = e.target.checked; };
   for (const id of ['vit', 'rpm', 'slide']) { const el = $(id), out = el.nextElementSibling; (el.oninput = () => { u[id] = +el.value; out.textContent = (+el.value).toFixed(2).replace('.', ','); })(); }
   $('stop').onclick = stop;
