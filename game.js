@@ -71,7 +71,7 @@
   }
   // demi-teinte : quatre encres de la plus sombre à la plus claire, et une encre de signal (feux, néons rouges), par carte
   const PAL = { ville: [0x0a0614, 0x3a1a6a, 0xff3a8a, 0xfff0c8, 0xff2a3a], touge: [0x06100c, 0x1c4a3a, 0x7ab890, 0xfff2c8, 0xff5030], wangan: [0x060a16, 0x1a3a6a, 0xf0a040, 0xfff4d8, 0xff3030],
-    paris: [0x100c14, 0x4a3a5a, 0xd89a70, 0xfff0d8, 0xe83a30], canal: [0x0c0a12, 0x5a2a4a, 0xf08a50, 0xfff0c0, 0xff3a40], barrage: [0x0a1420, 0x2a5a8a, 0x6cb04c, 0xf4f6fa, 0xe8482a], stade: [0x0a0a14, 0x3a3060, 0xe8a030, 0xfff4d8, 0xe8362a], givre: [0x080e22, 0x2c4478, 0x8fb4e8, 0xf4f8ff, 0xe8482a] }[M.id];
+    paris: [0x100c14, 0x4a3a5a, 0xd89a70, 0xfff0d8, 0xe83a30], canal: [0x0c0a12, 0x5a2a4a, 0xf08a50, 0xfff0c0, 0xff3a40], barrage: [0x0a1420, 0x2a5a8a, 0x6cb04c, 0xf4f6fa, 0xe8482a], stade: [0x0a0a14, 0x3a3060, 0xe8a030, 0xfff4d8, 0xe8362a], givre: [0x080e22, 0x2c4478, 0x8fb4e8, 0xf4f8ff, 0xe8482a], terre: [0x140c08, 0x6a3a1c, 0xe8903a, 0xfff0d0, 0xe8482a] }[M.id];
 
   // ---------- rendu basse définition : scène → cible 270p → passe finale (flou de vitesse, HUD, scanlines) ----------
   const renderer = window.__rendu || (window.__rendu = new THREE.WebGLRenderer({ antialias: false })); // un seul pour toute la session : il garde les shaders d'une carte à l'autre
@@ -521,6 +521,8 @@
     if (car.slide > 0.3 && sp > 10 && !car.air) for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.2, car.z - fz * 1.4 + rz * sd, car.vx * 0.25 + jit(4), 1 + Math.random() * 2.5, car.vz * 0.25 + jit(4), 0.9, lerp(0.16, 0.28, lm), lerp(0.18, 0.06, lm), lerp(0.28, 0.06, lm), -1);
     if (hit > 3) { const s = S[car.idx], sg = Math.sign(car.d); for (let i = 0; i < 16; i++) emit(car.x - s.tz * sg, carY + 0.5, car.z + s.tx * sg, car.vx * 0.5 + jit(14), 2 + Math.random() * 7, car.vz * 0.5 + jit(14), 0.5, 1, 0.75, 0.25, 22); }
     else if (car.rub && sp > 8) { const s = S[car.idx], sg = Math.sign(car.d); for (let i = 0; i < 3; i++) emit(car.x - s.tz * sg, carY + 0.4, car.z + s.tx * sg, car.vx * 0.6 + jit(5), 1 + Math.random() * 4, car.vz * 0.6 + jit(5), 0.35, 1, 0.75, 0.25, 22); } // frottement continu : gerbe plus fine que le choc
+    if (TH.poussiere) for (const c of race ? race.cars : [car]) { const q = T.surf[c.idx], v = Math.hypot(c.vx, c.vz), [pr, pg, pb] = q.aq ? [0.3, 0.34, 0.36] : TH.poussiere; // terre (th.poussiere = sa teinte) : chaque voiture lève un panache derrière elle, plus fourni en glisse ; dans le gué, une gerbe d'eau
+      if (v > 8 && !c.air && !c.out && (q.roul > 0.25 || q.aq) && (c === car || c.drift || Math.random() < 0.5)) for (const sd of [-0.8, 0.8]) emit(c.x - Math.cos(c.th) * 1.6 - Math.sin(c.th) * sd, c.y + 0.25, c.z - Math.sin(c.th) * 1.6 + Math.cos(c.th) * sd, c.vx * 0.3 + jit(3), 0.6 + Math.random() * (q.aq ? 5 : 2), c.vz * 0.3 + jit(3), q.aq ? 0.5 : 0.9, pr, pg, pb, q.aq ? 12 : -1); }
     for (const fl of flames) { fl.visible = car.boost > 0; fl.scale.y = (0.5 + Math.random() * 0.7) * Math.min(1, car.boost * 2); } // nitro : deux flammes d'échappement qui vacillent, les traînées virent au bleu
     if (car.dd && sp > 10 && !car.air) { const ok = car.driftT > 0.6; for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.15, car.z - fz * 1.4 + rz * sd, car.vx * 0.5 + rx * sd * 3 + jit(3), 1 + Math.random() * 3, car.vz * 0.5 + rz * sd * 3 + jit(3), 0.3, ok ? 1 : 0.3, ok ? 0.55 : 0.6, ok ? 0.1 : 1, 14); } // glisse : étincelles aux roues arrière, bleues puis orange quand la jauge se remplit à plein débit
     for (let i = 0; i < PN; i++) {
@@ -647,7 +649,7 @@
   const medal = t => t ? MED.filter(k => t <= REF * k).length : 0; // 0 aucune, 1 bronze, 2 argent, 3 or
   // mode Glisse : le score ne compte que si les deux tours sont bouclés en moins de GLT (deux tours au temps de bronze, plus 30 %) ; record et médailles par carte
   // GLM = [bronze, argent, or] en points, fixés à la main par carte d'après le pilote en glisse de test-cartes.js sur deux tours (son score vaut à peu près le bronze). Carte sans ligne ici : 8, 16 et 28 points par mètre de tour
-  const GLT = 2 * REF * MED[0] * 1.3, GLM = { ville: [20000, 40000, 70000], touge: [20000, 40000, 70000], wangan: [50000, 90000, 140000], paris: [15000, 30000, 55000], canal: [150000, 250000, 350000], barrage: [15000, 30000, 55000], stade: [25000, 50000, 80000], givre: [40000, 75000, 120000] }[M.id] || [8, 16, 28].map(k => Math.round(k * T.len / 1000) * 1000);
+  const GLT = 2 * REF * MED[0] * 1.3, GLM = { ville: [20000, 40000, 70000], touge: [20000, 40000, 70000], wangan: [50000, 90000, 140000], paris: [15000, 30000, 55000], canal: [150000, 250000, 350000], barrage: [15000, 30000, 55000], stade: [25000, 50000, 80000], givre: [40000, 75000, 120000], terre: [90000, 160000, 240000] }[M.id] || [8, 16, 28].map(k => Math.round(k * T.len / 1000) * 1000);
   const medG = s => GLM.filter(k => s >= k).length; let bestG = store.get('glisse') || 0, glFin = null; // glFin : le résultat de la manche, une fois les deux tours bouclés
   function finGlisse() {
     const score = Math.round(car.score), valide = tRace <= GLT, rec = valide && score > bestG; glFin = { score, valide, rec }; raceEnd = true; car.manual = false;

@@ -90,9 +90,9 @@ for (const M of CARTES) {
   if (T.surf.some(q => q !== SURF.sec)) {
     const E = T.surf; T.surf = null; const [sec] = tour(c => autopilot(c, T)); T.surf = E;
     if (!M.surf) assert(lap > 1.02 * sec && lap < 1.12 * sec, `${M.id} : tour sous la pluie ${lap} s, au sec ${sec} s`);
-    // surface déclarée (neige, glace, terre) : la carte se conduit autrement qu'au sec, sans tourner à la patinoire. Le tour perd de 8 à 35 %, et la glace vive, s'il y en a, reste par plaques : moins du quart du tour
+    // surface déclarée (neige, glace, terre) : la carte se conduit autrement qu'au sec, sans tourner à la patinoire. Le tour perd de 8 à 35 % (sur fond de terre, qui tourne presque comme le sec : de -5 à 35 %), et la glace vive, s'il y en a, reste par plaques : moins du quart du tour
     else { const gl = T.surf.filter(q => q.vir > 0.45).length / n; surfCarte = `, ${((lap / sec - 1) * 100).toFixed(0)} % plus lent qu'au sec (${sec.toFixed(1)} s), glace vive sur ${(gl * 100).toFixed(0)} % du tour`;
-      assert(lap > 1.08 * sec && lap < 1.35 * sec && gl < 0.25, `${M.id} : tour ${lap} s${surfCarte}`); }
+      assert(lap > (M.surf.fond === 'terre' ? 0.95 : 1.08) * sec && lap < 1.35 * sec && gl < 0.25, `${M.id} : tour ${lap} s${surfCarte}`); }
   }
   // surfaces (table SURF) : lancée au sec puis posée sur chaque surface, en plan ouvert. Distance de freinage depuis 200 km/h, rayon volant à fond à 120 km/h, vitesse perdue en 2 s pied levé depuis 100 km/h
   { const sur = (q, v, f) => { const c = lance(v); c.x = c.z = 1e5; TO.surf = [q]; // (au loin : à Paris, les piles de l'arc sont sur le chemin)
