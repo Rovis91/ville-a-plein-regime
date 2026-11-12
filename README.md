@@ -16,12 +16,13 @@ Prenez le volant d'une bête de 500 chevaux et lâchez-la dans les artères d'un
 
 <p align="center"><img src="docs/course-1.png" alt="En course, les adversaires dans les rétros"></p>
 
-### 🏁 QUATRE MODES DE JEU EXPLOSIFS !
+### 🏁 CINQ MODES DE JEU EXPLOSIFS !
 
 - **CONTRE-LA-MONTRE** : enchaînez les tours, battez vos records… puis battez votre propre **fantôme** !
 - **GLISSE** : 2 tours pour le style. Plus ça glisse vite, de travers et longtemps, plus ça paie… et le **multiplicateur** grimpe tant que vous enchaînez sans toucher un mur !
 - **COURSE** : 3 tours, 3 rivaux sans pitié. **KENJI**, **REI** et **JUN** ne vous feront aucun cadeau.
 - **ÉLIMINATION** : 4 voitures, 4 tours. À chaque passage sur la ligne, **le dernier sort**. Jusqu'au duel final !
+- **TOURNÉE** : toutes les cartes à la suite, des points à chaque manche, grille inversée… et un **trophée** au bout !
 
 <p align="center"><img src="docs/depart.png" alt="La grille de départ"></p>
 
@@ -135,6 +136,19 @@ Variante de la course, au menu des modes (« ÉLIMINATION », aux trois difficul
 
 Dans `sim.js` : `newRace(T, tours, niveaux, élastique, { elim: true })` ; une voiture sortie porte `c.out` (le temps de sa sortie), et `raceOrder(R)` donne le classement.
 
+### Tournée
+
+Au menu des modes (« TOURNEE », aux trois difficultés) : toutes les cartes du jeu à la suite, dans l'ordre du menu, en courses de 3 tours contre les rivaux de chaque carte.
+
+- Barème par manche : 10, 6, 3 et 1 points du premier au dernier.
+- Après chaque manche, le classement général s'affiche, avec ce que la manche a rapporté et la place de départ de la suivante.
+- La grille de départ est l'ordre inverse du classement général : le meneur part dernier. À égalité de points, le joueur est classé devant.
+- Les rivaux changent de nom à chaque carte ; les points suivent leur rang dans la liste des rivaux de la carte (le premier nommé hérite des points du premier nommé de la carte d'avant), pas leur nom.
+- La Tournée est sauvegardée après chaque manche close (une par difficulté). Quitter en cours de manche ne perd que cette manche : au menu, « REPRENDRE » la relance, depuis n'importe quelle carte. Une manche est close quand on quitte son tableau d'arrivée (Entrée ou Échap) ; fermer l'onglet avant, c'est la rejouer.
+- Au bout de la dernière carte, finir sur le podium donne le trophée de la difficulté (or, argent, bronze), affiché au menu. Ni échelle ni rétrogradation.
+
+La liste des manches est `CARTES` (`cartes.js`), lue telle quelle : une carte ajoutée entre dans la Tournée sans rien changer. Le calcul est une fonction pure de `sim.js`, `tournee(points, arrivée)`, qui rend les points, le classement et la grille ; `newRace` prend la grille par `{ grille }`. Dans `game.js`, voir « Tournée » : état dans `localStorage` sous `vpr7.tournee` (par difficulté : prochaine manche et points) et `vpr7.trophee`. On passe d'une carte à l'autre sans recharger la page ; la mémoire tenue d'une carte à l'autre se mesure avec `chaine()` de `outils/perf.js` (voir « Performances »).
+
 Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/E sur un clavier QWERTY. Les autres commandes sont lues par la lettre tapée.
 
 ## Fichiers
@@ -169,7 +183,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 node test.js
 ```
 
-Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, la jauge de nitro (remplissage, poussée, choc, vol), l'aspiration, la course contre IA, le score du mode Glisse (une glisse rapide rapporte plus qu'une lente, l'enchaînement multiplie, un choc le casse, des zigzags lents ne rapportent rien) et la course à élimination (personne ne sort au premier tour, classement = ordre inverse des sorties). Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
+Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, la jauge de nitro (remplissage, poussée, choc, vol), l'aspiration, la course contre IA, le score du mode Glisse (une glisse rapide rapporte plus qu'une lente, l'enchaînement multiplie, un choc le casse, des zigzags lents ne rapportent rien) la course à élimination (personne ne sort au premier tour, classement = ordre inverse des sorties) et la Tournée (points et grille sur des classements donnés, départ sur la grille demandée). Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
 
 ```bash
 node test-cartes.js
@@ -182,6 +196,8 @@ Dans le navigateur, `?auto` fait conduire le pilote automatique, et `window.__g`
 ## Performances
 
 `index.html?perf&auto` mesure toutes les cartes à la suite (une minute en tout) : le pilote automatique fait un tour en course contre 3 adversaires, à pas fixe, sans rien afficher, et chaque image est chronométrée. Le tableau sort dans la console et dans `localStorage['vpr.perf']`. Le banc est dans `outils/perf.js`, avec la référence que **toute carte doit tenir** (`BUDGET`) :
+
+Pour la mémoire sur un enchaînement de cartes sans rechargement (Tournée) : `index.html?auto`, mode course, puis dans la console `(await import('./outils/perf.js')).chaine()`. Chaque carte est chargée à la suite de la précédente, deux fois toute la liste, et on relève les géométries, textures et shaders tenus par le GPU et le tas JS. Référence : les chiffres d'une carte sont les mêmes au second passage qu'au premier (relevé du 12/11/2026 sur 7 cartes et 3 passages : identiques, de 56 géométries et 45 textures au barrage à 267 et 159 sur le Wangan, 24 à 32 shaders ; tas JS entre 24 et 100 Mo sans tendance à la hausse).
 
 | mesure | référence | ce que c'est |
 |---|---|---|

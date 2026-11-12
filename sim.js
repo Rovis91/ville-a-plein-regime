@@ -300,7 +300,7 @@
 
   // ---------- Course contre des adversaires IA ----------
   // API pour game.js (aucun rendu ici) :
-  //   R = newRace(T, laps = 3, lvls = AI_LVL, el = 0, opt = {})  crée la course. R.cars[0] = joueur (dernier sur la grille), R.cars[1..] = adversaires, le plus rapide en tête.
+  //   R = newRace(T, laps = 3, lvls = AI_LVL, el = 0, opt = {})  crée la course. R.cars[0] = joueur (dernier sur la grille), R.cars[1..] = adversaires, le plus rapide en tête ; opt.grille[i] = place de départ de la voiture i (0 = pole), pour une autre grille.
   //   stepRace(R, inp, dt)                     avance toutes les voitures d'un pas (dt = 1/120). inp = commandes du joueur, comme step() ;
   //                                            inp = null : le joueur est conduit par l'IA (mode ?auto, ou après son arrivée). Ne pas appeler pendant le décompte.
   //   R.t = temps de course (s) ; R.done = true quand tout le monde est arrivé ; R.laps = nombre de tours.
@@ -321,10 +321,21 @@
 
   function newRace(T, laps = 3, lvls = AI_LVL, el = 0, opt = {}) {
     const cars = [1, ...lvls].map((lvl, i) => {
-      const c = newCar(T), k = i ? i - 1 : lvls.length, j = T.n - 8 - 4 * k, s = T.S[j], d = k % 2 ? 3 : -3; // grille en quinconce, 8 m entre deux places
+      const c = newCar(T), k = opt.grille ? opt.grille[i] : i ? i - 1 : lvls.length, j = T.n - 8 - 4 * k, s = T.S[j], d = k % 2 ? 3 : -3; // grille en quinconce, 8 m entre deux places
       return Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, y: s.y, th: Math.atan2(s.tz, s.tx), idx: j, dist: -8 - 4 * k, d, lvl, pos: k + 1, lap: 1, fin: 0, out: 0, bump: 0 });
     });
     return { T, cars, laps: opt.elim ? cars.length : laps, el, elim: !!opt.elim, tete: 0, t: 0, done: false };
+  }
+
+  // Tournée : toutes les cartes à la suite, des points à chaque manche. Les voitures sont désignées par leur indice dans R.cars (0 = joueur, 1.. = rivaux de la carte : les points suivent la place sur la liste, pas le nom).
+  // tournee(pts, arrivee) : pts = points de chaque voiture avant la manche, arrivee = indices des voitures dans l'ordre d'arrivée (vide : rien n'est encore couru). Fonction pure, rend
+  //   pts (points après la manche), classement (indices, du meneur au dernier ; à égalité le joueur devant, puis le rival le plus lent) et grille (grille[i] = place de départ de la voiture i, 0 = pole :
+  //   l'ordre inverse du classement, à donner à newRace par opt.grille). À zéro partout, c'est la grille d'une course ordinaire.
+  const BAREME = [10, 6, 3, 1];
+  function tournee(pts, arrivee = []) {
+    pts = pts.map((p, i) => p + (BAREME[arrivee.indexOf(i)] || 0));
+    const n = pts.length, classement = pts.map((_, i) => i).sort((a, b) => pts[b] - pts[a] || (b || n) - (a || n));
+    return { pts, classement, grille: pts.map((_, i) => n - 1 - classement.indexOf(i)) };
   }
 
   const raceOrder = R => [...R.cars].sort((a, b) => (a.fin || 1e9) - (b.fin || 1e9) || (b.out || 1e9) - (a.out || 1e9) || b.dist - a.dist); // arrivées, puis en piste, puis sorties (la dernière sortie devant)
@@ -402,5 +413,5 @@
     }
   }
 
-  Object.assign(G, { sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, SURF, GL });
+  Object.assign(G, { sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, tournee, BAREME, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, SURF, GL });
 })(typeof window !== 'undefined' ? window : globalThis);
