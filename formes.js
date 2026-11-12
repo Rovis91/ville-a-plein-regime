@@ -5,11 +5,12 @@
 //                  la zone nomme la partie, pour que le placement lui donne sa texture : pose('station', { acier: …, lampe: … }, parent, [x, y, z])
 // Les textures sont dans textures.js. La piste elle-même (chaussée, murs, tunnel) est un ruban généré le long du tracé dans game.js, et la voiture y reste aussi.
 (function () {
-  const B = (w, h, d) => new THREE.BoxGeometry(w, h, d);
+  // dim = dimensions réelles en mètres, pour que le placement règle la densité des textures ; H = hauteur typique d'une boîte étirée en hauteur par instance
+  const B = (w, h, d, H = h) => { const g = new THREE.BoxGeometry(w, h, d); g.userData.dim = [w, H, d]; return g; };
   const paire = f => [-1, 1].map(f); // une pièce de chaque côté
   window.FORMES = {
     // ---------- formes simples ----------
-    boite: B,                                   // pièce unique aux dimensions libres : dalle d'eau, tour lointaine, pile de pont
+    boite: (w, h, d) => B(w, h, d),                                   // pièce unique aux dimensions libres : dalle d'eau, tour lointaine, pile de pont
     bloc: () => B(1, 1, 1),                     // cube unité, mis à l'échelle par instance : immeubles, tours, entrepôts
     immeuble: (w, H, d) => {                    // tour de la ville : la texture de fenêtres se répète tous les 28 m
       const g = B(w, H, d), uv = g.attributes.uv;
@@ -18,14 +19,14 @@
     },
     // piste
     luminaireTunnel: () => B(1.8, 0.25, 3.2), boitierSecours: () => B(0.12, 0.7, 1.4),
-    chevron: () => new THREE.PlaneGeometry(5, 2.5), pileViaduc: () => B(5, 1, 5), tubeNeon: () => B(0.35, 7, 0.35), refletTube: () => new THREE.PlaneGeometry(7, 1.6),
+    chevron: () => new THREE.PlaneGeometry(5, 2.5), pileViaduc: () => B(5, 1, 5, 24), tubeNeon: () => B(0.35, 7, 0.35), refletTube: () => new THREE.PlaneGeometry(7, 1.6),
     faisceau: () => { const g = new THREE.PlaneGeometry(26, 900); g.translate(0, 450, 0); return g; }, hologramme: () => new THREE.PlaneGeometry(90, 45),
     // mobilier de route
     matLampadaire: () => B(0.3, 10, 0.3), teteLampadaire: (l = 3.2) => B(l, 0.25, 0.7), reverbere: () => B(0.25, 7, 0.25), lanterne: () => B(0.7, 0.8, 0.7),
     catadioptre: () => B(0.18, 0.3, 0.18), cone: () => B(0.4, 0.7, 0.4), balise: () => B(0.5, 6.2, 0.5), murFresque: () => new THREE.PlaneGeometry(15.8, 5),
     // végétation
     cedre: () => new THREE.ConeGeometry(3.6, 15, 5), tronc: () => B(0.5, 5.2, 0.5), houppier: () => new THREE.IcosahedronGeometry(3.4, 0),
-    troncPalmier: () => B(0.55, 1, 0.55), palme: () => new THREE.IcosahedronGeometry(4, 0),
+    troncPalmier: () => B(0.55, 1, 0.55, 14), palme: () => new THREE.IcosahedronGeometry(4, 0),
     // véhicules et fret
     auto: () => B(4.1, 1.3, 1.75), conteneur: () => B(12, 2.6, 2.5), wagon: () => B(17, 4.2, 3.2),
     remorque: () => B(8, 3.1, 2.5), cabine: () => B(2.2, 2.6, 2.4), feuxCamion: () => B(0.15, 0.5, 2.3),

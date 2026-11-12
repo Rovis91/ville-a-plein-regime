@@ -1,19 +1,108 @@
 // Catalogue des textures : l'aspect de chaque surface du jeu, et rien d'autre (ni forme, ni emplacement).
 // Deux sortes d'entrées :
-//   aplat  — nom: 0xrrggbb                                   une teinte unie
-//   dessin — nom: (...réglages) => [largeur, hauteur, (g, o) => { ... }]   peint sur un canvas 2D ; o = { R, rnd, voile, speckle } (outils de game.js)
+//   aplat  — nom: 0xrrggbb          une teinte unie, réservée à ce qui émet de la lumière (lampes, feux, néons, peinture de signalisation)
+//   dessin — nom: (...réglages) => [largeur, hauteur, (g, o) => { ... }, tuile]   peint sur un canvas 2D
+//            o = { R, rnd, alea, voile, speckle } : outils de game.js. rnd est le hasard partagé avec le placement (ne pas en ajouter d'appels,
+//            le décor bougerait) ; alea est un hasard propre à la texture, à utiliser pour tout nouveau dessin.
+//            tuile (facultatif) : le dessin se répète tous les `tuile` mètres sur les boîtes, au lieu de s'étirer sur chaque face.
+// Étalon de détail : la chaussée. 8 pixels par mètre, un grain, des joints ou des nervures, de l'usure (coulures, rouille, éclats) ; pas de surface unie.
 // Les formes sont dans formes.js ; qui porte quelle texture, et où, se décide au placement (game.js pour la piste et la ville, decors.js pour les autres cartes),
-// par mat('nom', options, ...réglages). L'option c reteint une entrée (peinture d'une carrosserie, d'un conteneur).
+// par mat('nom', options, ...réglages). L'option c teinte un dessin clair (carrosserie, conteneur, wagon).
 // Les couleurs propres à une carte (chaussée, parois, glissières) restent dans son thème, cartes.js, et arrivent ici en réglages.
-window.TEXTURES = {
-  // ---------- aplats ----------
-  peinture: 0xffffff,      // à reteindre par l'option c
-  betonSombre: 0x1c1c26, neonJaune: 0xfcee0a, neonCyan: 0x00f0ff, neonMagenta: 0xff2bd6,
-  lampe: 0xfff2d0, feuRouge: 0xff2030, vitreSombre: 0x14161c,
-  cedre: 0x12281f, catadioptre: 0xff8c1a, bitume: 0x1e2024, acier: 0xd8dce0, clignotant: 0xff8c1a, cone: 0xff5a1a,
-  plaine: 0x14161a, matGris: 0x4a4e56, sodium: 0xffb85a, portiqueGris: 0x5a5e66, blancPont: 0xc9ced6, minium: 0xc8442c,
-  fonte: 0x1e3a2a, lanterne: 0xffd05a, tronc: 0x4a3a2a, feuillage: 0x4a6a3a, pierre: 0xd9c9a8, craie: 0xf4f0e8,
-  fer: 0x2a2030, beton: 0xa89e90, pylone: 0x3a2c3a, troncPalmier: 0x2a1c20, palme: 0x1a2418, lampeCanal: 0xffc04a, entrepot: 0x8a7a6a,
+(() => {
+  const M = 8; // tuile des matériaux : 64 pixels pour 8 m, la densité de la chaussée
+  const semis = (g, { R, alea }, n, c, w = 1, h = 1) => { for (let i = 0; i < n; i++) R(g, c, alea() * 64 | 0, alea() * 64 | 0, w, h); };
+  const patine = (g, o, n = 260) => o.voile(g, 0.2, () => { semis(g, o, n, '#000'); semis(g, o, n / 3, '#fff'); semis(g, o, n / 20, '#000', 3, 2); }); // le grain commun à toutes les surfaces
+  const coulures = (g, o, n, c = '#000', a = 0.2) => o.voile(g, a, () => { for (let i = 0; i < n; i++) o.R(g, c, o.alea() * 64 | 0, o.alea() * 30 | 0, 1 + (o.alea() * 2 | 0), 6 + o.alea() * 26 | 0); });
+  // béton coffré : joints de banche tous les 4 m, trous de coffrage, coulures, reprises plus claires
+  const beton = c => () => [64, 64, (g, o) => {
+    const { R, alea, voile } = o; R(g, c, 0, 0, 64, 64); patine(g, o);
+    voile(g, 0.12, () => { for (let i = 0; i < 5; i++) R(g, i & 1 ? '#fff' : '#000', alea() * 50 | 0, alea() * 50 | 0, 8 + alea() * 14 | 0, 6 + alea() * 12 | 0); });
+    voile(g, 0.3, () => { for (const k of [0, 32]) { R(g, '#000', 0, k, 64, 1); R(g, '#000', k, 0, 1, 64); } for (let x = 8; x < 64; x += 16) for (let y = 8; y < 64; y += 16) R(g, '#000', x, y, 1, 1); });
+    coulures(g, o, 7);
+  }, M];
+  // pierre de taille : assises de 1 m, joints décalés, pierres inégales
+  const pierre = c => () => [64, 64, (g, o) => {
+    const { R, alea, voile } = o; R(g, c, 0, 0, 64, 64);
+    voile(g, 0.1, () => { for (let y = 0; y < 64; y += 8) for (let x = (y & 8) - 8; x < 64; x += 16) if (alea() < 0.5) R(g, alea() < 0.5 ? '#000' : '#fff', x, y, 16, 8); });
+    patine(g, o, 160);
+    voile(g, 0.28, () => { for (let y = 0; y < 64; y += 8) { R(g, '#000', 0, y, 64, 1); for (let x = (y & 8); x < 64; x += 16) R(g, '#000', x, y, 1, 8); } });
+    coulures(g, o, 4, '#000', 0.14);
+  }, M];
+  // métal peint : tôles de 4 m boulonnées, éraflures, rouille qui coule des joints
+  const metal = c => () => [64, 64, (g, o) => {
+    const { R, alea, voile } = o; R(g, c, 0, 0, 64, 64); patine(g, o, 140);
+    voile(g, 0.35, () => { for (const k of [0, 32]) { R(g, '#000', 0, k, 64, 1); R(g, '#000', k, 0, 1, 64); } });
+    voile(g, 0.3, () => { for (const k of [2, 34]) for (let i = 3; i < 64; i += 8) { R(g, '#fff', i, k, 1, 1); R(g, '#fff', k, i, 1, 1); } for (let i = 0; i < 8; i++) R(g, '#fff', alea() * 56 | 0, alea() * 64 | 0, 3 + alea() * 6 | 0, 1); });
+    coulures(g, o, 5, '#5a2a10', 0.3);
+  }, M];
+  // revêtement : grain serré, rapiéçages, fissure
+  const sol = c => () => [64, 64, (g, o) => {
+    const { R, alea, voile } = o; R(g, c, 0, 0, 64, 64); patine(g, o, 420);
+    voile(g, 0.18, () => { for (let i = 0; i < 3; i++) { const x = alea() * 44 | 0, y = alea() * 44 | 0, w = 8 + alea() * 12 | 0, h = 8 + alea() * 12 | 0; R(g, i & 1 ? '#fff' : '#000', x, y, w, h); R(g, '#000', x, y, w, 1); R(g, '#000', x, y, 1, h); }
+      for (let y = 0, x = 40; y < 64; y++) { if (alea() < 0.3) x += alea() < 0.5 ? -1 : 1; if (y % 23 < 15) R(g, '#000', x, y, 1, 1); } });
+  }, M];
+  // écorce : fibres verticales, nœuds ; annelée pour le palmier
+  const ecorce = (c, anneaux) => () => [64, 64, (g, o) => {
+    const { R, alea, voile } = o; R(g, c, 0, 0, 64, 64);
+    voile(g, 0.3, () => { for (let i = 0; i < 90; i++) R(g, alea() < 0.6 ? '#000' : '#fff', alea() * 64 | 0, alea() * 64 | 0, 1, 4 + alea() * 14 | 0); if (anneaux) for (let y = 0; y < 64; y += 4) R(g, '#000', 0, y + (alea() * 2 | 0), 64, 1); else for (let i = 0; i < 4; i++) R(g, '#000', alea() * 60 | 0, alea() * 60 | 0, 3, 2); });
+  }, M / 2];
+  // feuillage : masses claires et sombres ; etages = rameaux en nappes (cèdre), palmes = longues folioles
+  const feuilles = (c, etages, palmes) => () => [64, 64, (g, o) => {
+    const { R, alea, voile } = o; R(g, c, 0, 0, 64, 64);
+    voile(g, 0.15, () => { for (let i = 0; i < 150; i++) R(g, alea() < 0.55 ? '#000' : '#fff', alea() * 64 | 0, alea() * 64 | 0, palmes ? 5 + alea() * 6 | 0 : 2 + alea() * 3 | 0, palmes ? 1 : 1 + alea() * 2 | 0); });
+    if (etages) voile(g, 0.18, () => { for (let y = 5; y < 64; y += 8) for (let x = 0; x < 64; x += 2) { const d = alea() * 3 | 0; R(g, '#000', x, y + d, 2, 2); R(g, '#fff', x, y + d - 2, 2, 1); } });
+  }];
+  window.TEXTURES = {
+  // ---------- aplats : ce qui émet de la lumière ----------
+  peinture: 0xffffff,      // signalisation et luminaires, à teinter par l'option c
+  neonJaune: 0xfcee0a, neonCyan: 0x00f0ff, neonMagenta: 0xff2bd6,
+  lampe: 0xfff2d0, feuRouge: 0xff2030, catadioptre: 0xff8c1a, clignotant: 0xff8c1a, cone: 0xff5a1a, sodium: 0xffb85a, lanterne: 0xffd05a, lampeCanal: 0xffc04a,
+
+  // ---------- matériaux, au détail de la chaussée ----------
+  betonSombre: beton('#1c1c26'), beton: beton('#a89e90'), blancPont: beton('#c9ced6'), craie: pierre('#f4f0e8'), pierre: pierre('#d9c9a8'),
+  acier: metal('#d8dce0'), matGris: metal('#4a4e56'), portiqueGris: metal('#5a5e66'), minium: metal('#c8442c'), fonte: metal('#1e3a2a'), fer: metal('#2a2030'), pylone: metal('#3a2c3a'),
+  bitume: sol('#1e2024'), plaine: sol('#14161a'),
+  tronc: ecorce('#4a3a2a'), troncPalmier: ecorce('#2a1c20', 1),
+  cedre: feuilles('#12281f', 1), feuillage: feuilles('#4a6a3a'), palme: feuilles('#1a2418', 0, 1),
+  // vitrage sombre : montants, reflets en biais
+  vitreSombre: () => [32, 16, (g, o) => { const { R, voile } = o; R(g, '#14161c', 0, 0, 32, 16); voile(g, 0.14, () => { for (let k = 0; k < 16; k++) { R(g, '#fff', 4 + k, 15 - k, 4, 1); R(g, '#fff', 19 + k / 2 | 0, 15 - k, 2, 1); } }); R(g, '#08090c', 0, 0, 32, 1); R(g, '#08090c', 15, 0, 1, 16); }],
+  // tôle ondulée claire, à teinter : conteneur ou remorque. Nervures, cadre, portes, marquage, rouille
+  tole: () => [64, 32, (g, o) => {
+    const { R, alea, voile } = o; R(g, '#e6e6e6', 0, 0, 64, 32);
+    voile(g, 0.22, () => { for (let x = 0; x < 64; x += 3) { R(g, '#000', x, 0, 1, 32); R(g, '#fff', x + 1, 0, 1, 32); } });
+    voile(g, 0.45, () => { R(g, '#000', 0, 0, 64, 2); R(g, '#000', 0, 30, 64, 2); R(g, '#000', 0, 0, 1, 32); R(g, '#000', 63, 0, 1, 32); R(g, '#000', 49, 2, 1, 28); });
+    R(g, '#f8f8f8', 8, 8, 18, 6); voile(g, 0.5, () => { for (let x = 10; x < 24; x += 4) R(g, '#000', x, 10, 2, 2); R(g, '#000', 53, 12, 1, 8); R(g, '#000', 58, 12, 1, 8); });
+    voile(g, 0.3, () => { for (let i = 0; i < 7; i++) R(g, '#5a2a10', alea() * 64 | 0, 2 + alea() * 12 | 0, 1 + (alea() * 2 | 0), 4 + alea() * 14 | 0); semis(g, o, 60, '#000'); });
+  }],
+  // wagon de marchandises clair, à teinter : planches, montants, porte coulissante, châssis
+  wagon: () => [64, 32, (g, o) => {
+    const { R, voile } = o; R(g, '#e2e2e2', 0, 0, 64, 32);
+    voile(g, 0.2, () => { for (let y = 3; y < 26; y += 3) R(g, '#000', 0, y, 64, 1); semis(g, o, 90, '#000'); });
+    voile(g, 0.4, () => { for (let x = 0; x < 64; x += 9) R(g, '#000', x, 0, 1, 26); R(g, '#000', 0, 0, 64, 2); R(g, '#000', 26, 3, 12, 22); });
+    voile(g, 0.2, () => R(g, '#fff', 27, 4, 10, 20)); R(g, '#16161a', 0, 26, 64, 6); for (const x of [6, 14, 46, 54]) R(g, '#2c2c34', x, 27, 5, 5);
+  }],
+  // carrosserie claire, à teinter, vue de côté sur une seule boîte : bandeau vitré à montants, portes, bas de caisse et roues
+  carrosserie: () => [64, 32, (g, o) => {
+    const { R, voile } = o; R(g, '#ececec', 0, 0, 64, 32);
+    R(g, '#141820', 10, 3, 42, 10); for (const x of [10, 24, 38, 51]) R(g, '#ececec', x, 3, 2, 10); voile(g, 0.2, () => { R(g, '#fff', 13, 4, 9, 2); R(g, '#fff', 27, 4, 9, 2); });
+    voile(g, 0.3, () => { R(g, '#000', 0, 14, 64, 1); R(g, '#000', 25, 14, 1, 12); R(g, '#000', 39, 14, 1, 12); R(g, '#000', 0, 24, 64, 1); R(g, '#fff', 0, 15, 64, 1); semis(g, o, 40, '#000'); });
+    R(g, '#101014', 0, 28, 64, 4); for (const x of [8, 46]) { R(g, '#101014', x, 22, 11, 10); R(g, '#3a3a44', x + 3, 25, 5, 5); }
+  }],
+  // laque claire, à teinter : le bas de caisse d'une voiture garée. Joints de portes, passages de roue, filet
+  laque: () => [64, 16, (g, o) => {
+    const { R, voile } = o; R(g, '#ececec', 0, 0, 64, 16);
+    voile(g, 0.3, () => { R(g, '#fff', 0, 2, 64, 1); R(g, '#000', 0, 9, 64, 1); for (const x of [21, 36]) R(g, '#000', x, 0, 1, 12); semis(g, o, 30, '#000'); });
+    R(g, '#101014', 0, 13, 64, 3); for (const x of [7, 46]) { R(g, '#101014', x, 6, 11, 10); R(g, '#3a3a44', x + 3, 9, 5, 5); }
+  }],
+  // entrepôt : bardage nervuré, portes de quai, bandeau de vitres hautes, salissures
+  entrepot: () => [64, 32, (g, o) => {
+    const { R, alea, voile } = o; R(g, '#8a7a6a', 0, 0, 64, 32);
+    voile(g, 0.16, () => { for (let x = 0; x < 64; x += 2) R(g, '#000', x, 0, 1, 32); semis(g, o, 120, '#000'); });
+    R(g, '#6a5c50', 0, 0, 64, 3); for (let x = 3; x < 64; x += 8) R(g, alea() < 0.3 ? '#c8b070' : '#3a3a40', x, 5, 5, 3);
+    for (let x = 6; x < 64; x += 20) { R(g, '#5a5048', x, 16, 11, 16); voile(g, 0.3, () => { for (let y = 18; y < 32; y += 3) R(g, '#000', x, y, 11, 1); }); }
+    coulures(g, o, 6, '#000', 0.18);
+  }],
 
   // ---------- ciel ----------
   ciel: (bandes, etoiles) => [512, 128, (g, { R, rnd }) => {
@@ -101,3 +190,4 @@ window.TEXTURES = {
     for (const x of [3, 17]) { c.beginPath(); c.moveTo(x, 3); c.lineTo(x + 6, 3); c.lineTo(x + 12, 8); c.lineTo(x + 6, 13); c.lineTo(x, 13); c.lineTo(x + 6, 8); c.fill(); }
   }],
 };
+})();

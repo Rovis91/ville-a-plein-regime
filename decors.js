@@ -4,12 +4,13 @@
 //   geo('forme', ...réglages)                  = géométrie d'une forme simple, pour inst()
 //   mat('texture', options, ...réglages)       = matière ; options : lum (lumineuse par elle-même), c (teinte), retro, gloss, rep (répétition), et celles de three
 //   pose('forme', peau, parent, [x, y, z], ...réglages) = pose une forme ; peau = une matière, ou { zone: matière } pour un assemblage
+//   habille(géométrie, matière)                = règle la densité de la texture sur une boîte (fait par pose et inst)
 //   lum(i, x, y, z, couleur, portée, force)    = déclare un luminaire à l'échantillon de piste i
 // Elle construit le décor autour du tracé et peut renvoyer une fonction tick(dt, now) pour ce qui bouge.
 (function () {
   // Pose une liste d'objets identiques en une seule passe de dessin. Élément : [x, y, z, rotationY, échelleX, échelleY, échelleZ].
   function inst(h, geo, mat, list) {
-    const m = new h.THREE.InstancedMesh(geo, mat, Math.max(1, list.length)), d = new h.THREE.Object3D();
+    const m = new h.THREE.InstancedMesh(h.habille(geo, mat), mat, Math.max(1, list.length)), d = new h.THREE.Object3D();
     list.forEach((p, i) => { d.position.set(p[0], p[1], p[2]); d.rotation.set(0, p[3] || 0, 0); d.scale.set(p[4] || 1, p[5] || p[4] || 1, p[6] || p[4] || 1); d.updateMatrix(); m.setMatrixAt(i, d.matrix); });
     m.count = list.length; m.frustumCulled = false; m.castShadow = m.receiveShadow = h.TH.sun[1] > 0.6; h.scene.add(m); return m; // soleil rasant (Paris, canal) : tout le décor porte une ombre ; de nuit ce serait du temps de rendu pour rien
   }
@@ -87,7 +88,7 @@
       const vitre = h.mat('vitreSombre'), feuRouge = h.mat('feuRouge', LUM), feuBlanc = h.mat('lampe', LUM);
       [[7, -19, 0.3, 0xf4f0e0], [7.5, -13, -0.2, 0xc8102e], [8, -7, 0.15, 0x2a5ac8], [22, -21, 1.57, 0x14161c], [22, 2, 1.4, 0xffc04a], [10, 6, -0.4, 0x9aa0a8], [16, 26, 1.57, 0x1f8f5a]].forEach(([vx, vz, a, col]) => {
         const v = new THREE.Group(); v.position.set(X(vx), 0.15, vz); v.rotation.y = a; gr.add(v);
-        h.pose('voitureGaree', { caisse: h.mat('peinture', { c: col }), vitre, feuRouge, feuBlanc }, v);
+        h.pose('voitureGaree', { caisse: h.mat('laque', { c: col }), vitre, feuRouge, feuBlanc }, v);
       });
       // la route de traverse est barrée : barrières rayées, cônes, feux orange qui clignotent
       const rayures = h.mat('rayures', LUM), cligno = h.mat('clignotant', LUM), cone = h.mat('cone', LUM);
@@ -148,7 +149,7 @@
         if (rnd() < 0.5 || g.dAt(gx, gz) < W + 9 || g.hAt(gx, gz) < -1.5) continue;
         for (let k = (rnd() * 4 | 0); k >= 0; k--) piles[rnd() * 4 | 0].push([gx + rnd() * 2, g.hAt(gx, gz) + 1.5 + k * 2.6, gz, 0]);
       }
-      piles.forEach((l, i) => inst(h, h.geo('conteneur'), h.mat('peinture', { c: cols[i] }), l));
+      piles.forEach((l, i) => inst(h, h.geo('conteneur'), h.mat('tole', { c: cols[i] }), l));
       for (const cx of [-200, 150, 500, 850]) { h.pose('grue', { structure: h.mat('minium'), cabine: blanc }, h.scene, [cx, 0, CH1]); balises.push(cx, 50, CH1 - 36); } // portiques : pieds sur le quai, flèche au-dessus de l'eau
       // la ville, au nord : tours à fenêtres allumées qui bordent la voie rapide, de plus en plus hautes vers l'intérieur
       const tour = cols2 => h.mat('tourFenetres', LUM, cols2);
@@ -170,7 +171,7 @@
       const roue = new THREE.Points(rg, new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true, fog: false })); roue.position.set(620, 78, 40); roue.rotation.y = 0.5; roue.frustumCulled = false; h.scene.add(roue);
       // camions : la remorque, la cabine et les feux arrière suivent le trafic de sim.js
       const nt = h.M.trafic, d = new THREE.Object3D();
-      const rem = new THREE.InstancedMesh(h.geo('remorque'), h.mat('peinture', { c: 0xb8bcc4 }), nt), cab = new THREE.InstancedMesh(h.geo('cabine'), h.mat('peinture', { c: 0x2c6ab8 }), nt), feux = new THREE.InstancedMesh(h.geo('feuxCamion'), h.mat('feuRouge', LUM), nt);
+      const rem = new THREE.InstancedMesh(h.geo('remorque'), h.mat('tole', { c: 0xb8bcc4 }), nt), cab = new THREE.InstancedMesh(h.geo('cabine'), h.mat('carrosserie', { c: 0x2c6ab8 }), nt), feux = new THREE.InstancedMesh(h.geo('feuxCamion'), h.mat('feuRouge', LUM), nt);
       for (const m of [rem, cab, feux]) { m.frustumCulled = false; h.scene.add(m); }
       return (dt, now) => {
         roue.rotation.z = now * 0.00012; bp.visible = (now / 700 & 1) === 1;
@@ -225,7 +226,7 @@
       lots.forEach((l, i) => inst(h, cube, fm[i], l)); bas.forEach((l, i) => inst(h, cube, fb[i], l));
       inst(h, h.geo('reverbere'), h.mat('fonte'), mats); inst(h, h.geo('lanterne'), h.mat('lanterne', LUM), lant);
       inst(h, h.geo('tronc'), h.mat('tronc'), troncs); inst(h, h.geo('houppier'), h.mat('feuillage'), houp);
-      [0x2a3a5a, 0x8a8a90, 0x5a1a1a, 0xd8d4c8].forEach((c, i) => inst(h, h.geo('auto'), h.mat('peinture', { c }), autos[i]));
+      [0x2a3a5a, 0x8a8a90, 0x5a1a1a, 0xd8d4c8].forEach((c, i) => inst(h, h.geo('auto'), h.mat('carrosserie', { c }), autos[i]));
       // l'arche au centre de la place ; le dôme blanc en haut de la butte
       h.pose('arche', { pierre: h.mat('pierre') }, h.scene, [450, g.hAt(450, 0), 0]);
       const craie = h.mat('craie'), yb = g.hAt(935, -598);
@@ -277,7 +278,7 @@
       }
       inst(h, h.geo('troncPalmier'), h.mat('troncPalmier'), troncs); inst(h, h.geo('palme'), h.mat('palme'), palmes);
       inst(h, h.geo('matLampadaire'), fer, lamp); inst(h, h.geo('teteLampadaire', 3), h.mat('lampeCanal', LUM), tete);
-      [0x8a3a2a, 0x5a4a3a, 0x3a4a5a].forEach((c, i) => inst(h, h.geo('wagon'), h.mat('peinture', { c }), wagons[i]));
+      [0x8a3a2a, 0x5a4a3a, 0x3a4a5a].forEach((c, i) => inst(h, h.geo('wagon'), h.mat('wagon', { c }), wagons[i]));
       // pompes à pétrole : le balancier hoche lentement, comme dans les champs pétrolifères de la ville
       const pompes = [], minium = h.mat('minium');
       for (let k = 0, n = 0; k < 400 && n < 9; k++) {
