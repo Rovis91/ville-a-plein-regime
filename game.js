@@ -1,5 +1,5 @@
 // Ville à plein régime — rendu, effets, HUD, commandes et boucle de jeu. La piste et la physique sont dans sim.js.
-// Plan du fichier (chercher « // ---------- ») : rendu et passe finale · textures · piste · ville · horizon · voiture et effets ·
+// Plan du fichier (chercher « // ---------- ») : rendu et passe finale · les trois entités du décor (textures.js, formes.js, placement) · piste · ville · horizon · voiture et effets ·
 // état de jeu et commandes · HUD · boucle. Voir README.md pour savoir où régler quoi.
 (() => {
   const T = buildTrack(THREE), S = T.S, N = T.n, W = T.W, V3 = THREE.Vector3, M = CARTE, TH = M.th; // carte active et son thème : voir cartes.js
@@ -137,20 +137,34 @@
     if (P('lisse')) { t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; }
     t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
   };
-  const bas = (map, color = 0xffffff) => new THREE.MeshBasicMaterial({ map, color, side: THREE.DoubleSide });
   const R = (g, c, x, y, w, h) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
 
+  // ---------- les trois entités du décor : textures.js (l'aspect), formes.js (la géométrie), et le placement — ici pour la piste et la ville, decors.js pour les autres cartes ----------
+  const speckle = (g, n, c, h = 1, H = 64) => { for (let i = 0; i < n; i++) R(g, c, rnd() * 64 | 0, rnd() * H | 0, 1, h); };
+  const voile = (g, a, f) => { g.globalAlpha = a; f(); g.globalAlpha = 1; }; // dessine en transparence : salissures et usure par-dessus n'importe quelle teinte
+  const tx = (nom, ...a) => { const [w, h, d] = TEXTURES[nom](...a); return tex(w, h, g => d(g, { R, rnd, voile, speckle })); }; // un dessin du catalogue, tiré à neuf à chaque appel
+  // une matière : une texture du catalogue (aplat ou dessin) et la façon de la rendre. Options : lum = lumineuse par elle-même, c = teinte,
+  // retro / gloss = rétroréfléchissante / brillante (lumière dynamique), rep = répétition, net = sans mipmaps, et toutes celles des matériaux three
+  const mat = (nom, o = {}, ...a) => {
+    const { lum: lu, c, retro: re, gloss: gl, rep, net, ...three } = o, e = TEXTURES[nom], p = typeof e === 'number' ? { color: c === undefined ? e : c } : { map: tx(nom, ...a) };
+    if (p.map && c !== undefined) p.color = c; if (rep) p.map.repeat.set(...rep); if (net) p.map.minFilter = THREE.NearestFilter;
+    const m = new THREE[lu ? 'MeshBasicMaterial' : 'MeshLambertMaterial'](Object.assign(p, three));
+    if (re) retro(m, re); if (gl) gloss(m, gl); return m;
+  };
+  const geo = (nom, ...a) => FORMES[nom](...a); // la géométrie d'une forme simple
+  // pose une forme en (x, y, z) dans parent. peau = une matière (forme simple, renvoie le Mesh) ou { zone: matière } (assemblage, renvoie ses Mesh)
+  const pose = (nom, peau, parent = scene, [x, y, z] = [0, 0, 0], ...a) => {
+    const f = FORMES[nom](...a);
+    if (f.isBufferGeometry) { const m = new THREE.Mesh(f, peau); m.position.set(x, y, z); parent.add(m); return m; }
+    return f.map(([zone, w, h, d, px, py, pz, r, ombre]) => { const m = box(w, h, d, peau[zone], x + px, y + py, z + pz, parent); if (r) m.rotation.set(...r); if (ombre) m.castShadow = true; return m; });
+  };
+  const LUMI = { lum: 1 }, LUMI2 = { lum: 1, side: THREE.DoubleSide }; // lumineuse par elle-même ; idem, visible des deux côtés
+
   // ciel en bandes (nuit, aube ou couchant selon la carte), étoiles, lune ou soleil
-  const skyMat = new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, map: tex(512, 128, g => {
-    const gr = g.createLinearGradient(0, 0, 0, 128);
-    for (const [p, c] of TH.sky) gr.addColorStop(p, c);
-    R(g, gr, 0, 0, 512, 128);
-    for (let i = 0; i < TH.stars; i++) R(g, i % 5 ? '#8a8ac0' : '#ffffff', rnd() * 512 | 0, rnd() * 44 | 0, 1, 1);
-  }) });
-  skyMat.map.minFilter = THREE.NearestFilter;
+  const skyMat = mat('ciel', { lum: 1, side: THREE.BackSide, fog: false, net: 1 }, TH.sky, TH.stars);
   const sky = new THREE.Mesh(new THREE.SphereGeometry(2500, 16, 12), skyMat); scene.add(sky);
   const SD = new V3(...TH.astre.dir).normalize();
-  const sunDisc = new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, map: tex(16, 16, g => { g.fillStyle = TH.astre.col; g.beginPath(); g.arc(8, 8, 7, 0, 7); g.fill(); R(g, TH.astre.ombre, 9, 5, 2, 2); R(g, TH.astre.ombre, 5, 9, 3, 2); }) }));
+  const sunDisc = new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, map: tx('astre', TH.astre.col, TH.astre.ombre) }));
   sunDisc.scale.set(TH.astre.taille, TH.astre.taille, 1); scene.add(sunDisc);
 
   const hemi = new THREE.HemisphereLight(...TH.hemi); scene.add(hemi); // bleu d'en haut, rebond magenta de la ville
@@ -230,47 +244,8 @@
   };
   const gloss = (m, g) => { m.userData.gloss = g; return m; }, retro = (m, r = 1.5) => { m.userData.retro = r; return m; };
 
-  // ---------- textures ----------
-  const speckle = (g, n, c, h = 1, H = 64) => { for (let i = 0; i < n; i++) R(g, c, rnd() * 64 | 0, rnd() * H | 0, 1, h); };
-  const voile = (g, a, f) => { g.globalAlpha = a; f(); g.globalAlpha = 1; }; // dessine en transparence : salissures et usure par-dessus n'importe quelle teinte
-  // chaussée : une dalle de 2W × 32 m. Grain, rapiéçages, joints, fissure, gomme sur les passages de roues, peinture usée.
-  // L'alpha de la texture code les flaques (lu par la lumière dynamique : moins c'est opaque, plus ça reflète) ; wet = 2 : la rigole centrale du canal
-  const roadTex = (asph, spk, edge, dash, k1, k2, wet) => tex(64, 256, g => {
-    R(g, asph, 0, 0, 64, 256); speckle(g, 900, spk, 1, 256);
-    voile(g, 0.25, () => { speckle(g, 500, '#000', 1, 256); speckle(g, 160, '#fff', 1, 256); });
-    voile(g, 0.2, () => {
-      for (let i = 0; i < 4; i++) { const x = 8 + rnd() * 34 | 0, y = rnd() * 220 | 0, w = 8 + rnd() * 12 | 0, h = 14 + rnd() * 30 | 0; R(g, i & 1 ? '#fff' : '#000', x, y, w, h); R(g, '#000', x, y, w, 1); R(g, '#000', x, y, 1, h); } // rapiéçages
-      R(g, '#000', 7, 0, 50, 1); R(g, '#000', 7, 128, 50, 1); // joints de dalle
-      for (let y = 0, x = 44; y < 256; y++) { if (rnd() < 0.3) x += rnd() < 0.5 ? -1 : 1; if (y % 97 < 60) R(g, '#000', x, y, 1, 1); } // fissure
-    });
-    voile(g, 0.15, () => { for (const x of [17, 26, 36, 45]) for (let y = 0; y < 256; y += 4) if (rnd() < 0.8) R(g, '#000', x + (rnd() * 2 | 0), y, 2, 4); }); // gomme
-    R(g, edge, 5, 0, 2, 256); R(g, edge, 57, 0, 2, 256);
-    for (let y = 0; y < 256; y += 64) { R(g, dash, 31, y, 2, 32); for (const x of [0, 60]) { R(g, k1, x, y, 4, 32); R(g, k2, x, y + 32, 4, 32); } }
-    for (let i = 0; i < 260; i++) R(g, asph, [5, 6, 31, 32, 57, 58][rnd() * 6 | 0], rnd() * 256 | 0, 1, 1 + rnd() * 3 | 0); // peinture usée
-    g.globalCompositeOperation = 'destination-out'; g.fillStyle = 'rgba(0,0,0,.5)'; // flaques : pâtés de pixels
-    for (let i = wet ? 7 : 2; i > 0; i--) { const x = 8 + rnd() * 44, y = rnd() * 256, r = 3 + rnd() * 5; for (let k = 0; k < 9; k++) { const w = r * (0.5 + rnd()) | 0; g.fillRect(x + (rnd() - 0.5) * r * 2 | 0, y + (rnd() - 0.5) * r * 5 | 0, w, w * 2); } }
-    if (wet === 2) { g.fillRect(27, 0, 3, 256); for (let y = 0; y < 256; y += 8) g.fillRect(25 + (rnd() * 3 | 0), y, 2 + (rnd() * 4 | 0), 8); }
-    g.globalCompositeOperation = 'source-over';
-  });
-  const wallTex = (neonC, p, carreaux) => tex(32, 32, g => { // x : 0 = haut du mur, y : le long de la piste ; p = [fond, joint, filet, pied]
-    R(g, p[0], 0, 0, 32, 32);
-    voile(g, 0.16, () => {
-      if (carreaux) { for (let x = 13; x < 29; x += 3) R(g, '#000', x, 0, 1, 32); for (let y = 0; y < 32; y += 4) R(g, '#000', 13, y, 16, 1); } // carrelage du bas de paroi
-      for (let i = 0; i < 9; i++) R(g, '#000', 12 + rnd() * 6 | 0, rnd() * 32 | 0, 12 + rnd() * 8 | 0, 1 + (rnd() * 2 | 0)); // coulures
-    });
-    R(g, p[1], 0, 0, 32, 2); R(g, neonC, 9, 0, 3, 32); R(g, p[2], 25, 0, 1, 32); R(g, p[3], 29, 0, 3, 32);
-  });
-  const cells = (bg, draw) => tex(64, 64, g => { R(g, bg, 0, 0, 64, 64); for (let x = 0; x < 4; x++) for (let y = 0; y < 4; y++) draw(g, x * 16 + 3, y * 16 + 4); });
-  const facade = cells('#262633', (g, x, y) => R(g, '#0a0a14', x, y, 10, 9));
-  const lit = (cols, p) => cells('#000', (g, x, y) => { if (rnd() < p) { R(g, cols[rnd() * cols.length | 0], x, y, 10, 9); R(g, '#000', x + 4, y, 1, 9); } }); // fenêtres allumées (carte émissive)
-  const chevTex = flip => tex(32, 16, g => {
-    if (flip) { g.translate(32, 0); g.scale(-1, 1); }
-    R(g, '#fcee0a', 0, 0, 32, 16); g.fillStyle = '#08080c';
-    for (const x of [3, 17]) { g.beginPath(); g.moveTo(x, 1); g.lineTo(x + 6, 1); g.lineTo(x + 12, 8); g.lineTo(x + 6, 15); g.lineTo(x, 15); g.lineTo(x + 6, 8); g.fill(); }
-  });
-
+  // ---------- matières additives (reflets, faisceaux, hologrammes) ----------
   const addMat = (map, o = {}) => new THREE.MeshBasicMaterial(Object.assign({ map, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, o));
-  const gradTex = (c, vert) => tex(vert ? 8 : 16, vert ? 64 : 2, g => { const gr = vert ? g.createLinearGradient(0, 0, 0, 64) : g.createLinearGradient(0, 0, 16, 0); gr.addColorStop(vert ? 1 : 0, c); gr.addColorStop(vert ? 0 : 1, '#000'); R(g, gr, 0, 0, 16, 64); });
   let signMats = []; const beacons = [], adMats = [];
 
   // ---------- géométrie de la piste (hauteurs relatives à l'altitude de la route) ----------
@@ -291,55 +266,45 @@
 
   const cT = T.t1 - T.t0, cO = N - cT; // sans tunnel : cT = 0, la route à ciel ouvert fait tout le tour
   // route : mouillée, elle renvoie en reflets étirés les phares, les néons, la lune ou le soleil (lumière dynamique)
-  ribbon(T.t1, cO, -W, 0, W, 0, gloss(new THREE.MeshLambertMaterial({ map: roadTex(...TH.route), side: THREE.DoubleSide }), TH.route[6] ? 0.55 : 0.08), 32);
-  const barT = tex(32, 32, g => { // x : 0 = haut ; lisse, rainure, poteaux tous les 4 m, coulures
-    const p = TH.mur; R(g, p[0], 0, 0, 32, 32); R(g, p[1], 0, 0, 3, 32); R(g, p[2], 6, 0, 1, 32); R(g, p[3], 13, 0, 19, 32); R(g, p[3], 3, 0, 10, 1);
-    voile(g, 0.3, () => { R(g, '#fff', 3, 0, 1, 32); R(g, '#000', 9, 0, 2, 32); R(g, '#000', 12, 0, 1, 32); R(g, '#000', 3, 16, 10, 1); for (let i = 0; i < 10; i++) R(g, '#000', 4 + rnd() * 3 | 0, rnd() * 32 | 0, 3 + rnd() * 6 | 0, 1); });
-  });
-  const barrier = TH.tubes ? bas(barT) : new THREE.MeshLambertMaterial({ map: barT, side: THREE.DoubleSide }); // ville : liseré néon, lumineux par lui-même ; ailleurs la glissière prend la lumière
+  ribbon(T.t1, cO, -W, 0, W, 0, mat('chaussee', { side: THREE.DoubleSide, gloss: TH.route[6] ? 0.55 : 0.08 }, ...TH.route), 32);
+  const barrier = mat('glissiere', { lum: TH.tubes, side: THREE.DoubleSide }, TH.mur); // ville : liseré néon, lumineux par lui-même ; ailleurs la glissière prend la lumière
   ribbon(T.t1, cO, -W, TH.murH, -W, -2, barrier); ribbon(T.t1, cO, W, TH.murH, W, -2, barrier);
-  const concrete = new THREE.MeshLambertMaterial({ color: 0x1c1c26, side: THREE.DoubleSide }), glowY = new THREE.MeshBasicMaterial({ color: 0xfcee0a }), glowC = new THREE.MeshBasicMaterial({ color: 0x00f0ff }), glowM = new THREE.MeshBasicMaterial({ color: 0xff2bd6 });
+  const concrete = mat('betonSombre', { side: THREE.DoubleSide }), glowY = mat('neonJaune', LUMI), glowC = mat('neonCyan', LUMI), glowM = mat('neonMagenta', LUMI);
   // tunnel : intérieur sombre, éclairé par ses luminaires (sur la ville : échangeur en alarme rouge qui bat avec la musique), coque sombre
   const tunMats = [];
   if (T.tun) {
     const u = TH.tun;
-    tunMats.push(gloss(bas(roadTex(...u.sol)), 0.3), bas(wallTex(u.murs[0], u.paroi, u.carreaux)), bas(wallTex(u.murs[1], u.paroi, u.carreaux)),
-      bas(tex(32, 32, g => { const p = u.plafond; R(g, p[0], 0, 0, 32, 32); R(g, p[3], 0, 15, 32, 1); R(g, p[3], 14, 0, 4, 32); voile(g, 0.2, () => speckle(g, 40, '#000', 3, 32)); }))); // plafond : joints, chemin de câbles
+    tunMats.push(mat('chaussee', { lum: 1, side: THREE.DoubleSide, gloss: 0.3 }, ...u.sol), mat('paroi', LUMI2, u.murs[0], u.paroi, u.carreaux), mat('paroi', LUMI2, u.murs[1], u.paroi, u.carreaux), mat('plafond', LUMI2, u.plafond));
     tunMats.forEach((m, i) => m.color.setScalar(m.userData.amb = TH.alarme && (i === 1 || i === 2) ? 0.85 : TUN_AMB)); // ville : les parois gardent leurs bandes néon vives
     { // luminaires en quinconce, un à gauche, un à droite : la lumière et l'ombre de la voiture changent de côté à chaque luminaire franchi
-      const d = new THREE.Object3D(), fx = u.neons.map(c => new THREE.InstancedMesh(new THREE.BoxGeometry(1.8, 0.25, 3.2), new THREE.MeshBasicMaterial({ color: c, fog: false }), Math.ceil(cT / LUM_PAS))), nf = [0, 0];
+      const d = new THREE.Object3D(), fx = u.neons.map(c => new THREE.InstancedMesh(geo('luminaireTunnel'), mat('peinture', { lum: 1, c, fog: false }), Math.ceil(cT / LUM_PAS))), nf = [0, 0];
       for (let i = T.t0 + 2, k = 0; i < T.t1 - 1; i += LUM_PAS, k++) {
         const s = S[i % N], sd = k & 1 ? 1 : -1, x = s.x - s.tz * sd * (W - 1.7), z = s.z + s.tx * sd * (W - 1.7);
         lum(i % N, x, s.y + 7.2, z, u.neons[k & 1], 21, 3, 1);
         d.position.set(x, s.y + 7.85, z); d.rotation.set(0, across(s), 0); d.updateMatrix(); fx[k & 1].setMatrixAt(nf[k & 1]++, d.matrix);
-        if (k % 6 === 3) { const b = box(0.12, 0.7, 1.4, new THREE.MeshBasicMaterial({ color: u.portail }), s.x - s.tz * (W - 0.1), s.y + 2.6, s.z + s.tx * (W - 0.1)); b.rotation.y = across(s); } // boîtier de secours lumineux sur la paroi de droite
+        if (k % 6 === 3) pose('boitierSecours', mat('peinture', { lum: 1, c: u.portail }), scene, [s.x - s.tz * (W - 0.1), s.y + 2.6, s.z + s.tx * (W - 0.1)]).rotation.y = across(s); // boîtier de secours lumineux sur la paroi de droite
       }
       fx.forEach((m, c) => { m.count = nf[c]; scene.add(m); });
     }
     ribbon(T.t0, cT, -W, 0, W, 0, tunMats[0], 32);
     ribbon(T.t0, cT, -W, 8, -W, 0, tunMats[1]); ribbon(T.t0, cT, W, 8, W, 0, tunMats[2]); ribbon(T.t0, cT, -W, 8, W, 8, tunMats[3]);
     for (const [oa, ya, ob, yb] of [[-W - 1.5, 10, -W - 1.5, -u.coque], [W + 1.5, 10, W + 1.5, -u.coque], [-W - 1.5, 10, W + 1.5, 10]]) ribbon(T.t0, cT, oa, ya, ob, yb, concrete).castShadow = true;
-    const pm = new THREE.MeshBasicMaterial({ color: u.portail });
+    const pm = mat('peinture', { lum: 1, c: u.portail });
     for (const i of [T.t0, T.t1]) { // portails lumineux
       const s = S[i], g = new THREE.Group(); g.position.set(s.x, s.y, s.z); g.rotation.y = across(s); scene.add(g);
-      box(2 * W + 6, 4, 3, pm, 0, 10, 0, g);
-      for (const sd of [-1, 1]) box(3, 12, 3, pm, sd * (W + 1.5), 6, 0, g);
+      pose('portailTunnel', { portail: pm }, g, [0, 0, 0], W);
     }
   }
   { // ligne et portique de départ
     const s = S[0], g = new THREE.Group(); g.position.set(s.x, s.y, s.z); g.rotation.y = across(s); scene.add(g);
-    const ck = tex(16, 4, c => { R(c, TH.depart[2], 0, 0, 16, 4); for (let x = 0; x < 16; x++) for (let y = 0; y < 4; y++) if ((x + y) & 1) R(c, '#08080c', x, y, 1, 1); });
-    ck.minFilter = THREE.NearestFilter;
-    box(2 * W, 0.06, 4, new THREE.MeshBasicMaterial({ map: ck }), 0, 0, 0, g);
-    box(2 * W + 3, 1.6, 1, new THREE.MeshBasicMaterial({ color: TH.depart[0] }), 0, 8, 0, g);
-    for (const sd of [-1, 1]) box(1, 8, 1, new THREE.MeshBasicMaterial({ color: TH.depart[1] }), sd * (W + 1), 4, 0, g);
+    pose('depart', { damier: mat('damier', { lum: 1, net: 1 }, TH.depart[2]), traverse: mat('peinture', { lum: 1, c: TH.depart[0] }), poteau: mat('peinture', { lum: 1, c: TH.depart[1] }) }, g, [0, 0, 0], W);
   }
   { // chevrons à l'extérieur des virages, piles du viaduc, tubes néon en bord de route (repères de vitesse)
-    const dummy = new THREE.Object3D(), geo = new THREE.PlaneGeometry(5, 2.5);
-    const sg = [0, 1].map(f => new THREE.InstancedMesh(geo, retro(bas(chevTex(f))), 600)), cnt = [0, 0]; // rétroréfléchissants : ils s'allument dans les phares
-    const piles = new THREE.InstancedMesh(new THREE.BoxGeometry(5, 1, 5), concrete, 60); let np = 0;
-    const tubes = [glowM, glowC].map(m => new THREE.InstancedMesh(new THREE.BoxGeometry(0.35, 7, 0.35), m, 200)), nt = [0, 0];
-    const streaks = ['#ff2bd6', '#00f0ff'].map(c => new THREE.InstancedMesh(new THREE.PlaneGeometry(7, 1.6), addMat(gradTex(c)), 200));
+    const dummy = new THREE.Object3D();
+    const sg = [0, 1].map(f => new THREE.InstancedMesh(geo('chevron'), mat('chevron', { lum: 1, side: THREE.DoubleSide, retro: 1.5 }, f), 600)), cnt = [0, 0]; // rétroréfléchissants : ils s'allument dans les phares
+    const piles = new THREE.InstancedMesh(geo('pileViaduc'), concrete, 60); let np = 0;
+    const tubes = [glowM, glowC].map(m => new THREE.InstancedMesh(geo('tubeNeon'), m, 200)), nt = [0, 0];
+    const streaks = ['#ff2bd6', '#00f0ff'].map(c => new THREE.InstancedMesh(geo('refletTube'), addMat(tx('degrade', c)), 200));
     for (let i = 0; i < N; i++) {
       const s = S[i], nx = -s.tz, nz = s.tx, inT = zone(i, 0) === 1;
       dummy.scale.set(1, 1, 1); dummy.rotation.set(0, across(s), 0);
@@ -364,20 +329,19 @@
 
   // reflets sur la route mouillée : liseré des glissières dehors, néons des murs dans l'échangeur (ceux-là battent avec la musique)
   for (const sd of [-1, 1]) {
-    if (TH.reflets) ribbon(T.t1, cO, sd * W, 0.04, sd * (W - 4), 0.04, addMat(gradTex(TH.reflets)));
-    if (T.tun && TH.tun.reflets) { const m = addMat(gradTex(TH.tun.reflets[sd < 0 ? 0 : 1])); ribbon(T.t0, cT, sd * W, 0.04, sd * (W - 5), 0.04, m); tunMats.push(m); }
+    if (TH.reflets) ribbon(T.t1, cO, sd * W, 0.04, sd * (W - 4), 0.04, addMat(tx('degrade', TH.reflets)));
+    if (T.tun && TH.tun.reflets) { const m = addMat(tx('degrade', TH.tun.reflets[sd < 0 ? 0 : 1])); ribbon(T.t0, cT, sd * W, 0.04, sd * (W - 5), 0.04, m); tunMats.push(m); }
   }
   if (TH.pubs) { // portiques au-dessus de la route, avec écran publicitaire qui défile
     for (const [i, txt] of ['ネオン // SPEED // 危険 // ', '電脳 CITY ★ 24H ★ ', '>>> NOODLE BAR >>> ホテル '].entries()) {
       const c = ['#ff2bd6', '#00f0ff', '#fcee0a'][i];
-      adMats.push(new THREE.MeshBasicMaterial({ map: tex(128, 16, g => { R(g, '#08080c', 0, 0, 128, 16); R(g, c, 0, 0, 128, 1); R(g, c, 0, 15, 128, 1); g.fillStyle = c; g.font = 'bold 11px sans-serif'; g.textBaseline = 'middle'; g.fillText(txt, 2, 8, 124); }) }));
+      adMats.push(mat('ecranPub', LUMI, c, txt));
     }
     for (let i = 70, k = 0; i < N; i += 90) {
       if (zone(i, 40) > 0) continue;
       const s = S[i], gr = new THREE.Group(); gr.position.set(s.x, s.y, s.z); gr.rotation.y = across(s); scene.add(gr);
       lum(i, s.x, s.y + 9, s.z, [0xff2bd6, 0x00f0ff, 0xfcee0a][k % 3], 24, 2.6); // l'écran éclaire la route sous lui
-      box(2 * W + 3, 4, 0.5, adMats[k++ % 3], 0, 11.5, 0, gr);
-      for (const sd of [-1, 1]) box(0.8, 13.5, 0.8, concrete, sd * (W + 1.3), 6.75, 0, gr);
+      pose('portiquePub', { ecran: adMats[k++ % 3], beton: concrete }, gr, [0, 0, 0], W);
     }
   }
 
@@ -385,23 +349,20 @@
   let beams = [], holos = [], MV = 0, mvP, mvV, mvC, mvGeo, movers, beaconPts, decorTick = null;
   if (TH.decor === 'ville') {
   { // sol : grille de rues éclairées vue d'en haut
-    const gt = tex(64, 64, g => { R(g, '#07060e', 0, 0, 64, 64); R(g, '#3a2408', 0, 0, 64, 2); R(g, '#3a2408', 0, 0, 2, 64); for (let i = 0; i < 64; i += 6) { R(g, '#ffb040', i, 0, 2, 1); R(g, '#40e0ff', 0, i + 3, 1, 2); } });
-    gt.repeat.set(70, 70); box(5000, 1, 5000, new THREE.MeshBasicMaterial({ map: gt }), 0, -60.5, 200);
+    box(5000, 1, 5000, mat('rues', { lum: 1, rep: [70, 70] }), 0, -60.5, 200);
   }
   {
-    const emi = (cols, p) => new THREE.MeshLambertMaterial({ map: facade, emissive: 0xffffff, emissiveMap: lit(cols, p) });
+    const emi = (cols, p) => mat('fenetres', { emissive: 0xffffff, emissiveMap: tx('fenetresAllumees', cols, p) });
     const mats = [emi(['#ffd27a', '#ffe9b0'], 0.45), emi(['#7af0ff', '#d0f8ff'], 0.4), emi(['#ff5ad0', '#ffd27a', '#7af0ff'], 0.5), emi(['#ffd27a'], 0.12)];
     const signs = signMats = ['ネオン', 'スピード', '危険', 'ホテル', '電脳', 'BAR', 'NOODLE', '24H'].map((txt, i) => {
       const c = ['#ff003c', '#00f0ff', '#fcee0a', '#ff4fc8'][i % 4];
-      return new THREE.MeshBasicMaterial({ map: tex(64, 32, g => { R(g, '#08080c', 0, 0, 64, 32); g.strokeStyle = c; g.lineWidth = 2; g.strokeRect(2, 2, 60, 28); g.fillStyle = c; g.font = 'bold 18px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 32, 17, 54); }) });
+      return mat('enseigne', LUMI, c, txt);
     });
     for (let gx = -620; gx <= 820; gx += 64) for (let gz = -260; gz <= 780; gz += 64) {
       const x = gx + rnd() * 24 - 12, z = gz + rnd() * 24 - 12, w = 28 + rnd() * 22, d = 28 + rnd() * 22, top = 24 + rnd() * rnd() * 150;
       const lim = (W + 4 + 0.71 * Math.max(w, d)) ** 2;
       if (S.some((s, i) => i % 3 === 0 && (s.x - x) ** 2 + (s.z - z) ** 2 < lim)) continue;
-      const H = top + 60, g = new THREE.BoxGeometry(w, H, d), uv = g.attributes.uv;
-      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * Math.max(1, Math.round(w / 28)), uv.getY(i) * Math.max(1, Math.round(H / 28)));
-      const m = new THREE.Mesh(g, mats[rnd() * mats.length | 0]);
+      const H = top + 60, m = new THREE.Mesh(geo('immeuble', w, H, d), mats[rnd() * mats.length | 0]);
       m.position.set(x, top - H / 2, z); m.rotation.y = (rnd() - 0.5) * 0.6; m.castShadow = m.receiveShadow = true; scene.add(m);
       if (rnd() < 0.55) { const h2 = 8 + rnd() * 45, tm = box(w * (0.4 + rnd() * 0.3), h2, d * (0.4 + rnd() * 0.3), m.material, 0, H / 2 + h2 / 2, 0, m); tm.castShadow = true; } // étage en retrait
       if (rnd() < 0.45) { const ah = 10 + rnd() * 35; box(0.8, ah, 0.8, concrete, w * 0.35, H / 2 + ah / 2, d * 0.35, m); beacons.push(x + w * 0.35, top + ah + 1, z + d * 0.35); } // antenne et balise rouge
@@ -414,14 +375,14 @@
   }
   // ---------- horizon et vie de la ville ----------
   { // mégatours lointaines, hors brouillard : silhouettes piquées de fenêtres sur le halo de l'horizon
-    const far = new THREE.MeshBasicMaterial({ fog: false, map: tex(32, 64, g => { R(g, '#0d0820', 0, 0, 32, 64); for (let i = 0; i < 70; i++) R(g, ['#ffd27a', '#7af0ff', '#ff5ad0'][i % 3], rnd() * 32 | 0, rnd() * 64 | 0, 1, 1); }) });
+    const far = mat('tourLoin', { lum: 1, fog: false }, '#0d0820', ['#ffd27a', '#7af0ff', '#ff5ad0'], 70);
     for (let i = 0; i < 44; i++) { const a = i / 44 * 6.283 + rnd() * 0.1, rad = 1150 + rnd() * 500, h = 200 + rnd() * rnd() * 600, w = 60 + rnd() * 90; box(w, h, w, far, 100 + Math.cos(a) * rad, h / 2 - 60, 250 + Math.sin(a) * rad); }
   }
   // faisceaux de projecteurs qui balaient le ciel
-  const beamGeo = new THREE.PlaneGeometry(26, 900); beamGeo.translate(0, 450, 0);
-  beams = [[320, 120], [-120, 330], [520, -120], [80, 660], [-420, 60], [700, 420]].map(([x, z], i) => { const b = new THREE.Mesh(beamGeo, addMat(gradTex(['#5a7cff', '#ff2bd6', '#00f0ff'][i % 3], true), { opacity: 0.5 })); b.position.set(x, -60, z); scene.add(b); return b; });
+  const beamGeo = geo('faisceau');
+  beams = [[320, 120], [-120, 330], [520, -120], [80, 660], [-420, 60], [700, 420]].map(([x, z], i) => { const b = new THREE.Mesh(beamGeo, addMat(tx('degrade', ['#5a7cff', '#ff2bd6', '#00f0ff'][i % 3], true), { opacity: 0.5 })); b.position.set(x, -60, z); scene.add(b); return b; });
   // hologrammes géants : les enseignes en lumière pure, qui tournent et grésillent
-  holos = [[250, 150, 210], [-160, 165, 300], [450, 140, -90], [0, 185, 640], [640, 170, 520]].map(([x, y, z], i) => { const h = new THREE.Mesh(new THREE.PlaneGeometry(90, 45), addMat(signMats[i].map, { opacity: 0.6 })); h.position.set(x, y, z); scene.add(h); return h; });
+  holos = [[250, 150, 210], [-160, 165, 300], [450, 140, -90], [0, 185, 640], [640, 170, 520]].map(([x, y, z], i) => { const h = new THREE.Mesh(geo('hologramme'), addMat(signMats[i].map, { opacity: 0.6 })); h.position.set(x, y, z); scene.add(h); return h; });
   // trafic : véhicules volants entre les tours et phares dans les rues en contrebas (un point lumineux chacun)
   MV = 110; mvP = new Float32Array(MV * 3); mvV = new Float32Array(MV * 2); mvC = new Float32Array(MV * 3); mvGeo = new THREE.BufferGeometry();
   for (let i = 0; i < MV; i++) {
@@ -435,7 +396,7 @@
   movers = new THREE.Points(mvGeo, new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true, fog: false })); movers.frustumCulled = false; scene.add(movers);
   const beaconGeo = new THREE.BufferGeometry(); beaconGeo.setAttribute('position', new THREE.Float32BufferAttribute(beacons, 3));
   beaconPts = new THREE.Points(beaconGeo, new THREE.PointsMaterial({ color: 0xff2030, size: 2, sizeAttenuation: false, fog: false })); scene.add(beaconPts);
-  } else decorTick = window.DECORS[TH.decor]({ THREE, scene, T, S, N, W, M, TH, tex, R, box, ribbon, rnd, addMat, gradTex, bas, across, zone, lum, retro, gloss, temps: () => race ? -1 : tTraf }); // pas de trafic en course : les adversaires ne savent pas l'éviter
+  } else decorTick = window.DECORS[TH.decor]({ THREE, scene, T, S, N, W, M, TH, ribbon, rnd, across, zone, lum, geo, mat, pose, temps: () => race ? -1 : tTraf }); // pas de trafic en course : les adversaires ne savent pas l'éviter
 
   // pluie : traînées qui s'allongent et foncent vers la caméra avec la vitesse
   const RN = 400, rainP = new Float32Array(RN * 3), rainGeo = new THREE.BufferGeometry(), rainV = new Float32Array(RN * 6);
@@ -922,5 +883,5 @@
   }
   const loop = now => { requestAnimationFrame(loop); frame(now); };
   requestAnimationFrame(loop);
-  window.__g = { frame, start, M, T, scene, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
+  window.__g = { frame, start, M, T, scene, cam, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
 })();
