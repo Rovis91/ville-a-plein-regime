@@ -64,3 +64,73 @@ c = newCar(T); c.manual = true; run(c, I(0, 1), 6);
 assert(c.gear === 0 && c.vf * 3.6 > 62 && c.vf * 3.6 < 76, 'rupteur de 1re mal placé: ' + c.vf * 3.6);
 
 console.log(`OK  longueur ${T.len | 0} m, rayon mini ${rmin | 0} m, tour auto ${t.toFixed(2)} s (à fond sans freiner : ${tf.toFixed(2)} s, ${fh} chocs), vmax ${(vmax * 3.6) | 0} km/h, 0-100 en ${t100.toFixed(1)} s, passages à ${shifts.join(' / ')} km/h, tour en glisse ${td.toFixed(2)} s (${boosts} boosts, ${dh} chocs), dérive ${beta | 0}°, rattrapage ${rec.toFixed(2)} s`);
+
+// ---------- course : collisions, pilotes IA, classement ----------
+const fin = c => [c.x, c.z, c.vx, c.vz, c.th].every(Number.isFinite);
+const sep = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+const at = (c, i, d, v) => { const s = S[i]; Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, idx: i, dist: i, d, th: Math.atan2(s.tz, s.tx), vx: s.tx * v, vz: s.tz * v }); return c; };
+
+// choc par l'arrière à 240 km/h sur une voiture arrêtée : pas de traversée, la voiture percutée est poussée, celle qui percute ralentit
+let R = newRace(T), [a, b] = R.cars; R.cars.length = 2;
+at(a, 60, 0, 66); at(b, 75, 0, 0);
+for (let i = 0; i < 2 / H; i++) {
+  stepRace(R, I(0, 1), H);
+  assert(fin(a) && fin(b), 'choc arrière : NaN');
+  assert(a.dist < b.dist && sep(a, b) > 1.6, 'choc arrière : voitures traversées');
+  assert(Math.abs(a.d) <= W && Math.abs(b.d) <= W, 'choc arrière : voiture hors piste');
+}
+assert(Math.hypot(b.vx, b.vz) > 10, 'la voiture percutée doit être poussée');
+// choc frontal, 240 km/h chacune
+R = newRace(T); [a, b] = R.cars; R.cars.length = 2;
+at(a, 60, 0, 66); at(b, 90, 0.5, -66);
+let bump = 0;
+for (let i = 0; i < 1 / H; i++) {
+  stepRace(R, I(0, 0), H); bump = Math.max(bump, a.bump);
+  assert(fin(a) && fin(b) && a.idx < b.idx + 1 && sep(a, b) > 1.6, 'choc frontal : voitures traversées');
+  assert(Math.abs(a.d) <= W && Math.abs(b.d) <= W, 'choc frontal : voiture hors piste');
+}
+assert(bump > 50, 'choc frontal non signalé: ' + bump);
+// contact latéral : deux voitures côte à côte, l'une serre l'autre ; elle la pousse sans l'arrêter
+R = newRace(T); [a, b] = R.cars; R.cars.length = 2;
+at(a, 60, -1.3, 40); at(b, 60, 1.3, 40); a.vx -= S[60].tz * 3; a.vz += S[60].tx * 3; bump = 0;
+for (let i = 0; i < 1 / H; i++) { stepRace(R, I(0.15, 1), H); bump = Math.max(bump, b.bump); assert(sep(a, b) > 1.6, 'contact latéral : voitures imbriquées'); }
+assert(bump > 0.5 && b.d > 2.5, 'le contact latéral doit pousser: ' + b.d);
+assert(a.vf > 36 && Math.hypot(b.vx, b.vz) > 36, 'le contact latéral ne doit pas arrêter: ' + a.vf);
+
+// le tour d'une voiture seule ne doit pas bouger quand on touche à la course (records vpr5.* comparables)
+assert(Math.abs(t - 44.79) < 0.01 && Math.abs(tf - 52.68) < 0.01 && Math.abs(td - 46.19) < 0.01, `le tour solo a changé: ${t} / ${tf} / ${td}`);
+// les 3 niveaux d'IA, seuls : du plus rapide au plus lent, entre le tour propre et le tour en glisse
+const laps = AI_LVL.map(lvl => { const c = newCar(T); let t = 0; while (c.dist < n && t < 180) { step(c, autopilot(c, T, lvl), T, H); t += H; assert(c.hit < 3, 'IA seule dans le mur'); } return t; });
+assert(laps.every((l, i) => l > 44.79 && l < 46.19 && (!i || l > laps[i - 1] + 0.2)), 'rythme des IA hors plage: ' + laps);
+
+// une IA rapide partie derrière une lente, sur la même ligne, la dépasse en moins d'un tour, sans choc violent
+R = newRace(T, 3, [0.85]); [a, b] = R.cars; at(a, 10, 0, 0); at(b, 20, 0, 0); bump = 0;
+while (a.pos !== 1 && R.t < 60) { stepRace(R, null, H); bump = Math.max(bump, a.bump); }
+assert(a.pos === 1 && a.dist < n, 'pas de dépassement en un tour: ' + a.dist);
+assert(bump < 5, 'dépassement en force: ' + bump);
+const tpass = R.t;
+
+// course complète de 3 tours à 4 IA : tout le monde arrive, sans NaN, sans sortir de la piste ni rester bloqué ; classement = ordre d'arrivée
+R = newRace(T);
+assert(R.cars.length === 4 && R.cars[0].pos === 4 && new Set(R.cars.map(c => c.dist)).size === 4, 'grille de départ');
+for (const x of R.cars) for (const y of R.cars) assert(x === y || sep(x, y) > 5, 'grille : voitures trop proches');
+const cars4 = R.cars, R0 = c => cars4.indexOf(c) ? 'IA' + cars4.indexOf(c) : 'joueur(IA)', arr = []; let last = R.cars.map(c => c.dist), walls = 0, bumps = 0;
+while (!R.done && R.t < 300) {
+  stepRace(R, null, H);
+  for (const c of R.cars) {
+    assert(fin(c) && Math.abs(c.d) <= W, 'course : NaN ou voiture hors piste');
+    if (c.fin && !arr.includes(c)) arr.push(c);
+    if (c.hit > 3) walls++; if (c.bump > 3) bumps++;
+  }
+  assert.deepStrictEqual(R.cars.map(c => c.pos).sort(), [1, 2, 3, 4]);
+  if (Math.round(R.t / H) % 600 === 0) { R.cars.forEach((c, i) => assert(c.dist > last[i] + 25, `voiture ${i} bloquée à ${R.t | 0} s`)); last = R.cars.map(c => c.dist); }
+}
+assert(R.done && arr.length === 4 && R.cars.every(c => c.lap === 3 && c.dist >= 3 * n), 'course non terminée');
+assert.deepStrictEqual(raceOrder(R), arr, 'classement différent de l\'ordre d\'arrivée');
+arr.forEach((c, i) => assert(c.pos === i + 1 && (!i || c.fin >= arr[i - 1].fin), 'places ou temps finaux incohérents'));
+assert(arr[3].fin - arr[0].fin < 8, 'course trop étalée: ' + arr.map(c => c.fin));
+// un joueur qui ne touche à rien reste dernier et les IA finissent quand même
+R = newRace(T, 1); while (!R.cars.slice(1).every(c => c.fin) && R.t < 100) stepRace(R, I(0, 0), H);
+assert(R.cars[0].pos === 4 && !R.cars[0].fin && !R.done && R.t < 60, 'course à 1 tour avec joueur immobile');
+
+console.log(`OK  course : IA seules ${laps.map(l => l.toFixed(2)).join(' / ')} s au tour (niveaux ${AI_LVL.join(' / ')}), dépassement en ${tpass.toFixed(1)} s, 3 tours à 4 IA : ${arr.map(c => R0(c) + ' ' + c.fin.toFixed(2)).join(', ')} (${walls} chocs mur, ${bumps} chocs voiture)`);
