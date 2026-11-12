@@ -5,6 +5,8 @@
 // Champs d'une carte :
 //   W demi-largeur de route (m) · large [[a, b, w], …] demi-largeur w entre les points a et b (place) · place { c: [x, z], r, a, piles } cercle où l'on roule partout, avec les piles d'un monument (boîtes [x, z, demi-largeurs] dans son repère tourné de a) · grip adhérence latérale maxi (m/s²) · sc échelle du tracé · pts [x, z, altitude], sens horaire, départ en [0]
 //   camH hauteur de la caméra (m, 3,2 par défaut : à relever quand la voiture masque la route) · tun [a, b] tunnel entre deux points (ou null) · chaud [a, b] secteur où la musique se déchaîne · amb [[a, b], …] zones où l'on entend l'ambiance du lieu · sect [a, b] les deux temps intermédiaires
+//   sauts [[point, longueur, hauteur, fosse, profondeur], …] tremplin qui finit net au point, suivi ou non d'une fosse (m) · cuv [[a, b, largeur, rayon], …] murs roulables : un quart de tube de chaque côté du plat entre les points a et b. L'un ou l'autre active le relief (hauteur, gravité, vol : voir sim.js) ; th.paroi = texture des murs roulables
+//   bis { de, a, w, pts, sauts } : bretelle, un second ruban de demi-largeur w qui quitte le tracé au point `de` et le rejoint au point `a` ; ses sauts désignent ses propres points, et le relief y joue toujours (voir sim.js)
 //   anticipe : le pilote automatique calcule sa distance de freinage (indispensable dès qu'il y a une épingle)
 //   rivaux : prénoms des trois adversaires du mode course (sinon ceux de la ville) · med : médailles [bronze, argent, or] en multiples du tour lancé du pilote automatique (défaut 1,1 / 1,03 / 0,97 ; plus bas là où la glisse rapporte beaucoup) · trafic : nombre de camions à doubler · car : la voiture (format CARD de sim.js) · radio : stations (voir RADIO plus bas) · th : thème
 (function (G) {
@@ -149,6 +151,26 @@
           '36 - - 34 - - 31 - 29 - - 31 - - 34 - | 36 - - - - - - - 39 - 36 - 34 - - - | 31 - - 34 - - 36 - 39 - - 36 - - 34 - | 31 - - - - - - - . - - - - - - -'],
         sec: { i: 'b0', a: 'k0 s0 h0 b0', b: 'k0 s0 h1 b0 c0', c: 'k1 s1 h1 b0 c0 l0', x: 'h2 b1 l1 P1', e: 'k1 s1 h1 b1 c1 l1 P1', q: 'k2 s0 h2 b1' }, form: 'iabcqxecabcc' }),
     ],
+    barrage: [
+      st({ name: 'RADIO SOMMET', fq: '101.5', vol: 1, genre: 'ITALO DISCO', bpm: 122, gamme: 'mineur', key: 57, kit: 'lin', eq: [-6, 2500, 3, 8], rev: 0.3, echo: [3, 0.4], pump: 0.4, // boîte à rythmes sèche, basse à l'octave, arpège, thème en dents de scie : la descente en télécabine
+        prog: ['Am F C G Am F Dm Em', 'F G Am Am'], k: [F4], s: [CP], h: [OFF, 'x.o.x.o.x.o.x.o.'],
+        b: ['bSeq', '0 - 12 - 0 - 12 - 0 - 12 - 0 - 12 -', '0 0 12 0 0 12 0 12 0 0 12 0 7 12 0 12'], d: ['strings', 0], c: ['super', 'x..x..x.x..x..x.'], a: ['pulseArp', '0121201245656456', '0.2.4.2.0.2.4.6.'],
+        l: ['ldSaw', '12 - - 15 - - 19 - 17 - 15 - 12 - - - | 20 - - 17 - - 15 - 17 - - - . - - - | 15 - - 19 - - 22 - 19 - 15 - 19 - - - | 14 - - 17 - - 22 - 19 - - - . - - - | 24 - - 27 - - 31 - 29 - 27 - 24 - - - | 32 - - 29 - - 27 - 29 - - - . - - - | 29 - - 26 - - 29 - 32 - 29 - 26 - - - | 31 - - - 26 - - - 22 - - - 19 - - -',
+          '20 - - - 24 - - - 27 - - - 24 - - - | 22 - - - 26 - - - 29 - - - 26 - - - | 24 - - 27 - - 31 - 29 - 27 - 24 - - - | 24 - - - - - - - . - - - - - - -'],
+        sec: { i: 'h0 a0 d lo', a: 'k0 s0 h0 b0 d', b: 'k0 s0 h1 b0 d a0', c: 'k0 s0 h1 b1 d a0 c0 l0', x: 'd a1 l1 P1', u: 'k0 h1 b0 d roll P1', e: 'k0 s0 h1 b1 c0 l1 P1' }, form: 'iabcxuceabcc' }),
+      st({ name: 'RADIO TORRENT', fq: '96.6', vol: 0.5, genre: 'SURF ROCK', bpm: 164, gamme: 'mineur', key: 52, kit: 'rock', eq: [-4, 1400, 6, 2], rev: 0.4, pump: 1, // guitare à trémolo noyée de réverbération, cocotte en doubles-croches, batterie rock : aucun synthé
+        prog: ['Em D C D Em D Am Bm', 'C D Em Em'], k: ['x.....x.x.....x.', 'x..x..x.x..x..x.'], s: [SN, '....x.......x.xx'], h: ['r.r.r.r.r.r.r.r.', 'X.X.X.X.X.X.X.o.'], p: ['t.t.t.t.t.t.t.t.'],
+        b: ['bPick', '0 - 0 - 7 - 0 - 0 - 0 - 7 - 10 -', '0 0 0 0 0 0 0 0 0 0 0 0 7 7 10 10'], g: ['gtrMute', 'xxxxxxxxxxxxxxxx', 'x.xxx.xxx.xxx.xx'], c: ['pwr', 'x.....x.....x...'], cO: -12,
+        l: ['ldGtr', '12 - 12 - 15 - 14 - 12 - 10 - 12 - - - | 14 - 14 - 17 - 15 - 14 - 10 - 14 - - - | 15 - 15 - 19 - 17 - 15 - 12 - 15 - - - | 14 - - - 17 - - - 22 - - - 19 - - - | 24 - 24 - 27 - 26 - 24 - 22 - 24 - - - | 26 - 26 - 29 - 27 - 26 - 22 - 26 - - - | 24 - 27 - 29 - 27 - 24 - 20 - 24 - - - | 26 - - - 22 - - - 19 - - - 14 - - -',
+          '27 - - 24 - - 20 - 24 - - - 27 - - - | 29 - - 26 - - 22 - 26 - - - 29 - - - | 31 - - 27 - - 24 - 27 - 31 - 34 - - - | 36 - - - - - - - . - - - - - - -'],
+        sec: { i: 'g0 h0', a: 'k0 s0 h0 b0 g0', b: 'k0 s0 h1 b0 g0 c0', c: 'k1 s1 h1 b0 g1 c0 l0', x: 'h0 b1 g0 l1 P1', e: 'k1 s1 h1 b1 c0 l1 P1 p0', q: 'k0 s0 h0 b1 g1 p0' }, form: 'iabcqxecabcc' }),
+      st({ name: 'ALTITUDE 303', fq: '303', vol: 0.9, genre: 'ACID HOUSE', bpm: 124, gamme: 'mineur', sw: 0.08, key: 60, kit: 'k909', eq: [4, 900, 4, 2], rev: 0.2, echo: [3, 0.45], pump: 0.4, sweep: 1, // une ligne de basse acide qui tourne sur elle-même, le filtre fait le reste ; cloche et accords plaqués à écho
+        prog: ['Cm7 Cm7 Fm7 Fm7 Cm7 Cm7 AbM7 Gm7', 'AbM7 Bb Cm7 Cm7'], k: [F4, 'x...x...x...x.x.'], s: [CP, '....c.......c.cc'], h: [OFF, 'x.o.x.oxx.o.x.ox'], p: ['c..c..c..c..c.c.'],
+        b: ['bAcid', '0 - 0 12 - 0 3 - 0 - 12 0 - 10 - 7', '0 0 12 0 0 12 0 3 0 0 12 0 10 12 7 0'], d: ['warm', 0], c: ['stabM7', 'x..x...x..x.....', '..x...x...x...x.'], a: ['seqArp', '0.0.2.0.3.0.2.0.', '0120012001200120'],
+        l: ['ldTri', '24 - - - - - 22 - 19 - - - - - - - | 24 - - - - - 27 - 26 - - - 22 - - - | 20 - - - - - 24 - 27 - - - - - - - | 26 - - - 22 - - - 19 - - - 17 - - -',
+          '27 - - - 24 - - - 31 - - - 27 - - - | 29 - - - 26 - - - 34 - - - 29 - - - | 31 - - - - - 27 - 24 - - - - - - - | 24 - - - - - - - . - - - - - - -'],
+        sec: { i: 'k0 h0 b0 lo', a: 'k0 s0 h0 b0 a0', b: 'k0 s0 h1 b0 a0 c0', c: 'k1 s1 h1 b1 a1 c0 d l0 p0', x: 'd a0 c1 l1 P1', u: 'k0 h1 b1 a1 roll P1', e: 'k1 s1 h1 b1 c1 d l1 P1 p0' }, form: 'iabcbxucecbc' }),
+    ],
   };
 
   G.CARTES = [
@@ -199,6 +221,10 @@
     // Paris à l'aube : circuit de rues, relances entre des angles, pavés.
     { id: 'paris', nom: 'PREMIER METRO', rivaux: ['LUCIE', 'MARC', 'INES'], W: 7, large: [[3, 7, 36]], place: { c: [450, 0], r: 121, a: 2.39, piles: [[-14.9, -7.6, 8, 3.8], [14.9, -7.6, 8, 3.8], [-14.9, 7.6, 8, 3.8], [14.9, 7.6, 8, 3.8]] }, grip: 19, sc: 1, tun: [27, 30], chaud: [13, 22], amb: [[3, 7], [23, 26]], sect: [12, 25], anticipe: 1,
       pts: [[0, 0, 0], [200, 0, 0], [330, 15, 0], [420, 80, 0], [480, 80, 0], [524, 42, 0], [534, -15, 0], [505, -65, 0], [430, -160, 0], [420, -300, 2], [450, -390, 4], [540, -420, 6], [700, -420, 8], [810, -435, 12], [880, -480, 19], [860, -545, 26], [800, -590, 31], [830, -660, 37], [930, -670, 42], [1020, -630, 44], [1070, -540, 38], [1040, -410, 26], [1085, -280, 14], [1060, -150, 4], [1100, 0, 0], [1090, 140, -2], [1010, 225, -4], [800, 240, -6], [600, 250, -12], [400, 250, -12], [200, 240, -6], [0, 240, -3], [-150, 225, 0], [-235, 150, 0], [-235, 60, 0], [-150, 0, 0]],
+      // itinéraire bis par les toits : là où la ruelle part à gauche (point 14), tout droit sur la rampe de l'échafaudage ; épingle à droite sur le premier toit, tremplin par-dessus la cour (à moins de 125 km/h on tombe dedans, et on en ressort par sa rampe),
+      // second toit, puis la descente rejoint la rue qui redescend de la butte (point 21) : 340 m au lieu de 710
+      bis: { de: 14, a: 21, w: 5.5, sauts: [[9, 20, 1.5, 40, 6]],
+        pts: [[887.5, -498.5, 21], [904.9, -541.7, 28.8], [922.4, -584.9, 33.2], [928.1, -594, 33.2], [936.6, -600.4, 33.2], [946.8, -603.5, 33.2], [957.5, -602.8, 33.2], [967.2, -598.4, 33.2], [974.8, -590.9, 33.2], [992, -566.3, 33.2], [1007.8, -543.8, 33.2], [1023.6, -521.2, 33.2], [1039.4, -498.7, 33.2], [1047, -482.9, 32.6], [1049.3, -465.5, 31.2], [1046, -448.3, 29.6]] },
       // Renault 5 Maxi Turbo (1985, Groupe B) : 4 cylindres turbo 1,5 L, 350 ch, 905 kg, moteur central arrière, propulsion (rapports estimés)
       car: car({ nom: 'RENAULT 5 MAXI TURBO', ratios: [3.36, 2.06, 1.38, 1.06, 0.82], final: 3.89, wheel: 0.29, mass: 980, idle: 1000, red: 7500, cd: 0.40, area: 1.9,
         tq: [0, 120, 220, 330, 400, 420, 400, 370, 300], son: 1.25, look: { col: 0xf2c400, l: 0.8, w: 0.98, h: 1.12, nez: 0.3, cab: [-0.25, 2.3, 0.62], aileron: 0 } }),
@@ -222,6 +248,20 @@
         astre: { soleil: 1, dir: [-0.85, 0.11, 0.35], col: '#fff4c0', ombre: '#fff4c0', taille: 340 }, hemi: [0xb898c8, 0xb8ad9a, 0.85], sun: [0xffa860, 0.9], phares: 0.4, bloom: 0.03, scan: 0.05,
         murH: 1.3, route: ['#4c4a50', '#58565c', '#f4f0e0', '#2aa39a', '#e83f8c', '#f4f0e0', false], mur: ['#f4f0e0', '#e83f8c', '#1848c8', '#e4ddd0'], depart: [0xff7a3d, 0x3d2a5c, '#f4f0e0'],
         hud: { y: '#ffc04a', c: '#ff7a3d', r: '#e83f8c', fond: 'rgba(40,24,56,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'SPEEDWAY · HEURE DOREE'], titre: ['CANAL', 'SIX'] } } },
+
+    // Roche-Sourde : la route de service d'un barrage-voûte, en plein midi. Carte du relief : tremplin de la ligne droite (réception en descente), bosse de la montée,
+    // grand virage relevé sur le parement de la voûte (le mur est plus rapide que la corde), tremplin par-dessus le déversoir (trop lent, on tombe dedans et on en ressort par sa rampe), épingle et chicane du retour.
+    { id: 'barrage', nom: 'ROCHE-SOURDE', rivaux: ['MAEL', 'ZOE', 'TIAGO'], med: [1.08, 1, 0.94], W: 8, grip: 20, sc: 1, tun: null, chaud: [11, 21], amb: [[10, 16]], sect: [11, 23], anticipe: 1,
+      sauts: [[2, 40, 0.8], [20, 30, 1, 36, 6]], cuv: [[10, 16, 10, 9]],
+      pts: [[0, 0, 10], [120, 0, 10], [220, 0, 10], [300, 0, 3], [400, 0, -4], [500, 15, -4], [585, 75, 0], [620, 170, 11], [620, 262, 19.6], [620, 285, 20.8], [620, 308, 19.8], [620, 430, 17], [609.5, 455.5, 17], [584, 466, 17], [558.5, 455.5, 17], [548, 430, 17], [548, 385, 17], [533, 345, 17], [498, 330, 17], [400, 330, 16.5], [300, 330, 16], [200, 330, 15.5], [100, 330, 15], [-80, 330, 14.5], [-115, 320, 14.5], [-130, 290, 14], [-130, 200, 12.5], [-150, 130, 11.5], [-130, 60, 11], [-115, 15, 10.2], [-80, 0, 10]],
+      // voiture inventée : une petite quatre roues motrices de rallye, 4 cylindres turbo de 2 L, 340 ch, 1150 kg
+      car: car({ nom: 'CORBIER R4 TURBO', ratios: [3.31, 2.13, 1.52, 1.16, 0.92], final: 4.1, wheel: 0.31, mass: 1225, idle: 1000, red: 7800, cd: 0.38, area: 2.0,
+        tq: [0, 160, 260, 360, 410, 420, 400, 360, 280], trac: 10.5, rwd: 0, son: 1.2, look: { col: 0xe8482a, l: 0.86, w: 1, h: 1.08, nez: 0.4, cab: [-0.2, 2.2, 0.6], aileron: 1, bandes: 0xf4f0e0 } }),
+      radio: RADIO.barrage,
+      th: { decor: 'barrage', fog: 0xbfd8e8, fogD: [200, 1900], sky: [[0, '#1c4f9c'], [0.3, '#1c4f9c'], [0.31, '#3f7fc4'], [0.42, '#3f7fc4'], [0.43, '#8fbfe0'], [0.49, '#8fbfe0'], [0.5, '#bfd8e8'], [1, '#bfd8e8']], stars: 0,
+        astre: { dir: [0.35, 0.8, -0.45], col: '#fffbe8', ombre: '#fffbe8', taille: 150 }, hemi: [0xbcd8ff, 0x9aa89a, 0.95], sun: [0xfff4d8, 1], phares: 0.3, bloom: 0.03, scan: 0.05,
+        murH: 1.1, paroi: 'parement', route: ['#54565a', '#606266', '#f4f0e0', '#f4c020', '#e8482a', '#f4f0e0', false], mur: ['#d8d4c8', '#e8482a', '#f4c020', '#b8b4a8'], depart: [0xe8482a, 0x2a3a4a, '#f4f0e0'],
+        hud: { y: '#ffffff', c: '#f4c020', r: '#e8482a', fond: 'rgba(20,40,64,.9)', style: 'trait', split: 0, jp: null, sur: [null, 'BARRAGE · PLEIN MIDI'], titre: ['ROCHE', 'SOURDE'] } } },
   ];
   let id = 'ville';
   if (typeof location !== 'undefined') try { id = new URLSearchParams(location.search).get('carte') || localStorage.getItem('vpr.carte') || id; } catch (e) { }

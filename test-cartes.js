@@ -13,13 +13,18 @@ for (const M of CARTES) {
   assert(cross > 2 * W + 8, `${M.id} : la piste se recoupe (${cross})`);
   assert(T.sp[0] < T.sp[1] && T.h0 < T.h1 && (!T.tun || T.t0 < T.t1), `${M.id} : secteurs dans le désordre`);
   // deux tours au pilote automatique : le second, lancé, donne les chiffres
-  let c = newCar(T), t = 0, t1 = 0, hits = 0, vmax = 0, vmin = 1e9;
+  // relief : sans saut ni mur roulable déclarés, la voiture ne quitte jamais le sol ; avec, elle ne passe jamais dessous, et le tour lancé compte au moins un vol par tremplin, sans réception qui casse la vitesse
+  let c = newCar(T), t = 0, t1 = 0, hits = 0, vmax = 0, vmin = 1e9, vols = 0, dur = 0;
+  assert(T.vert === !!(M.sauts || M.cuv), M.id + ' : relief actif à tort');
   while (c.dist < 2 * n && t < 900) {
-    step(c, autopilot(c, T), T, H); t += H; assert((Math.abs(c.d) <= S[c.idx].w || dansPlace(c.x, c.z)) && Number.isFinite(c.x));
+    const av = c.air; step(c, autopilot(c, T), T, H); t += H; assert((Math.abs(c.d) <= S[c.idx].w || dansPlace(c.x, c.z)) && Number.isFinite(c.x));
+    assert(T.vert ? c.y >= sol(T, c) - 1e-9 : !c.air && c.y === sol(T, c), M.id + ' : la voiture quitte le sol ou passe dessous');
+    if (c.dist >= n) { if (c.air && !av) vols++; if (c.land > 9) dur++; }
     if (c.dist >= n) { if (!t1) t1 = t; const v = Math.hypot(c.vx, c.vz); vmax = Math.max(vmax, v); vmin = Math.min(vmin, v); if (c.hit > 3) hits++; }
   }
   assert(c.dist >= 2 * n, `${M.id} : le pilote automatique ne boucle pas le tour`);
   assert(hits <= 2, `${M.id} : le pilote automatique tape les murs (${hits})`);
+  assert(vols >= (M.sauts || []).length && !dur, `${M.id} : ${vols} vols au tour lancé pour ${(M.sauts || []).length} tremplins, ${dur} réceptions dures`);
   // départ arrêté, gaz à fond : 0 à 100 km/h plausible, et la boîte auto monte tous les rapports utiles sans rester au rupteur
   c = newCar(T); let t100 = 0;
   for (let i = 0; i < 8 / H && !t100; i++) { step(c, { steer: 0, gas: 1, brake: 0, hand: false }, T, H); if (c.vf >= 100 / 3.6) t100 = (i + 1) * H; assert(c.rpm <= CARD.red + 200); }
@@ -60,6 +65,7 @@ for (const M of CARTES) {
   // ordre des trois façons de boucler un tour lancé : en glisse avec boosts (le plus rapide), propre au pilote automatique, à fond sans freiner dans les murs (le plus lent).
   // Pilote en glisse : frein à main dès que la trajectoire demande plus de 90 % du braquage, tenu tant qu'elle en demande plus de 30 % du même côté, volant dosé pour la suivre ; en glisse il s'autorise 20 % de vitesse de plus que le pilote propre.
   const tour = drive => { const c = newCar(T); let t = 0, t1 = 0, b = 0, pb = 0, h = 0; while (c.dist < 2 * n && t < 900) { step(c, drive(c), T, H); t += H; if (!t1 && c.dist >= n) t1 = t; if (t1 && c.boost > 0 && pb <= 0) b++; if (t1 && c.hit > 3) h++; pb = c.boost; } return [t - t1, b, h]; };
+  const BIS = T.bis; T.bis = null; // ces trois tours comparent des façons de rouler sur le tracé au sol : bretelle fermée (sinon le pilote à fond, qui rate le virage de la ruelle, file sur les toits)
   const lap = t - t1, [tfond, , hfond] = tour(c => ({ ...autopilot(c, T), gas: 1, brake: 0 })), [tgl, boosts, hgl] = tour(c => {
     const a = autopilot(c, T, c.dd ? 1.2 : 1), sp = Math.hypot(c.vx, c.vz), la = S[(c.idx + 3 + Math.floor(sp * 0.1)) % n], dem = s => s.kl * sp / omega(sp); // dem = part du braquage que demande la trajectoire
     const m = wrap(Math.atan2(la.z + la.tx * la.dl - c.z, la.x - la.tz * la.dl - c.x) - (c.dd ? cap(c) : c.th)) * 3; // en glisse le nez est en travers : on vise avec la direction de la vitesse
@@ -67,6 +73,7 @@ for (const M of CARTES) {
     return { ...a, gas: a.gas ? 1 : 0 }; });
   assert(boosts > 1 && tgl < lap, `${M.id} : tour en glisse (${tgl} s, ${boosts} boosts, ${hgl} chocs) pas plus rapide que le tour propre (${lap} s)`);
   assert(hfond && tfond > lap * 1.01, `${M.id} : à fond dans les murs (${tfond} s, ${hfond} chocs) pas plus lent que le tour propre (${lap} s)`);
+  T.bis = BIS;
   // trafic : positions finies, sur la route ; une voiture arrêtée sur une file se fait pousser sans être traversée
   if (M.trafic) {
     for (const tt of [0, 37.3, 400]) for (const k of trafic(T, tt)) assert(Number.isFinite(k.x) && Math.abs(k.d) < W - 1.4, `${M.id} : camion hors route`);
@@ -103,12 +110,31 @@ for (const M of CARTES) {
       if (P.piles.some(([x, z, a, b]) => Math.abs(lx - x) < a - 0.3 && Math.abs(lz - z) < b - 0.3)) dedans++; }
     assert(hit > 3 && !dedans, `${M.id} : la pile de l'arc ne bloque pas (choc ${hit}, ${dedans} pas dedans)`);
   }
+  // bretelle (itinéraire bis) : un ruban plus court que l'arc de tracé qu'il coupe, raccordé au tracé à ses deux bouts, à l'écart de lui entre les deux zones de raccord ;
+  // un pilote qui la prend gagne du temps si le saut passe, en perd s'il le rate (il tombe dans la fosse et en ressort) ; la progression le long du tracé ne saute jamais
+  let bisTxt = '';
+  if (BIS) { const B = BIS, e0 = S[B.a0], e1 = S[(B.a0 + B.na) % n], b1 = B.S[B.n - 1], lip = B.S.findIndex((s, i) => i < B.n - 1 && B.S[i + 1].y < s.y - 2);
+    assert(B.n < 0.7 * B.na && Math.hypot(B.S[0].x - e0.x, B.S[0].z - e0.z) < 0.5 && Math.hypot(b1.x - e1.x, b1.z - e1.z) < 4, M.id + ' : bretelle pas plus courte que le tracé, ou mal raccordée');
+    assert(1 / Math.max(...B.S.map(s => Math.abs(s.k))) > 15 && lip > ZB && lip < B.n - ZB, M.id + ' : bretelle trop serrée, ou saut dans une zone de raccord');
+    for (let j = ZB; j < B.n - ZB; j++) for (const s of S) assert(Math.hypot(s.x - B.S[j].x, s.z - B.S[j].z) > B.S[j].w + s.w + 2, `${M.id} : la bretelle touche le tracé hors des raccords (échantillon ${j})`);
+    // pilote de bretelle : le pilote automatique à qui on demande de la prendre, un peu en dedans aux abords ; « raté » : le même, qui freine jusqu'à 90 km/h avant le tremplin
+    const bisTour = rate => { const c = newCar(T); let t = 0, t1 = 0, pas = 0, vols = 0, bas = 1e9, h = 0, vt = 0;
+      while (c.dist < 2 * n && t < 900) { const a = autopilot(c, T, 1, [], true), d0 = c.dist, av = c.air, v = Math.hypot(c.vx, c.vz);
+        step(c, rate && c.bis && c.ib > lip - 30 && c.ib <= lip && v > 25 ? { ...a, gas: 0, brake: 1 } : a, T, H); t += H; if (!t1 && c.dist >= n) t1 = t;
+        assert(Number.isFinite(c.x) && Math.abs(c.d) <= ici(T, c).w && c.y >= sol(T, c) - 1e-9 && Math.abs(c.dist - d0) < 40, M.id + ' : bretelle, voiture hors du ruban, sous le sol, ou progression qui saute');
+        assert(c.bis || !c.air, M.id + ' : en vol sur le tracé au sol');
+        if (t1 && c.bis) { pas++; if (c.air && !av) vols++; if (c.hit > 3) h++; if (c.ib >= lip && !vt) vt = v; if (c.ib > lip && c.ib < lip + 20) bas = Math.min(bas, c.y - B.S[lip].y); } }
+      assert(c.dist >= 2 * n && pas > 100 && vols, `${M.id} : le pilote de bretelle ne la prend pas, ne saute pas ou ne boucle pas (${pas} pas, ${vols} vols)`); return [t - t1, bas, h, vt]; };
+    const [tb, bb, hb, vb] = bisTour(0), [tr, br, , vr] = bisTour(1);
+    assert(tb < lap - 1 && bb > -1 && !hb, `${M.id} : par la bretelle ${tb} s (tracé ${lap} s), point bas ${bb} m au-dessus de la fosse, ${hb} chocs`);
+    assert(tr > lap && br < -3, `${M.id} : saut raté ${tr} s (tracé ${lap} s), point bas ${br} m`);
+    bisTxt = ` ; bretelle ${B.n * 2} m pour ${B.na * 2} m de tracé : ${tb.toFixed(1)} s si le saut passe (${(tb - lap).toFixed(1)} s, tremplin à ${Math.round(vb * 3.6)} km/h), ${tr.toFixed(1)} s s'il est raté (+${(tr - lap).toFixed(1)} s, à ${Math.round(vr * 3.6)} km/h)`; }
   // course : 3 tours à 4 pilotes automatiques sur le tracé de la carte ; tout le monde arrive, personne ne sort ni ne reste bloqué
   const R = newRace(T); let wall = 0, bump = 0;
   while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && (Math.abs(x.d) <= S[x.idx].w || dansPlace(x.x, x.z)), M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }
   assert(R.done, M.id + ' : la course ne se termine pas');
   const k = v => Math.round(v * 3.6);
-  console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} boosts, ${hgl} chocs), à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; braquage à 60 / 120 / 200 / ${k(vtop)} km/h : ${braq.map(x => x[0]).join(' / ')} °/s, rayons ${braq.map(x => x[1]).join(' / ')} m, route (${2 * W} m) traversée en ${braq.map(x => x[2]).join(' / ')} s ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);
+  console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs${T.vert ? ', ' + vols + ' vols' : ''}, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} boosts, ${hgl} chocs), à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; braquage à 60 / 120 / 200 / ${k(vtop)} km/h : ${braq.map(x => x[0]).join(' / ')} °/s, rayons ${braq.map(x => x[1]).join(' / ')} m, route (${2 * W} m) traversée en ${braq.map(x => x[2]).join(' / ')} s ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture${bisTxt}`);
 }
 // radio : trois stations par carte ; une forme d'au moins 32 mesures faite de sections différentes ; timbres et batteries connus d'audio.js
 // (la variété à l'oreille se mesure dans le navigateur : bouton « Variété des stations » de ecoute.html, il n'y a pas de Web Audio sous node)

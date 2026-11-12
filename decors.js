@@ -31,6 +31,7 @@
   // Terrain : un champ de hauteur qui passe par la route. Chaque sommet prend l'altitude des portions de route voisines (moyenne pondérée par
   // la distance) : la route se retrouve posée sur une pente, les lacets empilés deviennent des terrasses, un canal se creuse entre deux voies.
   // o = { pas, marge, mat, loin, chute (au-delà de `loin` mètres de la route, le sol descend de `chute` m par mètre), creux(x, z),
+  //       plafond(x, z) = altitude que le sol ne dépasse pas (sous un ouvrage qui n'est pas la route : la bretelle des toits de Paris),
   //       sol(s) = altitude du sol sous l'échantillon s quand la route n'est pas posée dessus (viaduc, pont),
   //       sous = pente (touge seul) : plafonne chaque sommet sous toute la route proche, puis remonte de `sous` m par mètre ; les triangles ne passent plus sur une chaussée en contrebas (lacets) }
   // Renvoie hAt(x, z) = altitude du sol et dAt(x, z) = distance à la route, pour y poser le décor.
@@ -49,6 +50,7 @@
       if (d < W + 1 && pm.pose) y -= 1.5; // sous la chaussée : on creuse, la route et ses murets cachent le raccord
       if (o.loin && d > o.loin) y -= (d - o.loin) * o.chute;
       if (o.creux) y -= o.creux(x, z);
+      if (o.plafond) y = Math.min(y, o.plafond(x, z));
       if (o.sous && d < R) y = Math.max(y, pm.g - 1.7); // assez haut pour que le pied des murets ne flotte pas
       if (o.sous && d < RC) for (let cz = -1; cz <= 1; cz++) for (let cx = -1; cx <= 1; cx++) for (const s of cases.get((Math.floor(x / RC) + cx) * 1e4 + Math.floor(z / RC) + cz) || []) {
         const e = Math.hypot(s.x - x, s.z - z); if (e < RC) y = Math.min(y, s.y - 0.3 + Math.max(0, e - R) * o.sous); // au-delà de RC la remontée dépasse tout dénivelé de la carte
@@ -176,6 +178,36 @@
   }
 
   window.DECORS = {
+    // ---------- Roche-Sourde : un barrage-voûte en plein midi. Alpage et sapins, sommets enneigés, le parement de la voûte au-dessus du virage relevé, le déversoir sous le second tremplin ----------
+    barrage(h) {
+      const { THREE, S, N, W, rnd } = h, mur = s => paroi(s, s.w);
+      const iD = pt(h, 20), sD = S[iD], xD = sD.x - 19; // le déversoir : un chenal du lac vers la vallée, que la piste franchit par sa fosse
+      const chenal = (x, z) => Math.abs(x - xD) < 21 && z > sD.z - 150 ? 6.5 : 0, lac = (x, z) => z > 520 ? Math.min(30, (z - 520) * 0.5) : 0;
+      const g = terrain(h, { pas: 8, marge: 460, loin: 70, chute: -0.3, creux: (x, z) => Math.max(chenal(x, z), lac(x, z)), mat: h.mat('bruit', {}, '#6c8c4c', ['#5c7c42', '#7c9c5a', '#8c8c82', '#586c44']) });
+      const eau = h.mat('eauVive', { rep: [12, 60] }), eauLac = h.mat('eauVive', { rep: [90, 60] });
+      boite(h, eau, 40, 0.3, 700, xD, sD.y - 7.05, sD.z + 200); boite(h, eauLac, 1500, 0.3, 900, 500, 14, 990);
+      // la voûte : le mur roulable extérieur du grand virage se prolonge en parement, jusqu'à 42 m, couronné d'un chemin de ronde
+      const beton = h.mat('parement', { side: THREE.DoubleSide }), i0 = S.findIndex(s => s.rc), nC = S.filter(s => s.rc).length, f = s => (s.w - W) / 10, ht = s => mur(s) + 1 + 41 * f(s) * f(s);
+      h.ribbon(i0, nC, s => -s.w - 0.3, s => mur(s) - 2, s => -s.w - 0.3, ht, beton, 16).castShadow = true;
+      h.ribbon(i0, nC, s => -s.w - 0.3, ht, s => -s.w - 7, ht, beton, 16); h.ribbon(i0, nC, s => -s.w - 7, ht, s => -s.w - 7, () => -10, beton, 16);
+      h.pose('tourPrise', { beton: h.mat('beton'), vitre: h.mat('peinture', { c: 0x2a4a5a }) }, h.scene, [584, 14, 540]);
+      // portiques des tremplins, 30 m avant le bout
+      const peau = { acier: h.mat('acier'), banderole: h.mat('banderoleSaut', { lum: 1, side: THREE.DoubleSide }) };
+      for (const [p] of h.M.sauts) { const i = pt(h, p); h.pose('portiqueSaut', peau, repere(h, S[(i - 15 + N) % N]), [0, 0, 0], W);
+        h.ribbon((i - 7 + N) % N, 7, -W + 0.6, 0.05, W - 0.6, 0.05, h.mat('banderoleSaut', { lum: 1, rep: [4, 1] }), 3.5); } // et les 14 derniers mètres du tremplin peints de chevrons
+      // ligne à haute tension qui descend de la centrale, le long de la ligne droite
+      for (let x = -200; x <= 760; x += 160) h.pose('pyloneHT', { acier: h.mat('acier') }, h.scene, [x, g.hAt(x, -60), -60]);
+      // sapins : par bouquets sur l'alpage, jamais sur la route ni dans le chenal
+      const arbres = [];
+      for (let k = 0; k < 1500; k++) { const x = g.box[0] + rnd() * (g.box[2] - g.box[0]), z = g.box[1] + rnd() * (g.box[3] - g.box[1]), d = g.dAt(x, z);
+        if (d > 26 && !chenal(x, z) && !lac(x, z) && Math.sin(x * 0.02) + Math.cos(z * 0.027) + rnd() > 0.9) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, 0.7 + rnd() * 0.8]); }
+      const futs = arbres.map(p => { const y0 = p[1] - 6; p[1] = y0 + 10 * p[4]; return [p[0], y0 + 2.4 * p[4], p[2], 0, p[4]]; });
+      inst(h, h.geo('cedre'), h.mat('cedre'), arbres); inst(h, h.geo('tronc'), h.mat('tronc'), futs);
+      // les sommets, en couronne à plus d'un kilomètre
+      const pics = []; for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283 + rnd() * 0.2, r = 1150 + rnd() * 500, l = 520 + rnd() * 420; pics.push([300 + Math.cos(a) * r, 40, 200 + Math.sin(a) * r, rnd() * 1.5, l, 380 + rnd() * 330, l]); }
+      inst(h, h.geo('pic'), h.mat('rocNeige', { fog: false }), pics);
+      return dt => { eau.map.offset.y -= dt * 0.9; eauLac.map.offset.x += dt * 0.01; }; // le déversoir coule
+    },
     // ---------- Karasu-tōge : forêt de cèdres, glissières à catadioptres, et au sommet un carrefour : supérette de nuit, station-service, voitures garées ----------
     touge(h) {
       const { THREE, S, N, W, rnd } = h;
@@ -448,16 +480,21 @@
       const { THREE, S, N, W, rnd, M } = h, quai = (x, z) => z > 250 && x > -170 && x < 1060; // côté fleuve des quais
       const PL = M.place, C = PL.c, RT = PL.r + 6, horsPlace = (x, z) => (x - C[0]) ** 2 + (z - C[1]) ** 2 > (PL.r + 1) ** 2; // la place : centre, pied des façades
       const IY = 1.5, WY = -8, rive = x => x > 180 && x < 820 ? 262 : 248; // niveau de la Seine ; sa rive : au ras des voies sur berge, en retrait du tunnel qui passe dessous
-      const g = terrain(h, { pas: 16, marge: 320, mat: h.mat('bruit', {}, '#6e6a66', ['#7a7672', '#625e5a']), creux: (x, z) => quai(x, z) ? Math.max(0, Math.min(9, (z - rive(x)) * 0.6)) : 0 });
+      // l'itinéraire bis par les toits (bretelle de sim.js) : BS = ses échantillons, lip = le bout du tremplin, nf = longueur de la cour (la fosse), yT = niveau des toits, tA…tB = du haut de la rampe au bout du second toit
+      const BI = h.T.bis, BS = BI ? BI.S : [], nb = BS.length, wb = BI ? BS[0].w : 0, lip = BS.findIndex((s, j) => j < nb - 1 && BS[j + 1].y < s.y - 2), nf = BI ? Math.round(M.bis.sauts[0][3] / 2) : 0, yT = BI ? BS[lip - 12].y : 0;
+      const dTrace = s => { let m = 1e9; for (const q of S) m = Math.min(m, Math.hypot(q.x - s.x, q.z - s.z)); return m; }, tA = BS.findIndex(s => s.y > yT - 0.3), tB = BI ? nb - 1 - [...BS].reverse().findIndex(s => s.y > yT - 0.3 && dTrace(s) > 30) : 0;
+      // le sol reste sous la bretelle : à 60 cm sous sa chaussée, et bien plus bas sous les deux immeubles et la cour
+      const sousBis = (x, z) => { let m = 1e9, y = 1e9; for (let j = 14; j < nb - 14; j++) { const d = Math.hypot(BS[j].x - x, BS[j].z - z); if (d < m) { m = d; y = j > tA - 8 && j < tB + 4 ? yT - 13 : BS[j].y - 0.6; } } return m < (y < yT - 12 ? 38 : wb + 12) ? y : 1e9; };
+      const g = terrain(h, { pas: 16, marge: 320, mat: h.mat('bruit', {}, '#6e6a66', ['#7a7672', '#625e5a']), creux: (x, z) => quai(x, z) ? Math.max(0, Math.min(9, (z - rive(x)) * 0.6)) : 0, plafond: BI && sousBis });
       const eau = h.mat('bruit', { lum: 1, rep: [40, 20] }, '#1e3a3a', ['#2a4a48', '#c08a7a', '#16302e']); // la Seine, qui prend le rose du ciel
       boite(h, eau, 1710, 1, 728, 595, WY - 0.5, 626); for (const [x0, x1] of [[-260, 180], [820, 1060]]) boite(h, eau, x1 - x0, 1, 18, (x0 + x1) / 2, WY - 0.5, 255);
       let graine = 1; const al = () => (graine = graine * 16807 % 2147483647) / 2147483647; // hasard propre aux nouveaux placements : ne décale pas rnd
       // ruban le long de la piste dont les bords suivent la largeur locale : fa(s), fb(s) = écarts à l'axe ; à plat, la texture est plaquée en plan (une tuile tous les `tuile` m)
       // ya, yb = hauteurs, nombres ou fonctions (s, k) de l'échantillon et du rang dans le ruban
-      const ruban = (i0, cnt, fa, ya, fb, yb, m) => {
+      const ruban = (i0, cnt, fa, ya, fb, yb, m, R = S) => { // R : le ruban échantillonné (le tracé, ou la bretelle)
         const t = m.userData.tuile || 4, pos = [], uv = [], idx = [], Y = (v, s, k) => typeof v === 'function' ? v(s, k) : v;
         for (let k = 0; k <= cnt; k++) {
-          const s = S[(i0 + k) % N], a = fa(s), b = fb(s), y1 = Y(ya, s, k), y2 = Y(yb, s, k), A = [s.x - s.tz * a, s.y + y1, s.z + s.tx * a], B = [s.x - s.tz * b, s.y + y2, s.z + s.tx * b];
+          const s = R[(i0 + k) % R.length], a = fa(s), b = fb(s), y1 = Y(ya, s, k), y2 = Y(yb, s, k), A = [s.x - s.tz * a, s.y + y1, s.z + s.tx * a], B = [s.x - s.tz * b, s.y + y2, s.z + s.tx * b];
           pos.push(...A, ...B); uv.push(...(ya === yb ? [A[0] / t, A[2] / t, B[0] / t, B[2] / t] : [k * 2 / t, y1 / t, k * 2 / t, y2 / t]));
           if (k < cnt) idx.push(2 * k, 2 * k + 1, 2 * k + 2, 2 * k + 1, 2 * k + 3, 2 * k + 2);
         }
@@ -484,6 +521,7 @@
       const troncs = [], houp = [], mats = [], lant = [], autos = [[], [], [], []], boutiques = [], anneaux = [];
       // trottoirs à bordure de granit, et bande de stationnement en asphalte, par tronçon de même type hors tunnel ; ils suivent la largeur de la chaussée (la place s'élargit)
       const dalle = h.mat('dalles', { side: THREE.DoubleSide }), bordure = h.mat('pierre', { side: THREE.DoubleSide }), bitume = h.mat('bruit', { side: THREE.DoubleSide }, '#45454c', ['#4f4f56', '#3c3c42']);
+      const embr = new Set(); if (BI) for (const [a, b] of [[BI.i0 - 12, BI.i0 + 32], [BI.i1 - 48, BI.i1 + 12]]) for (let i = a; i <= b; i++) embr.add(S[(i + N) % N]);
       for (let i = 0; i < N;) {
         let j = i; const tun = h.zone(i, 1) > 0.5; while (j < N && type[j] === type[i] && (h.zone(j, 1) > 0.5) === tun) j++;
         const t = TYPES[type[i]], gb = t.gare ? 3.2 : 0;
@@ -496,7 +534,7 @@
           for (let k = i; k < j; k++) { const s = S[k]; if (k % 6 === 0) { const [x, z] = bord(s, -1, s.w + 0.8); anneaux.push([x, s.y - 1.1, z, h.across(s) + Math.PI]); }
             if (k % 10 === 5) { const [x, z] = bord(s, 1, s.w + 9), y0 = s.y + hq(s, k - i); troncs.push([x, y0 + 2.6, z]); houp.push([x, y0 + 7.6, z, al() * 6, 1, 0.9, 1]); } }
         } else if (!tun && type[i] !== 'place') for (const sd of [-1, 1]) {
-          const dans = s => !horsPlace(...bord(s, sd, s.w + gb)); // dans le cercle de la place : pas de trottoir, on y roule
+          const dans = s => !horsPlace(...bord(s, sd, s.w + gb)) || sd > 0 && embr.has(s); // dans le cercle de la place : pas de trottoir, on y roule ; ni à droite là où la bretelle des toits part et revient
           ruban(i, j - i, s => sd * (s.w + gb), 0.22, s => dans(s) ? sd * (s.w + gb) : sd * (s.w + t.recul + 0.5), 0.22, dalle); ruban(i, j - i, s => sd * (s.w + gb), 0.22, s => sd * (s.w + gb), s => dans(s) ? 0.22 : -0.6, bordure);
           if (gb) ruban(i, j - i, s => sd * s.w, 0.01, s => sd * (s.w + gb), 0.01, bitume);
         }
@@ -551,6 +589,30 @@
         for (let x = x0 + 10; x < x1 - 8; x += 17.5) { for (let r = 0; r < 3; r++) if (!r || al() < 0.8) { const H = 20 + al() * 6; lots[al() * 3 | 0].push([x + (r ? al() * 4 - 2 : 0), IY + H / 2 - 3, z0 + 16 + r * 24, 0, 17, H + 6, 14]); }
           if ((x - x0) % 35 < 17.5) { troncs.push([x, IY + 2.6, z0 + 5]); houp.push([x, IY + 7.6, z0 + 5, al() * 6, 1, 0.9, 1]); } }
       }
+      // ---- les toits : façades, boutiques, arbres et réverbères retirés là où passe la bretelle ; rampe de béton à parapets depuis la ruelle ; deux immeubles à toit-terrasse
+      // (le premier porte l'épingle, le tremplin est au bord de son toit), la cour pavée entre les deux, fermée par deux maisons, et sa rampe de sortie
+      if (BI) {
+        const beton = h.mat('beton', { side: THREE.DoubleSide }), a = 26, cnt = nb - 50 - a; // parapets et flancs : de l'endroit où la bretelle a quitté la rue à celui où elle la retrouve
+        for (const sd of [-1, 1]) { ruban(a, cnt, () => sd * (wb + 0.15), 0.85, () => sd * (wb + 0.15), 0, beton, BS); ruban(a, cnt, () => sd * (wb + 0.15), 0.85, () => sd * (wb + 0.55), 0.85, bordure, BS); ruban(a, cnt, () => sd * (wb + 0.55), 0.85, () => sd * (wb + 0.55), -14, beton, BS); }
+        // boîte orientée qui englobe les échantillons i0…i1 de la bretelle, alignée sur l'échantillon `axe` ; coupe = +1 ou -1 : sa face avant ou arrière passe juste à cet échantillon (le bord du toit)
+        const obb = (i0, i1, axe, coupe, m = wb + 5) => { const o = BS[axe]; let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
+          for (let j = i0; j <= i1; j++) { const s = BS[j], u = (s.x - o.x) * o.tx + (s.z - o.z) * o.tz, v = (s.x - o.x) * -o.tz + (s.z - o.z) * o.tx; u0 = Math.min(u0, u - m); u1 = Math.max(u1, u + m); v0 = Math.min(v0, v - m); v1 = Math.max(v1, v + m); }
+          if (coupe > 0) u1 = 0.3; else u0 = -0.3;
+          const at = (u, v) => [o.x + o.tx * u - o.tz * v, o.z + o.tz * u + o.tx * v]; return { at, axe, u0, u1, v0, v1, c: at((u0 + u1) / 2, (v0 + v1) / 2), sx: v1 - v0, sz: u1 - u0, ry: h.across(o) }; };
+        const A = obb(tA, lip, lip, 1), B = obb(lip + nf, tB, lip + nf, -1), plats = [], bandeaux = [], terrasses = [], edic = [];
+        // retirés : les immeubles qui mordraient sur la bretelle, sur les deux toits-terrasses ou sur la cour ; les boutiques avec eux ; arbres, réverbères et voitures garées sur son passage
+        const C = obb(lip, lip + nf, lip, -1, 30), sur = (o, x, z, m) => { const q = BS[o.axe], u = (x - q.x) * q.tx + (z - q.z) * q.tz, v = (x - q.x) * -q.tz + (z - q.z) * q.tx; return u > o.u0 - m && u < o.u1 + m && v > o.v0 - m && v < o.v1 + m; };
+        const pres = (x, z, r, j1) => BS.some((s, j) => j > 22 && j < j1 && Math.hypot(s.x - x, s.z - z) < r), gene = (x, z, m) => pres(x, z, wb + 3 + m, nb - 45) || [A, B, C].some(o => sur(o, x, z, m));
+        for (const [L, f] of [...[...lots, ...bas].map(L => [L, p => gene(p[0], p[2], 10)]), [boutiques, p => gene(p[0], p[2], 16)], ...[troncs, houp, mats, lant, ...autos].map(L => [L, p => pres(p[0], p[2], wb + 2, nb - 14) || gene(p[0], p[2], 0)])]) for (let i = L.length; i--;) if (f(L[i])) L.splice(i, 1);
+        for (const o of [A, B]) { plats.push([o.c[0], yT - 0.35 - 13, o.c[1], o.ry, o.sx, 26, o.sz]); bandeaux.push([o.c[0], yT - 0.2, o.c[1], o.ry, o.sx + 0.6, 0.3, o.sz + 0.6]); terrasses.push([o.c[0], yT - 0.19, o.c[1], o.ry, o.sx - 0.4, 0.08, o.sz - 0.4]); } // la terrasse à 15 cm sous la chaussée : pas de scintillement
+        // sur le premier toit, loin de la chaussée : édicules d'escalier
+        for (const [fu, fv] of [[0.5, 0.5], [0.2, 0.25], [0.15, 0.8], [0.8, 0.12], [0.75, 0.85], [0.5, 0.08]]) { const [x, z] = A.at(A.u0 + fu * A.sz, A.v0 + fv * A.sx);
+          if (BS.every(s => Math.hypot(s.x - x, s.z - z) > wb + 5)) edic.push([x, yT + 1.5, z, A.ry, 4.5, 3, 3.5]); }
+        inst(h, h.geo('bloc'), fm[1], plats); inst(h, h.geo('bloc'), h.mat('pierre'), bandeaux); inst(h, h.geo('bloc'), dalle, terrasses); inst(h, h.geo('bloc'), h.mat('brique'), edic);
+        // la cour : dalle pavée au niveau du fond de la fosse, et une maison de chaque côté pour la fermer
+        { const o = BS[lip + (nf >> 1)], yc = BS[lip + 3].y, L = nf * 2 + 1.2; inst(h, h.geo('bloc'), paves, [[o.x, yc - 0.52, o.z, h.across(o), 64, 1, L]]);
+          for (const sd of [-1, 1]) bas[sd > 0 ? 0 : 1].push([o.x - o.tz * sd * 40, yT + 3 - 15, o.z + o.tx * sd * 40, h.across(o), 16, 30, L + 6]); }
+      }
       const cube = h.geo('bloc');
       lots.forEach((l, i) => inst(h, cube, fm[i], l)); bas.forEach((l, i) => inst(h, cube, fb[i], l));
       // les combles : corniche de pierre, brisis de zinc à lucarnes, souches de cheminée en brique (le haut des façades ne montre plus de fenêtres)
@@ -590,10 +652,10 @@
         // la tête du tunnel sous le pont : mur de pierre percé, arc de décharge à claveaux, plaque du souterrain (comme les trémies des voies sur berge)
         h.pose('teteTunnelParis', { pierre: h.mat('pierre'), claveau: h.mat('pierre', {}, '#a89878'), plaque: h.mat('ecrit', {}, 128, 16, '#1d2f6f', '#f4f0e0', 'SOUTERRAIN DES QUAIS', 13) }, gp, [0, 0, 0], WY - s.y); }
       // le dôme blanc en haut de la butte
-      const craie = h.mat('craie'), yb = g.hAt(935, -598);
-      h.pose('basilique', { craie }, h.scene, [935, yb, -598]);
-      h.pose('dome', craie, h.scene, [935, yb + 24, -596], 13, 8, 5).scale.y = 1.5;
-      for (const sx of [-15, 15]) h.pose('dome', craie, h.scene, [935 + sx, yb + 24, -588], 5, 6, 4).scale.y = 1.5;
+      const craie = h.mat('craie'), BX = BI ? 880 : 935, BZ = BI ? -625 : -598, yb = g.hAt(BX, BZ); // décalé de 60 m vers l'ouest : l'épingle des toits passe là où il se dressait
+      h.pose('basilique', { craie }, h.scene, [BX, yb, BZ]);
+      h.pose('dome', craie, h.scene, [BX, yb + 24, BZ + 2], 13, 8, 5).scale.y = 1.5;
+      for (const sx of [-15, 15]) h.pose('dome', craie, h.scene, [BX + sx, yb + 24, BZ + 10], 5, 6, 4).scale.y = 1.5;
       return null;
     },
 
