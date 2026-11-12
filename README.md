@@ -111,7 +111,7 @@ puis ouvrir http://localhost:8123/.
 | F | fantôme du contre-la-montre : bronze, argent, or, aucun, son propre record (au menu et en piste) |
 | L | copier le lien de défi du dernier tour bouclé (contre-la-montre) |
 | Échap ou P | menu pause (reprendre, recommencer, boîte, radio, musique, fantôme, lien de défi, quitter) |
-| R | recommencer |
+| R | recommencer (en solo ; à deux : RECOMMENCER dans le menu de pause) |
 | Manette | stick ou croix : volant et menus · ZR ou B : gaz · ZL ou Y : frein · A : glisse · X : nitro · clic du stick : radio · L / R : rapports · − : boîte manuelle / automatique · + : pause · B : valider |
 | À deux, clavier de gauche | ZQSD : accélérer, freiner, tourner · Espace : frein à main · X : nitro · A / E : rapports · G : boîte automatique / manuelle |
 | À deux, clavier de droite | ↑ ↓ ← → : accélérer, freiner, tourner · Maj droite : frein à main · la touche à gauche de Maj droite (« ! » en AZERTY, « / » en QWERTY) ou Entrée du pavé numérique : nitro · boîte automatique seulement |

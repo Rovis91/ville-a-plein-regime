@@ -479,6 +479,7 @@
     if (duo !== VX.length > 1) { if (duo) { VX[1] = voixPan(-PANJ); VX[2] = voixPan(PANJ); } else { for (let i = 1; i < 3; i++) { tait(VX[i], t); for (const s of VX[i].src) s.stop(t + 0.3); } VX.length = 1; } }
     if (duo) tait(VX[0], t);
     for (let i = 0, n = duo ? 2 : 1; i < n; i++) { const j = L[i], v = VX[duo ? i + 1 : 0], c = j.car, { rpm, load } = j;
+      if (j.muet) { tait(v, t); continue; } // pas la voiture de ce joueur, ou déjà entendue de l'autre côté : sa voix se tait mais reste en place (ni coupure ni recréation)
       // moteur (discret sous la musique) : coupure au passage de rapport, timbre selon la charge, turbo, pétarades au lever de pied
       if (j.up || j.down) (c.manual ? levier : clac)(j.down, t, v.mot); // boîte manuelle : le levier ; automatique : la transmission
       const f = rpm * CARD.red / 40 * CARD.son; // la moitié de la fréquence d'allumage d'un 6 cylindres (3 explosions par tour) : même montée en régime, une octave plus grave
