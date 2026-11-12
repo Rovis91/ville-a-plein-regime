@@ -35,13 +35,18 @@
   const pente = (s, d) => { const x = s.rc ? tube(s, d) : 0; return x > 0 ? Math.sign(d) * x / Math.sqrt(s.rc * s.rc - x * x) : 0; };
   // Sol sous la voiture : altitude du ruban, continue d'un échantillon au suivant (k = décalage en échantillons, pour la caméra), plus la paroi
   function sol(T, c, k = 0) {
-    const S = T.S, N = T.n; let i = c.idx, a = S[i], b = S[(i + 1) % N], u = ((c.x - a.x) * (b.x - a.x) + (c.z - a.z) * (b.z - a.z)) / ((b.x - a.x) ** 2 + (b.z - a.z) ** 2 || 1);
-    if (u < 0) { i = (i - 1 + N) % N; u = Math.max(0, u + 1); } u = Math.min(1, u); a = S[(i + k + N) % N]; b = S[(i + k + 1 + N) % N];
-    return a.y + (b.y - a.y) * u + paroi(S[c.idx], c.d);
+    const B = c.bis && T.bis, S = B ? B.S : T.S, N = B ? B.n : T.n, at = j => S[B ? clamp(j, 0, N - 1) : (j + N) % N]; let i = B ? c.ib : c.idx, a = S[i], b = at(i + 1), u = ((c.x - a.x) * (b.x - a.x) + (c.z - a.z) * (b.z - a.z)) / ((b.x - a.x) ** 2 + (b.z - a.z) ** 2 || 1);
+    if (u < 0) { i = B ? Math.max(0, i - 1) : (i - 1 + N) % N; u = Math.max(0, u + 1); } u = Math.min(1, u); a = at(i + k); b = at(i + k + 1);
+    return a.y + (b.y - a.y) * u + paroi(ici(T, c), c.d);
   }
 
-  function buildTrack(THREE) {
-    const curve = new THREE.CatmullRomCurve3(PTS.map((p, i) => new THREE.Vector3(p[0], HGT[i], p[1])), true, 'centripetal');
+  // Bretelle (M.bis) : un second ruban, ouvert, qui quitte le tracé au point `de` et le rejoint au point `a` ; elle s'y raccorde en le longeant sur LEAD échantillons à chaque bout.
+  //   La voiture qui y roule a c.bis et son indice c.ib ; c.idx reste un indice du tracé principal, interpolé du départ au retour (caméra, lumières, HUD, son, classement n'en savent rien).
+  //   Le relief y joue toujours (c'est par là qu'on saute de toit en toit), même si la carte n'en déclare pas pour son tracé.
+  const LEAD = 10, ici = (T, c) => c.bis ? T.bis.S[c.ib] : T.S[c.idx]; // ici : l'échantillon du ruban sur lequel roule la voiture
+  // échantillonnage d'un ruban, un point tous les 2 m : pts = [x, altitude, z], fermé (le tracé) ou ouvert (la bretelle)
+  function ruban(THREE, pts, ferme) {
+    const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(p[0], p[1], p[2])), ferme, 'centripetal');
     curve.arcLengthDivisions = 4000;
     const len = curve.getLength(), n = Math.round(len / 2), P = curve.getSpacedPoints(n), S = [];
     for (let i = 0; i < n; i++) {
@@ -49,9 +54,22 @@
       S.push({ x: p.x, y: p.y, z: p.z, tx: dx / l, tz: dz / l, k: 0, sl: (q.y - p.y) / l, dl: 0, kl: 0 }); // sl = pente ; dl, kl = écart au centre et courbure de la trajectoire du pilote automatique
     }
     // courbure signée (>0 = virage à droite), lissée sur ±3 échantillons
-    S.forEach((s, i) => { const a = S[(i - 3 + n) % n], b = S[(i + 3) % n]; s.k = s.kl = (a.tx * b.tz - a.tz * b.tx) / (6 * len / n); });
+    const v = ferme ? i => S[(i + n) % n] : i => S[clamp(i, 0, n - 1)];
+    S.forEach((s, i) => { const a = v(i - 3), b = v(i + 3); s.k = s.kl = (a.tx * b.tz - a.tz * b.tx) / (6 * len / n); });
+    return { S, n, len };
+  }
+  // sauts : [[point, longueur, hauteur, fosse, profondeur], …] : un tremplin qui monte en parabole et finit net au point ; derrière, une fosse (facultative) dont on ressort par 16 m de rampe : saut raté = temps perdu, jamais bloqué
+  function sauts(S, n, liste, at) {
+    for (const [p, L, h, F = 0, P = 0] of liste || []) { const i0 = at(p), nl = Math.round(L / 2), nf = Math.round(F / 2);
+      for (let k = 1; k <= nl; k++) S[(i0 - nl + k + n) % n].y += h * (k / nl) ** 2;
+      for (let k = 1; k <= nf; k++) S[(i0 + k) % n].y -= P * Math.min(1, (nf - k) / 8); }
+  }
+  const proche = (S, x, z) => { let b = 0, bd = 1e9; S.forEach((s, i) => { const d = (s.x - x) ** 2 + (s.z - z) ** 2; if (d < bd) { bd = d; b = i; } }); return b; };
+
+  function buildTrack(THREE) {
+    const { S, n, len } = ruban(THREE, PTS.map((p, i) => [p[0], HGT[i], p[1]]), true);
     KT.w1 = KT.vref / (KT.large * (1 / Math.max(...S.map(s => Math.abs(s.k))) + W)); KT.w0 = 1.6 * KT.w1;
-    const near = p => { let b = 0, bd = 1e9; S.forEach((s, i) => { const d = (s.x - p[0]) ** 2 + (s.z - p[1]) ** 2; if (d < bd) { bd = d; b = i; } }); return b; };
+    const near = p => proche(S, p[0], p[1]);
     const at = i => near(PTS[i]), TUN = M.tun || [0, 0];
     // largeur variable : M.large = [[a, b, w], …] demi-largeur w entre les points a et b, raccordée sur 60 m de part et d'autre ; ailleurs W (s.w = demi-largeur à l'échantillon)
     S.forEach(s => s.w = W);
@@ -59,10 +77,7 @@
     // murs roulables : M.cuv = [[a, b, largeur, rayon], …] ajoute de chaque côté du plat, entre les points a et b, un quart de tube qui s'ouvre sur 40 m (s.pl = demi-largeur du plat, s.rc = rayon du tube)
     S.forEach(s => { s.pl = s.w; s.rc = 0; });
     for (const [a, b, B, R] of M.cuv || []) { const i0 = at(a), l = (at(b) - i0 + n) % n; for (let k = 0; k <= l; k++) { const f = Math.min(1, k / 20, (l - k) / 20), s = S[(i0 + k) % n]; s.rc = R; s.w = W + B * f * f * (3 - 2 * f); } }
-    // sauts : M.sauts = [[point, longueur, hauteur, fosse, profondeur], …] : un tremplin qui monte en parabole et finit net au point ; derrière, une fosse (facultative) dont on ressort par 16 m de rampe : saut raté = temps perdu, jamais bloqué
-    for (const [p, L, h, F = 0, P = 0] of M.sauts || []) { const i0 = at(p), nl = Math.round(L / 2), nf = Math.round(F / 2);
-      for (let k = 1; k <= nl; k++) S[(i0 - nl + k + n) % n].y += h * (k / nl) ** 2;
-      for (let k = 1; k <= nf; k++) S[(i0 + k) % n].y -= P * Math.min(1, (nf - k) / 8); }
+    sauts(S, n, M.sauts, at);
     const vert = !!(M.sauts || M.cuv);
     if (vert) S.forEach((s, i) => { const b = S[(i + 1) % n]; s.sl = (b.y - s.y) / Math.hypot(b.x - s.x, b.z - s.z); });
     // la trajectoire du pilote automatique est la ligne de moindre courbure qui tient dans la route, à 2,1 m des murs (ou du pied des parois : elle reste sur le plat), quelle que soit la largeur (extérieur, corde, extérieur).
@@ -83,8 +98,15 @@
     const pz = Array.isArray(M.th.pluie) ? M.th.pluie.map(([a, b, f]) => [span(at(a), at(b), 60), f]) : null, tz = span(t0, t1, 20);
     const pluie = Float32Array.from(S, (_, i) => pz ? Math.max(0, ...pz.map(([z, f]) => z(i) * f)) : M.th.pluie ? 1 : 0);
     const eau = pluie.map((p, i) => clamp((p - 1) / 2, 0, 1) * (M.tun ? 1 - tz(i) : 1));
+    // bretelle : M.bis = { de, a, w, pts: [[x, z, altitude], …], sauts } ; ses sauts désignent ses propres points. i0, i1 = où elle quitte et rejoint le tracé ; a0, na = l'arc du tracé (début, longueur) sur lequel c.idx est interpolé
+    let bis = null;
+    if (M.bis) { const D = M.bis, i0 = at(D.de), i1 = at(D.a), m = i => { const s = S[(i + n) % n]; return [s.x, s.y, s.z]; }, q = D.pts.map(p => [p[0] * SC, p[2], p[1] * SC]);
+      bis = Object.assign(ruban(THREE, [m(i0 - LEAD), m(i0), ...q, m(i1), m(i1 + LEAD)], false), { i0, i1, a0: (i0 - LEAD + n) % n, na: (i1 - i0 + 2 * LEAD + n) % n });
+      bis.S.forEach(s => { s.w = s.pl = D.w || W; s.rc = 0; });
+      sauts(bis.S, bis.n, D.sauts, p => proche(bis.S, q[p][0], q[p][2]));
+      bis.S.forEach((s, i) => { const b = bis.S[i + 1]; if (b) s.sl = (b.y - s.y) / Math.hypot(b.x - s.x, b.z - s.z); }); }
     // tun : la carte a un tunnel, de t0 à t1 ; h0-h1 : secteur « chaud » pour la musique ; sp : les deux temps intermédiaires (indices d'échantillons)
-    return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, eau, vert };
+    return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, eau, vert, bis };
   }
 
   function newCar(T) {
@@ -92,6 +114,7 @@
     return { x: s.x, z: s.z, th: Math.atan2(s.tz, s.tx), vx: 0, vz: 0, steer: 0, yaw: 0, idx: i, dist: -8, d: 0, hit: 0, vf: 0, vl: 0,
       drift: false, slide: 0, driftT: 0, dd: 0, sa: 0, boost: 0, stun: 0, nDrift: 0, nBoost: 0, nWall: 0, combo: 0, comboMax: 0, // n… : bilan de glisse (glisses, boosts, chocs mur, boosts enchaînés sans choc)
       manual: false, gear: 0, lastGear: 0, shiftT: 0, rpm: CARD.idle,
+      bis: false, ib: 0, // bretelle : la voiture y roule, son indice sur ce ruban
       y: s.y, vy: 0, air: false, airT: 0, land: 0 }; // relief : hauteur, vitesse verticale, en l'air, durée du vol en cours, vitesse d'impact à la réception (un seul pas)
   }
 
@@ -156,7 +179,7 @@
     if (c.boost > 0) { c.boost -= dt; if (inp.gas) acc += 6; }
     if (c.stun > 0) { c.stun -= dt; if (acc > 0) acc *= 0.2; }
     vf += acc * dt;
-    const s0 = S[c.idx]; if (Math.abs(vf) > 1) vf -= 9.81 * s0.sl * (fx * s0.tx + fz * s0.tz) * dt; // la pente pousse ou retient
+    const s0 = ici(T, c); if (Math.abs(vf) > 1) vf -= 9.81 * s0.sl * (fx * s0.tx + fz * s0.tz) * dt; // la pente pousse ou retient
     if (inp.brake) vf -= (vf > 0.5 ? 18 : 12) * (1 - PL.frein * m) * inp.brake * dt;
     if (vf < -12) vf = -12;
     // traînée aérodynamique (½·ρ·Cd·A·v²), résistance au roulement, et un peu de vitesse perdue en tournant
@@ -177,18 +200,46 @@
     if (inp.gas) c.rpm += (CARD.red - c.rpm) * Math.min(1, dt * 6);
   }
 
+  // Là où les deux rubans se recouvrent (les ZB premiers et derniers échantillons de la bretelle), on passe de l'un à l'autre en sortant du premier : il n'y a de mur que hors des deux.
+  // Rend vrai si la voiture, sortie de son ruban, tient dans l'autre ; elle y est alors.
+  const ZB = 60;
+  function bascule(c, T) {
+    const B = T.bis, n = T.n, dans = (S, i) => { const s = S[i]; return Math.abs((c.x - s.x) * -s.tz + (c.z - s.z) * s.tx) <= s.w - 1.1; };
+    let b = 0, bd = 1e9; const vu = (S, i) => { const s = S[i], d = (s.x - c.x) ** 2 + (s.z - c.z) ** 2; if (d < bd) { bd = d; b = i; } };
+    if (c.bis) {
+      const fin = c.ib > B.n / 2; if (c.ib >= ZB && c.ib < B.n - ZB) return false;
+      for (let j = -ZB; j <= ZB; j++) vu(T.S, ((fin ? B.i1 : B.i0) + j + n) % n);
+      if (!dans(T.S, b)) return false;
+      c.bis = false; c.dist += ((b - c.idx + n + n / 2) % n) - n / 2; c.idx = b; return true;
+    }
+    const k0 = (c.idx - B.i0 + n + 20) % n < ZB + 20, k1 = (c.idx - B.i1 + n + ZB) % n < ZB + 20; if (!k0 && !k1) return false;
+    for (let j = 0; j < ZB; j++) vu(B.S, k0 ? j : B.n - 1 - j);
+    if (!dans(B.S, b)) return false;
+    c.bis = true; c.ib = b; return true;
+  }
+
   function step(c, inp, T, dt) {
-    const S = T.S, n = T.n;
+    const n = T.n; let B = c.bis && T.bis, S = B ? B.S : T.S;
     if (c.air) vole(c, inp, dt); else roule(c, inp, T, dt);
     // position sur la piste + murs (impossible de couper : un tour bouclé est toujours valide)
-    let b = c.idx, bd = 1e9;
-    // sur la place on coupe où l'on veut : on cherche l'échantillon le plus proche bien plus loin devant
-    for (let j = -6, jm = dansPlace(c.x, c.z) ? 250 : 14; j <= jm; j++) { const i = (c.idx + j + n) % n, s = S[i], d = (s.x - c.x) ** 2 + (s.z - c.z) ** 2; if (d < bd) { bd = d; b = i; } }
-    c.dist += ((b - c.idx + n + n / 2) % n) - n / 2;
-    c.idx = b;
-    const s = S[b], nx = -s.tz, nz = s.tx, L = s.w - 1.1;
-    c.d = (c.x - s.x) * nx + (c.z - s.z) * nz; c.hit = 0; c.rub = 0; c.wallT = (c.wallT || 0) - dt;
-    const o = Math.abs(c.d) - L, P = M.place, pr = P ? Math.hypot(c.x - P.c[0], c.z - P.c[1]) - (P.r - 1.1) : Infinity; // pr > 0 : hors du cercle de la place
+    let b, s, nx, nz, o;
+    const pose = () => {
+      let bd = 1e9; b = B ? c.ib : c.idx;
+      if (B) { for (let j = Math.max(0, c.ib - 6), jm = Math.min(B.n - 1, c.ib + 14); j <= jm; j++) { const s = S[j], d = (s.x - c.x) ** 2 + (s.z - c.z) ** 2; if (d < bd) { bd = d; b = j; } }
+        c.ib = b; const i = (B.a0 + Math.round(b * B.na / B.n)) % n; c.dist += ((i - c.idx + n + n / 2) % n) - n / 2; c.idx = i; }
+      else {
+        // sur la place on coupe où l'on veut : on cherche l'échantillon le plus proche bien plus loin devant
+        for (let j = -6, jm = dansPlace(c.x, c.z) ? 250 : 14; j <= jm; j++) { const i = (c.idx + j + n) % n, s = S[i], d = (s.x - c.x) ** 2 + (s.z - c.z) ** 2; if (d < bd) { bd = d; b = i; } }
+        c.dist += ((b - c.idx + n + n / 2) % n) - n / 2;
+        c.idx = b;
+      }
+      s = S[b]; nx = -s.tz; nz = s.tx;
+      c.d = (c.x - s.x) * nx + (c.z - s.z) * nz; o = Math.abs(c.d) - (s.w - 1.1);
+    };
+    pose(); c.hit = 0; c.rub = 0; c.wallT = (c.wallT || 0) - dt;
+    // bretelle : arrivée au bout (ou ressortie par l'entrée), la voiture est rendue au tracé ; sortie de son ruban là où l'autre passe, elle change de ruban
+    if (T.bis && (B && (b >= B.n - 2 || !b && (c.x - s.x) * s.tx + (c.z - s.z) * s.tz < 0) ? (c.bis = false, c.idx = (b ? B.i1 + LEAD : B.a0) % n, true) : o > 0 && bascule(c, T))) { B = c.bis && T.bis; S = B ? B.S : T.S; pose(); }
+    const L = s.w - 1.1, P = M.place, pr = P ? Math.hypot(c.x - P.c[0], c.z - P.c[1]) - (P.r - 1.1) : Infinity; // pr > 0 : hors du cercle de la place
     if (o > 0 && pr > 0) { // hors de la chaussée et hors de la place : le mur le plus proche
       if (pr < o) { const dx = (c.x - P.c[0]) / (pr + P.r - 1.1), dz = (c.z - P.c[1]) / (pr + P.r - 1.1), t = c.vx * -dz + c.vz * dx > 0 ? 1 : -1; mur(c, dx, dz, pr, -dz * t, dx * t, -t, 1 / P.r, dt); }
       else { const sg = Math.sign(c.d); c.d = sg * L; mur(c, nx * sg, nz * sg, o, s.tx, s.tz, sg, -s.k * sg, dt); }
@@ -205,8 +256,8 @@
     }
     // relief : chute libre, sauf si le sol est là
     const g = sol(T, c);
-    if (!T.vert) { c.y = g; return; }
-    const vy = c.vy - GRAV * dt, y = c.y + vy * dt, sg = (c.x - s.x) * s.tx + (c.z - s.z) * s.tz < 0 ? S[(b - 1 + n) % n] : s, vg = sg.sl * (c.vx * sg.tx + c.vz * sg.tz); c.land = 0; // sg : le tronçon de ruban sous la voiture ; vg : la vitesse verticale que sa pente donne à la voiture (la paroi n'y compte pas : y monter ne lance pas en l'air)
+    if (!T.vert && !B) { c.y = g; if (c.airT) { c.air = false; c.airT = c.vy = 0; } return; } // (revenu de la bretelle en plein vol sur un tracé sans relief : posé)
+    const vy = c.vy - GRAV * dt, y = c.y + vy * dt, sg = (c.x - s.x) * s.tx + (c.z - s.z) * s.tz < 0 ? S[B ? Math.max(0, b - 1) : (b - 1 + n) % n] : s, vg = sg.sl * (c.vx * sg.tx + c.vz * sg.tz); c.land = 0; // sg : le tronçon de ruban sous la voiture ; vg : la vitesse verticale que sa pente donne à la voiture (la paroi n'y compte pas : y monter ne lance pas en l'air)
     const p = pente(s, c.d);
     if (y > g && (c.airT || !p)) { c.y = y; c.vy = vy; c.air = y - g > DROOP; return; } // (sur une paroi on ne décolle pas : la vitesse y plaque la voiture, elle suit la surface)
     if (c.airT) { c.land = vg - vy; const k = 1 - clamp((c.land - LAND0) * LANDK, 0, LANDX); c.vx *= k; c.vz *= k; c.airT = 0; }
@@ -219,7 +270,7 @@
   // Pilote automatique : sert au test node, au mode ?auto, à ramener la voiture après l'arrivée, et aux adversaires en course.
   // lvl = niveau du pilote (1 = tour propre de référence ; plus bas = moins de gaz et virages plus lents).
   // others = voitures à éviter : il se décale pour doubler une voiture plus lente, ne se rabat pas tant qu'elle est à sa hauteur, et freine s'il est bloqué derrière.
-  function autopilot(c, T, lvl = 1, others = []) {
+  function autopilot(c, T, lvl = 1, others = [], bis = false) {
     const S = T.S, n = T.n, sp = Math.hypot(c.vx, c.vz), look = 3 + Math.floor(sp * 0.1);
     let off = 0, vcap = 1e9, best = 1e9;
     for (const o of others) {
@@ -234,14 +285,17 @@
       // serré contre le mur à sa hauteur : céder ; bloqué derrière elle : freiner à temps et régler sa vitesse sur la sienne
       vcap = g > 0 && Math.abs(want) > 5.5 ? so * 0.9 : g > 0 && Math.abs(c.d - o.d) < 2.4 && g * 2 - 7 < (sp * sp - so * so) / 28 ? so : 1e9;
     }
-    const la = S[(c.idx + look) % n];
+    // bretelle : le pilote l'ignore, sauf si on le lui demande (bis : essais et captures) ; s'il s'y retrouve quand même, il en suit l'axe. jb = son indice sur la bretelle, -1 sur le tracé
+    const B = T.bis, ja = B ? (c.idx - B.a0 + n) % n : 0, jb = !B ? -1 : c.bis ? c.ib : bis && ja < 60 ? ja : -1;
+    const at = jb < 0 ? j => S[(c.idx + j) % n] : j => jb + j < B.n ? B.S[jb + j] : S[(B.i1 + LEAD + jb + j - B.n) % n]; // au bout de la bretelle, le tracé reprend
+    const la = at(look); const BISG = 0.8; // sur la bretelle il suit l'axe, sans trajectoire calculée : il garde de la marge de braquage
     const e = wrap(Math.atan2(la.z + la.tx * (off || la.dl) - c.z, la.x - la.tz * (off || la.dl) - c.x) - c.th);
     let va = 1e9;
     // vitesse permise = celle de chaque virage de la trajectoire à venir, plus ce qu'on peut perdre en freinant d'ici là (10 m/s², 2 m par échantillon)
     // sous la pluie : virages au lacet mouillé, sans dépasser le seuil d'aquaplaning là où il ne passerait plus, et freinage plus long
     const fr = 40 * (1 - PL.frein * eau(T, c.idx));
     for (let j = 0; j < 200; j++) {
-      const i = (c.idx + j) % n, m = eau(T, i), k = Math.abs(S[i].kl) + 1e-4, g = 1.3 * (1 - PL.vir * m), vq = PL.vaq - PL.dvaq * m;
+      const i = (c.idx + j) % n, m = eau(T, i), k = Math.abs(at(j).kl) + 1e-4, g = (jb < 0 ? 1.3 : BISG) * (1 - PL.vir * m), vq = PL.vaq - PL.dvaq * m;
       let v = vturn(g, k); if (m && v > vq) v = Math.max(vq, vturn(g * (1 - PL.aq * m) * 0.7, k)); // au-delà du seuil d'aquaplaning, avec de la marge : la voiture y chasse
       va = Math.min(va, Math.sqrt(v ** 2 + fr * j));
     }
@@ -337,5 +391,5 @@
     }
   }
 
-  Object.assign(G, { sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, PL });
+  Object.assign(G, { sol, ici, ZB, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, PL });
 })(typeof window !== 'undefined' ? window : globalThis);
