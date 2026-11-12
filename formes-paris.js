@@ -24,8 +24,8 @@
       const arche = (xa, xb, ys) => { const r = (xb - xa) / 2, m = (xa + xb) / 2; for (const a of [0.3, 0.6, 0.9, 1.2]) { const e = r * (1 - Math.cos(a)), y = ys + (12 - ys) * Math.sin(a) ** 0.8; B.push(...paire(sd => ['pierre', e, 12 - y, D, m + sd * (r - e / 2), (y + 12) / 2, Z])); } };
       arche(-11, 8.5, 7); // par-dessus la voie sur berge
       for (let x = -14, k = 0; x > -L; x -= 42, k++) {
-        B.push(['pierre', 6, 7 - y0 + 2, D, x, (7 + y0 - 2) / 2, Z, null, 1], ...paire(sz => ['pierre', 4.2, 7 - y0 + 2, 4.2, x, (7 + y0 - 2) / 2, Z + sz * (D / 2 + 1.4), [0, 0.785, 0]]));
-        if (x - 42 > -L) arche(x - 39, x - 3, 7);
+        B.push(['pierre', 6, 12 - y0 + 2, D, x, (12 + y0 - 2) / 2, Z, null, 1], ...paire(sz => ['pierre', 4.2, 7 - y0 + 2, 4.2, x, (7 + y0 - 2) / 2, Z + sz * (D / 2 + 1.4), [0, 0.785, 0]])); // pile jusqu'au tablier, avant-becs
+        if (x - 42 > -L) arche(x - 39, x - 3, 7); else B.push(['pierre', 26, 13.5 - y0, D, -L - 4, (13.5 + y0) / 2, Z, null, 1]); // culée de l'autre rive
         B.push(...paire(sz => ['fer', 0.3, 5, 0.3, x, 16.5, Z + sz * (D / 2 - 0.3)]), ...paire(sz => ['lampe', 0.7, 0.8, 0.7, x, 19.2, Z + sz * (D / 2 - 0.3)]));
       }
       return B;
@@ -57,6 +57,13 @@
       [[3, 8], [2.2, 10], [1.5, 12], [0.9, 14], [0.4, 12]].reduce((y, [w, hh]) => { B.push(['plomb', w, hh, w, 5, y + hh / 2, 0]); return y + hh; }, 41);
       return B;
     },
+    // rive du fleuve, longue dans l'axe X : mur de quai de l'eau (y0) au sol (y1) ; zones : quai, sol
+    rive: (L, D, y0, y1) => [['quai', L, y1 - y0, D, 0, (y0 + y1) / 2, 0, null, 1], ['sol', L, 0.1, D, 0, y1 + 0.05, 0]],
+    // tête de tunnel en pierre sous le pont, dans le repère de la route au portail (X en travers, Z vers l'arrière) : mur percé d'une ouverture de 17 × 8 m
+    // à l'arrière du pont, arc de décharge à onze claveaux, plaque ; y0 = niveau de l'eau. Zones : pierre, claveau, plaque
+    teteTunnelParis: y0 => { const B = [['pierre', 8.5, 12 - y0, 1, -12.75, (12 + y0) / 2, 2.4], ['pierre', 17, 4, 1, 0, 10, 2.4], ['claveau', 18.4, 0.6, 1.6, 0, 7.7, 2.6]], R = 17.9, cy = 9.6 - R;
+      for (let k = 0; k < 11; k++) { const a = (k / 10 - 0.5) * 1.09; B.push(['claveau', 1.75, 1.3, 0.8, Math.sin(a) * (R + 0.65), cy + Math.cos(a) * (R + 0.65), 3.2, [0, 0, -a]]); }
+      B.push(['plaque', 11, 1.2, 0.15, 0, 11.4, 3.0]); return B; },
     // arc de triomphe : 45 m de large (X), 22 de profondeur (Z), 50 de haut. Grande arche de 14,6 m sous 29 m dans l'axe Z, arches latérales de 8,4 m sous 18,7 m dans l'axe X ;
     // quatre piles à socle et groupes sculptés, voûtes en gradins, corniche, frise, attique à écussons. Zones : pierre, relief (parties sculptées)
     arc: () => {
