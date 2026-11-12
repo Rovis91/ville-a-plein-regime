@@ -2,6 +2,10 @@
 // Plan du fichier (chercher « // ---------- ») : rendu et passe finale · les trois entités du décor (textures.js, formes.js, placement) · piste · ville · horizon · voiture et effets ·
 // état de jeu et commandes · HUD · boucle. Voir README.md pour savoir où régler quoi.
 (() => {
+  // Changer de carte ne recharge pas la page : sim.js et ce fichier sont rejoués (voir menuAct). La carte précédente s'arrête ici ; son décor n'est libéré
+  // qu'après la première image de la nouvelle, pour que les shaders compilés resservent (les compiler était l'essentiel de l'attente).
+  let avant = window.__g; if (avant && avant.fin) avant.fin();
+  const arret = new AbortController(), addEventListener = (ev, f) => window.addEventListener(ev, f, { signal: arret.signal }); // tous les écouteurs de ce fichier tombent d'un coup à l'arrêt
   const T = buildTrack(THREE), S = T.S, N = T.n, W = T.W, V3 = THREE.Vector3, M = CARTE, TH = M.th; // carte active et son thème : voir cartes.js
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
@@ -70,7 +74,7 @@
     paris: [0x100c14, 0x4a3a5a, 0xd89a70, 0xfff0d8, 0xe83a30], canal: [0x0c0a12, 0x5a2a4a, 0xf08a50, 0xfff0c0, 0xff3a40], barrage: [0x0a1420, 0x2a5a8a, 0x6cb04c, 0xf4f6fa, 0xe8482a] }[M.id];
 
   // ---------- rendu basse définition : scène → cible 270p → passe finale (flou de vitesse, HUD, scanlines) ----------
-  const renderer = new THREE.WebGLRenderer({ antialias: false });
+  const renderer = window.__rendu || (window.__rendu = new THREE.WebGLRenderer({ antialias: false })); // un seul pour toute la session : il garde les shaders d'une carte à l'autre
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.BasicShadowMap;
   document.body.prepend(renderer.domElement);
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(70, 1, 0.5, 3000);
@@ -189,7 +193,7 @@
 
   // ciel en bandes (nuit, aube ou couchant selon la carte), étoiles, lune ou soleil
   const skyMat = mat('ciel', { lum: 1, side: THREE.BackSide, fog: false, net: 1 }, TH.sky, TH.stars);
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(2500, 16, 12), skyMat); scene.add(sky);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(2500, 16, 12), skyMat); sky.userData.dyn = 1; scene.add(sky);
   const SD = new V3(...TH.astre.dir).normalize();
   const sunDisc = new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, map: tx('astre', TH.astre.col, TH.astre.ombre) }));
   sunDisc.scale.set(TH.astre.taille, TH.astre.taille, 1); scene.add(sunDisc);
@@ -466,7 +470,7 @@
   splash.frustumCulled = false; scene.add(splash);
 
   // ---------- voiture : géométrie dans formes-voitures.js, livrée dans textures-voitures.js ; ici le placement, les roues qui tournent et braquent, les feux stop, le roulis ----------
-  const carG = new THREE.Group(), body = new THREE.Group(); carG.add(body); scene.add(carG);
+  const carG = new THREE.Group(), body = new THREE.Group(); carG.add(body); carG.userData.dyn = 1; scene.add(carG); // dyn : ne pas fondre dans le décor fixe (voir « fusion »)
   const L = CARD.look, K = { MAZDA: 'fd', TOYOTA: 'a80', RENAULT: 'r5', DODGE: 'gts' }[CARD.nom.split(' ')[0]] || 'gtr'; // shortcut: déduit du nom, à remplacer par un champ look.type si cartes.js en gagne un
   const VO = FORMES.voiture(K), livree = col => mat('livree', { gloss: 0.9 }, VO.plan, col, L.bandes || 0); // une livrée par teinte : celle du joueur, une par adversaire
   const carMat = livree(L.col), brakeMat = new THREE.MeshBasicMaterial({ color: 0x8a1020 }), lampMat = new THREE.MeshBasicMaterial({ color: 0xfff2d0 });
@@ -551,6 +555,52 @@
     g.traverse(o => { if (o.material === carMat) o.material = m; else if (o.material === brakeMat) o.material = b; });
     g.visible = false; g.userData.y = 0; scene.add(g); return g;
   });
+
+  // ---------- fusion du décor fixe : une passe de dessin par matière, au lieu d'une par objet ----------
+  // Tout maillage simple, opaque et immobile est fondu avec ceux de la même matière (mêmes ombres) en une seule géométrie, en coordonnées du monde : l'image est la même,
+  // mais la ville passe de 950 passes de dessin à 150. Ce qui bouge, ou s'affiche et se cache, doit porter userData.dyn = 1 (lui ou un parent) :
+  // ciel, voitures, bateaux, grande roue, dirigeable… Contrôle après avoir ajouté un décor animé : (await import('./outils/perf.js')).mobiles() doit ne rien lister.
+  {
+    const PAVE = 500, GROS = 30000, lots = new Map(), NM = new THREE.Matrix3(), v = new V3(), cand = [];
+    const fixe = o => { for (let p = o; p; p = p.parent) if (p.userData.dyn || !p.visible) return false; return true; };
+    scene.updateMatrixWorld(true);
+    scene.traverse(o => { const m = o.material, g = o.geometry; if (o.isMesh && !o.isInstancedMesh && !Array.isArray(m) && !m.transparent && g.drawRange.count === Infinity && !Object.keys(g.morphAttributes).length && fixe(o)) cand.push(o); });
+    for (const o of cand) {
+      const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere();
+      const k = [o.material.uuid, +o.castShadow, +o.receiveShadow, +o.frustumCulled, o.renderOrder, o.layers.mask, Object.keys(g.attributes).sort().map(n => n + g.attributes[n].itemSize).join()].join('|');
+      if (!lots.has(k)) lots.set(k, []); lots.get(k).push(o);
+      o.userData.petit = g.boundingSphere.radius * Math.max(o.scale.x, o.scale.y, o.scale.z) <= 60; // rythme.js trie les aplats lumineux sur la taille de l'objet d'origine
+    }
+    // un lot lourd (plus de GROS sommets) est découpé en pavés de PAVE mètres, pour que ce qui est hors champ ne soit pas dessiné ; les grandes pièces (sol, rubans) restent entières
+    for (const [k, l] of [...lots]) {
+      if (l.reduce((s, o) => s + (o.geometry.index || o.geometry.attributes.position).count, 0) < GROS) continue;
+      lots.delete(k);
+      for (const o of l) { const g = o.geometry, r = g.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis(); v.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld);
+        const kp = k + '|' + (r < PAVE / 2 ? Math.floor(v.x / PAVE) + ':' + Math.floor(v.z / PAVE) : 'grand'); if (!lots.has(kp)) lots.set(kp, []); lots.get(kp).push(o); }
+    }
+    for (const l of lots.values()) {
+      if (l.length < 2) continue;
+      const src = l.map(o => o.geometry.index ? o.geometry.toNonIndexed() : o.geometry), n = src.reduce((s, g) => s + g.attributes.position.count, 0), G = new THREE.BufferGeometry();
+      for (const nom in src[0].attributes) {
+        const sz = src[0].attributes[nom].itemSize, A = new Float32Array(n * sz); let base = 0;
+        l.forEach((o, i) => {
+          const a = src[i].attributes[nom], mw = o.matrixWorld, miroir = mw.determinant() < 0; if (nom === 'normal') NM.getNormalMatrix(mw);
+          for (let j = 0; j < a.count; j++) {
+            const d = (base + (miroir ? j - j % 3 + [0, 2, 1][j % 3] : j)) * sz; // échelle négative : on retourne chaque triangle pour qu'il garde sa face
+            if (nom === 'position') { v.fromBufferAttribute(a, j).applyMatrix4(mw); A[d] = v.x; A[d + 1] = v.y; A[d + 2] = v.z; }
+            else if (nom === 'normal') { v.fromBufferAttribute(a, j).applyMatrix3(NM).normalize(); A[d] = v.x; A[d + 1] = v.y; A[d + 2] = v.z; }
+            else { A[d] = a.getX(j); if (sz > 1) A[d + 1] = a.getY(j); if (sz > 2) A[d + 2] = a.getZ(j); if (sz > 3) A[d + 3] = a.getW(j); }
+          }
+          base += a.count;
+        });
+        G.setAttribute(nom, new THREE.BufferAttribute(A, sz));
+      }
+      const o0 = l[0], m = new THREE.Mesh(G, o0.material); m.castShadow = o0.castShadow; m.receiveShadow = o0.receiveShadow; m.frustumCulled = o0.frustumCulled; m.renderOrder = o0.renderOrder; m.layers.mask = o0.layers.mask;
+      m.matrixAutoUpdate = false; m.userData.petit = l.some(o => o.userData.petit); scene.add(m);
+      for (const o of l) o.userData.fondu = 1;
+    }
+    for (const o of cand.reverse()) if (o.userData.fondu) { if (o.children.length) o.layers.set(31); else o.parent.remove(o); } // les enfants d'abord ; un parent qui en garde reste dans l'arbre sans être dessiné (calque 31)
+  }
   scene.traverse(o => { if (o.isInstancedMesh) o.frustumCulled = false; if (o.material) eclaire(o.material); }); // r128 calcule le culling sur la géométrie de base, pas sur les instances
 
   // ---------- audio : voir audio.js (window.SON) ; ici seulement ce que le jeu et le HUD lisent ----------
@@ -618,11 +668,20 @@
   }
   function toMenu() { state = 'title'; race = null; raceEnd = false; car = newCar(T); cth = car.th; carY = S[car.idx].y; tRace = 0; lapN = 1; result = null; hist.length = 0; msel = 3; }
   // menu principal : 0 carte, 1 mode, 2 boîte, 3 démarrer ; d = -1 / +1 (gauche / droite ; Entrée vaut +1)
+  let cible = null, cibleT = 0; // carte demandée au menu, pas encore construite
+  function changeCarte() {
+    if (cible === M) { cible = null; return; }
+    setPref('vpr.carte', cible.id); try { sessionStorage.setItem('vpr.menu', 1); history.replaceState(null, '', location.pathname + '?carte=' + cible.id); } catch (e) { }
+    window.CARTE = cible; SON.carte(cible);
+    // sim.js (tracé et physique de la carte), ce fichier (décor, jeu) et rythme.js s'il est là sont rejoués dans l'ordre ; le renderer, ses shaders et le son restent
+    const suite = [...new Set([...document.scripts].filter(sc => /(^|\/)(sim|game|rythme)\.js(\?|$)/.test(sc.src)).map(sc => sc.src))];
+    (function joue() { const src = suite.shift(); if (!src) return; const sc = document.createElement('script'); sc.src = src; sc.onload = () => { sc.remove(); joue(); }; document.body.appendChild(sc); })(); // la balise rejouée est retirée : il n'en reste jamais qu'une par fichier
+  }
   function menuAct(d) {
-    if (msel === 0) { // changer de carte : on mémorise et on recharge, le décor n'est construit qu'au chargement
-      const id = CARTES[(CARTES.indexOf(M) + d + CARTES.length) % CARTES.length].id;
-      setPref('vpr.carte', id); try { sessionStorage.setItem('vpr.menu', 1); } catch (e) { }
-      location.href = location.pathname + '?carte=' + id;
+    if (cible && msel === 3) return; // une carte est en route : on ne démarre pas sur l'ancienne
+    if (msel === 0) { // changer de carte : le nom change tout de suite ; le décor suit dès qu'on cesse de faire défiler (0,15 s), sans recharger la page
+      cible = CARTES[(CARTES.indexOf(cible || M) + d + CARTES.length) % CARTES.length];
+      clearTimeout(cibleT); cibleT = setTimeout(changeCarte, 150);
     } else if (msel === 1) { // contre-la-montre, puis la course à chaque difficulté
       const k = ((mode === 'solo' ? 0 : diff + 1) + d + DIFF.length + 1) % (DIFF.length + 1);
       mode = k ? 'course' : 'solo'; if (k) diff = k - 1; setPref('vpr6.mode', JSON.stringify(mode)); setPref('vpr6.diff', diff); }
@@ -688,8 +747,8 @@
   const hidDemande = () => navigator.hid && navigator.hid.requestDevice({ filters: [{ vendorId: 0x057e }] }).then(l => l.forEach(hidOuvre)).catch(() => { }); // touche J : fenêtre du navigateur pour autoriser le Joy-Con (une fois)
   if (navigator.hid) {
     const cherche = () => navigator.hid.getDevices().then(l => l.forEach(hidOuvre)).catch(() => { }); // déjà autorisé : pas de fenêtre
-    cherche(); navigator.hid.addEventListener('connect', cherche);
-    navigator.hid.addEventListener('disconnect', e => { if (hidPad && e.device === hidPad.dev) { hidPad = null; padIdx = -1; padDit('MANETTE DÉCONNECTÉE'); } });
+    cherche(); navigator.hid.addEventListener('connect', cherche, { signal: arret.signal });
+    navigator.hid.addEventListener('disconnect', e => { if (hidPad && e.device === hidPad.dev) { hidPad = null; padIdx = -1; padDit('MANETTE DÉCONNECTÉE'); } }, { signal: arret.signal });
   }
   function padFrame() {
     const pads = [...(navigator.getGamepads ? navigator.getGamepads() : [])].filter(p => p && p.connected); if (hidPad) pads.push(hidPad);
@@ -762,7 +821,7 @@
       if (HU.sur[0]) txt(HU.sur[0], cx, 6, 16, C, 'center', 0, JP); txt(mode === 'course' ? 'COURSE · 3 TOURS' : HU.sur[1], cx, 27, 8, C, 'center');
       txt(HU.titre[0], cx, 44, 24, Y, 'center', 2); txt(HU.titre[1], cx, 70, 24, Y, 'center', 2);
       panel(cx - 160, 100, 320, 140);
-      [['CARTE', M.nom + '  ' + (CARTES.indexOf(M) + 1) + '/' + CARTES.length], ['MODE', mode === 'course' ? 'COURSE : ' + DIFF[diff].nom : 'CONTRE-LA-MONTRE'], ['BOITE', manual ? 'MANUELLE' : 'AUTO']].forEach(([l, v], i) => {
+      [['CARTE', (cible || M).nom + '  ' + (CARTES.indexOf(cible || M) + 1) + '/' + CARTES.length], ['MODE', mode === 'course' ? 'COURSE : ' + DIFF[diff].nom : 'CONTRE-LA-MONTRE'], ['BOITE', manual ? 'MANUELLE' : 'AUTO']].forEach(([l, v], i) => {
         const on = msel === i, y = 108 + i * 15;
         txt((on ? '> ' : '  ') + l, cx - 152, y, 8, on ? Y : '#e8e8e4'); txt(on ? '< ' + v + ' >' : v, cx + 152, y, 8, on ? Y : C, 'right');
       });
@@ -944,13 +1003,13 @@
       let x = rainP[i * 3] - car.vx * dt, y = rainP[i * 3 + 1] - 55 * dt, z = rainP[i * 3 + 2] - car.vz * dt;
       x = ((x + 40) % 80 + 80) % 80 - 40; z = ((z + 40) % 80 + 80) % 80 - 40; if (y < 0) y += 30;
       rainP[i * 3] = x; rainP[i * 3 + 1] = y; rainP[i * 3 + 2] = z;
-      rainV.set([x, y, z, x + car.vx * 0.035 + gl * 0.12, y + gl, z + car.vz * 0.035 + gl * 0.05], i * 6); // vent constant : la traînée penche un peu
+      const o = i * 6; rainV[o] = x; rainV[o + 1] = y; rainV[o + 2] = z; rainV[o + 3] = x + car.vx * 0.035 + gl * 0.12; rainV[o + 4] = y + gl; rainV[o + 5] = z + car.vz * 0.035 + gl * 0.05; // vent constant : la traînée penche un peu (écrit case par case : un tableau par goutte et par image faisait travailler le ramasse-miettes)
     }
     rainGeo.attributes.position.needsUpdate = true;
     const ns2 = Math.min(SN, Math.round(SN * pl / 3)); splGeo.setDrawRange(0, ns2);
     for (let i = 0; i < ns2; i++) { // un impact vit 0,14 s sur la chaussée, de 4 à 40 m devant, puis renaît ailleurs ; il éclate clair et s'éteint
       if ((splA[i] += dt) > 0.14) { splA[i] -= 0.14; const j = 2 + Math.floor(alea() * 18), s = S[(car.idx + j) % N], l = (alea() * 2 - 1) * W; splP.set([s.x - s.tz * l, s.y + 0.06, s.z + s.tx * l], i * 3); splD[i] = 1 - j / 24; } // au loin, l'impact est plus pâle
-      const f = (1 - splA[i] / 0.14) ** 2 * splD[i]; splC.set([0.45 * f, 0.6 * f, 0.75 * f], i * 3);
+      const f = (1 - splA[i] / 0.14) ** 2 * splD[i]; splC[i * 3] = 0.45 * f; splC[i * 3 + 1] = 0.6 * f; splC[i * 3 + 2] = 0.75 * f;
     }
     splGeo.attributes.position.needsUpdate = splGeo.attributes.color.needsUpdate = true;
 
@@ -974,9 +1033,25 @@
     drawHUD(dt, sp, r, state === 'race' && sp > 30 && Math.abs(wk) > 0.011 ? Math.sign(wk) : 0);
     // flou de vitesse : rien sous 55 % de la vitesse de pointe, léger au-delà, franc seulement pendant le boost
     post.uniforms.amt.value = 0.35 * Math.max(0, (r - 0.55) / 0.45) ** 2; post.uniforms.ab.value = 0.002 + 0.004 * r + (stun > 0 ? stun * 0.06 : 0);
+    if (!chaud) { // première image : tout est dessiné une fois sans tri de visibilité, pour que shaders, géométries et textures partent au GPU maintenant et non au premier passage en course (à-coups de 40 ms)
+      chaud = true; const caches = [], tri = [];
+      scene.traverse(o => { if (!o.visible) { caches.push(o); o.visible = true; } if (o.frustumCulled) { tri.push(o); o.frustumCulled = false; } });
+      renderer.setRenderTarget(rt); renderer.render(scene, cam);
+      for (const o of caches) o.visible = false; for (const o of tri) o.frustumCulled = true;
+      if (avant && avant.libere) avant.libere(); avant = null; // l'ancienne carte peut maintenant rendre sa mémoire : la nouvelle tient les shaders communs (et on l'oublie, sinon chaque carte garderait toutes les précédentes)
+    }
     renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(null); renderer.render(postScene, postCam);
   }
-  const loop = now => { requestAnimationFrame(loop); frame(now); };
-  requestAnimationFrame(loop);
-  window.__g = { frame, start, M, T, scene, cam, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
+  let chaud = false;
+  let raf = 0;
+  const loop = now => { raf = requestAnimationFrame(loop); frame(now); };
+  raf = requestAnimationFrame(loop);
+  // arrêt (changement de carte) : plus de boucle ni d'écouteurs ; puis libere() rend au GPU tout ce que cette carte y avait mis (les shaders, eux, restent au renderer tant qu'une matière s'en sert)
+  const fin = () => { cancelAnimationFrame(raf); arret.abort(); clearTimeout(padNoteT); padNote.remove(); };
+  const libere = () => {
+    scene.traverse(o => { if (o.geometry) o.geometry.dispose(); for (const m of [].concat(o.material || [])) { for (const k of ['map', 'emissiveMap', 'alphaMap']) if (m[k]) m[k].dispose(); m.dispose(); } });
+    rt.dispose(); if (rt.depthTexture) rt.depthTexture.dispose(); hudT.dispose(); post.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
+  };
+  window.__g = { frame, start, fin, libere, M, T, scene, cam, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
 })();
+if (/[?&]perf\b/.test(location.search)) import('./outils/perf.js').then(m => m.suite()); // banc de performance : voir outils/perf.js

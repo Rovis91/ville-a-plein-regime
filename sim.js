@@ -68,10 +68,15 @@
     // la trajectoire du pilote automatique est la ligne de moindre courbure qui tient dans la route, à 2,1 m des murs (ou du pied des parois : elle reste sur le plat), quelle que soit la largeur (extérieur, corde, extérieur).
     // Un point tous les 8 m, chacun ramené là où ses 4 voisins le voudraient pour que la ligne tourne le moins possible ; puis sa courbure, par le cercle passant par 3 points.
     {
-      const m = 4, N = Math.floor(n / m), D = new Float64Array(N), pt = (i, d) => { const s = S[(i + n) % n]; return [s.x - s.tz * d, s.z + s.tx * d]; }, pj = j => pt((j + N) % N * m, D[(j + N) % N]);
+      const m = 4, N = Math.floor(n / m), D = new Float64Array(N), pt = (i, d) => { const s = S[(i + n) % n]; return [s.x - s.tz * d, s.z + s.tx * d]; };
+      // 6000 passes sur tous les points : boucle sans aucune allocation (tableaux à plat), c'était l'essentiel du temps de chargement d'une carte. Mêmes opérations dans le même ordre : résultat identique au bit près.
+      const X = new Float64Array(N), Z = new Float64Array(N), TX = new Float64Array(N), TZ = new Float64Array(N), LIM = new Float64Array(N);
+      for (let j = 0; j < N; j++) { const s = S[j * m]; X[j] = s.x; Z[j] = s.z; TX[j] = s.tx; TZ[j] = s.tz; LIM[j] = s.pl - 3.2; }
       for (let it = 0; it < 6000; it++) for (let j = 0; j < N; j++) {
-        const s = S[j * m], a = pj(j - 1), b = pj(j + 1), a2 = pj(j - 2), b2 = pj(j + 2);
-        D[j] = clamp(-((4 * (a[0] + b[0]) - a2[0] - b2[0]) / 6 - s.x) * s.tz + ((4 * (a[1] + b[1]) - a2[1] - b2[1]) / 6 - s.z) * s.tx, 3.2 - s.pl, s.pl - 3.2);
+        const a = (j - 1 + N) % N, b = (j + 1) % N, a2 = (j - 2 + N) % N, b2 = (j + 2) % N;
+        const ax = X[a] - TZ[a] * D[a], az = Z[a] + TX[a] * D[a], bx = X[b] - TZ[b] * D[b], bz = Z[b] + TX[b] * D[b];
+        const a2x = X[a2] - TZ[a2] * D[a2], a2z = Z[a2] + TX[a2] * D[a2], b2x = X[b2] - TZ[b2] * D[b2], b2z = Z[b2] + TX[b2] * D[b2];
+        D[j] = clamp(-((4 * (ax + bx) - a2x - b2x) / 6 - X[j]) * TZ[j] + ((4 * (az + bz) - a2z - b2z) / 6 - Z[j]) * TX[j], -LIM[j], LIM[j]);
       }
       S.forEach((s, i) => { const j = Math.floor(i / m) % N, f = i / m - Math.floor(i / m); s.dl = D[j] + (D[(j + 1) % N] - D[j]) * f; });
       S.forEach((s, i) => { const a = pt(i - m, S[(i - m + n) % n].dl), b = pt(i, s.dl), c = pt(i + m, S[(i + m) % n].dl), ux = b[0] - a[0], uz = b[1] - a[1], vx = c[0] - b[0], vz = c[1] - b[1];
@@ -236,14 +241,20 @@
     }
     const la = S[(c.idx + look) % n];
     const e = wrap(Math.atan2(la.z + la.tx * (off || la.dl) - c.z, la.x - la.tz * (off || la.dl) - c.x) - c.th);
-    let va = 1e9;
     // vitesse permise = celle de chaque virage de la trajectoire à venir, plus ce qu'on peut perdre en freinant d'ici là (10 m/s², 2 m par échantillon)
     // sous la pluie : virages au lacet mouillé, sans dépasser le seuil d'aquaplaning là où il ne passerait plus, et freinage plus long
-    const fr = 40 * (1 - PL.frein * eau(T, c.idx));
-    for (let j = 0; j < 200; j++) {
-      const i = (c.idx + j) % n, m = eau(T, i), k = Math.abs(S[i].kl) + 1e-4, g = 1.3 * (1 - PL.vir * m), vq = PL.vaq - PL.dvaq * m;
-      let v = vturn(g, k); if (m && v > vq) v = Math.max(vq, vturn(g * (1 - PL.aq * m) * 0.7, k)); // au-delà du seuil d'aquaplaning, avec de la marge : la voiture y chasse
-      va = Math.min(va, Math.sqrt(v ** 2 + fr * j));
+    // Elle ne dépend que de l'échantillon : calculée une fois par échantillon et gardée dans T.va (200 virages regardés, 8 fois par image en course sinon)
+    if (T.vaEau !== T.eau) { T.va = new Float64Array(n).fill(-1); T.vaEau = T.eau; } // (elle dépend aussi de la pluie : si T.eau change, on repart de zéro)
+    const VA = T.va;
+    let va = VA[c.idx];
+    if (va < 0) {
+      va = 1e9; const fr = 40 * (1 - PL.frein * eau(T, c.idx));
+      for (let j = 0; j < 200; j++) {
+        const i = (c.idx + j) % n, m = eau(T, i), k = Math.abs(S[i].kl) + 1e-4, g = 1.3 * (1 - PL.vir * m), vq = PL.vaq - PL.dvaq * m;
+        let v = vturn(g, k); if (m && v > vq) v = Math.max(vq, vturn(g * (1 - PL.aq * m) * 0.7, k)); // au-delà du seuil d'aquaplaning, avec de la marge : la voiture y chasse
+        va = Math.min(va, Math.sqrt(v ** 2 + fr * j));
+      }
+      VA[c.idx] = va;
     }
     const vt = Math.min(vcap, va * lvl * (off ? 0.9 : 1)); // hors trajectoire, on passe moins vite
     const st = clamp(e * 3, -1, 1);

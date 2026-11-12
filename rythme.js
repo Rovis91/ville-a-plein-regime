@@ -10,15 +10,16 @@
     const m = o.material;
     if (!o.isMesh || !m || !m.isMeshBasicMaterial || m.transparent || m.depthWrite === false || m.side === THREE.BackSide) return; // ni ciel, ni fumée, ni traînées, ni fantôme
     if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
-    if (m.map && o.geometry.boundingSphere.radius * Math.max(o.scale.x, o.scale.y, o.scale.z) > 60) return; // ni l'eau, ni les grands plans d'horizon (texturés) ; les liserés néon des murs, unis, restent
+    if (m.map && !o.userData.petit && o.geometry.boundingSphere.radius * Math.max(o.scale.x, o.scale.y, o.scale.z) > 60) return; // ni l'eau, ni les grands plans d'horizon (texturés) ; les liserés néon des murs, unis, restent
     mats.set(m, m.color.clone());
   });
   let k = 1;
+  cancelAnimationFrame(window.__rythme); // changement de carte : ce fichier est rejoué, l'ancienne boucle s'arrête
   const tick = () => {
-    requestAnimationFrame(tick);
+    window.__rythme = requestAnimationFrame(tick);
     const but = SON.musicOn && __g.state !== 'pause' ? 1 - FORCE / 2 + FORCE * (SON.pulse || 0) : 1; // musique coupée ou pause : couleurs d'origine
     k += (but - k) * 0.5;
     for (const [m, c] of mats) m.color.copy(c).multiplyScalar(k);
   };
-  requestAnimationFrame(tick);
+  window.__rythme = requestAnimationFrame(tick);
 })();

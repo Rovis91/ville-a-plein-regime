@@ -142,6 +142,26 @@ Passe chaque carte dans la physique : tracé sans recoupement, tour bouclé au p
 
 Dans le navigateur, `?auto` fait conduire le pilote automatique, et `window.__g` expose l'état du jeu pour le débogage.
 
+## Performances
+
+`index.html?perf&auto` mesure toutes les cartes à la suite (une minute en tout) : le pilote automatique fait un tour en course contre 3 adversaires, à pas fixe, sans rien afficher, et chaque image est chronométrée. Le tableau sort dans la console et dans `localStorage['vpr.perf']`. Le banc est dans `outils/perf.js`, avec la référence que **toute carte doit tenir** (`BUDGET`) :
+
+| mesure | référence | ce que c'est |
+|---|---|---|
+| `ms` | ≤ 2 ms | temps moyen d'une image, GPU compris |
+| `msMax` | ≤ 3 ms | la même chose sur la pire demi-seconde du tour |
+| `cpuMax` | ≤ 8,3 ms | la pire image isolée (à-coup) : aucune ne doit dépasser une image à 120 Hz |
+| `appelsMax` | ≤ 300 | passes de dessin par image, ombres comprises (le seul chiffre qui ne dépend pas de la machine) |
+
+Les millisecondes valent pour la machine de mesure (portable à puce graphique intégrée Intel Arc 140T, image de 480 × 270) ; sur une autre, comparer les cartes entre elles et surveiller `appelsMax`. Une carte qui sort du tableau : `sectMs` et `sectAppels` disent sur quel dixième du tracé, `piresCpu` où tombent les à-coups et s'ils viennent du rendu ou du son.
+
+Ce qui tient ces chiffres, et qu'il ne faut pas défaire :
+
+- **Fusion du décor fixe** (`game.js`, « fusion ») : après la construction, tous les maillages immobiles d'une même matière sont fondus en un seul. Poser mille boîtes ne coûte donc qu'une passe de dessin. Ce qui bouge ou clignote par sa visibilité doit porter `userData.dyn = 1` (lui ou un parent), sinon il serait figé : `(await import('./outils/perf.js')).mobiles()` dans la console liste les oublis.
+- **Préchauffage** : la première image dessine tout le décor une fois, même hors champ, pour que shaders, géométries et textures partent au GPU pendant le chargement et non au premier passage en course.
+- **Changement de carte sans rechargement** (`changeCarte` dans `game.js`) : `sim.js`, `game.js` et `rythme.js` sont rejoués, le renderer (donc ses shaders compilés) et le son restent. Tout ce que `game.js` branche sur la page passe par son `addEventListener` local, coupé d'un coup à l'arrêt ; un nouvel écouteur, minuteur ou élément de page doit être défait dans `fin()`, et toute ressource GPU hors de la scène libérée dans `libere()`.
+- Pas de tableau créé à chaque image dans les boucles par goutte ou par particule (le ramasse-miettes fait des à-coups).
+
 ## Où régler quoi
 
 Dans `cartes.js`, pour chaque carte :
