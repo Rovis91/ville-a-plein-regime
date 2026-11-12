@@ -17,7 +17,10 @@
   const near = (h, x, z) => { let b = 0, bd = 1e18; h.S.forEach((s, i) => { const d = (s.x - x) ** 2 + (s.z - z) ** 2; if (d < bd) { bd = d; b = i; } }); return b; };
   const pt = (h, i) => near(h, h.M.pts[i][0] * h.M.sc, h.M.pts[i][1] * h.M.sc); // échantillon de piste le plus proche du point de contrôle i
   // pose un assemblage en nombre : une passe de dessin par zone, quel que soit le nombre d'exemplaires. Élément comme pour inst
-  const insts = (h, nom, peau, list, ...a) => Object.entries(h.zones(nom, peau, ...a)).map(([zn, g]) => inst(h, g, peau[zn], list));
+  // o.a = réglages de la forme ; o.teinte = la zone qui prend la couleur de chaque élément (8e valeur : 0xrrggbb)
+  const insts = (h, nom, peau, list, o = {}) => Object.entries(h.zones(nom, peau, ...(o.a || []))).map(([zn, g]) => {
+    const m = inst(h, g, peau[zn], list); if (zn === o.teinte && list.length) { list.forEach((p, i) => m.setColorAt(i, new h.THREE.Color(p[7]))); m.instanceColor.needsUpdate = true; } return m;
+  });
   const LUM = { lum: 1 }; // matière lumineuse par elle-même : vitrine, enseigne, feu
   const boite = (h, m, w, ht, d, x, y, z) => h.pose('boite', m, h.scene, [x, y, z], w, ht, d); // pièce unique aux dimensions libres
   // un point au bord de la route : échantillon s, côté sd (-1 gauche, 1 droite), à `off` mètres de l'axe
@@ -72,7 +75,8 @@
         const x = g.box[0] + rnd() * (g.box[2] - g.box[0]), z = g.box[1] + rnd() * (g.box[3] - g.box[1]), d = g.dAt(x, z);
         if (d > W + 6 && d < 230 && libre(x, z)) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, 0.9 + rnd() * 0.9]);
       }
-      inst(h, h.geo('cedre'), h.mat('cedre'), arbres);
+      const fûts = arbres.map(p => { const y0 = p[1] - 6; p[1] = y0 + 11 * p[4]; return [p[0], y0 + 2.6 * p[4], p[2], 0, p[4]]; }); // le houppier monte sur un fût nu, comme un vrai cèdre du Japon
+      inst(h, h.geo('cedre'), h.mat('cedre'), arbres); inst(h, h.geo('tronc'), h.mat('tronc'), fûts);
       // catadioptres orange sur les glissières : le seul balisage, comme sur une vraie route de col
       const cata = [];
       for (let i = 0; i < N; i += 6) for (const side of [-1, 1]) { const [x, z] = bord(S[i], side, W + 0.15); cata.push([x, S[i].y + 0.85, z]); }
@@ -82,15 +86,15 @@
       const gr = repere(h, sc), X = v => sd * (W + v), bitume = h.mat('bitume'), acier = h.mat('acier');
       h.pose('esplanade', { bitume }, gr, [X(21), 0, 0]); h.pose('traverse', { bitume }, gr, [X(70), 0, -12]); // la route de traverse s'enfonce dans la forêt
       // supérette : vitrine éclairée, bandeau à enseigne originale (bleu et jaune), distributeurs devant la vitrine
-      h.pose('superette', { vitrine: h.mat('vitrine', LUM), enseigne: h.mat('ecrit', LUM, 128, 12, '#1d4ac8', '#ffd84a', 'カラスマート  KARASU MART  24H', 9), distributeur: h.mat('distributeur', LUM) }, gr, [X(34), 0, -8], sd);
+      h.pose('superette', { mur: h.mat('crepi'), porte: h.mat('vitreSombre'), toit: h.mat('matGris'), clim: acier, vitrine: h.mat('vitrine', LUM), enseigne: h.mat('ecrit', LUM, 128, 12, '#1d4ac8', '#ffd84a', 'カラスマート  KARASU MART  24H', 9), distributeur: h.mat('distributeur', LUM) }, gr, [X(34), 0, -8], sd);
       // station-service : auvent éclairé par-dessous, deux pompes, totem de prix (marque inventée)
-      h.pose('station', { acier, lampe: h.mat('lampe', LUM), enseigne: h.mat('ecrit', LUM, 96, 8, '#c8102e', '#ffffff', 'TOGE OIL  峠石油', 7), pompe: h.mat('pompeEssence', LUM) }, gr, [X(15), 0, 15]);
+      h.pose('station', { acier, ilot: h.mat('beton'), lampe: h.mat('lampe', LUM), enseigne: h.mat('ecrit', LUM, 96, 8, '#c8102e', '#ffffff', 'TOGE OIL  峠石油', 7), pompe: h.mat('pompeEssence', LUM) }, gr, [X(15), 0, 15]);
       h.pose('totem', { acier, prix: h.mat('ecrit', LUM, 32, 32, '#101418', '#ffd84a', '168', 14) }, gr, [X(4.5), 0, 25]);
       // voitures garées : silhouettes de sportives génériques, feux allumés, certaines tournées vers la route
       const vitre = h.mat('vitreSombre'), feuRouge = h.mat('feuRouge', LUM), feuBlanc = h.mat('lampe', LUM);
       [[7, -19, 0.3, 0xf4f0e0], [7.5, -13, -0.2, 0xc8102e], [8, -7, 0.15, 0x2a5ac8], [22, -21, 1.57, 0x14161c], [22, 2, 1.4, 0xffc04a], [10, 6, -0.4, 0x9aa0a8], [16, 26, 1.57, 0x1f8f5a]].forEach(([vx, vz, a, col]) => {
-        const v = new THREE.Group(); v.position.set(X(vx), 0.15, vz); v.rotation.y = a; gr.add(v);
-        h.pose('voitureGaree', { caisse: h.mat('laque', { c: col }), vitre, feuRouge, feuBlanc }, v);
+        const v = new THREE.Group(); v.position.set(X(vx), 0, vz); v.rotation.y = a; gr.add(v);
+        h.pose('voitureGaree', { caisse: h.mat('laque', { c: col }), vitre, feuRouge, feuBlanc, chassis: h.mat('matGris'), roue: h.mat('roue'), pneu: h.mat('pneu') }, v);
       });
       // la route de traverse est barrée : barrières rayées, cônes, feux orange qui clignotent
       const rayures = h.mat('rayures', LUM), cligno = h.mat('clignotant', LUM), cone = h.mat('cone', LUM);
@@ -199,7 +203,7 @@
       piles.forEach((l, i) => inst(h, h.geo('conteneur'), h.mat('tole', { c: cols[i] }), l));
       const structure = h.mat('metalClair', { c: 0xe0b020 }), cabine = h.mat('metalClair', { c: 0xe8e8e4 }), vitre = h.mat('vitreSombre'), roue = h.mat('roue'), pneu = h.mat('pneu'), machinerie = h.mat('metalClair', { c: 0x8a8e96 });
       insts(h, 'cavalier', { structure, cabine, vitre, roue }, cavaliers);
-      insts(h, 'grueParc', { structure: h.mat('metalClair', { c: 0x2c6ab8 }), cabine, vitre, roue, machinerie }, portiques, 24);
+      insts(h, 'grueParc', { structure: h.mat('metalClair', { c: 0x2c6ab8 }), cabine, vitre, roue, machinerie }, portiques, { a: [24] });
       // le quai : portiques au-dessus des navires amarrés, tracteurs de quai qui attendent sous les portiques
       const minium = h.mat('minium'), treillis = h.mat('treillis', { alphaTest: 0.5, side: THREE.DoubleSide }, '#c8442c');
       for (const cx of [-150, -40, 70, 620, 740, 930]) { h.pose('grue', { structure: minium, treillis, tirant: gris, machinerie: cabine, cabine, vitre, roue }, h.scene, [cx, 0, CH1]); balises.push(cx, 69, CH1 + 41); }
@@ -337,7 +341,7 @@
             if (g.dAt(x, z) > W + t.recul + 6.5 && (type[i] !== 'place' || (x - 450) ** 2 + z * z > 118 * 118)) { const H = t.H[0] + rnd() * (t.H[1] - t.H[0]); (ruelle ? bas[rnd() * 2 | 0] : lots[rnd() * 3 | 0]).push([x, g.hAt(x, z) + H / 2 - 3, z, ry, 17, H + 6, 14]); }
           }
           if (i % 10 === 0 && !tun) for (const off of fleuve ? [2.4] : t.arbres) { const [x, z] = bord(s, sd, W + off); if (g.dAt(x, z) > W + off - 1.5) { troncs.push([x, s.y + 2.6, z]); houp.push([x, s.y + 7.6, z, rnd() * 6, 1, 0.9, 1]); } } // platanes : en rangées sur les grands axes, le long du fleuve sur le quai
-          if (t.gare && !tun && !fleuve && i % 4 === 0 && rnd() < (t.gare > 1 ? 0.8 : 0.55)) { const [x, z] = bord(s, sd, W + 1.7); autos[rnd() * 4 | 0].push([x, s.y + 0.75, z, ry + 1.5708]); } // voitures en stationnement
+          if (t.gare && !tun && !fleuve && i % 4 === 0 && rnd() < (t.gare > 1 ? 0.8 : 0.55)) { const [x, z] = bord(s, sd, W + 1.7); autos[rnd() * 4 | 0].push([x, s.y, z, ry + 1.5708]); } // voitures en stationnement
         }
         if (i % 10 === 0 && h.zone(i, 6) === 0) { const sd = (i / 10) & 1 ? 1 : -1, [x, z] = bord(s, sd, W + (t.gare ? 3.6 : 0.6)); mats.push([x, s.y + 3.4, z]); lant.push([x, s.y + 7, z]); h.lum(i, x, s.y + 6.5, z, 0xffd05a, 15, 1.6); } // réverbères, allumés jusqu'au lever du jour
       }
@@ -347,9 +351,19 @@
       }
       const cube = h.geo('bloc');
       lots.forEach((l, i) => inst(h, cube, fm[i], l)); bas.forEach((l, i) => inst(h, cube, fb[i], l));
+      // les combles : corniche de pierre, brisis de zinc à lucarnes, souches de cheminée en brique (le haut des façades ne montre plus de fenêtres)
+      const corniche = [], comble = [], souches = [];
+      for (const [x, y, z, ry, sx, sy, sz] of [...lots.flat(), ...bas.flat()]) {
+        const top = y + sy / 2, c = Math.cos(ry), sn = Math.sin(ry); corniche.push([x, top + 0.15, z, ry, sx + 0.5, 0.3, sz + 0.5]); comble.push([x, top + 1.6, z, ry, sx - 1.6, 3.2, sz - 1.6]);
+        for (const [ox, oz] of [[sx * 0.3, sz * 0.2], [-sx * 0.3, -sz * 0.2]]) souches.push([x + c * ox + sn * oz, top + 4.1, z - sn * ox + c * oz, ry]);
+      }
+      // une géométrie chacun : la pierre règle la densité de sa texture sur la boîte
+      inst(h, h.geo('bloc'), h.mat('pierre'), corniche); inst(h, h.geo('bloc'), h.mat('zinc'), comble); inst(h, h.geo('cheminee'), h.mat('brique'), souches);
+      inst(h, h.geo('bloc'), h.mat('matGris'), comble.map(([x, y, z, ry, sx, sy, sz]) => [x, y + sy / 2 + 0.05, z, ry, sx - 1.4, 0.1, sz - 1.4])); // le terrasson, plat, au-dessus du brisis
       inst(h, h.geo('reverbere'), h.mat('fonte'), mats); inst(h, h.geo('lanterne'), h.mat('lanterne', LUM), lant);
       inst(h, h.geo('tronc'), h.mat('tronc'), troncs); inst(h, h.geo('houppier'), h.mat('feuillage'), houp);
-      [0x2a3a5a, 0x8a8a90, 0x5a1a1a, 0xd8d4c8].forEach((c, i) => inst(h, h.geo('auto'), h.mat('carrosserie', { c }), autos[i]));
+      const garees = autos.flatMap((l, i) => l.map(p => [...p, 1, 1, 1, [0x2a3a5a, 0x8a8a90, 0x5a1a1a, 0xd8d4c8][i]]));
+      insts(h, 'voitureGaree', { caisse: h.mat('laque'), vitre: h.mat('vitreSombre'), chassis: h.mat('matGris'), roue: h.mat('roue'), pneu: h.mat('pneu'), feuRouge: h.mat('feuRouge', LUM), feuBlanc: h.mat('lampe', LUM) }, garees, { teinte: 'caisse' });
       // l'arche au centre de la place ; le dôme blanc en haut de la butte
       h.pose('arche', { pierre: h.mat('pierre') }, h.scene, [450, g.hAt(450, 0), 0]);
       const craie = h.mat('craie'), yb = g.hAt(935, -598);
@@ -395,13 +409,13 @@
       for (let i = 0; i < N; i += 7) for (const sd of [-1, 1]) {
         const s = S[i], [x, z] = bord(s, sd, W + 6.5);
         if (g.dAt(x, z) < W + 5.5 || s.y < 0) continue; // seulement sur la berge, pas dans le lit
-        const y = g.hAt(x, z), ht = 12 + rnd() * 5; troncs.push([x, y + ht / 2, z, 0, 1, ht, 1]); palmes.push([x, y + ht, z, rnd() * 6, 1, 0.45, 1]);
+        const y = g.hAt(x, z), ht = 12 + rnd() * 5; troncs.push([x, y + ht / 2, z, 0, 1, ht, 1]); palmes.push([x, y + ht, z, rnd() * 6]);
         if (i % 21 === 0) { const [lx, lz] = bord(s, sd, W + 1.2), [hx, hz] = bord(s, sd, W - 0.4), ry = h.across(s); lamp.push([lx, s.y + 5, lz, ry]); tete.push([hx, s.y + 10, hz, ry]); h.lum(i, hx, s.y + 9.6, hz, 0xffc04a, 26, 1.5); } // lampadaires de la route de berge
-        if (sd > 0 && i % 21 === 0) { const [wx, wz] = bord(s, 1, W + 24); if (g.dAt(wx, wz) > W + 20) wagons[rnd() * 3 | 0].push([wx, g.hAt(wx, wz) + 2.4, wz, h.across(s) + 1.5708]); }
+        if (sd > 0 && i % 21 === 0) { const [wx, wz] = bord(s, 1, W + 24); if (g.dAt(wx, wz) > W + 20) wagons[rnd() * 3 | 0].push([wx, g.hAt(wx, wz), wz, h.across(s) + 1.5708]); }
       }
-      inst(h, h.geo('troncPalmier'), h.mat('troncPalmier'), troncs); inst(h, h.geo('palme'), h.mat('palme'), palmes);
+      inst(h, h.geo('troncPalmier'), h.mat('troncPalmier'), troncs); insts(h, 'palmes', { palme: h.mat('palme', { side: THREE.DoubleSide }) }, palmes);
       inst(h, h.geo('matLampadaire'), fer, lamp); inst(h, h.geo('teteLampadaire', 3), h.mat('lampeCanal', LUM), tete);
-      [0x8a3a2a, 0x5a4a3a, 0x3a4a5a].forEach((c, i) => inst(h, h.geo('wagon'), h.mat('wagon', { c }), wagons[i]));
+      insts(h, 'wagonCouvert', { caisse: h.mat('wagon'), toit: h.mat('matGris'), chassis: h.mat('fer'), roue: h.mat('roue'), pneu: h.mat('fer') }, wagons.flatMap((l, i) => l.map(p => [...p, 1, 1, 1, [0x8a3a2a, 0x5a4a3a, 0x3a4a5a][i]])), { teinte: 'caisse' });
       // pompes à pétrole : le balancier hoche lentement, comme dans les champs pétrolifères de la ville
       const pompes = [], minium = h.mat('minium');
       for (let k = 0, n = 0; k < 400 && n < 9; k++) {
@@ -418,7 +432,9 @@
       // entrepôts bas autour, puis les tours du centre-ville à l'ouest, à contre-jour devant le soleil
       const hl = [];
       for (let k = 0; k < 260; k++) { const x = g.box[0] + rnd() * (g.box[2] - g.box[0]), z = g.box[1] + rnd() * (g.box[3] - g.box[1]); if (g.dAt(x, z) > 80) hl.push([x, g.hAt(x, z) + 3, z, (rnd() * 2 | 0) * 1.5708, 30 + rnd() * 40, 9 + rnd() * 6, 22 + rnd() * 20]); }
-      inst(h, h.geo('bloc'), h.mat('entrepot'), hl);
+      inst(h, h.geo('bloc'), h.mat('entrepot'), hl); // toits de bac acier à lanterneaux, débordants, et quelques groupes de ventilation dessus
+      inst(h, h.geo('bloc'), h.mat('toleToit'), hl.map(([x, y, z, ry, sx, sy, sz]) => [x, y + sy / 2 + 0.3, z, ry, sx + 0.8, 0.6, sz + 0.8]));
+      inst(h, h.geo('bloc'), h.mat('acier'), hl.filter((p, k) => k % 3 === 0).map(([x, y, z, ry, sx, sy]) => [x, y + sy / 2 + 1.6, z, ry, 4, 2, 3]));
       const tours = h.mat('tourLoin', { lum: 1, fog: false }, '#2a1c3a', ['#ffc04a'], 40);
       for (let i = 0; i < 34; i++) { const hh = 120 + rnd() * rnd() * 380, w = 50 + rnd() * 70; boite(h, tours, w, hh, w, -2300 + rnd() * 900, hh / 2, -500 + rnd() * 1300); }
       return (dt, now) => { for (const [b, ph] of pompes) b.rotation.z = Math.sin(now * 0.0012 + ph) * 0.32; };

@@ -167,6 +167,24 @@
     voile(g, 0.2, () => { for (let i = 0; i < 6; i++) R(g, '#000', alea() * 56 | 0, alea() * 56 | 0, 4 + alea() * 8 | 0, 3 + alea() * 6 | 0); });
   }, 24],
 
+  // crépi clair de petit commerce : grain, soubassement plus sombre, coulures sous l'acrotère
+  crepi: () => [64, 64, (g, o) => { const { R, voile } = o; R(g, '#d8d2c4', 0, 0, 64, 64); patine(g, o, 300); voile(g, 0.25, () => R(g, '#000', 0, 54, 64, 10)); coulures(g, o, 8, '#000', 0.12); }, 8],
+  // brisis de zinc d'un comble parisien : joints debout tous les 50 cm, lucarnes à fronton tous les 4 m, coulures blanches
+  zinc: () => [64, 64, (g, o) => {
+    const { R, voile } = o; R(g, '#6a7486', 0, 0, 64, 64);
+    voile(g, 0.35, () => { for (let x = 0; x < 64; x += 4) { R(g, '#000', x, 0, 1, 64); R(g, '#fff', x + 1, 0, 1, 64); } });
+    for (const x of [10, 42]) { R(g, '#e4dccb', x - 1, 20, 14, 26); R(g, '#e4dccb', x + 1, 16, 10, 4); R(g, '#e4dccb', x + 4, 13, 4, 3); R(g, '#2a3038', x + 2, 24, 8, 18); R(g, '#e4dccb', x + 5, 24, 2, 18); voile(g, 0.4, () => R(g, '#000', x - 1, 46, 14, 2)); }
+    coulures(g, o, 6, '#fff', 0.12);
+  }], // posé en instances mises à l'échelle : s'étire sur chaque face, pas de tuile
+  // brique de cheminée : appareil, joints clairs, suie en tête
+  brique: () => [16, 16, (g, { R, voile }) => { R(g, '#8a3a2a', 0, 0, 16, 16); for (let y = 0; y < 16; y += 2) { R(g, '#c8b8a0', 0, y, 16, 1); for (let x = (y & 2) * 2; x < 16; x += 8) R(g, '#c8b8a0', x, y, 1, 2); } voile(g, 0.5, () => R(g, '#000', 0, 0, 16, 3)); }, 2],
+  // bac acier de toiture : ondes, recouvrements, lanterneaux translucides, rouille
+  toleToit: () => [64, 64, (g, o) => {
+    const { R, alea, voile } = o; R(g, '#8a8a88', 0, 0, 64, 64);
+    voile(g, 0.25, () => { for (let x = 0; x < 64; x += 3) { R(g, '#000', x, 0, 1, 64); R(g, '#fff', x + 1, 0, 1, 64); } R(g, '#000', 0, 31, 64, 1); });
+    for (const x of [6, 38]) R(g, '#b8c4c0', x, 8, 18, 14); coulures(g, o, 8, '#5a2a10', 0.25); voile(g, 0.2, () => { for (let i = 0; i < 4; i++) R(g, '#000', alea() * 56 | 0, alea() * 56 | 0, 8, 6); });
+  }], // idem
+
   // ---------- ciel ----------
   ciel: (bandes, etoiles) => [512, 128, (g, { R, rnd }) => {
     const gr = g.createLinearGradient(0, 0, 0, 128);

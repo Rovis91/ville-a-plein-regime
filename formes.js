@@ -8,7 +8,7 @@
   // dim = dimensions réelles en mètres, pour que le placement règle la densité des textures ; H = hauteur typique d'une boîte étirée en hauteur par instance
   const B = (w, h, d, H = h) => { const g = new THREE.BoxGeometry(w, h, d); g.userData.dim = [w, H, d]; return g; };
   const paire = f => [-1, 1].map(f); // une pièce de chaque côté
-  const roues = (xs, z) => xs.flatMap(x => paire(sd => [0, 0.785].map(a => [a ? 'pneu' : 'roue', 1, 1, 0.5, x, 0.5, sd * z, [0, 0, a]])).flat()); // roue = deux boîtes croisées, la jante et le pneu : un octogone de profil
+  const roues = (xs, z, d = 1, w = 0.5) => xs.flatMap(x => paire(sd => [0, 0.785].map(a => [a ? 'pneu' : 'roue', d, d, w, x, d / 2, sd * z, [0, 0, a]])).flat()); // roue = deux boîtes croisées, la jante et le pneu : un octogone de profil
   // commun à toutes les remorques : essieux tandem, béquilles, feux arrière, barre anti-encastrement
   const remorque = [...roues([-4.4, -5.6], 0.95), ...paire(sd => ['chassis', 0.2, 0.9, 0.2, 1.4, 0.6, sd * 0.8]), ...paire(sd => ['feu', 0.1, 0.25, 0.5, -6.45, 1.2, sd * 0.85]), ['chassis', 0.15, 0.15, 2.2, -6.3, 0.8, 0]];
   window.FORMES = {
@@ -31,7 +31,7 @@
     cedre: () => new THREE.ConeGeometry(3.6, 15, 5), tronc: () => B(0.5, 5.2, 0.5), houppier: () => new THREE.IcosahedronGeometry(3.4, 0),
     troncPalmier: () => B(0.55, 1, 0.55, 14), palme: () => new THREE.IcosahedronGeometry(4, 0),
     // véhicules et fret
-    auto: () => B(4.1, 1.3, 1.75), conteneur: () => B(12, 2.6, 2.5), wagon: () => B(17, 4.2, 3.2),
+    auto: () => B(4.1, 1.3, 1.75), conteneur: () => B(12, 2.6, 2.5), wagon: () => B(17, 4.2, 3.2), cheminee: () => B(0.8, 2, 2.2), clim: () => B(3, 2, 3.4), reservoir: () => new THREE.CylinderGeometry(2.2, 2.2, 4.4, 8),
     remorque: () => B(8, 3.1, 2.5), cabine: () => B(2.2, 2.6, 2.4), feuxCamion: () => B(0.15, 0.5, 2.3),
     // grands repères
     pyloneHT: () => B(1.6, 48, 1.6), brasHT: () => B(1, 1, 16), dome: (r, seg, ann) => new THREE.SphereGeometry(r, seg, ann, 0, 6.283, 0, 1.6),
@@ -45,11 +45,14 @@
     pylonePont: W => [...paire(sd => ['beton', 3, 96, 3, sd * (W + 3.5), 2, 0]), ['beton', 2 * W + 10, 3, 3, 0, 46, 0]], // pylône en H d'un pont à haubans
     // touge : le carrefour du sommet. cote = 1 ou -1 : de quel côté de la route il est, la supérette présente ses distributeurs vers la route
     esplanade: () => [['bitume', 40, 0.5, 52, 0, -0.1, 0]], traverse: () => [['bitume', 60, 0.5, 9, 0, -0.1, 0]],
-    superette: cote => [['vitrine', 11, 4.4, 22, 0, 2.3, 0], ['enseigne', 11.6, 1.3, 22.6, 0, 5.1, 0], ...[13.5, 15.2].map(z => ['distributeur', 1, 2.2, 1.3, cote * -5.8, 1.2, z])],
-    station: () => [['acier', 13, 0.7, 18, 0, 5.6, 0], ['lampe', 12.4, 0.12, 17.4, 0, 5.2, 0], ['enseigne', 13.2, 0.9, 18.2, 0, 6.3, 0],
+    // supérette : murs de crépi, vitrine sur toute la façade côté route, bandeau d'enseigne, porte, acrotère, groupes froids sur le toit, distributeurs devant
+    superette: cote => [['mur', 11, 4.4, 22, 0, 2.2, 0], ['vitrine', 0.2, 3.2, 20, cote * -5.55, 1.75, 0], ['porte', 0.25, 2.4, 2.2, cote * -5.6, 1.2, 4], ['enseigne', 0.3, 1.3, 22.6, cote * -5.75, 5.05, 0], ['toit', 11.4, 0.5, 22.4, 0, 4.65, 0],
+      ...[-6, 0, 6].map(z => ['clim', 1.6, 1, 1.4, cote * 2.5, 5.4, z]), ...[13.5, 15.2].map(z => ['distributeur', 1, 2.2, 1.3, cote * -5.8, 1.2, z])],
+    station: () => [['acier', 13, 0.7, 18, 0, 5.6, 0], ['lampe', 12.4, 0.12, 17.4, 0, 5.2, 0], ...paire(sd => ['enseigne', 0.2, 0.9, 18.2, sd * 6.6, 6.3, 0]), ...paire(sd => ['enseigne', 13.2, 0.9, 0.2, 0, 6.3, sd * 9.1]), ['acier', 13, 0.2, 18, 0, 6.6, 0], ['ilot', 1.6, 0.25, 10, 0, 0.12, 0],
       ...[[-5, -7], [5, -7], [-5, 7], [5, 7]].map(([x, z]) => ['acier', 0.5, 5.4, 0.5, x, 2.7, z]), ...[-3.5, 3.5].map(z => ['pompe', 1, 1.7, 0.7, 0, 0.95, z])],
     totem: () => [['acier', 0.4, 8, 0.4, 0, 4, 0], ['prix', 0.5, 3.4, 3, 0, 6.6, 0]],
-    voitureGaree: () => [['caisse', 4.3, 0.62, 1.8, 0, 0.5, 0], ['vitre', 2, 0.48, 1.5, -0.3, 1.05, 0], ['feuRouge', 0.08, 0.16, 1.6, -2.17, 0.62, 0], ...[-0.6, 0.6].map(z => ['feuBlanc', 0.08, 0.16, 0.4, 2.17, 0.5, z])],
+    // voiture garée, origine au sol : caisse, pavillon sur un bandeau vitré, bas de caisse, quatre roues, feux
+    voitureGaree: () => [['caisse', 4.3, 0.6, 1.8, 0, 0.66, 0], ['caisse', 2, 0.1, 1.46, -0.35, 1.42, 0], ['vitre', 2.3, 0.46, 1.56, -0.3, 1.15, 0], ['chassis', 4.4, 0.2, 1.7, 0, 0.32, 0], ['feuRouge', 0.08, 0.16, 1.6, -2.17, 0.78, 0], ...[-0.6, 0.6].map(z => ['feuBlanc', 0.08, 0.16, 0.4, 2.17, 0.68, z]), ...roues([1.35, -1.35], 0.8, 0.64, 0.22)],
     barriere: () => [['rayures', 0.25, 0.9, 2.6, 0, 1, 0], ['clignotant', 0.3, 0.3, 0.3, 0, 1.7, 0]],
     // Wan-9 : portique de quai, pieds sur le quai (z > 0), flèche en treillis au-dessus de l'eau, chevalet et tirants, salle des machines, chariot et cabine
     grue: () => [...[-12, 12].flatMap(x => [...[22, 48].map(z => ['structure', 2, 44, 2, x, 22, z]), ['treillis', 1.2, 34, 1.2, x, 22, 35, [0.72, 0, 0]], ['structure', 1.6, 1.4, 30, x, 1.2, 35], ...[24, 46].map(z => ['roue', 1.2, 1.2, 0.6, x, 0.6, z])]),
@@ -97,6 +100,10 @@
     panneauPub: angle => [['mat', 1, 24, 1, 0, 12, 0], ['affiche', 1, 8, 16, 0, 22, 0, [0, angle, 0]]],
     pontCanal: () => [['beton', 16, 3, 640, 0, 17.5, 0, null, 1], ...[-8.5, 8.5].map(x => ['beton', 1, 2, 640, x, 20, 0]), // tablier, garde-corps, puis arcs en V au-dessus
       ...[-170, 0, 170].flatMap(z => [-0.42, 0.42].map(a => ['beton', 2, 3, 96, 0, 30, z + (a > 0 ? 42 : -42), [a, 0, 0]]))],
+    // wagon couvert, origine au rail : caisse, châssis, deux bogies à deux essieux, tampons, attelages
+    wagonCouvert: () => [['caisse', 17, 3.6, 3.1, 0, 3, 0], ['toit', 17.2, 0.25, 3.3, 0, 4.9, 0], ['chassis', 17.6, 0.5, 2.6, 0, 1.05, 0], ...[-6, 6].flatMap(x => [['chassis', 3, 0.5, 2.2, x, 0.6, 0], ...roues([x - 1, x + 1], 0.8, 0.9, 0.2)]), ...paire(sx => paire(z => ['chassis', 0.4, 0.35, 0.35, sx * 9, 1.05, z * 0.8])).flat()],
+    // palmier : une couronne de huit palmes qui retombent, origine en haut du tronc
+    palmes: () => Array.from({ length: 8 }, (_, k) => { const a = k / 8 * 6.2832; return ['palme', 5.5, 0.15, 1, Math.cos(a) * 2.4, -0.6, Math.sin(a) * 2.4, [0, -a, -0.45 - (k % 2) * 0.2]]; }),
     pompeSocle: () => [['fer', 7, 0.8, 2.4, 0, 0.4, 0], ...[-0.3, 0.3].map(a => ['fer', 0.5, 7.4, 0.5, a * 4, 4, 0, [0, 0, a]])],
     pompeBalancier: () => [['minium', 9, 0.7, 0.7, 0.6, 0, 0], ['minium', 1.4, 2.4, 1, 5.2, -0.6, 0], ['fer', 1.6, 1.6, 1.6, -4, -0.4, 0]], // tourne autour de son origine
     chateauEau: () => [...[[-4, -4], [4, -4], [-4, 4], [4, 4]].map(([x, z]) => ['fer', 0.8, 26, 0.8, x, 13, z]), ['cuve', 13, 9, 13, 0, 30, 0], ['fer', 14, 1, 14, 0, 35, 0]],
