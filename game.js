@@ -563,11 +563,11 @@
   const PRE = 'vpr6.' + (M.id === 'ville' ? '' : M.id + '.');
   const store = { get: k => { try { return JSON.parse(localStorage.getItem(PRE + k)); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(PRE + k, JSON.stringify(v)); } catch (e) { } } };
   const pref = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }, setPref = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
-  let msel = 3; // ligne du menu principal
+  let msel = 3, partir = false; // ligne du menu principal ; changement de carte en cours
   // écran d'accueil : le navigateur n'autorise le son qu'après un geste ; on le demande d'abord, pour que la musique soit là quand le menu s'affiche
   let accueil = true;
   const entrer = () => { SON.init(); accueil = false; };
-  try { if (sessionStorage.getItem('vpr.menu')) { msel = 0; sessionStorage.removeItem('vpr.menu'); entrer(); } } catch (e) { } // on vient de changer de carte : on reste sur cette ligne, sans repasser par l'accueil (le navigateur garde en général le droit au son d'une page à l'autre ; sinon il revient à la touche suivante)
+  try { const m = sessionStorage.getItem('vpr.menu'); if (m) { msel = 0; sessionStorage.removeItem('vpr.menu'); entrer(); SON.reprendre(JSON.parse(m)); } } catch (e) { } // la musique de menu reprend où elle en était // on vient de changer de carte : on reste sur cette ligne, sans repasser par l'accueil (le navigateur garde en général le droit au son d'une page à l'autre ; sinon il revient à la touche suivante)
   for (const ev of ['mousedown', 'pointerup', 'touchend']) addEventListener(ev, () => { if (accueil) entrer(); else SON.init(); }); // un clic ou un appui valent une touche
   const fmt = t => `${t / 60 | 0}'${String(t % 60 | 0).padStart(2, '0')}"${String(t * 100 % 100 | 0).padStart(2, '0')}`;
   let lookA = 0, lookP = 0, lookT = 0; // caméra libre à la souris : angle autour de la voiture, hauteur en plus, délai avant retour
@@ -613,8 +613,9 @@
   function menuAct(d) {
     if (msel === 0) { // changer de carte : on mémorise et on recharge, le décor n'est construit qu'au chargement
       const id = CARTES[(CARTES.indexOf(M) + d + CARTES.length) % CARTES.length].id;
-      setPref('vpr.carte', id); try { sessionStorage.setItem('vpr.menu', 1); } catch (e) { }
-      location.href = location.pathname + '?carte=' + id;
+      if (partir) return; partir = true; // un seul départ, même si la touche est répétée pendant le fondu
+      setPref('vpr.carte', id); try { sessionStorage.setItem('vpr.menu', JSON.stringify(SON.quitter() || 1)); } catch (e) { }
+      setTimeout(() => { location.href = location.pathname + '?carte=' + id; }, 100); // le temps que la musique s'efface, sans clac
     } else if (msel === 1) { // contre-la-montre, puis la course à chaque difficulté
       const k = ((mode === 'solo' ? 0 : diff + 1) + d + DIFF.length + 1) % (DIFF.length + 1);
       mode = k ? 'course' : 'solo'; if (k) diff = k - 1; setPref('vpr6.mode', JSON.stringify(mode)); setPref('vpr6.diff', diff); }

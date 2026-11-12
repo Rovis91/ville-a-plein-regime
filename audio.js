@@ -1,5 +1,5 @@
 // Ville à plein régime — audio : tout est synthétisé (bande-son originale et adaptative). Stations de chaque carte : RADIO dans cartes.js.
-// Interface (window.SON) : init() au premier geste · frame(dt, e) à chaque image · setStation(i), toggleMusic(), carte(M), volume(famille, v) ·
+// Interface (window.SON) : init() au premier geste · frame(dt, e) à chaque image · quitter() / reprendre(m) autour d'un changement de carte au menu · setStation(i), toggleMusic(), carte(M), volume(famille, v) ·
 // beep(f), crash(), stinger(rec), tonnerre() · éditeur de musique : ecoute, recale(), pas, timbres, kits · lus par le jeu : station, nom, fq, genre, musicOn, beat, pulse, ana · banc d'écoute et mesure :
 // init(contexte hors ligne), pump(), pret, live, vol, stations, evenement(), moniteur(gain), vu, et les bruitages ponctuels clac(), levier(), choc(v),
 // boost(), petarade() · prises de test : ac, out, smp.
@@ -28,14 +28,17 @@
   const RK = () => 'vpr.radio' + (M.id === 'ville' ? '' : '.' + M.id); // dernière station écoutée, par carte
   let station = 0, S16 = 60 / ST[0].bpm / 4;
 
-  // musique de menu : une boucle calme par carte (accords de 4 mesures, nappe, arpège de cloches) ; aucune batterie
-  const MENU = {
-    ville: { bpm: 72, v: 1.55, pad: 'choir', arp: '0...2...1...3...', CH: [[50, 57, 60, 65], [46, 53, 57, 62], [48, 55, 58, 64], [45, 52, 57, 61]] },
-    touge: { bpm: 80, v: 1.05, pad: 'epFM', arp: '0.2...3...1.2...', CH: [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59]] },
-    wangan: { bpm: 84, v: 1.84, pad: 'warm', arp: '0.....2...3.....', CH: [[52, 59, 62, 66], [48, 55, 59, 64], [45, 52, 55, 59], [47, 54, 57, 62]] },
-    paris: { bpm: 90, v: 1.6, pad: 'strings', arp: '..0..2..3..1..2.', CH: [[54, 57, 61, 64], [47, 51, 54, 57], [52, 56, 59, 63], [49, 52, 56, 59]] },
-    canal: { bpm: 76, v: 1.05, pad: 'warm', arp: '0.....2...3.....', CH: [[55, 58, 62, 65], [55, 58, 62, 65], [48, 51, 55, 58], [48, 51, 55, 58]] },
+  // musique de menu : un seul morceau calme pour toutes les cartes — même tempo, mêmes accords (Dm7 BbM7 C7 A), même mélodie de cloches, même basse.
+  // Chaque carte n'en change que la couleur : timbre de la nappe (pad) et de la mélodie (arp), octave de la mélodie (oct), passe-bas (lp), niveau (v, réglé par mesure).
+  // Changer de carte recharge la page : quitter() note où en est le morceau, reprendre() le relance au même endroit et ouvre la nouvelle couleur en fondu.
+  const MENU = { bpm: 80, mel: '0...2...1...3...', CH: [[50, 57, 60, 65], [46, 53, 57, 62], [48, 55, 58, 64], [45, 52, 57, 61]],
+    ville: { v: 1.55, pad: 'choir', arp: 'bell', oct: 0, lp: 3500 },      // chœur sombre, cloches
+    touge: { v: 1.84, pad: 'epFM', arp: 'pluck', oct: 0, lp: 6000 },      // piano électrique, cordes pincées
+    wangan: { v: 1.46, pad: 'warm', arp: 'pulseArp', oct: 12, lp: 1800 }, // nappe ronde et étouffée, impulsions à l'octave
+    paris: { v: 1.37, pad: 'strings', arp: 'bell', oct: 12, lp: 8000 },   // cordes claires, cloches à l'octave
+    canal: { v: 1.35, pad: 'warm', arp: 'epFM', oct: 0, lp: 2600 },       // nappe ronde, piano électrique
   };
+  let reprise = false; // le morceau vient d'être repris en cours de mesure : la nappe et la basse entrent tout de suite, sans attendre la mesure suivante
   // ambiance du lieu : lits de bruit filtré [type, fréquence, Q, niveau, vitesse et profondeur de la houle]
   const AMB = {
     ville: [['highpass', 6000, 0.5, 0.012], ['bandpass', 1400, 0.6, 0.03, 0.13, 0.3], ['lowpass', 110, 0.7, 0.2, 0.07, 0.4]], // pluie, rumeur de ville
@@ -227,9 +230,9 @@
 
   // ---------- séquenceur ----------
   function schedMenu(s, t) {
-    const mn = MENU[M.id] || MENU.ville, bar = s >> 4, q = s % 16, ch = mn.CH[bar % mn.CH.length], a = mn.arp[q];
-    if (q === 0) { for (const n of ch) tone(mn.pad, hz(n), t, S16 * 16.5, 0.05 * (PATCH[mn.pad].lv || 1), strip.d.in); osc('sine', hz(ch[0] - 24), t, S16 * 14, 0.2, duckG); }
-    if (a !== '.') tone('bell', hz(ch[+a] + 12 + (bar & 1 ? 12 : 0)), t, 0.9, 0.06, strip.a.in);
+    const mn = MENU[M.id] || MENU.ville, bar = s >> 4, q = s % 16, ch = MENU.CH[bar % MENU.CH.length], a = MENU.mel[q];
+    if (q === 0 || reprise) { const n = 16.5 - q; reprise = false; for (const x of ch) tone(mn.pad, hz(x), t, S16 * n, 0.05 * (PATCH[mn.pad].lv || 1), strip.d.in); osc('sine', hz(ch[0] - 24), t, S16 * Math.max(1, n - 2.5), 0.2, duckG); }
+    if (a !== '.') tone(mn.arp, hz(ch[+a] + 12 + mn.oct + (bar & 1 ? 12 : 0)), t, 0.9, 0.05 * (PATCH[mn.arp].lv || 1), strip.a.in);
   }
   // Un pas de double-croche. La station donne une forme (suite de sections de 4 mesures : introduction, couplets, refrain, break, montée…) ; chaque
   // section dit quelles parties jouent et avec quelle variante de motif (format : voir RADIO dans cartes.js). La course s'y ajoute : rien que le
@@ -308,16 +311,26 @@
   const juste = (n, ok) => ok.has(((n % 12) + 12) % 12) ? n : ok.has(((n - 1) % 12 + 12) % 12) ? n - 1 : n + 1; // note recalée sur la gamme et l'accord de la mesure : jamais de fausse note de basse
   const lvl = () => menu ? (MENU[M.id] || MENU.ville).v : ST[station].vol || 1; // niveau de la station : réglé par mesure pour que toutes sortent au même volume
   function retune(t, garde) { // garde : l'éditeur change un réglage en cours d'écoute, le séquenceur ne repart pas du début // (re)cale le séquenceur, le bus et les tranches de mixage sur la station ou sur la boucle de menu
-    const st = ST[station], mn = MENU[M.id] || MENU.ville; S16 = 60 / (menu ? mn.bpm : st.bpm) / 4; if (!garde) { t0 = nextT = t; stp = !menu && drums ? 64 : 0; lastN = lastB = 0; } // en course, une station prise en route commence au premier couplet, pas à l'introduction
+    const st = ST[station], mn = MENU[M.id] || MENU.ville; S16 = 60 / (menu ? MENU.bpm : st.bpm) / 4; if (!garde) { t0 = nextT = t; stp = !menu && drums ? 64 : 0; lastN = lastB = 0; } // en course, une station prise en route commence au premier couplet, pas à l'introduction
     if (!AC) return;
     const e = menu ? [3, 0.5] : st.echo || [3, 0.4], q = menu ? [0, 1000, 0, 0] : st.eq || [0, 1000, 0, 0];
     dly.delayTime.value = Math.min(0.95, S16 * e[0]); dlyFb.gain.value = e[1];
     const dv = menu ? 0 : st.drive || 0; busDry.gain.value = 1 - 0.7 * dv; busDrv.gain.value = 0.45 * dv; // saturation de tout le bus (électro saturée, techno industrielle)
-    swF.frequency.cancelScheduledValues(t); swF.frequency.setValueAtTime(!menu && st.sweep ? 500 : 20000, t); swF.Q.value = !menu && st.sweep ? 5 : 0.7;
+    swF.frequency.cancelScheduledValues(t); swF.frequency.setValueAtTime(menu ? mn.lp : st.sweep ? 500 : 20000, t); swF.Q.value = !menu && st.sweep ? 5 : 0.7;
     eqL.gain.value = q[0]; eqM.frequency.value = q[1]; eqM.gain.value = q[2]; eqH.gain.value = q[3]; // couleur de la station : grave, médium, aigu
     mrevG.gain.value = menu ? 0.6 : st.rev == null ? 0.2 : st.rev; drumRv.gain.value = menu ? 0 : (KIT[st.kit] || KIT.k909).room;
-    const parts = menu ? { d: mn.pad, a: 'bell' } : { b: st.b && st.b.p, d: st.d && st.d[0], c: st.c && st.c.p, g: st.g && st.g.p, a: st.a && st.a.p, l: st.l && st.l.p };
+    const parts = menu ? { d: mn.pad, a: mn.arp } : { b: st.b && st.b.p, d: st.d && st.d[0], c: st.c && st.c.p, g: st.g && st.g.p, a: st.a && st.a.p, l: st.l && st.l.p };
     for (const k in strip) { const P = PATCH[parts[k]] || {}, s = strip[k]; s.pan.pan.value = P.pan || 0; s.rv.gain.value = P.rv || 0; s.ec.gain.value = P.ec || 0; s.ch.gain.value = P.ch || 0; s.gate.gain.cancelScheduledValues(t); s.gate.gain.setValueAtTime(1, t); }
+  }
+  function quitter() { // on change de carte au menu : la musique s'efface vite ; renvoie où en est le morceau, pour reprendre()
+    if (!AC || !menu) return null; const t = AC.currentTime; tuneG.gain.cancelScheduledValues(t); tuneG.gain.setTargetAtTime(0, t, 0.03);
+    return { pas: stp - (nextT - t) / S16, t: Date.now() };
+  }
+  function reprendre(m) { // après le rechargement : même endroit du morceau, compte tenu du temps passé ; la couleur de la nouvelle carte s'ouvre en 2 s
+    if (!AC || !menu || !m || !(Date.now() - m.t < 8000)) return; const t = AC.currentTime + 0.05, lp = (MENU[M.id] || MENU.ville).lp;
+    stp = Math.max(0, Math.ceil(m.pas + (Date.now() - m.t) / 1000 / S16)); nextT = t; t0 = t - stp * S16; reprise = true;
+    tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.5);
+    swF.frequency.cancelScheduledValues(t); swF.frequency.setValueAtTime(Math.min(lp, 300), t); swF.frequency.exponentialRampToValueAtTime(lp, t + 2);
   }
   function setStation(i) {
     station = (((i | 0) % ST.length) + ST.length) % ST.length;
@@ -519,7 +532,7 @@
 
   document.addEventListener('visibilitychange', () => { if (AC && live) document.hidden ? AC.suspend() : AC.resume(); }); // pas de musique hachée ni de moteur figé en arrière-plan
   window.SON = {
-    init: initAudio, frame: audioFrame, setStation, carte, pump, beep, stinger, arrivee,
+    init: initAudio, frame: audioFrame, setStation, carte, pump, beep, stinger, arrivee, quitter, reprendre,
     crash: () => AC && crash(),
     tonnerre: () => { if (!AC) return; const t = AC.currentTime + 0.4; nz(t, 2.4, 0.5, V.amb, 'lowpass', 140); nz(t, 1.2, 0.12, V.amb, 'bandpass', 600, 0.6); }, // grondement + craquement dans le médium
     toggleMusic() { musicOn = !musicOn; if (AC) musicG.gain.value = musicOn ? 1 : 0; },
