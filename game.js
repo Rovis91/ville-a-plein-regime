@@ -266,22 +266,67 @@
     ge.computeVertexNormals(); return ge;
   };
   const part = (ge, mat, x, y, z, parent = body) => { const m = new THREE.Mesh(ge, mat); m.position.set(x, y, z); parent.add(m); return m; };
-  part(wedge(4.5, 0.62, 1.95, L.nez), carMat, 0, 0.62, 0); part(wedge(L.cab[1], L.cab[2], 1.6, 0.75), dark, L.cab[0], 0.91 + L.cab[2] / 2, 0); // coque, habitacle
-  if (L.aileron) { const ah = 0.25 * (L.aileron - 1); box(0.4, 0.08, 2.15, carMat, -2.05, 1.5 + ah, 0, body); for (const z of [-0.85, 0.85]) box(0.1, 0.5 + ah, 0.1, dark, -2.05, 1.2 + ah / 2, z, body); }
-  if (L.bandes) for (const z of [-0.2, 0.2]) box(L.cab[1] * 0.8, 0.02, 0.2, new THREE.MeshLambertMaterial({ color: L.bandes }), L.cab[0] - 0.15, 0.92 + L.cab[2], z, body);
-  box(0.5, 0.25, 1.7, dark, -2.1, 0.42, 0, body); // diffuseur
+  // silhouettes dédiées (boîtes, coins et trapèzes, en mètres, sans échelle) ; la GT-R garde le coin d'origine
+  const K = { MAZDA: 'fd', TOYOTA: 'a80', RENAULT: 'r5', DODGE: 'gts' }[CARD.nom.split(' ')[0]]; // shortcut: déduit du nom, à remplacer par un champ look.type si cartes.js en gagne un
+  const trap = (l, h, w, a, b, tz) => { // boîte dont le dessus est raccourci (a devant, b derrière) et resserré : habitacle à pare-brise et lunette inclinés
+    const ge = new THREE.BoxGeometry(l, h, w), p = ge.attributes.position;
+    for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) { p.setX(i, p.getX(i) + (p.getX(i) > 0 ? -a : b)); p.setZ(i, p.getZ(i) * tz); }
+    ge.computeVertexNormals(); return ge;
+  };
+  const B = (l, h, w, mat, x, y, z) => box(l, h, w, mat, x, y, z, body), B2 = (l, h, w, mat, x, y, z) => { B(l, h, w, mat, x, y, z); B(l, h, w, mat, x, y, -z); };
+  const brakeMat = new THREE.MeshBasicMaterial({ color: 0x8a1020 }), lampMat = new THREE.MeshBasicMaterial({ color: 0xfff2d0 });
+  const rond = (r, mat, x, y, z) => { const ge = new THREE.CylinderGeometry(r, r, 0.06, 8); ge.rotateZ(Math.PI / 2); part(ge, mat, x, y, z); part(ge, mat, x, y, -z); }; // feu rond, par paire
+  let WH = [-1.4 * L.l, 1.45 * L.l, 0.95 * L.w, 0.95 * L.w, 1]; // roues : x arrière, x avant, z arrière, z avant, échelle
+  const roues = (xr, xf, cr, cf, k) => { WH = [xr, xf, cr + 0.04 - 0.18 * k, cf + 0.04 - 0.18 * k, k]; }; // roues logées dans la caisse, flanc du pneu à fleur de l'aile (cr, cf)
+  if (K === 'fd') { // Mazda RX-7 FD3S Spirit R : nez bas, bulle courte, grande lunette, bandeau noir à quatre feux ronds, aileron bas
+    B(2.3, 0.56, 1.86, carMat, -0.95, 0.52, 0); part(wedge(1.9, 0.56, 1.86, 0.3), carMat, 1.15, 0.52, 0);
+    part(trap(2.1, 0.4, 1.56, 0.7, 0.8, 0.78), dark, -0.55, 1, 0); B(0.7, 0.04, 1.2, carMat, -0.5, 1.21, 0);
+    B(0.3, 0.05, 1.6, carMat, -1.9, 1.02, 0); B2(0.12, 0.2, 0.08, carMat, -1.9, 0.9, 0.6);
+    B(0.04, 0.22, 1.6, dark, -2.11, 0.62, 0); rond(0.09, brakeMat, -2.13, 0.62, 0.36); rond(0.09, brakeMat, -2.13, 0.62, 0.62);
+    B(0.3, 0.14, 1.6, dark, -2, 0.3, 0); B2(0.05, 0.08, 0.4, lampMat, 2.1, 0.42, 0.6);
+    roues(-1.3, 1.3, 0.93, 0.93, 0.82);
+  } else if (K === 'a80') { // Toyota Supra A80 RZ : caisse haute et ronde, aileron en arceau, trois feux ronds par côté
+    B(2.6, 0.64, 1.95, carMat, -0.95, 0.56, 0); part(wedge(1.9, 0.64, 1.95, 0.3), carMat, 1.3, 0.56, 0);
+    part(trap(2.3, 0.4, 1.6, 0.75, 0.95, 0.8), dark, -0.6, 1.08, 0); B(0.7, 0.04, 1.3, carMat, -0.7, 1.29, 0);
+    B(0.4, 0.07, 1.95, carMat, -2, 1.36, 0); B2(0.4, 0.48, 0.1, carMat, -2, 1.12, 0.92);
+    B2(0.04, 0.24, 0.74, dark, -2.26, 0.7, 0.56); for (const z of [0.32, 0.56, 0.8]) rond(0.1, brakeMat, -2.28, 0.7, z);
+    B(0.3, 0.16, 1.7, dark, -2.15, 0.32, 0); B2(0.05, 0.14, 0.5, lampMat, 2.25, 0.5, 0.65);
+    roues(-1.35, 1.35, 0.975, 0.975, 0.84);
+  } else if (K === 'r5') { // Renault 5 Maxi Turbo : caisse étroite et courte, hayon, ailes arrière en caisson avec prise d'air, becquet de toit, rampe de quatre phares
+    B(2.5, 0.66, 1.5, carMat, -0.55, 0.57, 0); part(wedge(1.1, 0.66, 1.5, 0.2), carMat, 1.25, 0.57, 0);
+    part(trap(2.45, 0.5, 1.44, 0.6, 0.25, 0.84), carMat, -0.55, 1.15, 0);
+    part(trap(1.5, 0.46, 1.48, 0.55, 0, 0.84), dark, -0.055, 1.13, 0); part(trap(0.5, 0.4, 1.15, 0, 0.2, 0.84), dark, -1.545, 1.15, 0); // pare-brise et vitres ; lunette entre deux montants
+    B(0.1, 0.06, 1, dark, -1.55, 1.43, 0); B(0.32, 0.05, 1.3, carMat, -1.64, 1.48, 0);
+    B2(1.3, 0.6, 0.28, carMat, -1.05, 0.56, 0.87); B2(0.04, 0.3, 0.2, dark, -0.39, 0.62, 0.88); B2(1, 0.5, 0.2, carMat, 1.1, 0.5, 0.84);
+    B(0.08, 0.16, 1.9, dark, -1.8, 0.36, 0); B2(0.05, 0.3, 0.2, brakeMat, -1.81, 0.72, 0.6);
+    B(0.1, 0.2, 1.8, dark, 1.8, 0.36, 0); B2(0.05, 0.14, 0.24, lampMat, 1.81, 0.64, 0.6); rond(0.11, lampMat, 1.83, 0.64, 0.13); rond(0.11, lampMat, 1.83, 0.64, 0.38);
+    roues(-1.05, 1.1, 1.01, 0.94, 0.8);
+  } else if (K === 'gts') { // Dodge Viper GTS : capot moitié de la voiture, habitacle reculé, toit à double bulle, queue relevée, deux bandes d'un bout à l'autre
+    const S = new THREE.MeshLambertMaterial({ color: L.bandes });
+    B(2.2, 0.56, 2, carMat, -1.2, 0.52, 0); part(wedge(2.4, 0.56, 2, 0.25), carMat, 1.1, 0.52, 0); B(1.3, 0.08, 2, carMat, -1.65, 0.84, 0);
+    part(trap(2, 0.36, 1.56, 0.55, 0.8, 0.78), dark, -1, 0.98, 0); B2(0.7, 0.07, 0.5, carMat, -0.87, 1.18, 0.3); B(0.25, 0.08, 2, carMat, -2.2, 0.94, 0);
+    for (const z of [-0.2, 0.2]) { part(wedge(2.42, 0.56, 0.2, 0.25), S, 1.1, 0.53, z); B(2.22, 0.56, 0.2, S, -1.2, 0.53, z); B(1.32, 0.02, 0.2, S, -1.65, 0.885, z); B(0.27, 0.09, 0.2, S, -2.2, 0.94, z); B(0.72, 0.02, 0.2, S, -0.87, 1.225, z); }
+    B2(0.05, 0.14, 0.5, brakeMat, -2.31, 0.64, 0.65); B(0.3, 0.16, 1.6, dark, -2.2, 0.3, 0); B2(0.05, 0.12, 0.4, lampMat, 2.3, 0.5, 0.7); B2(0.3, 0.14, 0.02, dark, 0.6, 0.56, 1);
+    roues(-1.4, 1.45, 1, 1, 0.82);
+  } else {
+    part(wedge(4.5, 0.62, 1.95, L.nez), carMat, 0, 0.62, 0); part(wedge(L.cab[1], L.cab[2], 1.6, 0.75), dark, L.cab[0], 0.91 + L.cab[2] / 2, 0); // coque, habitacle
+    if (L.aileron) { const ah = 0.25 * (L.aileron - 1); box(0.4, 0.08, 2.15, carMat, -2.05, 1.5 + ah, 0, body); for (const z of [-0.85, 0.85]) box(0.1, 0.5 + ah, 0.1, dark, -2.05, 1.2 + ah / 2, z, body); }
+    if (L.bandes) for (const z of [-0.2, 0.2]) box(L.cab[1] * 0.8, 0.02, 0.2, new THREE.MeshLambertMaterial({ color: L.bandes }), L.cab[0] - 0.15, 0.92 + L.cab[2], z, body);
+    box(0.5, 0.25, 1.7, dark, -2.1, 0.42, 0, body); // diffuseur
+    body.scale.set(L.l, L.h, L.w); // silhouette propre à chaque voiture
+  }
   const wheelGeo = new THREE.CylinderGeometry(0.43, 0.43, 0.36, 8); wheelGeo.rotateX(Math.PI / 2);
   const wheels = [];
-  body.scale.set(L.l, L.h, L.w); // silhouette propre à chaque voiture
-  for (const x of [-1.4, 1.45]) for (const z of [-0.95, 0.95]) {
-    const st = new THREE.Group(); st.position.set(x * L.l, 0.43, z * L.w); carG.add(st);
+  for (const i of [0, 1]) for (const sg of [-1, 1]) {
+    const st = new THREE.Group(); st.position.set(WH[i], 0.43 * WH[4], sg * WH[2 + i]); st.scale.setScalar(WH[4]); carG.add(st);
     const sp = part(wheelGeo, dark, 0, 0, 0, st); box(0.72, 0.14, 0.38, rim, 0, 0, 0, sp); // jante visible pour lire la rotation
-    wheels.push({ sp, st: x > 0 ? st : null });
+    wheels.push({ sp, st: i ? st : null });
   }
   carG.traverse(o => { o.castShadow = true; });
-  const brakeMat = new THREE.MeshBasicMaterial({ color: 0x8a1020 });
-  box(0.06, 0.2, 1.8, brakeMat, -2.27, 0.72, 0, body); // feux arrière, plus vifs au freinage
-  for (const z of [-0.65, 0.65]) box(0.06, 0.16, 0.45, new THREE.MeshBasicMaterial({ color: 0xfff2d0 }), 2.27, 0.42, z, body); // phares
+  if (!K) {
+    box(0.06, 0.2, 1.8, brakeMat, -2.27, 0.72, 0, body); // feux arrière, plus vifs au freinage
+    for (const z of [-0.65, 0.65]) box(0.06, 0.16, 0.45, lampMat, 2.27, 0.42, z, body); // phares
+  }
   if (L.neon) for (const z of [-1, 1]) box(3, 0.07, 0.05, new THREE.MeshBasicMaterial({ color: L.neon }), 0, 0.34, z, body); // liserés néon de bas de caisse
 
   // traînées lumineuses des feux arrière : deux rubans tirés sur les dernières positions
@@ -763,7 +808,10 @@
     const shake = 0.04 * r * r + (stun > 0 ? stun * 0.5 : 0);
     cam.position.set(px + (Math.random() - 0.5) * shake, s.y + 3.3 - 0.6 * r + (Math.random() - 0.5) * shake, pz);
     cam.lookAt(car.x + cx * 10, S[(car.idx + 5) % N].y + 1.4, car.z + cz * 10);
-    cam.fov = 62 + 26 * r + 3 * car.slide + (car.boost > 0 ? 6 : 0); cam.updateProjectionMatrix();
+    cam.fov = 62 + 26 * r + 3 * car.slide + (car.boost > 0 ? 6 : 0);
+    const vue = window.__g.vue; // shortcut: debug console seulement, __g.vue = [angle° autour de la voiture, distance, hauteur] pour inspecter le modèle ; à remplacer par un vrai mode photo si on en veut un
+    if (vue) { const a = car.th + vue[0] * Math.PI / 180; cam.position.set(car.x + Math.cos(a) * vue[1], carY + vue[2], car.z + Math.sin(a) * vue[1]); cam.lookAt(car.x, carY + 0.7, car.z); cam.fov = 45; }
+    cam.updateProjectionMatrix();
     sky.position.copy(cam.position); sunDisc.position.copy(cam.position).addScaledVector(SD, 2000); sunFollow();
 
     // lumière : nuit néon ↔ échangeur en alarme rouge qui bat avec la musique
