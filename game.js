@@ -12,6 +12,8 @@
   // zones d'ambiance sonore (champ amb de la carte, entre deux points du tracé) : 0 dehors, 1 dedans, fondu de 120 m à l'entrée et à la sortie
   const nearS = p => { let b = 0, bd = 1e18; for (let i = 0; i < N; i++) { const d = (S[i].x - p[0] * M.sc) ** 2 + (S[i].z - p[1] * M.sc) ** 2; if (d < bd) { bd = d; b = i; } } return b; };
   const ambZ = (M.amb || []).map(([a, b]) => span(nearS(M.pts[a]), nearS(M.pts[b]), true)), ambAt = i => Math.max(0, ...ambZ.map(z => z(i, 60)));
+  // pluie (thème) : 1 = partout, ou des zones [point a, point b, force 0 à 1] avec le même fondu de 120 m ; coupée en tunnel
+  const pluieZ = Array.isArray(TH.pluie) ? TH.pluie.map(([a, b, f]) => [span(nearS(M.pts[a]), nearS(M.pts[b]), true), f]) : null, pluieAt = i => pluieZ ? Math.max(0, ...pluieZ.map(([z, f]) => z(i, 60) * f)) : TH.pluie ? 1 : 0;
   let tTraf = 0; // temps écoulé depuis le départ : horloge du trafic
   let seed = 7;
   const rnd = () => { seed = seed * 1664525 + 1013904223 >>> 0; return seed / 4294967296; };
@@ -875,7 +877,7 @@
     for (let k = 0; k < ns && k < LUMS.length; k++) { const l = LUMS[k]; put(l.x, l.y, l.z, l.c, l.r, Math.min(1, (dm - l.d) / (dm * 0.3 + 0.01)) * (l.tun && TH.alarme ? 0.5 + pulse : 1)); }
     LUX.uN.value = nl;
     // pluie : chaque goutte recule de la vitesse de la voiture, sa traînée s'étire d'autant
-    rain.visible = !!TH.pluie && lm < 0.5; rain.position.set(car.x, carY, car.z);
+    const pl = pluieAt(car.idx) * (1 - lm); rain.visible = pl > 0.02; rainGeo.setDrawRange(0, 2 * Math.round(RN * pl)); rain.position.set(car.x, carY, car.z);
     for (let i = 0; i < RN; i++) {
       let x = rainP[i * 3] - car.vx * dt, y = rainP[i * 3 + 1] - 55 * dt, z = rainP[i * 3 + 2] - car.vz * dt;
       x = ((x + 40) % 80 + 80) % 80 - 40; z = ((z + 40) % 80 + 80) % 80 - 40; if (y < 0) y += 30;
