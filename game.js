@@ -335,7 +335,7 @@
   // adversaires du mode course : copies de la voiture du joueur, une couleur chacune (roues fixes) ; [nom, couleur]
   const OPP = [['KENJI', '#00c8ff'], ['REI', '#ff8a00'], ['JUN', '#40ff80']];
   const opps = OPP.map(([, col]) => {
-    const g = carG.clone(), m = new THREE.MeshLambertMaterial({ color: col }), b = brakeMat.clone();
+    const g = carG.clone(), m = new THREE.MeshLambertMaterial({ color: col, emissive: col, emissiveIntensity: 0.45 }), b = brakeMat.clone(); // un peu lumineuse : lisible de nuit et de loin
     g.traverse(o => { if (o.material === carMat) o.material = m; else if (o.material === brakeMat) o.material = b; });
     g.visible = false; g.userData.y = 0; scene.add(g); return g;
   });
@@ -629,6 +629,16 @@
       if (ghostM.visible) dot(ghostM.position.x, ghostM.position.z, C);
       if (race) race.cars.forEach((c, i) => i && dot(c.x, c.z, OPP[i - 1][1]));
       dot(car.x, car.z, Y);
+    }
+    if (race && !raceEnd && state !== 'title') { // repère au-dessus de chaque adversaire : à 270 lignes, une voiture lointaine ne fait que quelques pixels
+      cam.updateMatrixWorld();
+      race.cars.forEach((c, i) => {
+        const dx = c.x - cam.position.x, dz = c.z - cam.position.z, f = dx * Math.cos(cth) + dz * Math.sin(cth);
+        if (!i || f < 3 || f > 400) return; // derrière la caméra ou trop loin
+        tmp.set(c.x, opps[i - 1].userData.y + 2.4, c.z).project(cam);
+        const [name, col] = OPP[i - 1], x = Math.round((tmp.x + 1) / 2 * HW), y = Math.round((1 - tmp.y) / 2 * HH), w = name.length * 8 + 4;
+        R(hg, 'rgba(8,8,12,.75)', x - w / 2, y - 14, w, 11); txt(name, x, y - 12, 8, col, 'center'); R(hg, col, x - 2, y - 2, 5, 3); R(hg, col, x - 1, y + 1, 3, 2);
+      });
     }
     if (car.boost > 0) tag('BOOST', cx, 82, C);
     if (splitMsg && (splitMsg.T -= dt) > 0) tag('S' + (splitMsg.i + 1) + ' ' + (splitMsg.d == null ? fmt(splitMsg.t) : (splitMsg.d <= 0 ? '-' : '+') + Math.abs(splitMsg.d).toFixed(2)), cx, 102, splitMsg.d == null ? Y : splitMsg.d <= 0 ? C : RD); // écart au record à chaque secteur
