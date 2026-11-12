@@ -51,9 +51,9 @@
           fog: 0x2a0308, portail: 0xfcee0a, neons: [0xfcee0a, 0xff003c], reflets: ['#c0002c', '#b8a808'], coque: 80 },
         hud: { y: '#fcee0a', c: '#00f0ff', r: '#ff003c', fond: 'rgba(8,8,12,.82)', style: 'cyber', split: 1, jp: ['ラップ', 'スピード'], sur: ['夜間タイムアタック', 'CONTRE-LA-MONTRE NOCTURNE'], titre: ['VILLE À', 'PLEIN REGIME'] } } },
 
-    // Touge : montée rapide puis quatre épingles empilées. Adhérence de vraie route (2 g avec des pneus de course), route étroite.
+    // Touge : départ en descente, montée à 13 %, plateau du carrefour (supérette et station-service), puis quatre épingles empilées à 10 %. Adhérence de vraie route (2 g avec des pneus de course), route étroite.
     { id: 'touge', nom: 'KARASU-TOGE', W: 6, grip: 21, sc: 1, tun: null, chaud: [14, 40], sect: [10, 40], anticipe: 1,
-      pts: [[0, 0, 0], [150, 0, 4], [300, -40, 12], [430, -10, 22], [560, -70, 34], [700, -40, 46], [820, 40, 60], [860, 170, 74], [800, 290, 88], [840, 400, 100], [790, 500, 108], [720, 580, 107], [640, 610, 105], [570, 580, 103], [542, 520, 100], [540, 430, 95], [540, 345, 90], [534, 331, 89], [520, 325, 88], [506, 331, 87], [500, 345, 86], [500, 430, 81], [500, 515, 76], [494, 529, 75], [480, 535, 74], [466, 529, 73], [460, 515, 72], [460, 430, 67], [460, 345, 62], [454, 331, 61], [440, 325, 60], [426, 331, 59], [420, 345, 58], [420, 430, 53], [420, 515, 48], [414, 529, 47], [400, 535, 46], [386, 529, 45], [380, 515, 44], [380, 430, 39], [372, 350, 34], [335, 285, 29], [250, 250, 24], [150, 275, 19], [50, 300, 14], [-60, 260, 9], [-150, 180, 5], [-200, 80, 2], [-140, 5, 1]],
+      pts: [[0, 0, 20], [150, 0, 14], [300, -40, 10], [430, -10, 22], [560, -70, 38], [700, -40, 56], [820, 40, 74], [860, 170, 92], [800, 290, 108], [840, 400, 122], [790, 500, 132], [720, 580, 135], [640, 610, 135], [570, 580, 133], [542, 520, 130], [540, 430, 121], [540, 345, 112], [534, 331, 111], [520, 325, 110], [506, 331, 109], [500, 345, 108], [500, 430, 99], [500, 515, 90], [494, 529, 89], [480, 535, 88], [466, 529, 87], [460, 515, 86], [460, 430, 77], [460, 345, 68], [454, 331, 67], [440, 325, 66], [426, 331, 65], [420, 345, 64], [420, 430, 55], [420, 515, 46], [414, 529, 45], [400, 535, 44], [386, 529, 43], [380, 515, 42], [380, 430, 33], [372, 350, 26], [335, 285, 22], [250, 250, 18], [150, 275, 16], [50, 300, 22], [-60, 260, 19], [-150, 180, 18], [-200, 80, 18], [-140, 5, 19]],
       // Mazda RX-7 Spirit R Type A (FD3S, 2002) : birotor biturbo 13B-REW, 280 ch à 6500 tr/min, 314 N·m à 5000, 1270 kg, propulsion (rapports à vérifier sur fiche)
       car: car({ nom: 'MAZDA RX-7 SPIRIT R', ratios: [3.483, 2.015, 1.391, 1.000, 0.719], final: 4.1, wheel: 0.318, mass: 1345, idle: 900, red: 8000, cd: 0.31, area: 1.8,
         tq: [0, 150, 220, 270, 300, 314, 308, 290, 240], son: 1.5, look: { col: 0xf4f0e0, l: 0.95, w: 0.96, h: 0.9, nez: 0.72, cab: [-0.35, 1.9, 0.48], aileron: 1 } }),
@@ -66,9 +66,9 @@
         chev: 1, murH: 1.1, route: ['#26282c', '#34363c', '#e8e6da', '#ff8c1a', '#26282c', '#26282c', false], mur: ['#34363a', '#e8e6da', '#a8a69c', '#101214'], depart: [0xff8c1a, 0xe8e6da, '#e8e6da'],
         hud: { y: '#f4f0e0', c: '#ff8c1a', r: '#ff2a3a', fond: 'rgba(6,12,10,.84)', style: 'trait', split: 0, jp: ['ラップ', 'スピード'], sur: ['烏峠ダウンヒル', 'DESCENTE DE NUIT'], titre: ['KARASU', 'TOGE'] } } },
 
-    // Wangan : 2,7 km de ligne de baie à fond, puis une boucle intérieure serrée, avec du trafic à doubler.
-    { id: 'wangan', nom: 'WAN-9', W: 8, grip: 24, sc: 1, tun: [13, 18], chaud: [11, 24], sect: [8, 24], anticipe: 1, trafic: 9,
-      pts: [[0, 0, 20], [500, 0, 20], [1000, -30, 22], [1500, -20, 34], [1900, 10, 40], [2300, 60, 30], [2600, 180, 22], [2720, 380, 18], [2690, 515, 15], [2635, 570, 13], [2560, 590, 10], [2420, 555, 7], [2290, 650, 4], [2160, 550, 0], [2030, 650, -8], [1900, 550, -12], [1770, 650, -12], [1640, 550, -6], [1510, 650, 2], [1380, 550, 8], [1250, 650, 12], [1120, 560, 15], [980, 640, 17], [840, 600, 18], [700, 660, 18], [450, 650, 19], [200, 640, 20], [-50, 600, 20], [-250, 470, 20], [-320, 290, 20], [-250, 100, 20], [-120, 10, 20]],
+    // Wangan : voie rapide du front de mer à fond, pont à haubans vers l'île du port, enfilade entre les conteneurs, tunnel immergé sous le chenal, retour en ville. Du trafic à doubler.
+    { id: 'wangan', nom: 'WAN-9', W: 8, grip: 24, sc: 1, tun: [23, 28], chaud: [12, 22], sect: [8, 22], anticipe: 1, trafic: 9,
+      pts: [[0, 0, 18], [400, 0, 18], [800, 0, 18], [1100, 10, 18], [1300, 60, 19], [1400, 180, 23], [1410, 310, 33], [1400, 440, 26], [1390, 550, 19], [1340, 660, 12], [1220, 730, 6], [1080, 740, 3], [940, 700, 2], [800, 760, 2], [660, 700, 2], [520, 770, 2], [380, 710, 2], [240, 780, 2], [100, 720, 2], [-60, 790, 2], [-220, 760, 2], [-400, 800, 2], [-540, 760, 0], [-610, 660, -5], [-620, 540, -13], [-620, 400, -15], [-610, 250, -15], [-620, 110, -14], [-620, -20, -9], [-600, -130, 0], [-520, -230, 9], [-380, -250, 15], [-240, -180, 18], [-150, -60, 18]],
       // Toyota Supra RZ (JZA80, 1997) : 6 en ligne biturbo 2JZ-GTE, fiche export 320 ch, 427 N·m à 4000 tr/min, 1510 kg, Getrag V160 (rapports à vérifier sur fiche)
       car: car({ nom: 'TOYOTA SUPRA RZ', ratios: [3.827, 2.360, 1.685, 1.312, 1.000, 0.793], final: 3.266, wheel: 0.318, mass: 1585, idle: 800, red: 6800, cd: 0.32, area: 1.95,
         tq: [0, 180, 300, 400, 427, 420, 400, 340, 260], son: 0.95, look: { col: 0x4a4e5c, l: 1.02, w: 1, h: 0.96, nez: 0.66, cab: [-0.45, 2.1, 0.5], aileron: 2 } }),
@@ -77,7 +77,7 @@
         lead: [T1, T2, [[0, 86, 6], [6, 83, 2], [8, 79, 8]], [[0, 81, 4], [4, 78, 4], [8, 81, 4], [12, 78, 2], [14, 81, 2]], T1, T2, [[0, 86, 6], [6, 83, 2], [8, 91, 8]], [[0, 90, 8], [8, 86, 8]]] }], // trance
       th: { decor: 'wangan', fog: 0x0c1424, fogD: [90, 1300], sky: [[0, '#02030a'], [0.38, '#0a1024'], [0.47, '#4a2c18'], [0.5, '#0c1424'], [1, '#0c1424']], stars: 40,
         astre: { dir: [0.5, 0.7, -0.4], col: '#e8e0d0', ombre: '#b8b0a0', taille: 120 }, hemi: [0x4a5a8a, 0xff9a2e, 0.55], sun: [0x8fa0d0, 0.25], phares: 2.4, bloom: 0.1, scan: 0.1,
-        chev: 1, piles: -3, murH: 1.4, route: ['#24262e', '#30323c', '#f4f1e0', '#f4f1e0', '#24262e', '#24262e', false], mur: ['#3a3e46', '#c9ced6', '#ff9a2e', '#16181e'], depart: [0x1f8f5a, 0xc9ced6, '#f4f1e0'],
+        chev: 1, piles: -14, murH: 1.4, route: ['#24262e', '#30323c', '#f4f1e0', '#f4f1e0', '#24262e', '#24262e', false], mur: ['#3a3e46', '#c9ced6', '#ff9a2e', '#16181e'], depart: [0x1f8f5a, 0xc9ced6, '#f4f1e0'],
         tun: { sol: ['#2a2218', '#3a2e20', '#f4f1e0', '#f4f1e0', '#2a2218', '#2a2218'], murs: ['#ffb85a', '#ffb85a'], paroi: ['#3a2c18', '#6a5028', '#8a6a38', '#120e08'], plafond: ['#1a140c', '#ffb85a', '#ffb85a', '#3a2e20'],
           fog: 0x2a1a08, portail: 0x1f8f5a, neons: [0xff9a2e, 0xff9a2e], coque: 80 },
         hud: { y: '#ffffff', c: '#ffb85a', r: '#ff2a3a', fond: 'rgba(10,84,52,.92)', style: 'panneau', split: 0, jp: ['周回', '速度'], sur: ['湾岸九号線', 'LIGNE DE BAIE'], titre: ['WAN-9', 'BAYSHORE'] } } },
@@ -93,13 +93,14 @@
         lead: [P1, P2, [[0, 77, 4], [4, 80, 2], [6, 84, 2], [8, 82, 4], [12, 80, 4]], [[0, 79, 4], [4, 83, 4], [8, 86, 8]], P1, P2, [[0, 77, 4], [4, 80, 2], [6, 84, 2], [8, 87, 4], [12, 84, 4]], [[0, 83, 8], [8, 79, 8]]] }], // disco spatiale
       th: { decor: 'paris', fog: 0xf0b89a, fogD: [140, 1500], sky: [[0, '#2b3a67'], [0.26, '#2b3a67'], [0.27, '#5a6a9a'], [0.38, '#5a6a9a'], [0.39, '#c08a9a'], [0.45, '#c08a9a'], [0.46, '#f0b89a'], [1, '#f0b89a']], stars: 0,
         astre: { dir: [0.8, 0.14, 0.3], col: '#fff0c0', ombre: '#fff0c0', taille: 260 }, hemi: [0xa8b8e8, 0xd9c9a8, 0.95], sun: [0xffc890, 0.75], phares: 0.5, bloom: 0.03, scan: 0.05,
+        rues: [[0, 'boulevard'], [3, 'place'], [8, 'avenue'], [11, 'rue'], [13, 'ruelle'], [19, 'rue'], [24, 'avenue'], [26, 'quai'], [31, 'avenue'], [33, 'boulevard']],
         murH: 0.5, route: ['#4a4a52', '#56565e', '#e8e4d8', '#e8e4d8', '#8a8478', '#8a8478', false], mur: ['#8a8478', '#b0a898', '#8a8478', '#6a665e'], depart: [0x1d2f6f, 0x2a7a4a, '#f4f0e0'],
         tun: { sol: ['#3a3a40', '#46464c', '#e8e4d8', '#e8e4d8', '#3a3a40', '#3a3a40'], murs: ['#ffd05a', '#ffd05a'], paroi: ['#b8b4a8', '#d8d4c8', '#8a867a', '#5a564e'], plafond: ['#3a3830', '#ffe9a0', '#ffe9a0', '#5a564e'],
           fog: 0x40382a, portail: 0x5d6b82, neons: [0xffd05a, 0xffd05a], coque: 14 },
         hud: { y: '#ffffff', c: '#ffd05a', r: '#ff6a5a', fond: 'rgba(24,44,110,.92)', style: 'plaque', split: 0, jp: null, sur: [null, 'PARIS · 5 H 30'], titre: ['PREMIER', 'METRO'] } } },
 
-    // Canal de Los Angeles à l'heure dorée : béton mouillé, très large, la carte de la glisse.
-    { id: 'canal', nom: 'CANAL 6', rivaux: ['DRE', 'ROSA', 'CAL'], W: 15, grip: 15, sc: 1, tun: null, chaud: [1, 8], sect: [7, 19], anticipe: 1,
+    // Canal de Los Angeles à l'heure dorée : béton mouillé, large, la carte de la glisse. Fresques fléchées et balises à l'extérieur des courbes.
+    { id: 'canal', nom: 'CANAL 6', rivaux: ['DRE', 'ROSA', 'CAL'], W: 14, grip: 15, sc: 1, tun: null, chaud: [1, 8], sect: [7, 19], anticipe: 1,
       pts: [[0, 0, -8], [250, -80, -8], [500, 90, -8], [750, -80, -8], [1000, 90, -8], [1250, -80, -8], [1500, 60, -8], [1720, 40, -8], [1825, 123, -5], [1828, 168, -3], [1803, 206, -1], [1760, 220, 2], [1500, 230, 4], [1300, 290, 4], [1100, 220, 4], [900, 290, 4], [700, 220, 4], [500, 290, 4], [300, 220, 4], [50, 240, 4], [-170, 230, 2], [-256, 156, -1], [-270, 110, -3], [-256, 64, -5], [-170, -10, -8]],
       // Dodge Viper GTS (1996) : V10 de 8,0 L, 450 ch à 5200 tr/min, 664 N·m à 3700, 1535 kg, propulsion, boîte T56 (rapports à vérifier sur fiche)
       car: car({ nom: 'DODGE VIPER GTS', ratios: [2.66, 1.78, 1.30, 1.00, 0.74, 0.50], final: 3.07, wheel: 0.333, mass: 1610, idle: 800, red: 6000, cd: 0.35, area: 1.9,
@@ -109,7 +110,7 @@
         lead: [L1, L2, [[0, 87, 6], [6, 86, 2], [8, 82, 4], [12, 79, 4]], [[0, 77, 4], [4, 79, 12]], L1, L2, [[0, 87, 6], [6, 84, 2], [8, 82, 4], [12, 84, 4]], [[0, 86, 4], [4, 81, 4], [8, 78, 8]]] }], // g-funk
       th: { decor: 'canal', fog: 0xe89060, fogD: [160, 1700], sky: [[0, '#3d2a5c'], [0.24, '#3d2a5c'], [0.25, '#7a4078'], [0.36, '#7a4078'], [0.37, '#d85a50'], [0.44, '#d85a50'], [0.45, '#ff9a4a'], [0.49, '#ff9a4a'], [0.5, '#e89060'], [1, '#e89060']], stars: 0,
         astre: { dir: [-0.85, 0.11, 0.35], col: '#fff4c0', ombre: '#fff4c0', taille: 340 }, hemi: [0xb898c8, 0xb8ad9a, 0.85], sun: [0xffa860, 0.9], phares: 0.4, bloom: 0.03, scan: 0.05,
-        murH: 0.9, route: ['#9a9084', '#a89e90', '#c8bca8', '#2aa39a', '#9a9084', '#9a9084', true], mur: ['#8a8074', '#b8ad9a', '#e83f8c', '#5a5248'], depart: [0xff7a3d, 0x3d2a5c, '#f4f0e0'],
+        murH: 1.3, route: ['#7a7066', '#867c70', '#f4f0e0', '#2aa39a', '#e83f8c', '#f4f0e0', true], mur: ['#2a2030', '#f4f0e0', '#e83f8c', '#1a1420'], depart: [0xff7a3d, 0x3d2a5c, '#f4f0e0'],
         hud: { y: '#ffc04a', c: '#ff7a3d', r: '#e83f8c', fond: 'rgba(40,24,56,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'LOS ANGELES · HEURE DOREE'], titre: ['CANAL', 'SIX'] } } },
   ];
   let id = 'ville';
