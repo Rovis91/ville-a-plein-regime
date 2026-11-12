@@ -12,6 +12,12 @@ Object.assign(TEXTURES, {
     for (let i = 0; i < 12; i++) R(g, '#8e8678', alea() * 64 | 0, alea() * 64 | 0, 1, 1);
     for (let y = 0; y < 64; y += 8) { R(g, '#958d80', 0, y, 64, 1); for (let x = (y & 8); x < 64; x += 16) R(g, '#958d80', x, y, 1, 8); }
   }, 4],
+  // terre-plein de la place : dalles de granit clair de 1 m, grain moucheté, joints fins
+  granit: () => [64, 64, (g, { R, alea }) => { R(g, '#cfc8ba', 0, 0, 64, 64); for (let i = 0; i < 400; i++) R(g, alea() < 0.5 ? '#d8d2c6' : '#bcb5a6', alea() * 64 | 0, alea() * 64 | 0, 1, 1);
+    for (let k = 0; k < 64; k += 16) { R(g, '#a39c8e', 0, k, 64, 1); R(g, '#a39c8e', k, 0, 1, 64); } }, 4],
+  // colonne Morris : affiches de spectacle serrées sur fond vert bouteille, un titre clair ou sombre sur chacune
+  affiches: () => [64, 64, (g, { R, alea }) => { R(g, '#1e4a36', 0, 0, 64, 64);
+    for (let x = 1; x < 64; x += 16) for (let y = 6; y < 56; y += 17) { const c = ['#c8302a', '#e8c040', '#2a4a8a', '#f0ece0', '#1a1a1a', '#d86a2a'][alea() * 6 | 0]; R(g, c, x, y, 14, 15); R(g, c === '#f0ece0' ? '#1a1a1a' : '#f0ece0', x + 2, y + 2, 10, 3); R(g, '#8a8478', x + 2, y + 9, 10, 1); } }],
   // devanture de rez-de-chaussée, 13 × 4,4 m : bandeau peint à l'enseigne (nom inventé), vitrines encadrées de pilastres, porte ; l'intérieur dit le commerce
   //   genre : cafe, boulangerie, librairie, pharmacie, fleuriste, fromagerie, mode, boucherie ; fond = couleur de la boiserie ; or = couleur des lettres
   devanture: (genre, nom, fond, or) => [256, 88, (g, { R, alea, voile }) => {

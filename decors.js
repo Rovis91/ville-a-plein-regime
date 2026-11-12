@@ -657,12 +657,34 @@
       // le sol de la place en cases de 2 m : pavés partout dans le cercle où l'on roule, trottoir étroit au pied des façades, sauf où partent les avenues
       { const pres = S.filter(s => (s.x - C[0]) ** 2 + (s.z - C[1]) ** 2 < 260 ** 2), loin = (x, z) => { let m = 1e9; for (const s of pres) m = Math.min(m, Math.hypot(s.x - x, s.z - z) - s.w); return m; }; // distance au bord de la chaussée
         const roule = [[], [], []], pied = [[], [], []];
-        for (let r = 0; r < RT + 6; r += 2) { const n = Math.max(6, Math.ceil(6.2832 * r / 2)); for (let k = 0; k < n; k++) {
+        for (let r = PL.ile[0]; r < RT + 6; r += 2) { // (le terre-plein, au milieu, a son propre dallage)
+          const n = Math.max(6, Math.ceil(6.2832 * r / 2)); for (let k = 0; k < n; k++) {
           const a0 = k / n * 6.2832, a1 = (k + 1) / n * 6.2832, P = [[r, a0], [r + 2, a0], [r + 2, a1], [r, a1]].map(([rr, a]) => [C[0] + Math.cos(a) * rr, C[1] + Math.sin(a) * rr]), e = r < PL.r - 2 ? 0 : Math.min(...P.map(q => loin(...q)));
           const L = r < PL.r || e < 0.3 ? roule : pied; P.forEach(([x, z]) => { L[0].push(x, 0, z); L[1].push(x / 4, z / 4); }); const v = L[0].length / 3 - 4; L[2].push(v, v + 2, v + 1, v, v + 3, v + 2); } }
         roule[0].forEach((v, i) => { if (i % 3 === 1) roule[0][i] = 0.02; }); pied[0].forEach((v, i) => { if (i % 3 === 1) pied[0][i] = 0.22; });
         nappe(...roule, paves); nappe(...pied, dalle); }
       h.pose('arc', { pierre: h.mat('pierre'), relief: h.mat('basRelief') }, h.scene, [C[0], 0.02, C[1]]).forEach(m => m.rotation.y = PL.a); // l'arc au milieu, grande arche dans l'axe de la traversée ; ses piles sont des obstacles (sim.js)
+      // ---- le terre-plein de l'arc (sim.js : place.ile) : dallage de granit clair, étoile à douze branches en pavés roses, cent bornes de granit reliées par des chaînes,
+      // ouvertes dans l'axe de la grande arche ; sous l'arche, la dalle et la flamme ; dix candélabres. L'anneau de chaussée autour reste nu : c'est là qu'on glisse.
+      { const [RI, OUV] = PL.ile, A0 = Math.PI / 2 - PL.a, cs = Math.cos(PL.a), sn = Math.sin(PL.a), P2 = (r, a) => [C[0] + Math.cos(a) * r, C[1] + Math.sin(a) * r];
+        const ferme = a => Math.abs(RI * (Math.cos(a) * cs - Math.sin(a) * sn)) > OUV; // hors de l'ouverture (même calcul que sim.js)
+        couronne(C[0], C[1], 0, RI, 0.02, 72, h.mat('granit', { side: THREE.DoubleSide }));
+        const et = [[], [], []]; for (let k = 0; k < 12; k++) { const a = A0 + k * Math.PI / 6; for (const [r, b] of [[28, a - Math.PI / 12], [28, a + Math.PI / 12], [46, a]]) { const [x, z] = P2(r, b); et[0].push(x, 0.04, z); et[1].push(x / 4, z / 4); } et[2].push(3 * k, 3 * k + 1, 3 * k + 2); }
+        nappe(...et, h.mat('paves', { c: 0xf0b0a0, side: THREE.DoubleSide }));
+        const bornes = [], chaines = [], n = 100, pas = 6.2832 / n;
+        for (let k = 0; k < n; k++) { const a = A0 + (k + 0.5) * pas; if (!ferme(a)) continue; const [x, z] = P2(RI, a); bornes.push([x, 0.02, z, -a]);
+          if (ferme(a + pas)) { const [mx, mz] = P2(RI * Math.cos(pas / 2), a + pas / 2); chaines.push([mx, 0.62, mz, Math.PI / 2 - a - pas / 2, 2 * RI * Math.sin(pas / 2), 0.07, 0.07]); } }
+        insts(h, 'borne', { pierre: h.mat('pierre') }, bornes); inst(h, h.geo('bloc'), h.mat('fonte'), chaines);
+        h.pose('flamme', { bronze: h.mat('peinture', { c: 0x4a3c22 }), feu: h.mat('peinture', { lum: 1, c: 0xffa030 }) }, h.scene, [C[0], 0.02, C[1]]).forEach(m => m.rotation.y = PL.a);
+        const iP = large[large.length >> 1]; h.lum(iP, C[0], 2.5, C[1], 0xff8a30, 34, 2); // la flamme éclaire le dessous de la voûte
+        for (const sd of [-1, 1]) for (let k = 1; k <= 5; k++) { const [x, z] = P2(RI - 2.5, A0 + sd * k * Math.PI / 6); mats.push([x, 3.5, z]); lant.push([x, 7.1, z]); if (k % 2 === 0) h.lum(iP, x, 6.6, z, 0xffd05a, 15, 1.6); } }
+      // ---- le trottoir de la place, entre le mur et les façades : platanes, bancs, colonnes Morris, bouches de métro, un kiosque ; rien là où partent les avenues
+      const kqPlace = [], bancs = [], morris = [], metros = [];
+      { let n = 0; const pas = 9 / (PL.r + 2.2);
+        for (let a = pas / 2; a < 6.2832; a += pas) { const x = C[0] + Math.cos(a) * (PL.r + 2.2), z = C[1] + Math.sin(a) * (PL.r + 2.2), [d, s] = proche(x, z); if (d < s.w + 1.5) continue; // (sur la chaussée d'une avenue)
+          const P2 = (r, b = a) => [C[0] + Math.cos(b) * r, 0.22, C[1] + Math.sin(b) * r, -b - Math.PI / 2], k = n++; // posé sur le trottoir, face à l'arc
+          if (k % 27 === 13) metros.push(P2(PL.r + 3)); else if (k % 20 === 8) morris.push(P2(PL.r + 2.2)); else if (k === 45) kqPlace.push(P2(PL.r + 3.6)); else { troncs.push([x, 2.82, z]); houp.push([x, 7.82, z, k * 1.7, 1, 0.9, 1]); }
+          if (k % 5 === 2) bancs.push(P2(PL.r + 4.8, a + pas / 2)); } }
       const fm = ['#d9c9a8', '#cfc0a0', '#e0d4b8'].map(p => h.mat('facadeParis', {}, p)), lots = fm.map(() => []);
       const fb = ['#e8dcc0', '#d8c8b0'].map(p => h.mat('facadeParis', {}, p, 1)), bas = fb.map(() => []); // maisons basses de la butte
       for (let i = 0; i < N; i += 2) {
@@ -728,7 +750,10 @@
       insts(h, 'store', { toile: h.mat('toileRayee', { side: THREE.DoubleSide }), fer: h.mat('fonte') }, stores, { teinte: 'toile' });
       insts(h, 'terrasse', { plateau: h.mat('craie'), fer: h.mat('fonte'), canne: h.mat('bruit', {}, '#b8925a', ['#8a6a3a', '#d0b080']) }, terrasses);
       insts(h, 'croixPharmacie', { fer: h.mat('fonte'), croix: h.mat('peinture', { lum: 1, c: 0x2aff7a }) }, croix);
-      const kq = []; for (const [i, sd] of [[h.T.sp[1] - 60, -1], [h.T.sp[1] - 24, 1]]) { const s = S[i], [x, z] = bord(s, sd, s.w + 4.6); kq.push([x, s.y + 0.22, z, h.across(s) - sd * 1.5708]); } // entre les voitures garées et la rangée d'arbres
+      const kq = [...kqPlace]; for (const [i, sd] of [[h.T.sp[1] - 60, -1], [h.T.sp[1] - 24, 1]]) { const s = S[i], [x, z] = bord(s, sd, s.w + 4.6); kq.push([x, s.y + 0.22, z, h.across(s) - sd * 1.5708]); } // entre les voitures garées et la rangée d'arbres
+      insts(h, 'banc', { vert: h.mat('peinture', { c: 0x1e4a36 }), fer: h.mat('fonte') }, bancs);
+      insts(h, 'colonneMorris', { corps: h.mat('affiches'), toit: h.mat('peinture', { c: 0x1e4a36 }), fer: h.mat('fonte') }, morris);
+      insts(h, 'boucheMetro', { fer: h.mat('peinture', { c: 0x1e4a36 }), trou: h.mat('peinture', { c: 0x121216 }), panneau: h.mat('ecrit', LUM, 64, 22, '#a01818', '#f4e8c0', 'METRO', 14), lampe: h.mat('lanterne', LUM) }, metros);
       insts(h, 'kiosque', { corps: h.mat('kiosque'), toit: h.mat('peinture', { c: 0x1e4a36 }), comptoir: h.mat('fonte') }, kq);
       // voies sur berge : anneaux d'amarrage, péniches le long du quai ; le pont de pierre qui passe sur l'entrée du tunnel et traverse la Seine
       insts(h, 'anneau', { fer: h.mat('fonte') }, anneaux);

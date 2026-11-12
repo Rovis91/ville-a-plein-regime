@@ -64,6 +64,16 @@
     teteTunnelParis: y0 => { const B = [['pierre', 8.5, 12 - y0, 1, -12.75, (12 + y0) / 2, 2.4], ['pierre', 17, 4, 1, 0, 10, 2.4], ['claveau', 18.4, 0.6, 1.6, 0, 7.7, 2.6]], R = 17.9, cy = 9.6 - R;
       for (let k = 0; k < 11; k++) { const a = (k / 10 - 0.5) * 1.09; B.push(['claveau', 1.75, 1.3, 0.8, Math.sin(a) * (R + 0.65), cy + Math.cos(a) * (R + 0.65), 3.2, [0, 0, -a]]); }
       B.push(['plaque', 11, 1.2, 0.15, 0, 11.4, 3.0]); return B; },
+    // mobilier de la place. Borne de granit du terre-plein (les chaînes sont posées à part) ; dalle de bronze et flamme sous l'arche, à plat : on roule dessus
+    borne: () => [['pierre', 0.55, 0.75, 0.55, 0, 0.375, 0], ['pierre', 0.4, 0.18, 0.4, 0, 0.84, 0]],
+    flamme: () => [['bronze', 2.6, 0.05, 1.6, 0, 0.025, 0], ['bronze', 0.9, 0.1, 0.9, 0, 0.1, 0], ['feu', 0.3, 0.3, 0.3, 0, 0.3, 0], ['feu', 0.16, 0.22, 0.16, 0, 0.55, 0]],
+    // sur le trottoir, origine au sol, Z vers la chaussée : banc public à lattes, colonne Morris (fût à huit pans, marquise, dôme et épi), bouche de métro
+    // (trémie sombre, entourage de fonte ouvert côté chaussée, mât à enseigne lumineuse et globe)
+    banc: () => [['vert', 1.8, 0.06, 0.5, 0, 0.45, 0], ['vert', 1.8, 0.4, 0.06, 0, 0.75, -0.25], ...paire(sx => ['fer', 0.08, 0.45, 0.5, sx * 0.8, 0.225, 0])],
+    colonneMorris: () => [['fer', 1.5, 0.3, 1.5, 0, 0.15, 0], ['corps', 1.3, 3.2, 1.3, 0, 1.9, 0, null, 1], ['corps', 1.3, 3.2, 1.3, 0, 1.9, 0, [0, 0.785, 0], 1], ['toit', 1.9, 0.18, 1.9, 0, 3.6, 0], ['toit', 1.9, 0.18, 1.9, 0, 3.6, 0, [0, 0.785, 0]],
+      ['toit', 1.2, 0.35, 1.2, 0, 3.85, 0], ['toit', 0.6, 0.4, 0.6, 0, 4.2, 0], ['toit', 0.15, 0.5, 0.15, 0, 4.6, 0]],
+    boucheMetro: () => [['trou', 3, 0.03, 1.6, 0, 0.015, 0], ['fer', 3.2, 0.9, 0.08, 0, 0.45, -0.85], ...paire(sx => ['fer', 0.08, 0.9, 1.7, sx * 1.6, 0.45, 0]),
+      ['fer', 0.12, 3.6, 0.12, 1.9, 1.8, 0.9], ['panneau', 1.3, 0.45, 0.1, 1.9, 3.4, 0.9], ['lampe', 0.35, 0.35, 0.35, 1.9, 3.85, 0.9]],
     // arc de triomphe : 45 m de large (X), 22 de profondeur (Z), 50 de haut. Grande arche de 14,6 m sous 29 m dans l'axe Z, arches latérales de 8,4 m sous 18,7 m dans l'axe X ;
     // quatre piles à socle et groupes sculptés, voûtes en gradins, corniche, frise, attique à écussons. Zones : pierre, relief (parties sculptées)
     arc: () => {

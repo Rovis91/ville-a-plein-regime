@@ -245,6 +245,10 @@
         mur(c, Nx, Nz, CR - d, -Nz * t, Nx * t, -t, 0, dt);
       }
     }
+    // le terre-plein du monument : couronne de bornes à chaînes de rayon ile[0], ouverte sur ile[1] m de part et d'autre de l'axe de la grande arche ; un mur mince, qu'on frotte des deux côtés
+    if (P && P.ile) { const qx = c.x - P.c[0], qz = c.z - P.c[1], r = Math.hypot(qx, qz), e = r - P.ile[0];
+      if (Math.abs(e) < CR && Math.abs(qx * Math.cos(P.a) - qz * Math.sin(P.a)) > P.ile[1]) { const sg = e < 0 ? 1 : -1, Nx = sg * qx / r, Nz = sg * qz / r, t = c.vx * -Nz + c.vz * Nx > 0 ? 1 : -1;
+        mur(c, Nx, Nz, CR - Math.abs(e), -Nz * t, Nx * t, -t, sg / P.ile[0], dt); } }
     // relief : chute libre, sauf si le sol est là
     const g = sol(T, c);
     if (!T.vert) { c.y = g; return; }

@@ -127,6 +127,12 @@ for (const M of CARTES) {
       const qx = c.x - P.c[0], qz = c.z - P.c[1], lx = qx * Math.cos(P.a) - qz * Math.sin(P.a), lz = qx * Math.sin(P.a) + qz * Math.cos(P.a);
       if (P.piles.some(([x, z, a, b]) => Math.abs(lx - x) < a - 0.3 && Math.abs(lz - z) < b - 0.3)) dedans++; }
     assert(hit > 3 && !dedans, `${M.id} : la pile de l'arc ne bloque pas (choc ${hit}, ${dedans} pas dedans)`);
+    // terre-plein : la piste le contourne au large ; lancé sur la couronne de bornes hors de l'axe de l'arche, du dehors comme du dedans, on la heurte sans la franchir
+    if (P.ile) { const [ri] = P.ile, cs = Math.cos(P.a), sn = Math.sin(P.a), ray = q => Math.hypot(q.x - P.c[0], q.z - P.c[1]);
+      assert(S.every(s => ray(s) > ri + 20), `${M.id} : la piste passe trop près du terre-plein`);
+      for (const [r0, sens] of [[ri + 25, -1], [ri - 25, 1]]) { c = lance(P.c[0] + cs * r0, P.c[1] - sn * r0, Math.atan2(-sn * sens, cs * sens)); let choc = 0, franchi = 0;
+        for (let i = 0; i < 2 / H; i++) { step(c, { steer: 0, gas: 1, brake: 0, hand: false }, T, H); choc = Math.max(choc, c.hit); if ((ray(c) - ri) * sens > 0) franchi++; }
+        assert(choc > 3 && !franchi, `${M.id} : la couronne de bornes ne bloque pas ${sens < 0 ? 'du dehors' : 'du dedans'} (choc ${choc}, ${franchi} pas de l'autre côté)`); } }
   }
   // course : 3 tours à 4 pilotes automatiques sur le tracé de la carte ; tout le monde arrive, personne ne sort ni ne reste bloqué
   const R = newRace(T); let wall = 0, bump = 0;
