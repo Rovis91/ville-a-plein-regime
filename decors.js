@@ -299,48 +299,89 @@
       const pics = []; for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283 + rnd() * 0.2, r = 1150 + rnd() * 500, l = 520 + rnd() * 420; pics.push([250 + Math.cos(a) * r, 40, 250 + Math.sin(a) * r, rnd() * 1.5, l, 420 + rnd() * 330, l]); }
       inst(h, h.geo('pic'), h.mat('rocNeige', { fog: false, c: 0xa8b8e8 }), pics);
     },
-    // ---------- Spéciale des Ocres : une spéciale de rallye en fin de journée. Garrigue et pins parasols, buttes d'ocre, public sur les talus à l'extérieur des virages, bottes de paille, le gué, le hameau et son bout de bitume ----------
+    // ---------- Spéciale des Ocres : une spéciale de rallye en fin de journée. Garrigue, pins parasols, oliviers et cyprès, talus des bas-côtés, vignes et lavandes, buttes d'ocre ;
+    // parc d'assistance au départ, public sur des talus tout le long, banderoles, voitures garées, le gué, le hameau et son bout de bitume, des mas isolés, un village perché et sa chapelle ----------
     terre(h) {
-      const { THREE, S, N, W, rnd } = h, [[g0, g1], [b0, b1]] = h.M.surf.zones, entre = (i, a, n) => (i - a + N) % N <= n;
-      const g = terrain(h, { pas: 8, marge: 420, loin: 45, chute: -0.1, mat: h.mat('terreOcre') }); // la piste court au fond d'un vallon : le sol remonte doucement de part et d'autre
+      const { THREE, S, N, W, rnd } = h, [[g0, g1], [b0, b1]] = h.M.surf.zones, entre = (i, a, n) => (i - a + 2 * N) % N <= n, m = i => S[(i + 2 * N) % N];
+      const iG = (pt(h, g0) + pt(h, g1)) >> 1, iB = pt(h, b0), nB = (pt(h, b1) - iB + N) % N;
+      // plat(i) : là où le sol reste au niveau de la route (gué, hameau, parc d'assistance du départ) ; ailleurs les bas-côtés montent en talus
+      const plat = i => entre(i, iG - 30, 60) || entre(i, iB - 10, nB + 20) || entre(i, -50, 130), parc = i => entre(i, -50, 130);
+      const sub = S.filter((_, i) => i % 4 === 0), pres = (x, z) => { let b = 0, bd = 1e18; for (let k = 0; k < sub.length; k++) { const d = (sub[k].x - x) ** 2 + (sub[k].z - z) ** 2; if (d < bd) { bd = d; b = k; } } return [Math.sqrt(bd), b * 4]; };
+      const ss = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+      // le village perché : sur une butte à sommet plat, au point de l'emprise le plus loin de la route
+      let vx = 0, vz = 0, vd = 0, bx = [1e9, 1e9, -1e9, -1e9]; for (const s of S) bx = [Math.min(bx[0], s.x), Math.min(bx[1], s.z), Math.max(bx[2], s.x), Math.max(bx[3], s.z)];
+      for (let x = bx[0]; x <= bx[2]; x += 20) for (let z = bx[1]; z <= bx[3]; z += 20) { const d = pres(x, z)[0]; if (d > vd) { vd = d; vx = x; vz = z; } }
+      // relief des bas-côtés : des talus de terre au bord de la route (jusqu'à 3,5 m, par endroits seulement), des collines au-delà, la butte du village
+      const relief = (x, z) => { const [d, i] = pres(x, z); if (d < W + 3) return 0;
+        const n1 = Math.max(0, Math.sin(x * 0.031 + 1) * Math.cos(z * 0.027) + 0.5 * Math.sin(x * 0.07 + z * 0.05)), n2 = 0.5 + 0.5 * Math.sin(x * 0.011 + 2) * Math.cos(z * 0.009 + 1);
+        return (plat(i) ? 0 : 3.5 * n1 * ss(W + 3, W + 16, d)) + 16 * n2 * ss(50, 220, d) + 18 * (1 - ss(38, 110, Math.hypot(x - vx, z - vz))) * ss(30, 70, d); };
+      const g = terrain(h, { pas: 8, marge: 420, loin: 45, chute: -0.1, mat: h.mat('terreOcre'), creux: (x, z) => -relief(x, z) });
+      const occ = [], vide = (x, z, r) => occ.every(o => (o[0] - x) ** 2 + (o[1] - z) ** 2 > (o[2] + r) ** 2), prend = (x, z, r) => vide(x, z, r) && (occ.push([x, z, r]), true); // ce qui est déjà posé : rien ne se chevauche
+      const sol = (x, z, dy = 0) => g.hAt(x, z) + dy, hasard = () => [g.box[0] + rnd() * (g.box[2] - g.box[0]), g.box[1] + rnd() * (g.box[3] - g.box[1])];
       // le gué : le ruisseau traverse la route au creux du parcours, 16 m d'eau trouble sur la chaussée
-      const iG = (pt(h, g0) + pt(h, g1)) >> 1, eau = h.mat('eauVive', { c: 0xa89668, rep: [2, 3] }), eauR = h.mat('eauVive', { c: 0xa89668, rep: [12, 2] });
+      const eau = h.mat('eauGue', { rep: [3, 3] }), eauR = h.mat('eauGue', { rep: [12, 2] });
       h.ribbon((iG - 4 + N) % N, 8, -W + 0.2, 0.05, W - 0.2, 0.05, eau, 8);
-      h.pose('boite', eauR, repere(h, S[iG]), [0, -0.15, 0], 80, 0.3, 8);
+      h.pose('boite', eauR, repere(h, S[iG]), [0, -0.15, 0], 90, 0.3, 8);
       // le hameau : la terre laisse place à un bout de bitume entre des mas de pierre
-      const iB = pt(h, b0), nB = (pt(h, b1) - iB + N) % N, peauM = { mur: h.mat('pierre'), toit: h.mat('tuilesCanal'), volet: h.mat('peinture', { c: 0x6a8ab8 }) };
+      const peauM = { mur: h.mat('pierre'), toit: h.mat('tuilesCanal'), volet: h.mat('peinture', { c: 0x6a8ab8 }) }, mas = [], cypres = [], pins = [], futs = [], oliviers = [], buissons = [];
+      const cyp = (x, z) => { const e = 0.6 + rnd() * 0.5; cypres.push([x, sol(x, z, 7.3 * e), z, rnd() * 6, 0.38 * e, e, 0.38 * e]); };
       h.ribbon(iB, nB, -W + 0.2, 0.05, W - 0.2, 0.05, h.mat('chaussee', {}, '#4c4c52', '#58585e', '#e8e4d8', '#4c4c52', '#4c4c52', '#4c4c52', false), 32);
-      insts(h, 'mas', peauM, Array.from({ length: 7 }, (_, k) => { const s = S[(iB + 6 + Math.round(k * (nB - 12) / 6)) % N], [x, z] = bord(s, k & 1 ? 1 : -1, W + 7 + (k % 3) * 2); return [x, s.y - 0.5, z, h.across(s)]; }));
-      // le public : un talus à l'extérieur de chaque virage serré, bottes de paille au pied ; rien dans le gué ni dans le hameau
-      const libre = i => !entre(i, (iG - 30 + N) % N, 60) && !entre(i, (iB - 10 + N) % N, nB + 20), talus = [], bottes = [], autos = [], pris = i => talus.some(t => entre(i, (t[7] - 40 + N) % N, 80));
-      for (let i = 0; i < N; i++) { const s = S[i], k = Math.abs(s.k);
-        if (k < 0.022 || k < Math.abs(S[(i + 1) % N].k) || !libre(i) || pris(i)) continue; // au point de corde, un seul talus par virage
-        const sd = s.k > 0 ? -1 : 1; // l'extérieur : à gauche d'un virage à droite
-        for (const dk of [-4, 4]) { const t = S[(i + dk + N) % N], [x, z] = bord(t, sd, W + 6.5); talus.push([x, t.y - 0.4, z, h.across(t) + Math.PI / 2, 1, 1, 1, i]); }
-        for (let dk = -9; dk <= 9; dk += 2) { const t = S[(i + dk + N) % N], [x, z] = bord(t, sd, W + 1.3); bottes.push([x, t.y - 0.1, z, h.across(t)]); }
-        autos.push([i, sd]);
-      }
+      for (let k = 0; k < 9; k++) { const s = m(iB + 4 + Math.round(k * (nB - 8) / 8)), sd = k & 1 ? 1 : -1, [x, z] = bord(s, sd, W + 7 + (k % 3) * 2); mas.push([x, s.y - 0.5, z, h.across(s)]); occ.push([x, z, 9]);
+        if (k % 3 === 0) cyp(...bord(s, sd, W + 17)); }
+      for (let i = iB - 40; i < iB + nB + 60; i += 14) { const [x, z] = bord(m(i), -1, W + 2.2); futs.push([x, sol(x, z, 3.6), z, 0, 0.5, 1.4, 0.5]); } // poteaux du téléphone le long du hameau
+      // le parc d'assistance, à droite de la ligne droite du départ : deux rangs de barnums, un fourgon derrière chacun, une voiture de course sous un sur deux
+      const COUL = [0xe8482a, 0xf4f0e0, 0x2a62c8, 0xf4c020, 0x3a7a3a, 0xf08a2a], barnums = [], fourgons = [], autos = [], auto = (x, z, a, c) => autos.push([x, sol(x, z), z, a, 1, 1, 1, c]);
+      for (let k = 0; k < 14; k++) { const rang = k & 1, s = m(-44 + (k >> 1) * 16 + rang * 8), a = h.across(s), [x, z] = bord(s, 1, W + 8 + rang * 17), [fx, fz] = bord(s, 1, W + 15 + rang * 17);
+        barnums.push([x, s.y - 0.45, z, a - Math.PI / 2, 1, 1, 1, COUL[k % 6]]); fourgons.push([fx, s.y - 0.5, fz, a + Math.PI / 2 + (rnd() - 0.5) * 0.5, 1, 1, 1, COUL[(k + 1) % 6]]); occ.push([x, z, 6], [fx, fz, 4]);
+        if (k % 2 === 0) autos.push([x, s.y - 0.45, z, a + Math.PI / 2, 1, 1, 1, COUL[(k + 2) % 6]]); }
+      // le public : un talus à l'extérieur de chaque virage, un autre de loin en loin dans les lignes droites, en face du parc et à la réception des crêtes ; bottes de paille au pied, voitures garées derrière
+      const talus = [], bottes = [], pan = [], crete = h.M.sauts.map(([p]) => pt(h, p));
+      const groupe = (i, sd, nb) => { for (let k = 0; k < nb; k++) { const t = m(i + Math.round((k - (nb - 1) / 2) * 8)), [x, z] = bord(t, sd, W + 6.5); talus.push([x, Math.max(t.y, sol(x, z)) - 0.4, z, h.across(t) + Math.PI / 2, 1, 1, 1, i]); occ.push([x, z, 8]); }
+        for (let dk = -nb * 4 - 1; dk <= nb * 4 + 1; dk += 2) { const t = m(i + dk), [x, z] = bord(t, sd, W + 1.3); bottes.push([x, t.y - 0.1, z, h.across(t)]); }
+        for (let dk = -nb * 4; dk <= nb * 4; dk += 4) { const t = m(i + dk), [x, z] = bord(t, -sd, W + 0.45); pan.push([x, t.y + 1.45, z, h.across(t) + Math.PI / 2]); } // banderoles en face, au-dessus du muret
+        for (let k = 0; k < nb + 1; k++) { const t = m(i - nb * 4 + k * 7), [x, z] = bord(t, sd, W + 15 + rnd() * 5); if (prend(x, z, 3.5)) auto(x, z, h.across(t) + (rnd() - 0.5), COUL[(i + k) % 6]); } };
+      const pris = i => talus.some(t => entre(i, t[7] - 34, 68)), libre = i => !entre(i, iG - 22, 44) && !entre(i, iB - 14, nB + 28) && !parc(i);
+      for (const i of [-30, 0, 30, 60]) groupe(i, -1, 3); // la tribune de terre face au parc
+      for (const i of crete) for (const sd of [-1, 1]) groupe(i + 22, sd, 2);
+      for (let i = 0; i < N; i++) { const s = S[i], k = Math.abs(s.k); if (k >= 0.012 && k >= Math.abs(m(i + 1).k) && k >= Math.abs(m(i - 1).k) && libre(i) && !pris(i)) groupe(i, s.k > 0 ? -1 : 1, k > 0.022 ? 3 : 2); } // l'extérieur : à gauche d'un virage à droite
+      for (let i = 0, sd = 1; i < N; i += 20) if (libre(i) && !pris(i)) groupe(i, sd = -sd, 1);
+      for (let i = -48; i < 80; i += 4) for (const sd of [-1, 1]) { const t = m(i), [x, z] = bord(t, sd, W + 0.45); pan.push([x, t.y + 1.45, z, h.across(t) + Math.PI / 2]); }
+      for (const i of crete) for (let dk = -44; dk < -4; dk += 4) for (const sd of [-1, 1]) { const t = m(i + dk), [x, z] = bord(t, sd, W + 0.45); pan.push([x, t.y + 1.45, z, h.across(t) + Math.PI / 2]); }
       const foule = h.mat('foule', {}, '#8a5a34', '#e8482a'); foule.map.anisotropy = 8;
       insts(h, 'talusPublic', { talus: h.mat('terreOcre'), ruban: h.mat('banderoleRallye', {}, 0), foule }, talus);
-      inst(h, h.geo('botte'), h.mat('paille'), bottes);
-      // les voitures du public, garées derrière un talus sur deux
-      const vitre = h.mat('vitreSombre'), feuRouge = h.mat('feuRouge', LUM), feuBlanc = h.mat('lampe', LUM), chassis = h.mat('matGris'), roue = h.mat('roue'), pneu = h.mat('pneu'), laques = [0xf4f0e0, 0xc8102e, 0x3a6a4a].map(c => h.mat('laque', { c }));
-      autos.forEach(([i, sd], k) => { if (k & 1) return; const v = new THREE.Group(); v.position.set(sd * (W + 15), -0.4, 3); v.rotation.y = 0.4 * sd; repere(h, S[i]).add(v);
-        h.pose('voitureGaree', { caisse: laques[(k >> 1) % 3], vitre, feuRouge, feuBlanc, chassis, roue, pneu }, v); });
-      // portiques des crêtes, 30 m avant le bout, et les 14 derniers mètres peints de chevrons (formes et banderole de Roche-Sourde : même signal sur toutes les cartes à relief)
-      const peau = { acier: h.mat('acier'), banderole: h.mat('banderoleSaut', { lum: 1, side: THREE.DoubleSide }) }, chev = h.mat('banderoleSaut', { lum: 1, rep: [4, 1] });
-      for (const [p] of h.M.sauts) { const i = pt(h, p); h.pose('portiqueSaut', peau, repere(h, S[(i - 15 + N) % N]), [0, 0, 0], W); h.ribbon((i - 7 + N) % N, 7, -W + 0.6, 0.05, W - 0.6, 0.05, chev, 3.5); }
-      // pins parasols : clairsemés au bord de la route, en bosquets sur les pentes ; buissons de garrigue partout (le même houppier, tout petit, au ras du sol)
-      const pins = [], futs = [], pin = (x, z) => { const e = 0.8 + rnd() * 0.7, r = 3.2 + rnd() * 2.6, y = g.hAt(x, z); futs.push([x, y + 2.6 * e, z, 0, e]); pins.push([x, y + 5.2 * e + 0.25 * r, z, rnd() * 6, r]); };
-      for (let i = 0; i < N; i += 7) for (const sd of [-1, 1]) { const [x, z] = bord(S[i], sd, W + 9 + rnd() * 14); if (rnd() < 0.5 && libre(i) && !pris(i) && g.dAt(x, z) > W + 7) pin(x, z); }
-      for (let k = 0; k < 2600; k++) { const x = g.box[0] + rnd() * (g.box[2] - g.box[0]), z = g.box[1] + rnd() * (g.box[3] - g.box[1]), d = g.dAt(x, z);
-        if (d > 30 && Math.sin(x * 0.021) + Math.cos(z * 0.026) + rnd() > 1.1) pin(x, z);
-        else if (d > W + 3 && d < 160) { const r = 0.7 + rnd() * 1.1; pins.push([x, g.hAt(x, z) + 0.2, z, rnd() * 6, r]); } }
-      inst(h, h.geo('pinParasol'), h.mat('feuillage'), pins); inst(h, h.geo('tronc'), h.mat('tronc'), futs);
-      // les ocres : des buttes proches, hors de la route, et une couronne de falaises à l'horizon, dans la brume de poussière
+      inst(h, h.geo('boite', 8, 0.9, 0.1), h.mat('banderoleRallye', { side: THREE.DoubleSide }, 2), pan).castShadow = false;
+      // portiques des crêtes, 30 m avant le bout, aux couleurs de la spéciale : la crête se lit au relief, au portique et au public, sans marquage au sol
+      insts(h, 'portiqueSaut', { acier: h.mat('acier'), banderole: h.mat('banderoleRallye', { side: THREE.DoubleSide, rep: [2, 1] }, 4) }, crete.map(i => { const s = m(i - 15); return [s.x, s.y, s.z, h.across(s)]; }), { a: [W] });
+      // dans la campagne : des mas isolés avec leurs cyprès, une chapelle au bord de la route, le village sur sa butte autour de la sienne
+      const chap = [];
+      for (let k = 0, nb = 0; k < 900 && nb < 9; k++) { const [x, z] = hasard(), d = g.dAt(x, z); if (d < 26 || d > 70 || plat(pres(x, z)[1]) || !prend(x, z, 13)) continue;
+        const a = rnd() * 6; if (nb++ === 0) chap.push([x, sol(x, z, -0.8), z, a]); else mas.push([x, sol(x, z, -1), z, a]); for (const da of [0.6, 1.1, 3.6]) cyp(x + Math.cos(a + da) * 9, z + Math.sin(a + da) * 9); }
+      occ.push([vx, vz, 46]); chap.push([vx, sol(vx, vz, -0.3), vz, 0.4, 1.4]);
+      for (let k = 0; k < 22; k++) { const a = k * 2.4, r = 13 + k * 1.15, x = vx + Math.cos(a) * r, z = vz + Math.sin(a) * r; mas.push([x, sol(x, z, -1.2), z, a + (k & 1) * 1.57, 0.9 + rnd() * 0.3]); if (k % 4 === 0) cyp(x + 6, z + 5); }
+      insts(h, 'mas', peauM, mas); insts(h, 'chapelle', peauM, chap);
+      // vignes et lavandes : des parcelles en rangs sur les pentes
+      const champs = [[], []];
+      for (let k = 0, nb = 0; k < 1500 && nb < 22; k++) { const [x, z] = hasard(), d = g.dAt(x, z); if (d < 36 || d > 170 || !prend(x, z, 24)) continue;
+        const a = rnd() * 3.14, t = nb++ & 1, ca = Math.cos(a), sa = Math.sin(a);
+        for (let r = -4; r <= 4; r++) for (let q = -2; q <= 2; q++) { const px = x + ca * q * 7 - sa * r * 3.4, pz = z + sa * q * 7 + ca * r * 3.4; champs[t].push([px, sol(px, pz, 0.25), pz, -a]); } }
+      inst(h, h.geo('boite', 7.1, 1.1, 1.1), h.mat('feuillage', { c: 0xc8e070 }), champs[0]).castShadow = false; inst(h, h.geo('boite', 7.1, 0.8, 1.5), h.mat('lavande'), champs[1]).castShadow = false;
+      // voitures du public et de l'assistance : une passe de dessin par pièce, la caisse teintée par exemplaire
+      const peauV = { caisse: h.mat('laque'), vitre: h.mat('vitreSombre'), feuRouge: h.mat('feuRouge', LUM), feuBlanc: h.mat('lampe', LUM), chassis: h.mat('matGris'), roue: h.mat('roue'), pneu: h.mat('pneu') };
+      insts(h, 'voitureGaree', peauV, autos, { teinte: 'caisse' }); insts(h, 'fourgon', peauV, fourgons, { teinte: 'caisse' });
+      insts(h, 'barnum', { poteau: h.mat('acier'), toile: h.mat('peinture') }, barnums, { teinte: 'toile' });
+      inst(h, h.geo('botte'), h.mat('paille'), bottes.concat(Array.from({ length: 70 }, () => { const [x, z] = hasard(), d = g.dAt(x, z); return d > 14 && d < 110 && vide(x, z, 2) ? [x, sol(x, z, -0.1), z, rnd() * 6] : null; }).filter(Boolean)));
+      // pins parasols au bord de la route et en bosquets sur les pentes, oliviers plus bas, buissons de garrigue partout (le même houppier, tout petit, au ras du sol)
+      const pin = (x, z) => { const e = 0.8 + rnd() * 0.7, r = 3.2 + rnd() * 2.6, y = sol(x, z); futs.push([x, y + 2.6 * e, z, 0, e]); pins.push([x, y + 5.2 * e + 0.25 * r, z, rnd() * 6, r]); };
+      const olivier = (x, z) => { const e = 0.35 + rnd() * 0.2, r = 1.8 + rnd() * 1.4, y = sol(x, z); futs.push([x, y + 2.6 * e, z, rnd(), e * 1.6, e, e * 1.6]); oliviers.push([x, y + 5.2 * e + 0.5 * r, z, rnd() * 6, r, r * 1.7, r]); };
+      for (let i = 0; i < N; i += 4) for (const sd of [-1, 1]) { const [x, z] = bord(S[i], sd, W + 8 + rnd() * 18), q = rnd(); if (q < 0.62 && !plat(i) && vide(x, z, 3) && g.dAt(x, z) > W + 6) (q < 0.4 ? pin : q < 0.52 ? olivier : cyp)(x, z); }
+      for (let k = 0; k < 6500; k++) { const [x, z] = hasard(), d = g.dAt(x, z), b = Math.sin(x * 0.021) + Math.cos(z * 0.026) + rnd();
+        if (d > 26 && b > 0.9 && vide(x, z, 4)) (rnd() < 0.8 ? pin : olivier)(x, z);
+        else if (d > W + 3 && d < 190 && vide(x, z, 1)) { const r = 0.7 + rnd() * 1.3; buissons.push([x, sol(x, z, 0.2), z, rnd() * 6, r]); } }
+      inst(h, h.geo('pinParasol'), h.mat('feuillage'), pins); inst(h, h.geo('pinParasol'), h.mat('feuillage'), buissons).castShadow = false; inst(h, h.geo('pinParasol'), h.mat('feuillage', { c: 0xa8c0a0 }), oliviers); // buissons, rangs et banderoles ne portent pas d'ombre : du temps de rendu pour rien inst(h, h.geo('tronc'), h.mat('tronc'), futs); inst(h, h.geo('cedre'), h.mat('cedre', { c: 0x9ad08a }), cypres);
+      // les ocres : des blocs éboulés au bord de la route, des buttes proches, et une couronne de falaises à l'horizon, dans la brume de poussière
       const buttes = [], cx = (g.box[0] + g.box[2]) / 2, cz = (g.box[1] + g.box[3]) / 2;
-      for (let k = 0; k < 400 && buttes.length < 16; k++) { const x = g.box[0] + rnd() * (g.box[2] - g.box[0]), z = g.box[1] + rnd() * (g.box[3] - g.box[1]), d = g.dAt(x, z), l = 30 + rnd() * 40;
-        if (d > l + 40 && d < 260 && buttes.every(b => Math.hypot(b[0] - x, b[2] - z) > 110)) buttes.push([x, g.hAt(x, z) - 6, z, rnd() * 6, l, 22 + rnd() * 26, l * (0.7 + rnd() * 0.6)]); }
+      for (let k = 0; k < 2000 && buttes.length < 110; k++) { const [x, z] = hasard(), d = g.dAt(x, z), l = 1.2 + rnd() * 2.6; if (d > W + 4 && d < 60 && vide(x, z, l)) buttes.push([x, sol(x, z, -0.4), z, rnd() * 6, l, 0.8 + rnd() * 2, l * (0.7 + rnd() * 0.6)]); }
+      for (let k = 0, nb = 0; k < 600 && nb < 20; k++) { const [x, z] = hasard(), d = g.dAt(x, z), l = 30 + rnd() * 40; if (d > l + 40 && d < 280 && prend(x, z, l + 40)) { nb++; buttes.push([x, sol(x, z, -6), z, rnd() * 6, l, 22 + rnd() * 26, l * (0.7 + rnd() * 0.6)]); } }
       for (let k = 0; k < 18; k++) { const a = k / 18 * 6.283 + rnd() * 0.2, r = 1000 + rnd() * 450, l = 170 + rnd() * 190; buttes.push([cx + Math.cos(a) * r, 0, cz + Math.sin(a) * r, rnd() * 6, l, 110 + rnd() * 110, l * (0.7 + rnd() * 0.6)]); }
       inst(h, h.geo('butte'), h.mat('falaiseOcre'), buttes);
       // le ruisseau coule, le public lève les bras par moments

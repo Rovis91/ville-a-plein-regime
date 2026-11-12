@@ -29,6 +29,18 @@
       for (let y = 0; y < 64; y += 4) for (let x = 0; x < 64; x += 4) { R(g, ['#c8643a', '#b85530', '#d87a48', '#a84a2a', '#d08a58'][alea() * 5 | 0], x, y, 3, 4); R(g, '#7a3418', x + 3, y, 1, 4); }
       voile(g, 0.3, () => { for (let y = 3; y < 64; y += 4) R(g, '#000', 0, y, 64, 1); for (let i = 0; i < 8; i++) R(g, '#4a5a2a', alea() * 60 | 0, alea() * 60 | 0, 3 + (alea() * 4 | 0), 2); });
     }, 4],
+    // eau du gué : trouble, couleur de terre, rides claires
+    eauGue: () => [64, 64, (g, o) => {
+      const { R, alea } = o; R(g, '#8a6e4a', 0, 0, 64, 64);
+      for (let i = 0; i < 120; i++) R(g, alea() < 0.5 ? '#9a7c54' : '#74593a', alea() * 64 | 0, alea() * 64 | 0, 3 + (alea() * 6 | 0), 1);
+      for (let i = 0; i < 26; i++) R(g, '#d8c4a0', alea() * 64 | 0, alea() * 64 | 0, 2 + (alea() * 4 | 0), 1);
+    }, 12],
+    // rang de lavande : touffes violettes serrées, quelques tiges vertes, la terre entre les pieds
+    lavande: () => [16, 16, (g, o) => {
+      const { R, alea } = o; R(g, '#7a58b8', 0, 0, 16, 16);
+      for (let i = 0; i < 60; i++) R(g, ['#9a78d8', '#6a48a0', '#b090e0', '#5a7a48'][alea() * 4 | 0], alea() * 16 | 0, alea() * 16 | 0, 1, 1 + (alea() * 2 | 0));
+      for (let x = 0; x < 16; x += 4) R(g, '#8a5a34', x, 14, 1, 2);
+    }],
     // banderoles de la spéciale : deux annonceurs inventés par texture, k = le premier
     banderoleRallye: k => [192, 20, (g, o) => {
       const l = [['RALLYE DES OCRES', '#e8482a', '#f4f0e0'], ['HUILES MISTRAL', '#f4c020', '#1c2a5a'], ['PNEUS CIGALE', '#1c2a5a', '#f4f0e0'], ['RADIO CAILLOU 88.8', '#f4f0e0', '#e8482a'], ['GARRIGUE SPORT', '#2a62c8', '#f4c020'], ['SIROPS DU VALLON', '#3a7a3a', '#f4f0e0']];
