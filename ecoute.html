@@ -106,6 +106,7 @@
     derapF: ['pneu', 'Dérapage à fond', 'grand angle', ['pneu'], 12, () => course({ slide: 1 })],
     derapR: ['pneu', 'Dérapage réglable', 'curseur d\'angle ci-dessous', ['pneu'], 12, () => course({ slide: u.slide })],
     choc: ['choc', 'Choc', 'contact contre le mur', ['choc'], 12, null, () => SON.choc(6)],
+    chocV: ['choc', 'Choc entre voitures', 'contact léger en course', ['choc'], 12, null, () => SON.choc(10)],
     grosChoc: ['choc', 'Gros choc', '', ['choc'], 8, null, () => SON.choc(12)],
     frott: ['choc', 'Frottement', 'la voiture longe le mur', ['choc'], 13, () => course({ rub: 1 })],
     boost: ['choc', 'Boost', 'sortie de glisse', ['choc'], 12, null, () => SON.boost()],

@@ -708,7 +708,7 @@
     if (state === 'count' && shown) txt(String(shown), cx, 90, 64, Y, 'center', 3);
     else if (goT > 0) txt('GO', cx, 90, 64, Y, 'center', 3);
     if (result && state !== 'title' && (result.T -= dt) > 0) { // résultat du tour qu'on vient de boucler, sans arrêter la course
-      tag('TOUR ' + result.n + '  ' + fmt(result.t), cx, 122, Y); if (result.pos) tag('PLACE ' + result.pos + '/' + result.of, cx, 138, C); else tag(result.rec ? 'NOUVEAU RECORD' : '+' + result.diff.toFixed(2) + ' S', cx, 138, result.rec ? C : RD);
+      tag('TOUR ' + result.n + '  ' + fmt(result.t), cx, 28, Y); if (result.pos) tag('PLACE ' + result.pos + '/' + result.of, cx, 44, C); else tag(result.rec ? 'NOUVEAU RECORD' : '+' + result.diff.toFixed(2) + ' S', cx, 44, result.rec ? C : RD);
     }
     if (raceEnd && state === 'race') { // arrivée : classement, complété à mesure que les autres passent la ligne
       panel(cx - 134, 60, 268, 132); txt('ARRIVEE : ' + car.pos + (car.pos === 1 ? 'ER' : 'E'), cx, 68, 16, Y, 'center', 1);
@@ -744,11 +744,11 @@
     if (goT > 0) goT -= dt;
     const keyIn = input();
     const inp = state === 'race' ? (AUTO || raceEnd ? autopilot(car, T, 1, M.trafic && !race ? trafic(T, tTraf) : []) : keyIn) : { steer: 0, gas: 0, brake: 0, hand: false };
-    let hit = 0;
+    let hit = 0, bump = 0;
     for (acc += dt; acc >= H; acc -= H) {
       // en course, sim.js fait avancer tout le monde ; inp = null : l'IA conduit la voiture du joueur (?auto, ou une fois arrivé)
       if (race && state === 'race') stepRace(race, AUTO || raceEnd ? null : inp, H); else { step(car, inp, T, H); if (M.trafic && state === 'race') hitTrafic(car, T, tTraf); }
-      hit = Math.max(hit, car.hit, car.bump || 0); // shortcut: un choc entre voitures réutilise les effets du choc mur (étincelles côté mur), à séparer si ça se voit
+      bump = Math.max(bump, car.bump || 0); hit = Math.max(hit, car.hit, bump); // shortcut: un choc entre voitures réutilise les effets du choc mur (étincelles côté mur), à séparer si ça se voit
       if (state === 'race' && !raceEnd) {
         tRace += H; tTraf += H;
         if (race) { if (car.fin) { raceEnd = true; tRace = car.fin; car.manual = false; SON.stinger(car.pos === 1); } }
@@ -833,7 +833,7 @@
     ghostM.visible = ghostOn && state === 'race' && !race && !!ghost && g0 + 7 < ghost.length;
     if (ghostM.visible) { ghostM.position.set(lerp(ghost[g0], ghost[g0 + 4], gf), lerp(ghost[g0 + 1], ghost[g0 + 5], gf) + 0.6, lerp(ghost[g0 + 2], ghost[g0 + 6], gf)); ghostM.rotation.y = -(ghost[g0 + 3] + wrap(ghost[g0 + 7] - ghost[g0 + 3]) * gf); }
     fxFrame(dt, now, sp, inp, hit, fx, fz);
-    SON.frame(dt, { state, car, T, hot: hot(car.idx, 50), tun: lm, amb: ambAt(car.idx), r, sp, gas, hit, up: up > 0, down: up < 0, rpm, load, spool, stun });
+    SON.frame(dt, { state, car, T, hot: hot(car.idx, 50), tun: lm, amb: ambAt(car.idx), r, sp, gas, hit, bump, up: up > 0, down: up < 0, rpm, load, spool, stun });
 
     // alerte de virage serré, lue sur la courbure à venir
     let wk = 0;

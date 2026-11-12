@@ -283,7 +283,7 @@
     try { localStorage.setItem(RK(), station); } catch (e) { }
     if (!AC) { S16 = 60 / ST[station].bpm / 4; return; }
     const t = AC.currentTime; // touche mécanique d'autoradio (enfoncement puis relâchement : clic sec, résonance de boîtier), bref grésillement, puis la station
-    for (const [dt, v] of [[0, 1], [0.09, 0.6]]) { nz(t + dt, 0.012, 0.9 * v, V.ui, 'bandpass', 2800, 1.5); nz(t + dt, 0.004, 0.5 * v, V.ui, 'highpass', 6000); osc('sine', 190, t + dt, 0.07, 0.35 * v, V.ui); osc('triangle', 620, t + dt, 0.03, 0.15 * v, V.ui); }
+    touche(t); // le claquement en deux temps, d'abord essayé pour la boîte, que l'utilisateur a gardé pour ce bouton
     tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.setValueAtTime(0, t + 0.36); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.46); // shortcut: les nappes de l'ancienne station finissent de sonner après la friture (1 s au plus), à couper par un bus par station si ça s'entend
     const f = nz(t + 0.14, 0.22, 0.2, V.ui, 'bandpass', 900, 2); if (f) { f.frequency.setValueAtTime(900, t + 0.14); f.frequency.exponentialRampToValueAtTime(3200, t + 0.24); f.frequency.exponentialRampToValueAtTime(1300, t + 0.36); }
     for (let k = 0; k < 3; k++) nz(t + 0.14 + Math.random() * 0.2, 0.012, 0.25, V.ui, 'highpass', 2000);
@@ -378,15 +378,20 @@
   }
   const beep = f => AC && osc('square', f, AC.currentTime, 0.25, 0.2, V.ui);
   // bruitages ponctuels : appelés par audioFrame, et un par un par le banc d'écoute
-  function clac(down, t = AC.currentTime) { // passage de rapport : débrayage puis engagement, deux claquements secs dans le médium et un petit choc de transmission ; la coupure de poussée vient de la physique
-    const f = down ? 1500 : 1900;
-    nz(t, 0.018, CLAC, V.mot, 'bandpass', f, 2.5); osc('triangle', 150, t, 0.05, CLAC * 0.25, V.mot);
-    nz(t + 0.07, 0.03, CLAC * 1.4, V.mot, 'bandpass', f * 1.5, 2); nz(t + 0.07, 0.012, CLAC * 0.6, V.mot, 'highpass', 4000); osc('square', 320, t + 0.07, 0.03, CLAC * 0.15, V.mot);
+  function touche(t) { // bouton de radio : deux claquements secs dans le médium
+    nz(t, 0.018, CLAC, V.ui, 'bandpass', 1900, 2.5); osc('triangle', 150, t, 0.05, CLAC * 0.25, V.ui);
+    nz(t + 0.07, 0.03, CLAC * 1.4, V.ui, 'bandpass', 2850, 2); nz(t + 0.07, 0.012, CLAC * 0.6, V.ui, 'highpass', 4000); osc('square', 320, t + 0.07, 0.03, CLAC * 0.15, V.ui);
+  }
+  function clac(down, t = AC.currentTime) { // passage de rapport : coup sourd de transmission, puis soupape de décharge en montée, coup de gaz en rétrogradant ; la coupure de poussée vient de la physique
+    const o = osc('sine', 110, t, 0.1, 0.45, V.mot); o && o.frequency.exponentialRampToValueAtTime(55, t + 0.08);
+    nz(t, 0.03, 0.25, V.mot, 'lowpass', 700);
+    if (down) { const b = osc('sawtooth', 130, t + 0.03, 0.14, 0.22, filt('lowpass', 1100, 0.7, V.mot)); b && b.frequency.exponentialRampToValueAtTime(230, t + 0.12); }
+    else { const h = nz(t + 0.03, 0.22, 0.2, V.mot, 'bandpass', 2600, 1.2); h && h.frequency.exponentialRampToValueAtTime(900, t + 0.24); }
   }
   function choc(hit, t = AC.currentTime) { const v = Math.min(0.6, hit * 0.04); nz(t, 0.25, v, V.choc, 'lowpass', 400); nz(t, 0.07, v * 0.7, V.choc, 'bandpass', 1200, 0.8); } // coup sourd + claquement de tôle, pour qu'il s'entende sur de petits haut-parleurs
   function boostFx(t = AC.currentTime) { const o = osc('sawtooth', 220, t, 0.5, 0.1, filt('lowpass', 3000, 0.5, V.choc)); o.frequency.exponentialRampToValueAtTime(880, t + 0.4); const w = nz(t, 0.6, 0.08, V.choc, 'bandpass', 500, 1.5); w.frequency.exponentialRampToValueAtTime(4000, t + 0.5); } // boost de sortie de glisse : sifflement + souffle
   function petarade(spool = 1, t = AC.currentTime) { nz(t, 0.25, 0.04 * spool, V.mot, 'bandpass', 1400, 1.5); for (let i = 0; i < 3; i++) nz(t + 0.08 + Math.random() * 0.4, 0.035, 0.12, V.mot, 'lowpass', 900); } // lever de pied à haut régime
-  // e : état de la course pour cette image — { state, car, T, hot (0..1 dans le secteur chaud), tun (0..1 dans le tunnel), amb (0..1 dans une zone d'ambiance), r (vitesse 0..1), sp, gas, hit, up / down (rapport monté / descendu), rpm, load, spool, stun }
+  // e : état de la course pour cette image — { state, car, T, hot (0..1 dans le secteur chaud), tun (0..1 dans le tunnel), amb (0..1 dans une zone d'ambiance), r (vitesse 0..1), sp, gas, hit, bump (choc entre voitures, m/s), up / down (rapport monté / descendu), rpm, load, spool, stun }
   function audioFrame(dt, e) {
     if (!AC) return;
     const { state, car, T, r, sp, gas, hit, up, rpm, load, spool, stun } = e, N = T.n, tun = e.tun || 0, CARD = M.car;
@@ -407,7 +412,7 @@
     k(scrubG.gain, 0.5 * clamp(slip / 12, 0, 1) * r, 0.08);
     k(windG.gain, 0.045 * clamp((r - 0.5) * 2, 0, 1) ** 2 * (1 - tun), 0.2); // vent : un souffle à haute vitesse seulement, loin sous le moteur, coupé en tunnel
     k(scrapeG.gain, car.rub ? 0.05 + 0.1 * r : 0, 0.05);
-    if (hit > 3 && t - lastHit > 0.15) { lastHit = t; choc(hit, t); }
+    if ((hit > 3 || e.bump > 0.3) && t - lastHit > 0.15) { lastHit = t; choc(Math.max(hit, e.bump > 0.3 ? 8 + e.bump * 2 : 0), t); } // entre voitures les vitesses d'impact sont faibles : plancher de volume, sinon on ne l'entend pas
     if (car.boost > 0 && !wasBoost) boostFx(t);
     wasBoost = car.boost > 0;
     // ambiance du lieu : seulement dans ses zones (e.amb, fondu fait par le jeu), jamais au menu ni en tunnel ; événements espacés au hasard, dans la zone
