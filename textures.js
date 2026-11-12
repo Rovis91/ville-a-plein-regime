@@ -60,7 +60,7 @@
   lampe: 0xfff2d0, feuRouge: 0xff2030, catadioptre: 0xff8c1a, clignotant: 0xff8c1a, cone: 0xff5a1a, sodium: 0xffb85a, lanterne: 0xffd05a, lampeCanal: 0xffc04a,
 
   // ---------- matériaux, au détail de la chaussée ----------
-  betonSombre: beton('#1c1c26'), beton: beton('#a89e90'), blancPont: beton('#c9ced6'), craie: pierre('#f4f0e8'), pierre: pierre('#d9c9a8'),
+  betonSombre: beton('#1c1c26'), beton: beton('#a89e90'), betonGris: beton('#5e5a54'), blancPont: beton('#c9ced6'), craie: pierre('#f4f0e8'), pierre: pierre('#d9c9a8'),
   acier: metal('#d8dce0'), matGris: metal('#4a4e56'), portiqueGris: metal('#5a5e66'), minium: metal('#c8442c'), fonte: metal('#1e3a2a'), fer: metal('#2a2030'), pylone: metal('#3a2c3a'),
   bitume: sol('#1e2024'), plaine: sol('#14161a'),
   tronc: ecorce('#4a3a2a'), troncPalmier: ecorce('#2a1c20', 1),
@@ -103,6 +103,69 @@
     for (let x = 6; x < 64; x += 20) { R(g, '#5a5048', x, 16, 11, 16); voile(g, 0.3, () => { for (let y = 18; y < 32; y += 3) R(g, '#000', x, y, 11, 1); }); }
     coulures(g, o, 6, '#000', 0.18);
   }],
+
+  // ---------- véhicules, navires, machines de port ----------
+  metalClair: metal('#e2e2e2'), // tôle peinte claire, à teinter : cabine de camion, coque de navire, engin de port
+  // pneu vu de profil : gomme, flanc, jante et ses écrous
+  roue: () => [16, 16, (g, o) => {
+    const { R, voile } = o; R(g, '#121214', 0, 0, 16, 16); R(g, '#1c1c20', 2, 2, 12, 12); R(g, '#6a6c72', 4, 4, 8, 8); R(g, '#3a3c42', 6, 6, 4, 4);
+    for (const [x, y] of [[5, 5], [10, 5], [5, 10], [10, 10]]) R(g, '#a8aab0', x, y, 1, 1); voile(g, 0.3, () => semis(g, o, 20, '#000'));
+  }],
+  // bande de roulement : gomme noire, rainures
+  pneu: () => [16, 16, (g, { R }) => { R(g, '#141416', 0, 0, 16, 16); for (let y = 1; y < 16; y += 3) R(g, '#08080a', 0, y, 16, 1); }],
+  // calandre de camion : barreaux chromés sur fond noir, sigle rond inventé
+  calandre: () => [32, 16, (g, o) => { const { R } = o; R(g, '#0c0c10', 0, 0, 32, 16); for (let y = 2; y < 15; y += 3) R(g, '#9a9ca4', 1, y, 30, 1); R(g, '#c8cad0', 0, 0, 32, 1); R(g, '#c8cad0', 0, 15, 32, 1); R(g, '#d8dae0', 14, 6, 4, 4); R(g, '#0c0c10', 15, 7, 2, 2); }],
+  // citerne en inox : reflets en long, viroles soudées tous les 2 m, coulures
+  inox: () => [64, 32, (g, o) => {
+    const { R, alea, voile } = o; R(g, '#b4b8be', 0, 0, 64, 32);
+    voile(g, 0.25, () => { for (let y = 0; y < 32; y++) R(g, alea() < 0.5 ? '#fff' : '#000', 0, y, 64, 1); });
+    voile(g, 0.4, () => { for (const x of [0, 16, 32, 48]) R(g, '#000', x, 0, 1, 32); });
+    R(g, '#e8eaee', 0, 10, 64, 2); coulures(g, o, 6, '#3a2a1a', 0.2);
+  }, 8],
+  // plateau en planches : lattes de 30 cm, clous, taches d'huile
+  planches: () => [64, 64, (g, o) => {
+    const { R, alea, voile } = o; R(g, '#6a4a2c', 0, 0, 64, 64);
+    for (let y = 0; y < 64; y += 3) { R(g, alea() < 0.5 ? '#5a3c22' : '#7a5634', 0, y, 64, 2); R(g, '#2a1a10', 0, y + 2, 64, 1); }
+    voile(g, 0.4, () => { for (let x = 4; x < 64; x += 16) for (let y = 1; y < 64; y += 3) R(g, '#c8c0b0', x, y, 1, 1); semis(g, o, 160, '#000'); for (let i = 0; i < 4; i++) R(g, '#000', alea() * 56 | 0, alea() * 56 | 0, 5 + alea() * 6 | 0, 3 + alea() * 4 | 0); });
+  }, 4],
+  // bobine d'acier vue de face : spires, cerclage
+  bobine: () => [16, 16, (g, o) => { const { R, voile } = o; R(g, '#5a5c62', 0, 0, 16, 16); g.strokeStyle = '#8a8c92'; for (let r = 2; r < 8; r += 1.5) { g.beginPath(); g.arc(8, 8, r, 0, 7); g.stroke(); } R(g, '#18181c', 6, 6, 4, 4); voile(g, 0.5, () => R(g, '#c8102e', 0, 7, 16, 2)); }],
+  // sangle orange tressée
+  sangle: () => [8, 8, (g, { R }) => { R(g, '#d86a1a', 0, 0, 8, 8); for (let y = 0; y < 8; y += 2) R(g, '#b04a10', 0, y, 8, 1); }, 1],
+  // pont d'un porte-conteneurs vu de côté : quatre étages de conteneurs de 20 et 40 pieds, couleurs mêlées, joints et portes
+  cargaison: () => [64, 64, (g, o) => {
+    const { R, alea, voile } = o, C = ['#b8442c', '#2c6ab8', '#c9a02c', '#3a8a5a', '#d8d4cc', '#7a3a6a', '#1a4a5a', '#c86a2a', '#5a5e66'];
+    for (let y = 0; y < 64; y += 16) for (let x = -(alea() * 30 | 0); x < 64;) { const w = alea() < 0.5 ? 37 : 74; R(g, C[alea() * C.length | 0], x, y, w, 16); voile(g, 0.25, () => { for (let k = x + 1; k < x + w; k += 2) R(g, '#000', k, y + 1, 1, 14); }); R(g, '#16161a', x, y, 1, 16); x += w; }
+    for (let y = 0; y < 64; y += 16) R(g, '#16161a', 0, y + 15, 64, 1);
+    voile(g, 0.3, () => semis(g, o, 120, '#000'));
+  }, 10.4],
+  // treillis de charpente métallique : membrures, diagonales, fond transparent (matière en alphaTest)
+  treillis: c => [32, 32, (g, o) => {
+    const { R, voile } = o; g.clearRect(0, 0, 32, 32); R(g, c, 0, 0, 32, 3); R(g, c, 0, 29, 32, 3); R(g, c, 0, 0, 3, 32); R(g, c, 29, 0, 3, 32);
+    for (let k = 0; k < 32; k++) { R(g, c, k, k, 2, 2); R(g, c, 31 - k, k, 2, 2); }
+    voile(g, 0.35, () => { R(g, '#000', 0, 2, 32, 1); R(g, '#000', 0, 31, 32, 1); });
+  }, 4],
+  // façade de tour de ventilation : béton, bandes de persiennes inclinées, coulures sous chaque bande
+  persiennes: () => [64, 64, (g, o) => {
+    const { R, voile } = o; R(g, '#8e8a84', 0, 0, 64, 64); patine(g, o);
+    for (let y = 6; y < 64; y += 16) { R(g, '#2a2c30', 2, y, 60, 8); voile(g, 0.6, () => { for (let k = y; k < y + 8; k += 2) R(g, '#9a9ca2', 2, k, 60, 1); }); voile(g, 0.25, () => { for (let x = 2; x < 62; x += 3) R(g, '#000', x, y + 8, 1, 2 + (o.alea() * 5 | 0)); }); }
+    voile(g, 0.3, () => { R(g, '#000', 0, 0, 1, 64); R(g, '#000', 32, 0, 1, 64); });
+  }, 8],
+  // nacelle de grande roue, éclairée de l'intérieur : vitres, montants, bas de caisse coloré
+  nacelle: c => [16, 16, (g, { R }) => { R(g, c, 0, 0, 16, 16); R(g, '#fff2d0', 2, 2, 12, 7); R(g, c, 7, 2, 2, 7); R(g, '#202028', 0, 10, 16, 1); R(g, '#ffffff', 0, 0, 16, 1); }],
+  // signaux d'affectation de voie à l'entrée d'un tunnel : flèches vertes, croix rouge sur la voie fermée
+  feuxVoie: n => [16 * n, 16, (g, { R }) => {
+    R(g, '#08080c', 0, 0, 16 * n, 16);
+    for (let i = 0; i < n; i++) { const x = i * 16; R(g, '#2a2a30', x, 0, 1, 16); if (i === n - 1) for (let k = 0; k < 9; k++) { R(g, '#ff2030', x + 4 + k, 4 + k, 1, 1); R(g, '#ff2030', x + 12 - k, 4 + k, 1, 1); } else { R(g, '#30ff70', x + 7, 3, 2, 7); for (let k = 0; k < 4; k++) R(g, '#30ff70', x + 4 + k, 9 + k, 8 - 2 * k, 1); } }
+  }],
+  // défense de remorqueur : vieux pneus noirs bout à bout
+  defense: () => [16, 8, (g, { R }) => { R(g, '#0a0a0c', 0, 0, 16, 8); for (let x = 0; x < 16; x += 4) { R(g, '#1c1c20', x + 1, 1, 2, 6); R(g, '#000', x, 0, 1, 8); } }, 1.5],
+  // terre-plein du port : enrobé, marquage jaune des emplacements tous les 3 m, taches
+  parc: () => [64, 64, (g, o) => {
+    const { R, alea, voile } = o; R(g, '#202226', 0, 0, 64, 64); patine(g, o, 380);
+    voile(g, 0.55, () => { for (let x = 0; x < 64; x += 21) R(g, '#c8a02c', x, 0, 1, 64); R(g, '#c8a02c', 0, 0, 64, 1); R(g, '#c8a02c', 0, 32, 64, 1); });
+    voile(g, 0.2, () => { for (let i = 0; i < 6; i++) R(g, '#000', alea() * 56 | 0, alea() * 56 | 0, 4 + alea() * 8 | 0, 3 + alea() * 6 | 0); });
+  }, 24],
 
   // ---------- ciel ----------
   ciel: (bandes, etoiles) => [512, 128, (g, { R, rnd }) => {
