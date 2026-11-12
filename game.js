@@ -44,7 +44,25 @@
     lisere: { h: 0, z: 1, fx: `float e = smoothstep(.007, .018, arete(u, px * 1.5)); c = aplat(c, 9.);
       c = mix(c, min(c * 2.6 + vec3(.1, .2, .26), 1.), e * (.4 + .6 * smoothstep(0., .012, W(u))));` },
   };
-  const ST = STYLES[new URLSearchParams(location.search).get('style')];
+  // ingrédients à doser un par un, seuls ou par-dessus un style : ?lignes=540 (0 = écran) &aa=2 (suréchantillonnage, pas un flou) &lisse=1 (textures filtrées)
+  // &niveaux=32&trame=.5 &contour=.9 (encre) &lisere=.8 &ombres=.5 (0 à 1, relève les sombres) &contraste=1.2 &affine=.3 &tremble=1 &flou=1&halo=1 (ceux du rendu actuel)
+  const Q = new URLSearchParams(location.search), P = k => +Q.get(k) || 0, G = k => P(k).toFixed(3);
+  const ING = ['lignes', 'aa', 'lisse', 'niveaux', 'trame', 'contour', 'lisere', 'ombres', 'contraste', 'affine', 'tremble', 'flou', 'halo'];
+  const ST = STYLES[Q.get('style')] || ING.some(k => Q.has(k)) ? Object.assign({ h: 0 }, STYLES[Q.get('style')]) : null;
+  if (ST) {
+    for (const [k, c] of [['lignes', 'h'], ['affine', 'affine'], ['tremble', 'tremble']]) if (Q.has(k)) ST[c] = P(k);
+    ST.aa = ST.h ? 1 : Math.max(1, Math.min(3, P('aa'))); // en pleine résolution seulement : agrandie, une cible lissée serait floue
+    ST.z = ST.z || P('contour') || P('lisere'); const nv = P('niveaux') || (P('trame') ? 32 : 0);
+    ST.fx = (P('flou') || P('halo') ? `{ vec2 c0 = vec2(.5, .42), dd = u - c0; float ll = length(dd); vec3 a = vec3(0.);
+        for (int i = 0; i < 8; i++) a += texture2D(t, c0 + dd * (1. - amt * ${G('flou')} * ll * float(i) * .026)).rgb; c = a / 8.;
+        for (int i = 0; i < 12; i++) { float an = float(i) * .5236, rr = 2. + 2.5 * mod(float(i), 3.); c += max(texture2D(t, u + vec2(cos(an), sin(an)) * rr * px).rgb - .5, 0.) * ${(P('halo') * TH.bloom).toFixed(3)}; } }` : '')
+      + (ST.fx || '')
+      + (P('ombres') ? `c = pow(c, vec3(${(1 - 0.5 * P('ombres')).toFixed(3)}));` : '')
+      + (P('contraste') ? `c = clamp((c - .5) * ${G('contraste')} + .5, 0., 1.);` : '')
+      + (nv ? `c = floor(c * ${nv.toFixed(1)} + bayer(v / px) * ${G('trame')} + .5) / ${nv.toFixed(1)};` : '')
+      + (P('contour') ? `c *= 1. - ${G('contour')} * smoothstep(.007, .018, arete(u, px * 1.5));` : '')
+      + (P('lisere') ? `c = mix(c, min(c * 2.6 + vec3(.1, .2, .26), 1.), ${G('lisere')} * smoothstep(.007, .018, arete(u, px * 1.5)));` : '');
+  }
   // demi-teinte : quatre encres de la plus sombre à la plus claire, et une encre de signal (feux, néons rouges), par carte
   const PAL = { ville: [0x0a0614, 0x3a1a6a, 0xff3a8a, 0xfff0c8, 0xff2a3a], touge: [0x06100c, 0x1c4a3a, 0x7ab890, 0xfff2c8, 0xff5030], wangan: [0x060a16, 0x1a3a6a, 0xf0a040, 0xfff4d8, 0xff3030],
     paris: [0x100c14, 0x4a3a5a, 0xd89a70, 0xfff0d8, 0xe83a30], canal: [0x0c0a12, 0x5a2a4a, 0xf08a50, 0xfff0c0, 0xff3a40] }[M.id];
@@ -57,6 +75,7 @@
   const FOG_OUT = new THREE.Color(TH.fog), FOG_IN = new THREE.Color(TH.tun ? TH.tun.fog : TH.fog), WHITE = new THREE.Color(0xffffff);
   scene.fog = new THREE.Fog(TH.fog, TH.fogD[0], TH.fogD[1]);
   const rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+  if (ST && ST.aa > 1) rt.texture.minFilter = rt.texture.magFilter = THREE.LinearFilter; // suréchantillonnage : la cible est aa fois plus fine, la passe finale en fait la moyenne
   // le HUD est dessiné sur un canvas 2D à la même résolution que le jeu, puis composé dans la passe finale : une seule grille de pixels
   const hudC = document.createElement('canvas'), hg = hudC.getContext('2d'), hudT = new THREE.CanvasTexture(hudC);
   hudT.minFilter = hudT.magFilter = THREE.NearestFilter;
@@ -87,7 +106,7 @@
   if (ST) { // passe finale des styles : la scène telle quelle, l'effet du style, le HUD (toujours sur sa grille de 270 lignes), une vignette légère
     if (ST.z) { rt.depthTexture = new THREE.DepthTexture(1, 1); rt.depthTexture.type = THREE.UnsignedIntType; }
     Object.assign(post.uniforms, { dz: { value: rt.depthTexture }, ecr: { value: new THREE.Vector2(1, 1) }, pal: { value: PAL.map(c => new THREE.Color(c)) } });
-    post.fragmentShader = `uniform sampler2D t, h, dz; uniform vec2 px, ecr; uniform vec3 pal[5]; varying vec2 v;
+    post.fragmentShader = `uniform sampler2D t, h, dz; uniform float amt; uniform vec2 px, ecr; uniform vec3 pal[5]; varying vec2 v;
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); }
       float bayer(vec2 q){ return b2(.5 * q) * .25 + b2(q) - .5; }
       float lum(vec3 c){ return dot(c, vec3(.3, .59, .11)); }
@@ -106,15 +125,16 @@
   let HW = 480, RW = 480, RH = 270; const HH = 270; // HW × HH : grille du HUD ; RW × RH : cible de la scène (la même sans style)
   const resize = () => {
     HW = clamp(Math.round(HH * innerWidth / (innerHeight || 1)), 360, 960);
-    const OW = Math.round(innerWidth * devicePixelRatio), OH = Math.round(innerHeight * devicePixelRatio), k = ST ? (ST.h || OH) / HH : 1; RW = Math.round(HW * k); RH = Math.round(HH * k);
+    const OW = Math.round(innerWidth * devicePixelRatio), OH = Math.round(innerHeight * devicePixelRatio), aa = ST ? ST.aa : 1, k = ST ? (ST.h || OH) / HH * aa : 1; RW = Math.round(HW * k); RH = Math.round(HH * k);
     if (ST) { renderer.setSize(OW, OH, false); post.uniforms.ecr.value.set(OW, OH); } else renderer.setSize(HW, HH, false);
-    rt.setSize(RW, RH); hudC.width = HW; hudC.height = HH; post.uniforms.px.value.set(1 / RW, 1 / RH); cam.aspect = HW / HH; cam.updateProjectionMatrix();
+    rt.setSize(RW, RH); hudC.width = HW; hudC.height = HH; post.uniforms.px.value.set(aa / RW, aa / RH); cam.aspect = HW / HH; cam.updateProjectionMatrix();
   };
   addEventListener('resize', resize); resize();
 
   const tex = (w, h, draw) => {
     const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'));
-    const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestMipmapNearestFilter; // jamais de filtrage linéaire
+    const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestMipmapNearestFilter; // jamais de filtrage linéaire, sauf ?lisse=1
+    if (P('lisse')) { t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; }
     t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
   };
   const bas = (map, color = 0xffffff) => new THREE.MeshBasicMaterial({ map, color, side: THREE.DoubleSide });
@@ -204,7 +224,7 @@
       sh.vertexShader = 'varying vec3 vLw, vAf; uniform vec2 uRes;\n' + sh.vertexShader.replace('#include <fog_vertex>', LU_V + '#include <fog_vertex>');
       if (lit) sh.fragmentShader = LU_H + sh.fragmentShader.replace('#include <fog_fragment>', LU_F + '#include <fog_fragment>');
       // textures sans correction de perspective : vAf = uv × w, interpolé puis divisé par w interpolé, redonne l'interpolation affine à l'écran
-      if (ST && ST.affine) sh.fragmentShader = 'varying vec3 vAf;\n' + sh.fragmentShader.replace('#include <map_fragment>', THREE.ShaderChunk.map_fragment.replace('vUv', `mix(vUv, vAf.xy / vAf.z, ${ST.affine})`));
+      if (ST && ST.affine) sh.fragmentShader = 'varying vec3 vAf;\n' + sh.fragmentShader.replace('#include <map_fragment>', THREE.ShaderChunk.map_fragment.replace('vUv', `mix(vUv, vAf.xy / vAf.z, ${ST.affine.toFixed(3)})`));
     };
     m.customProgramCacheKey = () => 'lu' + lit;
   };
@@ -789,7 +809,7 @@
   }
 
   const ROUGE = new THREE.Color(0xff1828), PHARE = new THREE.Color(0xfff2d0), NEONC = new THREE.Color(L.neon || 0), BOITE = new THREE.Matrix4().makeScale(2.35, 0.64, 1.02).setPosition(0, 0.8, 0); // BOITE : englobe toute la caisse, pour l'ombre (un point dedans ou dessus n'est pas ombré)
-  let lumIdx = -1; const TRB = ST && ST.tremble || TREMBLE;
+  let lumIdx = -1; const TRB = ST && ST.tremble * ST.aa || TREMBLE;
   function frame(now) {
     const dt = state === 'pause' ? 0 : clamp((now - last) / 1000 || 0, 0, 0.1); last = Math.max(last, now); // en pause le temps s'arrête, l'image reste
     if (state === 'count') {
