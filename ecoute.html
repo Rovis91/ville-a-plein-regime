@@ -127,6 +127,8 @@
     record: ['ui', 'Jingle : record', '', ['ui'], 8, null, () => SON.stinger(true)],
     pasRecord: ['ui', 'Jingle : pas de record', '', ['ui'], 8, null, () => SON.stinger(false)],
     radio: ['ui', 'Changement de station', 'touche mécanique puis grésillement, sans la musique', ['ui'], 0, null, () => SON.setStation(SON.station + 1)],
+    gliss: ['mus', 'Glisse puis boost', 'sur la station en cours, en boucle : 2,5 s de glisse (palier à 0,6 s), boost, retour', ['mus', 'pneu', 'choc'], 0, x => { const p = x % 9, g = p > 2 && p < 4.5; return Object.assign(musique(), { dd: g ? 1 : 0, driftT: g ? p - 2 : 0, drift: g, slide: g ? 0.8 : 0, boost: p >= 4.5 && p < 6 ? 1 : 0 }); }],
+    glissR: ['mus', 'Glisse ratée', 'trop courte pour le boost (0,4 s) : la musique ne doit presque pas bouger', ['mus', 'pneu', 'choc'], 0, x => { const p = x % 5, g = p > 2 && p < 2.4; return Object.assign(musique(), { dd: g ? 1 : 0, driftT: g ? p - 2 : 0, drift: g, slide: g ? 0.6 : 0 }); }],
     tout: ['mix', 'Course complète', 'musique, moteur, pneus, vent, ambiance : le mélange du jeu', Object.keys(FAM), 0, x => Object.assign(musique(), { rpm: 0.55 + 0.4 * dents(x, 4), load: 1, gas: 1, spool: 0.8, amb: 1, slide: u.glisse ? u.slide : 0 })],
   };
   const musique = () => course({ r: u.vit, sp: u.vit * 80, plein: u.plein, drift: u.glisse, tun: u.tunnel ? 1 : 0, rub: u.mur ? 1 : 0, rpm: 0.2, load: 0, gas: 0 });
@@ -134,7 +136,7 @@
   function etat(sc, x) {
     const o = sc && sc[5] ? sc[5](x) : { state: 'pause' }, r = o.r || 0;
     return { state: o.state, tour: Math.max(0, u.tour), tours: u.tour < 0 ? 0 : 3, T: { h0: 500, h1: 700, n: 1000 }, hot: o.plein ? 1 : 0, tun: o.tun || 0, amb: o.amb || 0,
-      car: { manual: !!o.manuel, vl: o.slide ? 4 + 14 * o.slide : 0, boost: 0, idx: o.plein ? 600 : 0, dist: 1, drift: !!o.drift, rub: o.rub || 0 },
+      car: { manual: !!o.manuel, dd: o.dd || 0, driftT: o.driftT || 0, vl: o.slide ? 4 + 14 * o.slide : 0, boost: o.boost || 0, idx: o.plein ? 600 : 0, dist: 1, drift: !!o.drift, rub: o.rub || 0 },
       r, sp: o.sp || 0, gas: o.gas || 0, hit: pulse.hit ? 9 : 0, up: !!pulse.up, down: !!pulse.down, rpm: o.rpm || 0.2, load: o.load || 0, spool: o.spool || 0, stun: 0 };
   }
   const son = () => SON.ac && SON.live;

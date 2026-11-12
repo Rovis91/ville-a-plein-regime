@@ -10,11 +10,12 @@
   let TR = 0; // transposition du dernier tour, en demi-tons
   const hz = m => 440 * 2 ** ((m + TR - 69) / 12), R = -99, OUT = 0.56, CLAC = 0.6, LEV = 1; // R : silence dans un thème (voir mel() dans cartes.js)
   let M = CARTE, ST = M.radio, TH = M.th;
-  let AC, live = true, timer, pret = Promise.resolve(), ana, master, musicG, tuneG, drumG, musF, duckG, swF, busDry, busDrv, acid, fuzz, kdrv, bsat, dly, dlyFb, eqL, eqM, eqH, mrevG, drumRv, revIn, echoIn, choIn, mbuf, secG, drumF, gritDry, gritWet, rev, musSend, motSend, nbuf, outG, vu;
+  let AC, live = true, timer, pret = Promise.resolve(), ana, master, musicG, tuneG, drumG, musF, duckG, swF, busDry, busDrv, acid, fuzz, kdrv, bsat, dly, dlyFb, eqL, eqM, eqH, mrevG, drumRv, revIn, echoIn, choIn, mbuf, secG, drumF, gritDry, gritWet, hpF, rev, musSend, motSend, nbuf, outG, vu;
   let t0 = 0, nextT = 0, stp = 0, musicOn = true, lastHit = 0, lastN = 0, lastB = 0, menu = true;
   const vol = { mus: 1, mot: 1, pneu: 1, vent: 1, amb: 1, choc: 1, ui: 1 }, V = {}; // volume par famille (banc d'écoute) et leurs nœuds
   // état musical piloté par la course : mix = secteur chaud, inten = vitesse, driftL = glisse, drums = batterie, fin = dernier secteur
   const MX = { b: 1, d: 1.6, c: 2, g: 2, a: 2, l: 1.6 }; // niveau de chaque tranche : le médium et l'aigu ne doivent pas disparaître sous la basse
+  let tens = 0, glisse = false, acquis = false, acqDit = false, boostPend = false, boostL = false; // glisse : tension (0..1), en cours, boost acquis, palier déjà joué, relâchement à jouer, boost en cours
   let bigS = false, lastFill = -9, sortie = -1, grit = 0, curRoot = 33, lap = 1, lapN = -1; const was = {}; // lap : 0 premier tour (sobre), 1 normal, 2 dernier tour (le plus intense) ; // refrain en cours ; dernière relance ; parties qui jouaient à la mesure précédente
   let W = {}; const strip = {}; // ondes sur mesure ; tranches de mixage par partie (b basse, d nappe, c g accords, a arpège, l thème)
   let mix = 0, inten = 0, driftL = 0, drums = 0, fin = false, wasIn = false, wasNear = false, wasBoost = false, lastGas = 0;
@@ -232,7 +233,7 @@
     if (menu) return schedMenu(s, t);
     const st = ST[station], K = KIT[st.kit] || KIT.k909; t += (s & 1) * (st.sw || 0) * S16; // swing : les doubles-croches impaires traînent
     const bar = s >> 4, q = s % 16, d = drums, fi = (bar >> 2) % st.form.length, nxt = st.form[(fi + 1) % st.form.length];
-    if (q === 0 && ((bar & 3) === 0 || mix > 0.5 || fin)) { const b = mix > 0.5 || fin; if (bigS && !b) sortie = bar >> 2; bigS = b; } // le refrain du secteur chaud entre à la mesure suivante et ne repart qu'en fin de section : jamais au milieu d'une mesure
+    if ((q === 0 && ((bar & 3) === 0 || mix > 0.5 || fin || boostL)) || (boostL && !bigS && q % 4 === 0)) { const b = mix > 0.5 || fin || boostL; if (bigS && !b) sortie = bar >> 2; bigS = b; } // le boost de sortie de glisse est une action : il ouvre le refrain dès le temps suivant // le refrain du secteur chaud entre à la mesure suivante et ne repart qu'en fin de section : jamais au milieu d'une mesure
     const big = bigS;
     let key = st.form[fi]; if (big && key !== 'e') key = st.hot;
     else if (sortie === bar >> 2 && !st.sec[key].k) key = st.form[1]; // en sortant du secteur chaud on retombe sur un couplet, jamais sur un break : pas de trou // secteur chaud : le refrain, et sa variation quand la forme y arrive
@@ -283,6 +284,12 @@
         tone(st.l.p, hz(N), t, S16 * n * 1.05, PATCH[st.l.p].lv * (st.lV || 1), strip.l.in, lastN && hz(lastN)); lastN = N;
         if (fin || lap === 2) osc('triangle', hz(N + 12), t, S16 * n, 0.04, strip.l.in); } } // dernier secteur, dernier tour : thème doublé à l'octave
     if (driftL > 0.3) osc('sawtooth', hz(ch[(q * 2) % 3] + 24), t, 0.1, 0.07 * driftL, acid); // ligne acide tant qu'on glisse
+    if (d && glisse) { // la glisse tend la musique avec sa durée : roulement qui se resserre et souffle qui monte, calés sur le tempo (le grave s'amincit dans audioFrame)
+      if (q % (acquis ? 1 : 2) === 0) dSnare(t, 0.06 + 0.22 * tens, K);
+      nz(t, S16 * 0.9, 0.025 + 0.05 * tens, drumG, 'bandpass', 800 * 8 ** tens, 2);
+      if (acquis && !acqDit) { acqDit = true; dHat(t, 1, K, 'o'); tone('bell', hz(ch[0] + 24), t, 0.3, 0.09, strip.a.in); tone('bell', hz(ch[0] + 31), t + S16, 0.4, 0.09, strip.a.in); } // palier : le boost est acquis
+    }
+    if (boostPend && q % 4 === 0) { boostPend = false; if (d) crash(t, 0.8); } // relâchement : la cymbale tombe sur le temps qui suit la sortie de glisse
     if (st.sweep) swF.frequency.setTargetAtTime(big ? 16000 : 350 * 2 ** (3.6 * (0.5 - 0.5 * Math.cos(Math.PI * (s % 128) / 64))), t, big ? 0.6 : 0.15); // filtre balayé sur 8 mesures, grand ouvert dans le secteur chaud
     else swF.frequency.setTargetAtTime(sec.lo && !big ? 400 * 30 ** pos : 20000, t, 0.25); // section filtrée : le passe-bas s'ouvre au fil de la section
   }
@@ -347,7 +354,7 @@
     AC = ctx || new (window.AudioContext || window.webkitAudioContext)(); live = !ctx;
     const comp = AC.createDynamicsCompressor(); outG = gain(OUT, AC.destination); comp.connect(outG); // marge après le compresseur : mesuré, aucune crête au-dessus de -3 dB
     vu = AC.createAnalyser(); vu.fftSize = 2048; outG.connect(vu); // ce qui sort vraiment, pour le vumètre du banc d'écoute
-    lastHit = 0; ambT = 2; bigS = false; lastFill = -9; sortie = -1; grit = 0; for (const p in was) was[p] = false; drums = 0; mix = inten = driftL = 0; fin = inZone = false; // un contexte neuf repart de l'arrêt
+    lastHit = 0; ambT = 2; bigS = false; lastFill = -9; sortie = -1; grit = tens = 0; glisse = acquis = acqDit = boostPend = boostL = false; for (const p in was) was[p] = false; drums = 0; mix = inten = driftL = 0; fin = inZone = false; // un contexte neuf repart de l'arrêt
     master = gain(0.9, comp); ana = AC.createAnalyser(); ana.fftSize = 64; master.connect(ana);
     for (const k in vol) V[k] = gain(vol[k], master);
     nbuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
@@ -357,7 +364,7 @@
     for (let c = 0; c < 2; c++) { const x = ir.getChannelData(c); for (let i = 0; i < x.length; i++) x[i] = (Math.random() * 2 - 1) * Math.exp(-i / AC.sampleRate / 0.35); }
     rev.buffer = ir; rev.connect(gain(0.5, master)); musSend = gain(0, rev); motSend = gain(0, rev); V.mus.connect(musSend); V.mot.connect(motSend);
     musF = filt('lowpass', 18000, 0.7, V.mus); musicG = gain(musicOn ? 1 : 0, musF);
-    eqH = filt('highshelf', 5000, 0.7, musicG); eqM = filt('peaking', 1000, 0.9, eqH); eqL = filt('lowshelf', 130, 0.7, eqM); secG = gain(1, eqL); gritDry = gain(1, secG); tuneG = gain(1, gritDry); gritWet = gain(0, secG); tuneG.connect(gain(2.5, shaper(6, gritWet))); // couleur de la station ; niveau de la section ; voie saturée, dosée par la proximité du mur
+    eqH = filt('highshelf', 5000, 0.7, musicG); eqM = filt('peaking', 1000, 0.9, eqH); eqL = filt('lowshelf', 130, 0.7, eqM); hpF = filt('highpass', 20, 0.9, eqL); secG = gain(1, hpF); gritDry = gain(1, secG); tuneG = gain(1, gritDry); gritWet = gain(0, secG); tuneG.connect(gain(2.5, shaper(6, gritWet))); // couleur de la station ; niveau de la section ; voie saturée, dosée par la proximité du mur
     drumF = gain(1, tuneG); drumG = gain(1, drumF); kdrv = shaper(3, gain(0.8, drumG)); // drumF : fondus de la batterie aux entrées et sorties
     swF = filt('lowpass', 20000, 0.7, tuneG); busDry = gain(1, swF); busDrv = gain(0, swF);
     duckG = gain(1, busDry); duckG.connect(gain(2.5, shaper(4, busDrv))); // tout sauf la batterie passe par ce bus pompé
@@ -447,7 +454,11 @@
     k(windG.gain, 0.045 * clamp((r - 0.5) * 2, 0, 1) ** 2 * (1 - tun), 0.2); // vent : un souffle à haute vitesse seulement, loin sous le moteur, coupé en tunnel
     k(scrapeG.gain, car.rub ? 0.05 + 0.1 * r : 0, 0.05);
     if ((hit > 3 || e.bump > 0.3) && t - lastHit > 0.15) { lastHit = t; choc(Math.max(hit, e.bump > 0.3 ? 8 + e.bump * 2 : 0), t); if (racing) coupMusique(Math.max(hit, e.bump > 0.3 ? 8 : 0), t); } // entre voitures les vitesses d'impact sont faibles : plancher de volume, sinon on ne l'entend pas
-    if (car.boost > 0 && !wasBoost) boostFx(t);
+    // glisse (car.dd, car.driftT) : la tension monte en 1,5 s, palier quand le boost est acquis à 0,6 s ; sortie avec boost : tout s'ouvre d'un coup et le refrain joue tant que le boost dure ; glisse ratée : retour doux, sans effet
+    const gl = racing && car.dd ? car.driftT || 0 : 0, vise = car.boost > 0 ? 0 : clamp(gl / 1.5, 0, 1);
+    glisse = gl > 0.15; acquis = gl > 0.6; if (!glisse) acqDit = false; boostL = racing && car.boost > 0;
+    if (car.boost > 0 && !wasBoost) { boostFx(t); boostPend = true; tens = 0; }
+    tens += (vise - tens) * Math.min(1, dt * (vise > tens ? 8 : 3)); k(hpF.frequency, 20 * 20 ** tens, 0.08); // passe-haut : de 20 à 400 Hz, le grave s'amincit sans disparaître
     wasBoost = car.boost > 0;
     // ambiance du lieu : seulement dans ses zones (e.amb, fondu fait par le jeu), jamais au menu ni en tunnel ; événements espacés au hasard, dans la zone
     const amb = state === 'title' ? 0 : (e.amb || 0) * (1 - tun);
