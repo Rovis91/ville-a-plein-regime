@@ -48,7 +48,8 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | `index.html` | page, polices, ordre de chargement des scripts |
 | `cartes.js` | **les cartes**, en données : tracé, largeur, adhérence, voiture, stations de radio, thème (couleurs, ciel, lumière, interface). Ajouter une carte commence ici. |
 | `sim.js` | **physique**, sans aucun rendu : piste, moteur et boîte, glisse, murs, pilote automatique, course contre IA, trafic. Partagé entre le jeu et les tests. |
-| `game.js` | rendu three.js, décor de la ville, effets, audio, interface, commandes, boucle de jeu |
+| `game.js` | rendu three.js, décor de la ville, effets, interface, commandes, boucle de jeu |
+| `audio.js` | tout le son, synthétisé : stations de radio, séquenceur adaptatif, moteur, pneus, bruitages. Exposé au jeu par `window.SON`. |
 | `decors.js` | décors des autres cartes (forêt, baie, Paris, canal) : une fonction par carte |
 | `test-cartes.js` | tests de toutes les cartes |
 | `propositions/` | la page de conception d'origine des cartes (historique) |
@@ -58,7 +59,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | `three.min.js` | three.js r128 |
 | `test.js` | tests de la physique |
 
-`game.js` est un seul fichier découpé en sections repérées par `// ----------` : rendu et passe finale, textures, piste, ville, horizon, voiture et effets, audio, état de jeu et commandes, interface, boucle.
+`game.js` est un seul fichier découpé en sections repérées par `// ----------` : rendu et passe finale, textures, piste, ville, horizon, voiture et effets, état de jeu et commandes, interface, boucle.
 
 ## Tests
 
@@ -96,8 +97,8 @@ Dans `game.js` :
 
 | Chercher | Effet |
 |---|---|
-| `function sched(` | le séquenceur musical et ses couches adaptatives |
-| `function audioFrame(` | son du moteur, des pneus, du vent, et pilotage de la musique par la course |
+| `function sched(` (dans `audio.js`) | le séquenceur musical et ses couches adaptatives |
+| `function audioFrame(` (dans `audio.js`) | son du moteur, des pneus, du vent, et pilotage de la musique par la course |
 | `post.uniforms.amt.value` | intensité du flou de vitesse |
 | `c += bl *` | intensité du halo des néons |
 | `cam.fov =` | grand-angle de la caméra selon la vitesse |
@@ -115,7 +116,7 @@ Ce qui est solide : la physique est isolée, testée, et ne dépend pas du rendu
 
 Dette connue, à traiter avant d'ajouter beaucoup de contenu :
 
-- `game.js` fait environ 700 lignes dans une seule fermeture. Le premier découpage utile serait de sortir l'audio dans son propre fichier.
+- `game.js` fait environ 700 lignes dans une seule fermeture.
 - La physique tourne à 120 Hz sans interpolation de l'affichage : légère saccade possible sur un écran 144 Hz.
 - La ville compte plusieurs centaines d'objets dessinés séparément. Sans souci sur une machine récente, à fusionner si le jeu doit tourner sur du matériel modeste.
 - L'interface est entièrement redessinée à chaque image.
