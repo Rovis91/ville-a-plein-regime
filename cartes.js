@@ -151,7 +151,7 @@
         up: 7500, down: 6200, trac: 11, rwd: 0, son: 1, // 4 roues motrices : ~1,1 g de motricité, pas de survirage à l'accélérateur
         look: { col: 0xff2030, l: 1, w: 1, h: 1, nez: 0.62, cab: [-0.5, 2.1, 0.5], aileron: 1, neon: 0x00f0ff } },
       radio: RADIO.ville,
-      th: { decor: 'ville', fog: 0x1f0a36, fogD: [60, 800], sky: [[0, '#03020a'], [0.36, '#120a2e'], [0.47, '#5a1058'], [0.5, '#1f0a36'], [1, '#1f0a36']], stars: 140,
+      th: { decor: 'ville', rendu: { saturation: 1.2, magenta: 0.15, halo: 1.2 }, fog: 0x1f0a36, fogD: [60, 800], sky: [[0, '#03020a'], [0.36, '#120a2e'], [0.47, '#5a1058'], [0.5, '#1f0a36'], [1, '#1f0a36']], stars: 140,
         astre: { dir: [0.45, 0.8, 0.4], col: '#d8e8ff', ombre: '#a8b8e0', taille: 170 }, hemi: [0x5a6cff, 0xff2a6a, 0.55], sun: [0x8fb0ff, 0.35], phares: 2.6, bloom: 0.13, scan: 0.12,
         pluie: 1, orage: 1, alarme: 1, chev: 1, piles: -61, tubes: 1, reflets: '#00a8b8', pubs: 1, murH: 1.4,
         route: ['#2c2c3a', '#383848', '#fcee0a', '#d8d8e0', '#fcee0a', '#08080c', true], mur: ['#12121a', '#00f0ff', '#fcee0a', '#0a0a10'], depart: [0xfcee0a, 0x00f0ff, '#fcee0a'],
@@ -207,7 +207,7 @@
       car: car({ nom: 'DODGE VIPER GTS', ratios: [2.66, 1.78, 1.30, 1.00, 0.74, 0.50], final: 3.07, wheel: 0.333, mass: 1610, idle: 800, red: 6000, cd: 0.35, area: 1.9,
         tq: [0, 420, 560, 640, 664, 625, 540, 400, 0], son: 0.8, look: { col: 0x1848c8, l: 1.03, w: 1.05, h: 0.88, nez: 0.7, cab: [-0.95, 1.7, 0.46], aileron: 0, bandes: 0xf4f0e0 } }),
       radio: RADIO.canal,
-      th: { decor: 'canal', fog: 0xe89060, fogD: [160, 1700], sky: [[0, '#3d2a5c'], [0.24, '#3d2a5c'], [0.25, '#7a4078'], [0.36, '#7a4078'], [0.37, '#d85a50'], [0.44, '#d85a50'], [0.45, '#ff9a4a'], [0.49, '#ff9a4a'], [0.5, '#e89060'], [1, '#e89060']], stars: 0,
+      th: { decor: 'canal', rendu: { chaleur: 0.4, saturation: 1.08, ombres: 0.95 }, fog: 0xe89060, fogD: [160, 1700], sky: [[0, '#3d2a5c'], [0.24, '#3d2a5c'], [0.25, '#7a4078'], [0.36, '#7a4078'], [0.37, '#d85a50'], [0.44, '#d85a50'], [0.45, '#ff9a4a'], [0.49, '#ff9a4a'], [0.5, '#e89060'], [1, '#e89060']], stars: 0,
         astre: { dir: [-0.85, 0.11, 0.35], col: '#fff4c0', ombre: '#fff4c0', taille: 340 }, hemi: [0xb898c8, 0xb8ad9a, 0.85], sun: [0xffa860, 0.9], phares: 0.4, bloom: 0.03, scan: 0.05,
         murH: 1.3, route: ['#4c4a50', '#58565c', '#f4f0e0', '#2aa39a', '#e83f8c', '#f4f0e0', false], mur: ['#f4f0e0', '#e83f8c', '#1848c8', '#e4ddd0'], depart: [0xff7a3d, 0x3d2a5c, '#f4f0e0'],
         hud: { y: '#ffc04a', c: '#ff7a3d', r: '#e83f8c', fond: 'rgba(40,24,56,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'SPEEDWAY · HEURE DOREE'], titre: ['CANAL', 'SIX'] } } },

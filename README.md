@@ -62,6 +62,8 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | `three.min.js` | three.js r128 |
 | `test.js` | tests de la physique |
 
+**Régler le rendu** : ouvrir `index.html?carte=<id>&reglage`. Le jeu roule seul et un panneau donne un curseur par réglage du rendu rétro (finesse en lignes, niveaux de couleur, trame, flou, halo, vignette, saturation, contraste, teinte), avec des variantes toutes faites. Le réglage s'enregistre dans le navigateur pour la carte ; pour le fixer dans le jeu, copier la ligne affichée en bas du panneau dans le champ `rendu` du thème de la carte (`cartes.js`).
+
 `game.js` est un seul fichier découpé en sections repérées par `// ----------` : rendu et passe finale, outils des trois entités du décor (`tx`, `mat`, `geo`, `pose`), piste, ville, horizon, voiture et effets, état de jeu et commandes, interface, boucle.
 
 ## Tests
