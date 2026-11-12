@@ -436,14 +436,19 @@
   beaconPts = new THREE.Points(beaconGeo, new THREE.PointsMaterial({ color: 0xff2030, size: 2, sizeAttenuation: false, fog: false })); scene.add(beaconPts);
   } else decorTick = window.DECORS[TH.decor]({ THREE, scene, T, S, N, W, M, TH, ribbon, rnd, across, zone, lum, geo, mat, pose, zones, habille, temps: () => race ? -1 : tTraf }); // pas de trafic en course : les adversaires ne savent pas l'éviter
 
-  // pluie : traînées qui s'allongent et foncent vers la caméra avec la vitesse
-  // force 1 = 400 gouttes ; au-delà (averse, zones de pluie > 1), plus de gouttes, traînées plus longues et plus opaques
-  const RN = 1600, rainP = new Float32Array(RN * 3), rainGeo = new THREE.BufferGeometry(), rainV = new Float32Array(RN * 6);
-  const alea = (k => () => (k = k * 16807 % 2147483647) / 2147483647)(11); // au-delà des 400 premières : un tirage à part, la suite de rnd ne bouge pas
+  // pluie : traînées nettes qui s'allongent et foncent vers la caméra avec la vitesse, penchées par le vent ; tête claire, queue qui s'éteint (mélange additif, aucun flou)
+  // force 1 = 400 gouttes ; au-delà (averse, zones de pluie > 1), plus de gouttes, plus longues ; et des impacts qui rejaillissent sur la chaussée devant la voiture
+  const RN = 2400, rainP = new Float32Array(RN * 3), rainGeo = new THREE.BufferGeometry(), rainV = new Float32Array(RN * 6), rainC = new Float32Array(RN * 6);
+  const alea = (k => () => (k = k * 16807 % 2147483647) / 2147483647)(11); // hasard à part : la suite de rnd ne bouge pas (seules les 400 premières gouttes la tirent, comme avant)
   for (let i = 0; i < RN; i++) { const r = i < 400 ? rnd : alea; rainP.set([r() * 80 - 40, r() * 30, r() * 80 - 40], i * 3); }
-  rainGeo.setAttribute('position', new THREE.BufferAttribute(rainV, 3));
-  const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: 0x9fc8ff, transparent: true, opacity: 0.55, fog: false }));
+  for (let i = 0; i < RN; i++) { const b = 0.45 + 0.55 * alea(); rainC.set([0.62 * b, 0.8 * b, b, 0.08 * b, 0.12 * b, 0.2 * b], i * 6); } // proches et lointaines : des gouttes plus ou moins claires
+  rainGeo.setAttribute('position', new THREE.BufferAttribute(rainV, 3)); rainGeo.setAttribute('color', new THREE.BufferAttribute(rainC, 3));
+  const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false }));
   rain.frustumCulled = false; scene.add(rain);
+  const SN = 300, splP = new Float32Array(SN * 3), splC = new Float32Array(SN * 3), splA = new Float32Array(SN).map(() => alea() * 0.14), splD = new Float32Array(SN), splGeo = new THREE.BufferGeometry(); // impacts : vie de 0,14 s
+  splGeo.setAttribute('position', new THREE.BufferAttribute(splP, 3)); splGeo.setAttribute('color', new THREE.BufferAttribute(splC, 3));
+  const splash = new THREE.Points(splGeo, new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false }));
+  splash.frustumCulled = false; scene.add(splash);
 
   // ---------- voiture : coque en coin, roues qui tournent et braquent, feux stop ----------
   const carG = new THREE.Group(), body = new THREE.Group(); carG.add(body); scene.add(carG);
@@ -890,15 +895,21 @@
     for (let k = 0; k < ns && k < LUMS.length; k++) { const l = LUMS[k]; put(l.x, l.y, l.z, l.c, l.r, Math.min(1, (dm - l.d) / (dm * 0.3 + 0.01)) * (l.tun && TH.alarme ? 0.5 + pulse : 1)); }
     LUX.uN.value = nl;
     // pluie : chaque goutte recule de la vitesse de la voiture, sa traînée s'étire d'autant
-    const pl = pluieAt(car.idx) * (1 - lm), gl = 1.9 * Math.max(1, 0.4 + 0.6 * pl); rain.visible = pl > 0.02; rainGeo.setDrawRange(0, 2 * Math.min(RN, Math.round(400 * pl))); rain.position.set(car.x, carY, car.z);
-    rain.material.opacity = Math.min(0.9, 0.55 + 0.15 * Math.max(0, pl - 1));
-    for (let i = 0; i < RN; i++) {
+    const pl = pluieAt(car.idx) * (1 - lm), gl = 1.9 * Math.max(1, 0.4 + 0.6 * pl), nr = Math.min(RN, Math.round(400 * pl ** 1.5)); rain.visible = splash.visible = pl > 0.02;
+    rainGeo.setDrawRange(0, 2 * nr); rain.position.set(car.x, carY, car.z); rain.material.opacity = Math.min(1, 0.6 + 0.15 * pl);
+    for (let i = 0; i < nr; i++) {
       let x = rainP[i * 3] - car.vx * dt, y = rainP[i * 3 + 1] - 55 * dt, z = rainP[i * 3 + 2] - car.vz * dt;
       x = ((x + 40) % 80 + 80) % 80 - 40; z = ((z + 40) % 80 + 80) % 80 - 40; if (y < 0) y += 30;
       rainP[i * 3] = x; rainP[i * 3 + 1] = y; rainP[i * 3 + 2] = z;
-      rainV.set([x, y, z, x + car.vx * 0.035, y + gl, z + car.vz * 0.035], i * 6);
+      rainV.set([x, y, z, x + car.vx * 0.035 + gl * 0.12, y + gl, z + car.vz * 0.035 + gl * 0.05], i * 6); // vent constant : la traînée penche un peu
     }
     rainGeo.attributes.position.needsUpdate = true;
+    const ns2 = Math.min(SN, Math.round(SN * pl / 3)); splGeo.setDrawRange(0, ns2);
+    for (let i = 0; i < ns2; i++) { // un impact vit 0,14 s sur la chaussée, de 4 à 40 m devant, puis renaît ailleurs ; il éclate clair et s'éteint
+      if ((splA[i] += dt) > 0.14) { splA[i] -= 0.14; const j = 2 + Math.floor(alea() * 18), s = S[(car.idx + j) % N], l = (alea() * 2 - 1) * W; splP.set([s.x - s.tz * l, s.y + 0.06, s.z + s.tx * l], i * 3); splD[i] = 1 - j / 24; } // au loin, l'impact est plus pâle
+      const f = (1 - splA[i] / 0.14) ** 2 * splD[i]; splC.set([0.45 * f, 0.6 * f, 0.75 * f], i * 3);
+    }
+    splGeo.attributes.position.needsUpdate = splGeo.attributes.color.needsUpdate = true;
 
     if (state === 'race' && race) { // course : même bandeau « tour + temps » qu'en contre-la-montre, avec la place (le dernier tour est couvert par le classement d'arrivée)
       const ln = Math.floor(car.dist / N);
