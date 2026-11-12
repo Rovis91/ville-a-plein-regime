@@ -33,7 +33,7 @@
 <body>
 <main>
 <header>
-  <h1>Banc d'écoute <small style="font-weight:400;color:#a8a8b4;font-size:12px">version essais-2</small></h1>
+  <h1>Banc d'écoute <small style="font-weight:400;color:#a8a8b4;font-size:12px">version chocs-3</small></h1>
   <div id="vu"><span id="voyant" title="du signal sort"></span><div id="barre"><div id="niv"></div><div id="tenue"></div></div><span id="db">silence</span><button id="stop">■ Tout arrêter</button></div>
   <div id="quoi">Rien ne joue. Cliquez un son : il joue seul, tout le reste est coupé.</div>
 </header>
@@ -75,14 +75,12 @@
 <h2>Interface</h2>
 <div id="g-ui"></div>
 
-<h2>Essais : chocs, frottement et réaction de la musique</h2>
-<p>La station en cours tourne ; choisissez une variante dans chaque ligne, puis déclenchez un événement. La voiture ralentit après un choc, comme en jeu. Quand vous avez vos préférées, « Copier mon choix ».</p>
-<div id="essais"></div>
+<h2>Chocs sur la musique</h2>
+<p>La station en cours continue de jouer ; chaque bouton rejoue un événement de course par-dessus, avec le ralentissement qui suit.</p>
 <div id="evts">
   <button data-ev="choc">Choc brut contre un mur</button><button data-ev="petit">Petit choc</button><button data-ev="frott">Frottement seul (1,5 s)</button>
   <button data-ev="chocFrott">Choc puis frottement</button><button data-ev="voiture">Choc entre voitures</button><button data-ev="ralenti">Ralentir sans choc</button>
 </div>
-<button id="choix">Copier mon choix</button> <span id="choixTxt" style="color:#a8a8b4"></span>
 
 <h2>Tout ensemble, comme en course</h2>
 <p>Le mélange réel du jeu, sans amplification. Les curseurs règlent chaque famille ; dictez leurs valeurs pour qu'elles deviennent les réglages du jeu (1,00 = réglage actuel).</p>
@@ -150,13 +148,7 @@
     tout: ['mix', 'Course complète', 'musique, moteur, pneus, vent, ambiance : le mélange du jeu', Object.keys(FAM), 0, x => Object.assign(musique(), { rpm: 0.55 + 0.4 * dents(x, 4), load: 1, gas: 1, spool: 0.8, amb: 1, slide: u.glisse ? u.slide : 0 })],
   };
   // essais : un événement de course rejoué sur la musique (choc, frottement, contact), avec le ralentissement qui suit
-  const ESS = { choc: ['Bruit du choc', ['coup sourd (actuel)', 'tôle froissée', 'saturé, avec débris', 'lourd, carrosserie qui sonne']],
-    frott: ['Frottement', ['tôle (actuel)', 'meule', 'raclement grave', 'crissement et étincelles']],
-    mus: ['La musique au choc', ['ne réagit pas', 'étouffée + coup de basse (actuel)', 'coup de basse seul', 'saturation', 'bégaiement', 'coupure sèche puis cymbale', 'téléphone (ni grave ni aigu)']],
-    vit: ['La musique quand on ralentit', ['ne change pas', 'étouffée (actuel)', 'légèrement étouffée']],
-    contact: ['Entre voitures', ['choc seul (actuel)', 'choc + frottement bref']] };
-  const VR = { choc: 0, frott: 0, mus: 1, vit: 1, contact: 0 }; let ess = null;
-  function essais() { $('essais').innerHTML = Object.keys(ESS).map(k => '<p style="margin:6px 0 2px;color:#e8e8e4">' + ESS[k][0] + '</p>' + ESS[k][1].map((n, i) => '<button data-var="' + k + ':' + i + '" class="' + (VR[k] === i ? 'on' : '') + '">' + n + '</button>').join('')).join(''); if (son()) SON.variante(VR); }
+  let ess = null;
   function essaiEtat() { // x : secondes depuis l'événement
     const o = musique(), x = ess ? SON.ac.currentTime - ess.t : 99, T = ess ? ess.type : '', dur = T === 'petit' || T === 'voiture' ? 1.5 : 3;
     const frotte = (T === 'frott' && x < 1.5) || (T === 'chocFrott' && x > 0.05 && x < 1.3);
@@ -217,9 +209,8 @@
   }
   $('bilan').onclick = bilan; $('raz').onclick = () => { if (confirm('Effacer tous vos avis ?')) { AV = {}; garde(); avis(); } };
   document.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
-    if (b.dataset.var) { const [k, i] = b.dataset.var.split(':'); VR[k] = +i; essais(); return; }
-    if (b.dataset.ev) { if (!son()) return; if (scene !== SC.essai) jouer('essai'); SON.variante(VR); ess = { type: b.dataset.ev, t: SON.ac.currentTime };
-      $('quoi').innerHTML = 'Essai déclenché : <b>' + b.textContent + '</b> — ' + Object.keys(ESS).map(k => ESS[k][1][VR[k]]).join(' · '); b.className = 'on'; setTimeout(() => { b.className = ''; }, 600); return; }
+    if (b.dataset.ev) { if (!son()) return; if (scene !== SC.essai) jouer('essai'); ess = { type: b.dataset.ev, t: SON.ac.currentTime };
+      $('quoi').innerHTML = 'Déclenché sur la musique : <b>' + b.textContent + '</b>'; b.className = 'on'; setTimeout(() => { b.className = ''; }, 600); return; }
     if (b.dataset.av) { const [id, i] = b.dataset.av.split(':'), c = CARTES.find(x => x.id === id); if (c !== M) { stop(); M = c; SON.carte(M); }
       u.plein = !!b.dataset.plein; $('plein').checked = u.plein; enEcoute = b.dataset.av; jouer(i === 'm' ? 'menu' : 'st' + i); boutons(); avis(); return; }
     if (b.dataset.v) { const k = b.dataset.v.slice(0, -2), v = +b.dataset.v.slice(-1); AV[k] = AV[k] || {}; AV[k].v = AV[k].v === v ? undefined : v; garde(); avis(); return; } if (b.dataset.sc) jouer(b.dataset.sc); else if (b.dataset.c) { stop(); M = CARTES.find(c => c.id === b.dataset.c); SON.carte(M); boutons(); } });
@@ -228,7 +219,6 @@
   $('chocMus').onclick = () => { pulse.hit = 1; }; $('tour').onchange = e => { u.tour = +e.target.value; };
   for (const id of ['plein', 'glisse', 'tunnel', 'mur', 'gaz']) $(id).onchange = e => { u[id] = e.target.checked; };
   for (const id of ['vit', 'rpm', 'slide']) { const el = $(id), out = el.nextElementSibling; (el.oninput = () => { u[id] = +el.value; out.textContent = (+el.value).toFixed(2).replace('.', ','); })(); }
-  $('choix').onclick = () => { const t = 'Mon choix — ' + Object.keys(ESS).map(k => ESS[k][0].toLowerCase() + ' : ' + ESS[k][1][VR[k]]).join(' ; '); $('choixTxt').textContent = t; if (navigator.clipboard) navigator.clipboard.writeText(t).catch(() => { }); };
   $('stop').onclick = () => { stop(); enEcoute = null; avis(); };
   $('go').onclick = () => { SON.init(); stop(); boutons(); $('voile').remove(); };
 
@@ -312,8 +302,8 @@
   }
   $('variete').onclick = variete;
   $('autotest').onclick = autotest; $('mesurer').onclick = () => lancer([M]); $('mesurerTout').onclick = () => lancer(CARTES);
-  window.__banc = { VR, essais, bilan, avis, lancer, mesurer, rendre, autotest, variete, profil, corr, jouer, stop, SC, u };
-  boutons(); volumes(); avis(); essais();
+  window.__banc = { bilan, avis, lancer, mesurer, rendre, autotest, variete, profil, corr, jouer, stop, SC, u };
+  boutons(); volumes(); avis();
 })();
 </script>
 </body>
