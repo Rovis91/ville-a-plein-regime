@@ -1,6 +1,6 @@
 // Ville à plein régime — audio : tout est synthétisé (bande-son originale et adaptative). Stations de chaque carte : RADIO dans cartes.js.
 // Interface (window.SON) : init() au premier geste · frame(dt, e) à chaque image · setStation(i), toggleMusic(), carte(M), volume(famille, v) ·
-// beep(f), crash(), stinger(rec), tonnerre() · lus par le jeu : station, nom, fq, genre, musicOn, beat, pulse, ana · banc d'écoute et mesure :
+// beep(f), crash(), stinger(rec), tonnerre() · éditeur de musique : ecoute, recale(), pas, timbres, kits · lus par le jeu : station, nom, fq, genre, musicOn, beat, pulse, ana · banc d'écoute et mesure :
 // init(contexte hors ligne), pump(), pret, live, vol, stations, evenement(), moniteur(gain), vu, et les bruitages ponctuels clac(), levier(), choc(v),
 // boost(), petarade() · prises de test : ac, out, smp.
 // Chaîne : timbres (PATCH) → tranche de la partie → (batterie (KIT) | bus pompé → filtre balayé → saturation de bus) → coupure de station →
@@ -10,6 +10,9 @@
   let TR = 0; // transposition du dernier tour, en demi-tons
   const hz = m => 440 * 2 ** ((m + TR - 69) / 12), R = -99, OUT = 0.56, CLAC = 0.6, LEV = 1; // R : silence dans un thème (voir mel() dans cartes.js)
   let M = CARTE, ST = M.radio, TH = M.th;
+  // prises de l'éditeur de musique (editeur.html) : muet / solo par partie, section jouée en boucle, témoins (jusqu'à quand chaque partie sonne), section en cours
+  const EC = { mute: {}, solo: null, boucle: null, joue: {}, sec: '' }, jo = (p, t, d = 0.12) => { EC.joue[p] = t + d; };
+  const pv = (st, p) => (EC.solo ? EC.solo === p : !EC.mute[p]) ? (st.mx && st.mx[p] != null ? st.mx[p] : 1) : 0; // niveau d'une partie : st.mx, réglé dans l'éditeur
   let AC, live = true, timer, pret = Promise.resolve(), ana, master, musicG, tuneG, drumG, musF, duckG, swF, busDry, busDrv, acid, fuzz, kdrv, bsat, dly, dlyFb, eqL, eqM, eqH, mrevG, drumRv, revIn, echoIn, choIn, mbuf, secG, drumF, gritDry, gritWet, hpF, rev, musSend, motSend, nbuf, outG, vu;
   let t0 = 0, nextT = 0, stp = 0, musicOn = true, lastHit = 0, lastN = 0, lastB = 0, menu = true;
   const vol = { mus: 1, mot: 1, pneu: 1, vent: 1, amb: 1, choc: 1, ui: 1, pluie: 1 }, V = {}; // volume par famille (banc d'écoute) et leurs nœuds
@@ -242,6 +245,8 @@
     const big = bigS;
     let key = st.form[fi]; if (big && key !== 'e') key = st.hot;
     else if (sortie === bar >> 2 && !st.sec[key].k) key = st.form[1]; // en sortant du secteur chaud on retombe sur un couplet, jamais sur un break : pas de trou // secteur chaud : le refrain, et sa variation quand la forme y arrive
+    if (EC.boucle && st.sec[EC.boucle]) key = EC.boucle; EC.sec = key;
+    const mxv = p => pv(st, p);
     const sec = st.sec[key], pr = st.prog[sec.P || 0], ch = pr.CH[bar % pr.CH.length], root = pr.ROOT[bar % pr.ROOT.length], pos = ((bar & 3) * 16 + q) / 64; // pos : avancement dans la section
     curRoot = root;
     // premier tour du mode course : ni thème ni percussions hors du secteur chaud
@@ -261,35 +266,35 @@
     }
     let x, c;
     if (d && (x = on('k')) && !fill && (c = pat(st.k, x)[q]) !== '.') {
-      dKick(t, lerp(0.5, 0.8, mix) * (c === 'g' ? 0.5 : 1), K);
+      jo('k', t); dKick(t, mxv('k') * lerp(0.5, 0.8, mix) * (c === 'g' ? 0.5 : 1), K);
       const p = st.pump == null ? 0.35 : st.pump; // pompe : tout plonge sous la grosse caisse, plus ou moins selon le style
       if (p < 1) { duckG.gain.cancelScheduledValues(t); duckG.gain.setValueAtTime(p, t); duckG.gain.linearRampToValueAtTime(1, t + Math.min(st.pumpT || 0.24, S16 * 1.9)); }
     }
-    if (d && (x = on('s')) && !fill && (c = pat(st.s, x)[q]) !== '.') dSnare(hum(), big ? 0.5 : st.sMin || 0.34, K, c);
-    if (fill) dFill(t, q - 16 + fillN, fillN, K);
-    if (d && sec.roll && !((bar & 3) === 3 && q >= 14) && q % ((bar & 3) < 2 ? 4 : (bar & 3) < 3 ? 2 : 1) === 0) dSnare(t, 0.12 + 0.4 * pos, K); // montée : roulement qui se resserre
+    if (d && (x = on('s')) && !fill && (c = pat(st.s, x)[q]) !== '.') jo('s', t), dSnare(hum(), mxv('s') * (big ? 0.5 : st.sMin || 0.34), K, c);
+    if (fill && mxv('s') > 0) dFill(t, q - 16 + fillN, fillN, K);
+    if (d && sec.roll && !((bar & 3) === 3 && q >= 14) && q % ((bar & 3) < 2 ? 4 : (bar & 3) < 3 ? 2 : 1) === 0) dSnare(t, mxv('s') * (0.12 + 0.4 * pos), K); // montée : roulement qui se resserre
     if (d && sec.roll && (bar & 3) === 0 && q === 0) riser(t, S16 * 64, 0.18);
     if (d && sec.roll) lastRoll = bar;
     else if (d && (bar & 3) === 0 && q === 0 && lastRoll === bar - 1) { crash(t, 0.7); const o = osc('sine', hz(root + 24), t, 0.7, 0.6, drumG); o && o.frequency.exponentialRampToValueAtTime(hz(root), t + 0.5); } // le drop : au bout d'une montée, cymbale et chute de sub
     if (d && (bar & 3) === 0 && q === 0 && key === st.hot && lastFill === bar - 1) crash(t, 0.35); // cymbale d'entrée de refrain, seulement au bout d'une relance de batterie
     if (fill) lastFill = bar;
     if (!d) { if (q % 4 === 2) dHat(t, 0.5, K, 'x'); } // seul tic-tac pendant le décompte
-    else if ((x = on('h')) && (c = pat(st.h, x)[q]) !== '.') dHat(hum(), big || lap === 2 ? 1 : 0.8, K, c);
-    if (d && (x = on('p')) && (c = pat(st.p, x)[q]) !== '.') dPerc(hum(), 1, K, c);
+    else if ((x = on('h')) && (c = pat(st.h, x)[q]) !== '.') jo('h', t), dHat(hum(), mxv('h') * (big || lap === 2 ? 1 : 0.8), K, c);
+    if (d && (x = on('p')) && (c = pat(st.p, x)[q]) !== '.') jo('p', t), dPerc(hum(), mxv('p'), K, c);
     if (d && (x = on('b'))) { const rif = pat(st.b.v, x), rf = rif[q];
       if (rf != null && rf !== R) { let n = 1; while (q + n < 16 && rif[q + n] == null) n++; // tenue jusqu'à la note suivante
-        const P = PATCH[st.b.p], f = hz(st.bPar ? root + rf : juste(root + rf, pr.OK[bar % pr.OK.length])); tone(st.b.p, f, t, S16 * n * (P.len || 0.9), lerp(0.27, 0.38, mix) * (P.lv || 1), strip.b.in, lastB); lastB = f; } }
+        const P = PATCH[st.b.p], f = hz(st.bPar ? root + rf : juste(root + rf, pr.OK[bar % pr.OK.length])); jo('b', t, S16 * n); tone(st.b.p, f, t, S16 * n * (P.len || 0.9), mxv('b') * lerp(0.27, 0.38, mix) * (P.lv || 1), strip.b.in, lastB); lastB = f; } }
     else if (!d && q % 8 === 0) tone(st.b.p, hz(root + 12), t, S16 * 6, 0.25, strip.b.in);
     if (st.d && (!d || on('d'))) { const P = PATCH[st.d[0]];
-      if (q === 0) for (const n of ch) tone(st.d[0], hz(n + (st.d[1] || 0)), t, S16 * 16.5, 0.05 * (P.lv || 1), strip.d.in);
+      if (q === 0) { jo('d', t, S16 * 16); for (const n of ch) tone(st.d[0], hz(n + (st.d[1] || 0)), t, S16 * 16.5, mxv('d') * 0.05 * (P.lv || 1), strip.d.in); }
       strip.d.gate.gain.setValueAtTime(d && sec.gate && st.gate[q] === '.' ? 0.06 : 1, t); } // nappe hachée (gate de trance)
     for (const p of ['c', 'g']) if (d && (x = on(p)) && (c = pat(st[p].v, x)[q]) !== '.') { const P = PATCH[st[p].p];
-      for (const n of ch) tone(st[p].p, hz(n + 12 + (st[p + 'O'] || 0)), t, S16 * (P.s ? 1.6 : 3), (c === 'X' ? 0.065 : 0.045) * (P.lv || 1), strip[p].in); }
-    if ((x = on('a')) && (c = pat(st.a.v, x)[q]) !== '.' && (d || q % 2 === 0)) tone(st.a.p, hz(ch[c % 4 % ch.length] + 12 + (c >= 4 ? 12 : 0)), t, 0.2, (q % 4 === 0 ? 0.05 : 0.038) * (PATCH[st.a.p].lv || 1), strip.a.in); // 0-3 : notes de l'accord ; 4-7 : à l'octave
+      jo(p, t); for (const n of ch) tone(st[p].p, hz(n + 12 + (st[p + 'O'] || 0)), t, S16 * (P.s ? 1.6 : 3), mxv(p) * (c === 'X' ? 0.065 : 0.045) * (P.lv || 1), strip[p].in); }
+    if ((x = on('a')) && (c = pat(st.a.v, x)[q]) !== '.' && (d || q % 2 === 0)) jo('a', t), tone(st.a.p, hz(ch[c % 4 % ch.length] + 12 + (c >= 4 ? 12 : 0)), t, 0.2, mxv('a') * (q % 4 === 0 ? 0.05 : 0.038) * (PATCH[st.a.p].lv || 1), strip.a.in); // 0-3 : notes de l'accord ; 4-7 : à l'octave
     if (d && (x = on('l'))) { const L = pat(st.l.v, x), N = L[q];
       if (N != null && N !== R) { let n = 1; while (q + n < 16 && L[q + n] == null) n++;
-        const No = N + (st.lO || 0); tone(st.l.p, hz(No), t, S16 * n * 1.05, PATCH[st.l.p].lv * (st.lV || 1), strip.l.in, lastN && hz(lastN)); lastN = No;
-        if (fin || lap === 2) osc('triangle', hz(N + 12), t, S16 * n, 0.04, strip.l.in); } } // dernier secteur, dernier tour : thème doublé à l'octave
+        const No = N + (st.lO || 0); jo('l', t, S16 * n); tone(st.l.p, hz(No), t, S16 * n * 1.05, mxv('l') * PATCH[st.l.p].lv * (st.lV || 1), strip.l.in, lastN && hz(lastN)); lastN = No;
+        if (fin || lap === 2) osc('triangle', hz(N + 12), t, S16 * n, 0.04 * mxv('l'), strip.l.in); } } // dernier secteur, dernier tour : thème doublé à l'octave
     if (driftL > 0.3) osc('sawtooth', hz(ch[(q * 2) % 3] + 24), t, 0.1, 0.07 * driftL, acid); // ligne acide tant qu'on glisse
     if (d && glisse) { // la glisse tend la musique avec sa durée : roulement qui se resserre et souffle qui monte, calés sur le tempo (le grave s'amincit dans audioFrame)
       if (q % (acquis ? 1 : 2) === 0) dSnare(t, 0.06 + 0.22 * tens, K);
@@ -302,8 +307,8 @@
   }
   const juste = (n, ok) => ok.has(((n % 12) + 12) % 12) ? n : ok.has(((n - 1) % 12 + 12) % 12) ? n - 1 : n + 1; // note recalée sur la gamme et l'accord de la mesure : jamais de fausse note de basse
   const lvl = () => menu ? (MENU[M.id] || MENU.ville).v : ST[station].vol || 1; // niveau de la station : réglé par mesure pour que toutes sortent au même volume
-  function retune(t) { // (re)cale le séquenceur, le bus et les tranches de mixage sur la station ou sur la boucle de menu
-    const st = ST[station], mn = MENU[M.id] || MENU.ville; S16 = 60 / (menu ? mn.bpm : st.bpm) / 4; t0 = nextT = t; stp = !menu && drums ? 64 : 0; lastN = lastB = 0; // en course, une station prise en route commence au premier couplet, pas à l'introduction
+  function retune(t, garde) { // garde : l'éditeur change un réglage en cours d'écoute, le séquenceur ne repart pas du début // (re)cale le séquenceur, le bus et les tranches de mixage sur la station ou sur la boucle de menu
+    const st = ST[station], mn = MENU[M.id] || MENU.ville; S16 = 60 / (menu ? mn.bpm : st.bpm) / 4; if (!garde) { t0 = nextT = t; stp = !menu && drums ? 64 : 0; lastN = lastB = 0; } // en course, une station prise en route commence au premier couplet, pas à l'introduction
     if (!AC) return;
     const e = menu ? [3, 0.5] : st.echo || [3, 0.4], q = menu ? [0, 1000, 0, 0] : st.eq || [0, 1000, 0, 0];
     dly.delayTime.value = Math.min(0.95, S16 * e[0]); dlyFb.gain.value = e[1];
@@ -527,6 +532,8 @@
     get beat() { return AC ? Math.max(0, (AC.currentTime - t0) / (4 * S16)) : 0; }, // temps écoulés depuis le début de la station, calés sur le kick
     get pulse() { return AC ? Math.exp(-(this.beat % 1) * 5) : 0; },
     get ana() { return ana; }, // analyseur de spectre, pour l'égaliseur du HUD
+    ecoute: EC, recale() { if (AC) { retune(AC.currentTime, 1); tuneG.gain.setTargetAtTime(lvl(), AC.currentTime, 0.05); } }, // éditeur de musique : applique un réglage de station sans relancer le morceau
+    get pas() { return stp; }, get timbres() { return Object.keys(PATCH); }, get kits() { return Object.keys(KIT); },
     get ac() { return AC; }, get out() { return master; }, get smp() { return Object.keys(smp); }, // prises de test
   };
 })();

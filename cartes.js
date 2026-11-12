@@ -40,12 +40,14 @@
   // justesse : gamme de la station (demi-tons depuis key) ; par mesure, les notes permises = la gamme et l'accord. Un accord emprunté (déclaré dans
   // emprunts) remplace la note de la gamme qu'il altère. La basse est recalée dessus par audio.js ; les thèmes doivent y être écrits (test-cartes.js).
   const GAMME = { mineur: [0, 2, 3, 5, 7, 8, 10], majeur: [0, 2, 4, 5, 7, 9, 11] };
-  const st = o => {
-    o.accords = o.prog.map(p => p.split(' ')); o.prog = o.prog.map(prog); o.hot = o.hot || 'c';
+  const accorder = o => { // (re)calcule accords, fondamentales et notes permises depuis o.accords (noms d'accords, par progression) ; rappelé par l'éditeur de musique
+    o.prog = o.accords.map(a => prog(a.join(' ')));
     const sc = GAMME[o.gamme].map(i => (o.key + i) % 12);
     for (const pr of o.prog) pr.OK = pr.CH.map((ch, i) => { const c = [...ch, pr.ROOT[i]].map(n => n % 12), ok = new Set(sc);
       for (const x of c) if (!sc.includes(x)) for (const v of [(x + 1) % 12, (x + 11) % 12]) if (!c.includes(v) && v !== o.key % 12) ok.delete(v);
-      for (const x of [...c, ...(o.hors || []).map(h => (o.key + h) % 12)]) ok.add(x); return ok; });
+      for (const x of [...c, ...(o.hors || []).map(h => (o.key + h) % 12)]) ok.add(x); return ok; }); };
+  const st = o => {
+    o.accords = o.prog.map(p => p.split(' ')); accorder(o); o.hot = o.hot || 'c';
     for (const k of 'kshp') if (o[k]) o[k] = o[k].map(v => bars(v));
     for (const k of 'cga') if (o[k]) o[k] = { p: o[k][0], v: o[k].slice(1).map(v => bars(v)) };
     if (o.b) o.b = { p: o.b[0], v: o.b.slice(1).map(v => seq(v)) };
@@ -150,6 +152,11 @@
         sec: { i: 'b0', a: 'k0 s0 h0 b0', b: 'k0 s0 h1 b0 c0', c: 'k1 s1 h1 b0 c0 l0', x: 'h2 b1 l1 P1', e: 'k1 s1 h1 b1 c1 l1 P1', q: 'k2 s0 h2 b1' }, form: 'iabcqxecabcc' }),
     ],
   };
+
+  // Éditeur de musique (editeur.html) : ses réglages, par nom de station, sont enregistrés dans localStorage « vpr.musique » et appliqués par-dessus
+  // les valeurs écrites ici (champs MUS.cles, dans leur forme déjà lue : motifs découpés en mesures, accords par leur nom). Sans effet sous node.
+  G.MUS = { accorder, GAMME, QUAL, R, RADIO, cles: ['vol', 'bpm', 'sw', 'pump', 'rev', 'echo', 'eq', 'drive', 'cv', 'lV', 'lO', 'kit', 'mx', 'accords', 'k', 's', 'h', 'p', 'b', 'd', 'c', 'g', 'a', 'l', 'sec', 'form'] };
+  try { const s = JSON.parse(localStorage.getItem('vpr.musique')) || {}; for (const id in RADIO) for (const o of RADIO[id]) if (s[o.name]) { Object.assign(o, s[o.name]); accorder(o); } } catch (e) { }
 
   G.CARTES = [
     { id: 'ville', nom: 'VILLE A PLEIN REGIME', camH: 3.8, W: 9, grip: 44, sc: 0.85, tun: [6, 12], chaud: [6, 12], sect: [6, 12], amb: [[2, 5], [13, 15]], // pluie et rumeur : la grande courbe d'avant le tunnel, et la sortie

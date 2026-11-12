@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Éditeur de musique — Ville à plein régime</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  body { margin: 0; padding: 0 16px 40px; background: #0b0b10; color: #e8e8e4; font: 14px/1.4 system-ui, sans-serif; }
+  main { max-width: 1040px; margin: auto; }
+  header { position: sticky; top: 0; z-index: 2; background: #0b0b10; padding: 12px 0 8px; border-bottom: 1px solid #2a2a38; margin-bottom: 12px; }
+  h1 { font-size: 18px; margin: 0 0 10px; } h2 { font-size: 14px; margin: 0 0 10px; color: #fcee0a; text-transform: uppercase; letter-spacing: .05em; }
+  h2 small, h3 small { color: #a8a8b4; text-transform: none; letter-spacing: 0; font-weight: normal; } h3 { font-size: 13px; margin: 14px 0 6px; }
+  section { background: #14141c; border: 1px solid #2a2a38; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
+  .rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 6px 24px; }
+  .row { display: grid; grid-template-columns: 200px 1fr 48px auto; gap: 8px; align-items: center; }
+  .row output { text-align: right; color: #a8a8b4; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: #00f0ff; } input[type=checkbox] { accent-color: #00f0ff; }
+  button, select, input[type=text] { background: #1c1c28; color: inherit; border: 1px solid #3a3a4c; border-radius: 6px; padding: 5px 10px; font: inherit; }
+  button, select { cursor: pointer; } button:hover { border-color: #00f0ff; } button[aria-pressed=true] { background: #00505a; border-color: #00f0ff; }
+  #play { background: #00f0ff; color: #0b0b10; border-color: #00f0ff; font-weight: 600; min-width: 110px; }
+  .ms button { padding: 2px 8px; } input[aria-invalid=true] { border-color: #ff003c; }
+  .led { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #3a3a4c; margin-right: 8px; } .led.on { background: #40ff80; box-shadow: 0 0 6px #40ff80; }
+  .scroll { overflow-x: auto; padding: 3px; }
+  .grid { display: grid; grid-template-columns: 170px repeat(16, 1fr); gap: 3px; align-items: center; margin-bottom: 4px; min-width: 700px; }
+  .grid > :nth-child(4n+2) { margin-left: 6px; } .grid span small { color: #a8a8b4; }
+  .grid select { width: 100%; padding: 4px 0; text-align: center; text-align-last: center; appearance: none; background: #0b0b10; border-radius: 4px; }
+  .grid select.note { background: #00505a; border-color: #00a8b8; } .grid .on { outline: 2px solid #fcee0a; }
+  .chords { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; min-width: 700px; } .chords div { display: grid; gap: 4px; } .chords span { color: #a8a8b4; font-size: 12px; } .chords select { padding: 4px; }
+  table { border-collapse: collapse; font-size: 13px; } td, th { padding: 3px 5px; border-bottom: 1px solid #2a2a38; text-align: center; font-weight: normal; } th { color: #a8a8b4; } td:first-child { text-align: left; white-space: nowrap; } td select { padding: 2px 4px; } tr.joue td { background: #10262a; }
+  .roll { display: flex; border: 1px solid #2a2a38; border-radius: 6px; overflow: hidden; } .roll canvas { display: block; } .roll .scroll { padding: 0; flex: 1; } .roll .scroll canvas { cursor: crosshair; touch-action: none; }
+  p { margin: 6px 0 0; color: #a8a8b4; } textarea { width: 100%; box-sizing: border-box; height: 110px; margin-top: 10px; background: #0b0b10; color: inherit; border: 1px solid #3a3a4c; border-radius: 6px; font: 12px monospace; }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr 1fr 44px auto; } .rows { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>Éditeur de musique <small style="font-weight:400;color:#a8a8b4;font-size:12px">— le vrai moteur du jeu ; chaque réglage est enregistré dans ce navigateur et repris par le jeu au prochain chargement</small></h1>
+  <div class="bar">
+    <button id="play">▶ Lecture</button>
+    <label>Station <select id="station"></select></label>
+    <span id="now" style="color:#a8a8b4"></span>
+    <span style="flex:1"></span>
+    <button id="export">Exporter</button>
+    <button id="resetSt">Réinitialiser cette station</button>
+    <button id="resetAll">Tout réinitialiser</button>
+  </div>
+  <textarea id="out" hidden readonly aria-label="Réglages exportés"></textarea>
+</header>
+
+<section>
+  <h2>Situation de course <small>— la musique change selon la conduite ; règle ici ce que tu veux entendre</small></h2>
+  <div class="bar">
+    <label><input type="checkbox" id="sCourse" checked> En course</label>
+    <label>Vitesse <input type="range" id="sVit" min="0" max="1" step="0.01" value="0.85" style="width:120px"></label>
+    <label>Secteur chaud <input type="range" id="sChaud" min="0" max="1" step="0.01" value="0" style="width:120px"></label>
+    <label><input type="checkbox" id="sFin"> Dernier secteur</label>
+    <label><input type="checkbox" id="sGlisse"> Glisse</label>
+    <label>Section à écouter <select id="sBoucle"></select></label>
+  </div>
+  <p>Secteur chaud à plus de 50 % ou « Dernier secteur » : le refrain joue en continu, avec les parties marquées « secteur chaud ».</p>
+</section>
+
+<section>
+  <h2>Mixage <small>— le point s'allume quand la partie joue · M = muet, S = solo (écoute seulement, non enregistrés)</small></h2>
+  <div class="rows" id="mixer"></div>
+</section>
+
+<section>
+  <h2>Son <small>— batterie, timbre de chaque partie, tempo, effets et couleur de la station</small></h2>
+  <div class="rows" id="son"></div>
+</section>
+
+<section>
+  <h2>Accords <small>— un accord par mesure ; la basse, la nappe, les accords plaqués et l'arpège suivent</small></h2>
+  <div id="chords"></div>
+</section>
+
+<section>
+  <h2>Arrangement <small>— quelles parties jouent dans chaque section, et avec quelle variante de motif</small></h2>
+  <label>Forme (suite des sections, 4 mesures chacune) <input type="text" id="form" size="20" spellcheck="false"></label> <span id="formHint" style="color:#a8a8b4"></span>
+  <div class="scroll" style="margin-top:10px"><table id="secs"></table></div>
+</section>
+
+<section>
+  <h2>Motifs <small>— 16 pas par mesure ; « · » = rien</small></h2>
+  <div id="patterns"></div>
+</section>
+
+<section>
+  <h2>Basse <small>— temps de gauche à droite, notes en lignes (demi-tons au-dessus de la fondamentale de l'accord) · clic : poser, glisser vers la droite : allonger, clic sur une note : effacer</small></h2>
+  <div id="bass"></div>
+</section>
+
+<section>
+  <h2>Thème <small>— temps de gauche à droite, notes en lignes · lignes claires : notes de la gamme · clic : poser, glisser vers la droite : allonger, clic sur une note : effacer</small></h2>
+  <div id="theme"></div>
+</section>
+</main>
+
+<script>/* le serveur local laisse le navigateur garder d'anciens fichiers : on charge toujours les scripts du jour */ for (const f of ["cartes.js", "samples.js", "audio.js"]) document.write('<script src="' + f + "?v=" + Date.now() + '"><\/script>');</script>
+<script>
+const $ = id => document.getElementById(id), R = MUS.R, EC = SON.ecoute;
+const el = (tag, cls = '', html = '') => { const e = document.createElement(tag); e.className = cls; e.innerHTML = html; return e; };
+const NOM = { k: 'Grosse caisse', s: 'Caisse claire', h: 'Charlestons', p: 'Percussions', b: 'Basse', d: 'Nappe', c: 'Accords', g: 'Accords 2', a: 'Arpège', l: 'Thème' };
+const SIGNES = { // ce qu'on peut écrire dans un pas de chaque motif
+  k: { '.': '·', x: 'x coup', g: 'g léger' }, s: { '.': '·', x: 'x caisse claire', g: 'g fantôme', c: 'c clap', r: 'r cercle' },
+  h: { '.': '·', x: 'x fermé', X: 'X accentué', o: 'o ouvert', r: 'r ride', b: 'b cloche de ride' },
+  p: { '.': '·', c: 'c cloche', v: 'v clave', h: 'h conga aiguë', l: 'l conga grave', m: 'm shaker', t: 't tambourin', 1: '1 tom aigu', 2: '2 tom médium', 3: '3 tom grave', k: 'k métal' },
+  c: { '.': '·', x: 'x accord', X: 'X accentué' }, g: { '.': '·', x: 'x accord', X: 'X accentué' },
+  a: { '.': '·', 0: '0 note 1 de l\'accord', 1: '1 note 2', 2: '2 note 3', 3: '3 note 4', 4: '4 note 1 à l\'octave', 5: '5 note 2 à l\'octave', 6: '6 note 3 à l\'octave', 7: '7 note 4 à l\'octave' } };
+const NOTES = ['Do', 'Do#', 'Ré', 'Mib', 'Mi', 'Fa', 'Fa#', 'Sol', 'Lab', 'La', 'Sib', 'Si'], LETTRES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+const PC = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }, QNOM = { '': 'majeur', m: 'mineur', 7: '7', m7: 'm7', M7: 'maj7', m9: 'm9', 9: '9', 5: 'quinte seule' };
+
+let st, saved = {}; // station en cours ; réglages enregistrés, par nom de station
+try { saved = JSON.parse(localStorage.getItem('vpr.musique')) || {}; } catch (e) { }
+if (saved.tb) saved = {}; // réglages du premier éditeur (ancien moteur à 3 stations) : sans objet ici
+function touch() { // après chaque modification : la station entière est enregistrée, et le moteur recalé sans relancer le morceau
+  saved[st.name] = Object.fromEntries(MUS.cles.filter(k => st[k] !== undefined).map(k => [k, st[k]]));
+  try { localStorage.setItem('vpr.musique', JSON.stringify(saved)); } catch (e) { $('now').textContent = 'Enregistrement impossible dans ce navigateur : utilise Exporter.'; }
+  SON.recale();
+}
+const variantes = p => 'kshp'.includes(p) ? st[p] : st[p].v; // les variantes de motif d'une partie
+const sections = (p, vi, n) => Object.keys(st.sec).filter(k => st.sec[k][p] && st.sec[k][p].v % n === vi).join(' ') || 'aucune';
+
+// une ligne « libellé · curseur · valeur » ; lit et écrit par get / set
+function slider(parent, label, get, set, min, max, step, extra) {
+  const row = el('label', 'row', `<span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}"><output></output><span class="ms"></span>`);
+  const inp = row.children[1], out = row.children[2];
+  inp.value = get(); out.textContent = +(+get()).toFixed(2);
+  inp.oninput = () => { set(+inp.value); out.textContent = inp.value; touch(); };
+  if (extra) extra(row);
+  parent.append(row);
+}
+function choix(parent, label, options, get, set) { // une ligne « libellé · liste » ; options : [[valeur, texte], …]
+  const row = el('label', 'row', `<span>${label}</span><select></select>`), sel = row.children[1];
+  for (const [v, t] of options) sel.add(new Option(t, v));
+  sel.value = get(); sel.onchange = () => { set(sel.value); touch(); };
+  parent.append(row);
+}
+function grille(parent, name, signes, get, set) { // une mesure de 16 pas
+  const g = el('div', 'grid', `<span>${name}</span>`);
+  for (let q = 0; q < 16; q++) {
+    const sel = el('select'); for (const k in signes) sel.add(new Option(signes[k], k));
+    sel.value = get(q); sel.dataset.q = q; sel.className = sel.value === '.' ? '' : 'note'; sel.setAttribute('aria-label', `${name.replace(/<[^>]+>/g, ' ')}, pas ${q + 1}`);
+    sel.onchange = () => { set(q, sel.value); sel.className = sel.value === '.' ? '' : 'note'; touch(); };
+    g.append(sel);
+  }
+  parent.append(g);
+}
+
+// ---------- piano-roll : temps en X, notes en Y ----------
+const rolls = [], rollV = {}; // fonctions de dessin des rouleaux affichés ; variante affichée par partie
+function roll(host, p) {
+  const part = st[p], rel = p === 'b', vi = rollV[p] = Math.min(rollV[p] || 0, part.v.length - 1), bars = part.v[vi], n = bars.length * 16;
+  const all = part.v.flat(2).filter(x => x != null && x !== R);
+  const lo = rel ? Math.min(-12, ...all) : (all.length ? Math.min(...all) : st.key + 12) - 12, hi = rel ? Math.max(24, ...all) : (all.length ? Math.max(...all) : st.key + 24) + 12;
+  const CW = Math.max(11, Math.min(28, Math.floor(900 / n))), CH = 13, HEAD = 16, KW = 56, H = HEAD + (hi - lo + 1) * CH, W = n * CW;
+  const gamme = new Set(MUS.GAMME[st.gamme].map(i => (st.key + i) % 12)), pc = v => ((v % 12) + 12) % 12;
+  const tabs = el('div', 'bar'); tabs.style.marginBottom = '8px';
+  part.v.forEach((_, i) => { const b = el('button', '', `Variante ${i + 1} <small>· sections ${sections(p, i, part.v.length)}</small>`); b.setAttribute('aria-pressed', i === vi); b.onclick = () => { rollV[p] = i; build(); }; tabs.append(b); });
+  const plus = el('button', '', '＋ variante (copie)'); plus.onclick = () => { part.v.push(bars.map(b => [...b])); rollV[p] = part.v.length - 1; touch(); build(); }; tabs.append(plus);
+  const wrap = el('div', 'roll'), keys = el('canvas'), sc = el('div', 'scroll'), cv = el('canvas'); sc.append(cv); wrap.append(keys, sc); host.append(tabs, wrap);
+  const dpr = window.devicePixelRatio || 1, prep = (c, w) => { c.width = w * dpr; c.height = H * dpr; c.style.width = w + 'px'; c.style.height = H + 'px'; const x = c.getContext('2d'); x.scale(dpr, dpr); return x; };
+  const kx = prep(keys, KW), x = prep(cv, W);
+  cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', `${NOM[p]}, variante ${vi + 1} : rouleau de notes, à la souris`);
+  const clair = v => rel ? pc(v) === 0 : gamme.has(pc(v)), nom = v => rel ? (v > 0 ? '+' : '') + v : NOTES[pc(v)] + (Math.floor(v / 12) - 1);
+  kx.font = '10px system-ui'; kx.textBaseline = 'middle';
+  for (let v = hi; v >= lo; v--) { const y = HEAD + (hi - v) * CH; kx.fillStyle = clair(v) ? '#2a2a38' : '#14141c'; kx.fillRect(0, y, KW, CH - 1); kx.fillStyle = (rel ? v === 0 : pc(v) === pc(st.key)) ? '#fcee0a' : '#a8a8b4'; kx.fillText(nom(v), 6, y + CH / 2); }
+  const lire = bar => { const out = []; for (let q = 0; q < 16; q++) { const v = bar[q]; if (v == null || v === R) continue; let len = 1; while (q + len < 16 && bar[q + len] == null) len++; out.push({ q, v, len }); } return out; };
+  function draw() {
+    x.fillStyle = '#0b0b10'; x.fillRect(0, 0, W, H);
+    for (let v = hi; v >= lo; v--) { x.fillStyle = clair(v) ? '#1c1c28' : '#111118'; x.fillRect(0, HEAD + (hi - v) * CH, W, CH - 1); }
+    x.font = '10px system-ui'; x.textBaseline = 'middle';
+    for (let s = 0; s <= n; s++) { x.fillStyle = s % 16 === 0 ? '#5a5a70' : s % 4 === 0 ? '#34344a' : '#20202c'; x.fillRect(s * CW, s % 16 ? HEAD : 0, 1, H); if (s % 16 === 0 && s < n) { x.fillStyle = '#a8a8b4'; x.fillText('mesure ' + (s / 16 + 1), s * CW + 5, HEAD / 2); } }
+    bars.forEach((bar, bi) => { for (const o of lire(bar)) { x.fillStyle = '#00f0ff'; x.fillRect((bi * 16 + o.q) * CW + 1, HEAD + (hi - o.v) * CH, o.len * CW - 2, CH - 1); x.fillStyle = '#0b0b10'; x.fillRect((bi * 16 + o.q) * CW + 1, HEAD + (hi - o.v) * CH, 2, CH - 1); } });
+    const t = SON.ac && SON.ac.state === 'running' && EC.joue[p] > SON.ac.currentTime ? SON.pas - 1 : -1; // tête de lecture, quand la partie joue
+    if (t >= 0) { x.fillStyle = '#fcee0a'; x.fillRect((((t >> 4) % bars.length) * 16 + (t & 15)) * CW, 0, 2, H); }
+  }
+  function ecrire(bi, notes) { const a = Array(16).fill(R); for (const o of notes) { a[o.q] = o.v; for (let i = 1; i < o.len; i++) a[o.q + i] = null; } bars[bi] = a; touch(); draw(); }
+  const ou = e => { const r = cv.getBoundingClientRect(), y = e.clientY - r.top - HEAD; return [Math.max(0, Math.min(n - 1, Math.floor((e.clientX - r.left) / CW))), y < 0 ? null : hi - Math.floor(y / CH)]; };
+  let drag = null;
+  const poser = fin => { const { bi, q, v, base } = drag, len = fin - q + 1, notes = []; // une seule note à la fois : la nouvelle coupe ou remplace celles qu'elle recouvre
+    for (const o of base) { if (o.q >= q && o.q < q + len) continue; notes.push(o.q < q && o.q + o.len > q ? { q: o.q, v: o.v, len: q - o.q } : o); }
+    notes.push({ q, v, len }); ecrire(bi, notes); };
+  cv.onpointerdown = e => { const [s, v] = ou(e); if (v == null || v < lo) return; const bi = s >> 4, q = s & 15, notes = lire(bars[bi]), sur = notes.find(o => q >= o.q && q < o.q + o.len && (o.v === v || e.button === 2));
+    if (sur) return ecrire(bi, notes.filter(o => o !== sur));
+    if (e.button) return;
+    drag = { bi, q, v, base: notes }; cv.setPointerCapture(e.pointerId); poser(q); };
+  cv.onpointermove = e => { if (drag) poser(Math.max(drag.q, Math.min(15, ou(e)[0] - drag.bi * 16))); };
+  cv.onpointerup = cv.onpointercancel = () => { drag = null; };
+  cv.oncontextmenu = e => e.preventDefault();
+  draw(); rolls.push(draw);
+}
+
+// ---------- tout ce qui dépend de la station ----------
+let shown = -1;
+function build() {
+  st = SON.stations[SON.station]; shown = -1; rolls.length = 0;
+  for (const id of ['mixer', 'son', 'chords', 'secs', 'patterns', 'bass', 'theme']) $(id).textContent = '';
+  const parts = [...'kshpbdcgal'].filter(p => st[p]), secs = Object.keys(st.sec);
+
+  const sb = $('sBoucle'); sb.textContent = ''; sb.add(new Option('suivre la forme', ''));
+  for (const k of secs) sb.add(new Option(k + (k === st.hot ? ' (refrain)' : ''), k)); sb.value = EC.boucle = st.sec[EC.boucle] ? EC.boucle : '';
+
+  slider($('mixer'), 'Niveau de la station', () => st.vol || 1, v => { st.vol = v; }, 0, 3, 0.01);
+  for (const p of parts) slider($('mixer'), `<i class="led" data-k="${p}"></i>${NOM[p]}`, () => st.mx && st.mx[p] != null ? st.mx[p] : 1, v => { (st.mx = st.mx || {})[p] = v; }, 0, 2, 0.05, row => {
+    for (const [txt, title] of [['M', 'Muet'], ['S', 'Solo']]) {
+      const b = el('button', '', txt); b.title = title + ' : ' + NOM[p]; b.type = 'button';
+      b.setAttribute('aria-pressed', txt === 'M' ? !!EC.mute[p] : EC.solo === p);
+      b.onclick = e => { e.preventDefault(); if (txt === 'M') EC.mute[p] = !EC.mute[p]; else EC.solo = EC.solo === p ? null : p; build(); };
+      row.children[3].append(b);
+    }
+  });
+
+  const S = $('son'), timbres = SON.timbres.map(t => [t, t]), arr = (k, def) => st[k] = st[k] || def;
+  choix(S, 'Batterie', SON.kits.map(k => [k, k]), () => st.kit, v => { st.kit = v; });
+  for (const p of parts.filter(p => 'bdcgal'.includes(p))) choix(S, 'Timbre : ' + NOM[p].toLowerCase(), timbres, () => p === 'd' ? st.d[0] : st[p].p, v => { if (p === 'd') st.d[0] = v; else st[p].p = v; });
+  slider(S, 'Tempo (BPM)', () => st.bpm, v => { st.bpm = v; }, 60, 200, 1);
+  slider(S, 'Swing', () => st.sw || 0, v => { st.sw = v; }, 0, 0.3, 0.01);
+  slider(S, 'Pompe sous le kick (1 = aucune)', () => st.pump == null ? 0.35 : st.pump, v => { st.pump = v; }, 0, 1, 0.05);
+  slider(S, 'Réverbération', () => st.rev == null ? 0.2 : st.rev, v => { st.rev = v; }, 0, 1, 0.05);
+  slider(S, 'Écho : longueur (pas)', () => (st.echo || [3])[0], v => { arr('echo', [3, 0.4])[0] = v; }, 1, 6, 1);
+  slider(S, 'Écho : répétitions', () => (st.echo || [3, 0.4])[1], v => { arr('echo', [3, 0.4])[1] = v; }, 0, 0.8, 0.05);
+  ['Grave (dB)', 'Médium : fréquence (Hz)', 'Médium (dB)', 'Aigu (dB)'].forEach((n, i) => slider(S, 'Couleur : ' + n.toLowerCase(), () => (st.eq || [0, 1000, 0, 0])[i], v => { arr('eq', [0, 1000, 0, 0])[i] = v; }, i === 1 ? 200 : -18, i === 1 ? 5000 : 18, i === 1 ? 50 : 1));
+  slider(S, 'Saturation de tout le bus', () => st.drive || 0, v => { st.drive = v; }, 0, 1, 0.05);
+  slider(S, 'Niveau des couplets (refrain = 1)', () => st.cv || 1, v => { st.cv = v; }, 0.5, 2.5, 0.05);
+  if (st.d) choix(S, 'Nappe : octave', [[-12, 'une octave plus bas'], [0, 'normale'], [12, 'une octave plus haut']], () => st.d[1] || 0, v => { st.d[1] = +v; });
+  if (st.l) { slider(S, 'Thème : niveau', () => st.lV || 1, v => { st.lV = v; }, 0, 2, 0.05);
+    choix(S, 'Thème : octave', [[-24, 'deux octaves plus bas'], [-12, 'une octave plus bas'], [0, 'normale'], [12, 'une octave plus haut']], () => st.lO || 0, v => { st.lO = +v; }); }
+
+  st.accords.forEach((names, pi) => {
+    $('chords').append(el('h3', '', `Progression ${pi + 1} <small>· sections ${secs.filter(k => (st.sec[k].P || 0) === pi).join(' ') || 'aucune'}</small>`));
+    const cg = el('div', 'chords'), sc = el('div', 'scroll'); sc.append(cg); $('chords').append(sc);
+    names.forEach((name, b) => {
+      const [, n, alt, q] = name.match(/^([A-G])([b#]?)(.*)$/), c = el('div', '', `<span>Mesure ${b + 1}</span>`), rs = el('select'), qs = el('select');
+      NOTES.forEach((t, i) => rs.add(new Option(t, i))); rs.value = (PC[n] + (alt === '#' ? 1 : alt === 'b' ? 11 : 0)) % 12; rs.setAttribute('aria-label', `Progression ${pi + 1}, mesure ${b + 1}, note de l'accord`);
+      for (const k in MUS.QUAL) qs.add(new Option(QNOM[k] || k, k)); qs.value = q; qs.setAttribute('aria-label', `Progression ${pi + 1}, mesure ${b + 1}, type d'accord`);
+      rs.onchange = qs.onchange = () => { names[b] = LETTRES[rs.value] + qs.value; MUS.accorder(st); touch(); };
+      c.append(rs, qs); cg.append(c);
+    });
+  });
+
+  const f = $('form'); f.value = st.form; f.removeAttribute('aria-invalid'); $('formHint').textContent = 'sections possibles : ' + secs.join(' ');
+  f.oninput = () => { const ok = f.value.length > 0 && [...f.value].every(k => st.sec[k]); f.setAttribute('aria-invalid', !ok); if (ok) { st.form = f.value; touch(); } };
+  const T = $('secs'), cols = [...parts.map(p => NOM[p]), 'Progression', 'Montée', 'Filtre qui s\'ouvre', ...(st.gate ? ['Nappe hachée'] : [])];
+  T.append(el('tr', '', '<th>Section</th>' + cols.map(c => `<th>${c}</th>`).join('')));
+  for (const k of secs) {
+    const sec = st.sec[k], tr = el('tr', '', `<td>${k}${k === st.hot ? ' <small>(refrain)</small>' : ''}</td>`); tr.dataset.sec = k;
+    const cell = node => { const td = el('td'); td.append(node); tr.append(td); };
+    for (const p of parts) {
+      const sel = el('select'), n = p === 'd' ? 1 : variantes(p).length; sel.add(new Option('—', ''));
+      for (let i = 0; i < n; i++) { sel.add(new Option(p === 'd' ? 'oui' : i + 1, i)); sel.add(new Option((p === 'd' ? 'oui' : i + 1) + ' (secteur chaud)', i + '!')); }
+      sel.value = sec[p] ? sec[p].v % n + (sec[p].big ? '!' : '') : ''; sel.setAttribute('aria-label', `Section ${k}, ${NOM[p]}`);
+      sel.onchange = () => { if (sel.value === '') delete sec[p]; else sec[p] = { v: parseInt(sel.value), big: sel.value.endsWith('!') }; touch(); build(); };
+      cell(sel);
+    }
+    const ps = el('select'); st.accords.forEach((_, i) => ps.add(new Option(i + 1, i))); ps.value = sec.P || 0; ps.setAttribute('aria-label', `Section ${k}, progression`);
+    ps.onchange = () => { if (+ps.value) sec.P = +ps.value; else delete sec.P; touch(); build(); }; cell(ps);
+    for (const [flag, name] of [['roll', 'montée'], ['lo', 'filtre'], ...(st.gate ? [['gate', 'nappe hachée']] : [])]) {
+      const cb = el('input'); cb.type = 'checkbox'; cb.checked = !!sec[flag]; cb.setAttribute('aria-label', `Section ${k}, ${name}`);
+      cb.onchange = () => { if (cb.checked) sec[flag] = 1; else delete sec[flag]; touch(); }; cell(cb);
+    }
+    T.append(tr);
+  }
+
+  for (const p of parts.filter(p => 'kshpcga'.includes(p))) {
+    const V = variantes(p), host = el('div', 'scroll');
+    const h = el('h3', '', `${NOM[p]} `), plus = el('button', '', '＋ variante (copie)'); plus.onclick = () => { V.push([...V[V.length - 1]]); touch(); build(); }; h.append(plus);
+    $('patterns').append(h, host);
+    V.forEach((bars, vi) => bars.forEach((bar, bi) => grille(host, `Variante ${vi + 1}${bars.length > 1 ? ', mes. ' + (bi + 1) : ''} <small>· ${sections(p, vi, V.length)}</small>`, SIGNES[p],
+      q => bars[bi][q], (q, c) => { bars[bi] = bars[bi].slice(0, q) + c + bars[bi].slice(q + 1); })));
+  }
+
+  if (st.b) roll($('bass'), 'b'); else $('bass').append(el('p', '', 'Cette station n\'a pas de basse.'));
+  if (st.l) roll($('theme'), 'l');
+  else { const b = el('button', '', 'Créer un thème pour cette station'); $('theme').append(el('p', '', 'Cette station n\'a pas de thème. '), b);
+    b.onclick = () => { st.l = { p: 'ldSaw', v: [Array.from({ length: 4 }, () => Array(16).fill(R))] }; st.sec[st.hot].l = { v: 0, big: false }; touch(); build(); }; }
+}
+
+// ---------- barre du haut ----------
+const sel = $('station');
+CARTES.forEach((m, ci) => { const g = el('optgroup'); g.label = m.nom; m.radio.forEach((s, si) => g.append(new Option(`${s.name} · ${s.genre.toLowerCase()}`, ci + ':' + si))); sel.append(g); });
+function aller(v) { const [ci, si] = v.split(':').map(Number); if (SON.stations !== CARTES[ci].radio) SON.carte(CARTES[ci]); if (SON.station !== si) SON.setStation(si); sel.value = v; try { sessionStorage.setItem('ed.station', v); } catch (e) { } build(); }
+sel.onchange = () => aller(sel.value);
+let depart = CARTES.indexOf(CARTE) + ':' + SON.station; try { depart = sessionStorage.getItem('ed.station') || depart; } catch (e) { }
+aller(depart);
+
+let playing = false;
+$('play').onclick = () => {
+  playing = !playing;
+  if (!SON.ac) { SON.init(); for (const k of ['mot', 'pneu', 'vent', 'amb', 'pluie', 'choc']) SON.volume(k, 0); } // la musique seule : ni moteur, ni pneus, ni ambiance
+  else playing ? SON.ac.resume() : SON.ac.suspend();
+  $('play').textContent = playing ? '⏸ Pause' : '▶ Lecture';
+};
+$('sBoucle').onchange = () => { EC.boucle = $('sBoucle').value || null; };
+$('export').onclick = () => { const o = $('out'); o.hidden = false; o.value = JSON.stringify(saved); o.select(); navigator.clipboard?.writeText(o.value).catch(() => { }); };
+const effacer = tout => { if (!confirm(tout ? 'Effacer tes réglages de toutes les stations et revenir à la musique d\'origine ?' : `Effacer tes réglages de ${st.name} et revenir à sa musique d'origine ?`)) return;
+  if (tout) saved = {}; else delete saved[st.name]; localStorage.setItem('vpr.musique', JSON.stringify(saved)); location.reload(); };
+$('resetSt').onclick = () => effacer(false); $('resetAll').onclick = () => effacer(true);
+
+// joue le rôle de la course : envoie la situation choisie au vrai moteur (format de SON.frame), comme le banc d'écoute
+const etat = () => { const gl = $('sGlisse').checked, r = +$('sVit').value;
+  return { state: $('sCourse').checked ? 'race' : 'count', tour: 0, tours: 0, T: { h0: 500, h1: 600, n: 1000 }, hot: +$('sChaud').value, tun: 0, amb: 0, pluie: 0, r, sp: r * 80, rpm: 0.6, load: 1, gas: 1, spool: 0, hit: 0, bump: 0,
+    car: { manual: false, dd: gl ? 1 : 0, driftT: gl ? 1 : 0, vl: 0, boost: 0, idx: $('sFin').checked ? 700 : 100, dist: 1, drift: gl, rub: 0, d: 0 } }; };
+setInterval(() => { if (playing && SON.ac && SON.ac.state === 'running') SON.frame(1 / 60, etat()); }, 16);
+setInterval(() => { // témoins, section en cours, pas en cours
+  if (!playing || !SON.ac || SON.ac.state !== 'running') return;
+  for (const d of document.querySelectorAll('.led')) d.classList.toggle('on', EC.joue[d.dataset.k] > SON.ac.currentTime);
+  const pas = SON.pas - 1; if (pas === shown) return; shown = pas;
+  $('now').textContent = `section ${EC.sec}${EC.sec === st.hot ? ' (refrain)' : ''} · mesure ${((pas >> 4) & 3) + 1}/4`;
+  for (const tr of document.querySelectorAll('#secs tr')) tr.classList.toggle('joue', tr.dataset.sec === EC.sec);
+  for (const c of document.querySelectorAll('.grid [data-q]')) c.classList.toggle('on', +c.dataset.q === (pas & 15));
+  for (const d of rolls) d();
+}, 50);
+</script>
+</body>
+</html>
