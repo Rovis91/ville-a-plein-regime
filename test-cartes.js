@@ -2,7 +2,7 @@
 // La ville a ses propres tests, plus complets, dans test.js (ses chiffres ne doivent pas bouger : records de la ville).
 const assert = require('assert'), THREE = require('./three.min.js');
 require('./cartes.js');
-const H = 1 / 120, deg = r => r * 180 / Math.PI;
+const H = 1 / 120, deg = r => r * 180 / Math.PI; let surfTxt = '';
 for (const M of CARTES) {
   globalThis.CARTE = M; delete require.cache[require.resolve('./sim.js')]; require('./sim.js'); // sim.js lit la carte active à son chargement
   const T = buildTrack(THREE), { S, n, W } = T;
@@ -85,13 +85,25 @@ for (const M of CARTES) {
     assert(ras[0] > 0.05 && !ras[1] && lrg[0] === 0 && !lrg[1] && dedans[1] > 5 && dedans[0] === 0, `${M.id} : camion doublé au ras (jauge ${ras[0]}, choc ${ras[1]}), au large (${lrg}), percuté (jauge ${dedans[0]}, choc ${dedans[1]})`);
   }
   // pluie : la bruine (force 1) ne change rien ; une averse ralentit le pilote automatique de 2 à 12 % sans l'envoyer dans les murs, et allonge le freinage
-  assert(!T.eau.some(Boolean) === !(Array.isArray(M.th.pluie) && M.th.pluie.some(z => z[2] > 1)), M.id + ' : route mouillée là où il ne pleut pas fort');
-  if (T.eau.some(Boolean)) {
-    const E = T.eau; T.eau = null; const [sec] = tour(c => autopilot(c, T)); T.eau = E;
+  // aucune carte du jeu ne déclare de surface : la route est sèche partout (T.surf[i] === SURF.sec), sauf sous une averse
+  assert(!M.surf && T.surf.length === n && T.surf.every(q => q === SURF.sec) === !(Array.isArray(M.th.pluie) && M.th.pluie.some(z => z[2] > 1)), M.id + ' : route mouillée là où il ne pleut pas fort');
+  if (T.surf.some(q => q !== SURF.sec)) {
+    const E = T.surf; T.surf = null; const [sec] = tour(c => autopilot(c, T)); T.surf = E;
     assert(lap > 1.02 * sec && lap < 1.12 * sec, `${M.id} : tour sous la pluie ${lap} s, au sec ${sec} s`);
-    const frein = e => { TO.eau = [e]; const c = lance(v200); let d = 0; while (c.vf > 1) { go(c, I(0, 0, 1), H); d += c.vf * H; } TO.eau = null; return d; };
-    assert(frein(1) > 1.2 * frein(0), M.id + ' : le freinage sous la pluie doit être plus long');
   }
+  // surfaces (table SURF) : lancée au sec puis posée sur chaque surface, en plan ouvert. Distance de freinage depuis 200 km/h, rayon volant à fond à 120 km/h, vitesse perdue en 2 s pied levé depuis 100 km/h
+  { const sur = (q, v, f) => { const c = lance(v); c.x = c.z = 1e5; TO.surf = [q]; // (au loin : à Paris, les piles de l'arc sont sur le chemin)
+      const r = f(c); TO.surf = null; return r; };
+    const frein = q => sur(q, v200, c => { let d = 0; while (c.vf > 1) { go(c, I(0, 0, 1), H); d += c.vf * H; } return d; }), ray = q => sur(q, v120, c => rayon(c, I(1, 1))), roue = q => sur(q, 100 / 3.6, c => 100 / 3.6 - go(c, I(0, 0), 2).vf);
+    const f = {}, r = {}; for (const k in SURF) { f[k] = frein(SURF[k]); r[k] = ray(SURF[k]); }
+    const txt = Object.keys(SURF).map(k => `${k} ${f[k].toFixed(0)} m / ${r[k].toFixed(0)} m`).join(', ');
+    assert(f.mouille > 1.2 * f.sec, M.id + ' : le freinage sous la pluie doit être plus long (' + txt + ')');
+    assert(f.glace > 2.5 * f.sec && r.glace > 2 * r.sec, `${M.id} : sur la glace, freinage et rayon doivent être nettement plus grands qu'au sec (${txt})`);
+    assert(f.neige > 1.3 * f.sec && f.neige < 0.8 * f.glace && r.neige > 1.2 * r.sec && r.neige < 0.8 * r.glace, `${M.id} : la neige tassée doit se tenir entre le sec et la glace (${txt})`);
+    // terre : on freine un peu moins bien, on tourne presque aussi serré, la voiture se freine toute seule, et la glisse part plus tôt (à 36 km/h, frein à main et volant : rien au sec)
+    const part = q => sur(q, 36 / 3.6, c => go(c, I(1, 1, 0, true), 0.15).drift);
+    assert(f.terre > 1.1 * f.sec && f.terre < f.neige && r.terre < 1.15 * r.sec && roue(SURF.terre) > roue(SURF.sec) + 0.5 && part(SURF.terre) && !part(SURF.sec), `${M.id} : terre (${txt}, roue libre ${roue(SURF.terre)} contre ${roue(SURF.sec)} m/s, glisse à 36 km/h ${part(SURF.terre)})`);
+    surfTxt = txt; }
   // place où l'on roule partout : on traverse l'arche par son axe sans toucher ; lancé sur une pile, on la heurte sans entrer dedans ; on reprend la piste en sortant
   if (M.place) {
     const P = M.place, ux = Math.sin(P.a), uz = Math.cos(P.a), lance = (ox, oz, th) => { const c = newCar(T), s0 = S.reduce((b, s, k) => Math.hypot(s.x - ox, s.z - oz) < Math.hypot(S[b].x - ox, S[b].z - oz) ? k : b, 0);
@@ -119,6 +131,21 @@ for (const M of CARTES) {
   assert(R.done, M.id + ' : la course ne se termine pas');
   const k = v => Math.round(v * 3.6);
   console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs${T.vert ? ', ' + vols + ' vols' : ''}, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} coups de nitro, ${hgl} chocs), pilote auto avec une jauge ${tni.toFixed(1)} s, à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);
+}
+// surfaces déclarées par une carte (champ surf : { fond, zones }) : cartes d'essai, le touge recouvert de chaque surface, puis avec une seule plaque de glace.
+// Le pilote automatique lit la même table : il boucle son tour lancé sans taper, plus lentement qu'au sec ; et la plaque n'existe que là où elle est déclarée, fondue sur ses bords.
+{
+  const touge = CARTES.find(m => m.id === 'touge'), charge = surf => { globalThis.CARTE = { ...touge, id: 'essai', surf }; delete require.cache[require.resolve('./sim.js')]; require('./sim.js'); return buildTrack(THREE); };
+  const tour = T => { const c = newCar(T), n = T.n; let t = 0, t1 = 0, h = 0; while (c.dist < 2 * n && t < 900) { step(c, autopilot(c, T), T, H); t += H; if (!t1 && c.dist >= n) t1 = t; if (t1 && c.hit > 0) h++; } assert(c.dist >= 2 * n, 'surface : tour non bouclé'); return [t - t1, h]; };
+  const res = {}; for (const k in SURF) { const T = charge(k === 'sec' ? undefined : { fond: k }); assert(T.surf.every(q => q === SURF[k]), k + ' : le fond ne couvre pas toute la carte'); res[k] = tour(T); }
+  const txt = Object.keys(res).map(k => `${k} ${res[k][0].toFixed(1)} s`).join(', ');
+  for (const k in res) assert(!res[k][1], `le pilote automatique touche un mur sur ${k} (${res[k][1]} contacts ; ${txt})`);
+  assert(res.glace[0] > 1.3 * res.sec[0] && res.neige[0] > 1.08 * res.sec[0] && res.neige[0] < res.glace[0] && res.terre[0] > 1.02 * res.sec[0] && res.terre[0] < res.neige[0] && res.mouille[0] > 1.02 * res.sec[0], 'tours du touge selon la surface : ' + txt);
+  const T = charge({ zones: [[24, 28, 'glace']] }), near = p => T.S.reduce((b, s, i) => Math.hypot(s.x - p[0], s.z - p[1]) < Math.hypot(T.S[b].x - p[0], T.S[b].z - p[1]) ? i : b, 0), [a, m, b] = [24, 26, 28].map(i => near(touge.pts[i]));
+  assert(T.surf[m] === SURF.glace && T.surf[(a + T.n - 40) % T.n] === SURF.sec && T.surf[(b + 40) % T.n] === SURF.sec, 'plaque de glace : pas là où elle est déclarée');
+  const bord = T.surf[(a + T.n - 3) % T.n]; assert(bord.vir > 0 && bord.vir < SURF.glace.vir && bord.frein > 0 && bord.frein < SURF.glace.frein, 'plaque de glace : bord non fondu');
+  const [tp, hp] = tour(T); assert(!hp && tp > res.sec[0] + 0.3 && tp < res.glace[0], `plaque de glace : tour ${tp} s (${hp} contacts), au sec ${res.sec[0]} s`);
+  console.log(`OK  surfaces (touge) : ${txt}, une plaque de glace ${tp.toFixed(1)} s ; freinage de 200 km/h / rayon à 120 km/h : ${surfTxt}`);
 }
 // radio : trois stations par carte ; une forme d'au moins 32 mesures faite de sections différentes ; timbres et batteries connus d'audio.js
 // (la variété à l'oreille se mesure dans le navigateur : bouton « Variété des stations » de ecoute.html, il n'y a pas de Web Audio sous node)
