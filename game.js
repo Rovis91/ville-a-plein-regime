@@ -793,11 +793,14 @@
 
     // voiture (suit le relief) + caméra derrière : plus basse, plus proche et plus grand-angle avec la vitesse
     const sc = S[car.idx], fx = Math.cos(car.th), fz = Math.sin(car.th);
-    carY += (sc.y - carY) * Math.min(1, dt * 18); pitch += (Math.atan(sc.sl) - pitch) * Math.min(1, dt * 10);
+    // altitude continue le long de la piste : lue échantillon par échantillon, elle faisait sauter la voiture et la caméra à chaque pas, d'autant plus visible qu'on roule lentement
+    const yAt = (c, k = 0) => { let i = c.idx, a = S[i], b = S[(i + 1) % N], u = ((c.x - a.x) * (b.x - a.x) + (c.z - a.z) * (b.z - a.z)) / ((b.x - a.x) ** 2 + (b.z - a.z) ** 2 || 1);
+      if (u < 0) { i = (i - 1 + N) % N; u = Math.max(0, u + 1); } u = Math.min(1, u); a = S[(i + k + N) % N]; b = S[(i + k + 1 + N) % N]; return a.y + (b.y - a.y) * u; };
+    carY += (yAt(car) - carY) * Math.min(1, dt * 18); pitch += (Math.atan(sc.sl) - pitch) * Math.min(1, dt * 10);
     carG.position.set(car.x, carY, car.z); carG.rotation.set(0, -car.th, pitch); body.rotation.x = car.steer * r * 0.07;
     opps.forEach((g, i) => {
       const c = race && race.cars[i + 1]; g.visible = !!c; if (!c) return;
-      const so = S[c.idx]; g.userData.y += (so.y - g.userData.y) * Math.min(1, dt * 18);
+      const so = S[c.idx]; g.userData.y += (yAt(c) - g.userData.y) * Math.min(1, dt * 18);
       g.position.set(c.x, g.userData.y, c.z); g.rotation.set(0, -c.th, Math.atan(so.sl));
     });
     if (state === 'title') cth += dt * 0.22; else cth += wrap(car.th - cth) * Math.min(1, dt * 6); // au menu, la caméra tourne autour de la voiture pour montrer la carte
@@ -806,8 +809,8 @@
     const s = S[(car.idx - 4 + N) % N], nx = -s.tz, nz = s.tx, d = (px - s.x) * nx + (pz - s.z) * nz, o = Math.abs(d) - (W - 0.8);
     if (o > 0) { px -= nx * Math.sign(d) * o; pz -= nz * Math.sign(d) * o; } // la caméra reste entre les murs
     const shake = 0.04 * r * r + (stun > 0 ? stun * 0.5 : 0);
-    cam.position.set(px + (Math.random() - 0.5) * shake, s.y + 3.3 - 0.6 * r + (Math.random() - 0.5) * shake, pz);
-    cam.lookAt(car.x + cx * 10, S[(car.idx + 5) % N].y + 1.4, car.z + cz * 10);
+    cam.position.set(px + (Math.random() - 0.5) * shake, yAt(car, -4) + 3.3 - 0.6 * r + (Math.random() - 0.5) * shake, pz);
+    cam.lookAt(car.x + cx * 10, yAt(car, 5) + 1.4, car.z + cz * 10);
     cam.fov = 62 + 26 * r + 3 * car.slide + (car.boost > 0 ? 6 : 0);
     const vue = window.__g.vue; // shortcut: debug console seulement, __g.vue = [angle° autour de la voiture, distance, hauteur] pour inspecter le modèle ; à remplacer par un vrai mode photo si on en veut un
     if (vue) { const a = car.th + vue[0] * Math.PI / 180; cam.position.set(car.x + Math.cos(a) * vue[1], carY + vue[2], car.z + Math.sin(a) * vue[1]); cam.lookAt(car.x, carY + 0.7, car.z); cam.fov = 45; }

@@ -19,7 +19,7 @@
     vif: { bas: 0.6, lift: 1, frein: 1.2, gf: 0.9, ds: 0.5, ad: 1, kr: 1.3, po: 0.3, tr: 0.15, gl: 0.5 },
     glisse: { bas: 0.4, lift: 1.1, frein: 1.3, gf: 0.85, ds: 0.6, ad: 1, kr: 1.3, po: 0.4, tr: 0.12, gl: 0.7 },
   };
-  const TENUE = [G.TENUE, G.location && new URLSearchParams(G.location.search).get('tenue'), 'vif'].find(k => k in TENUES), P = TENUES[TENUE];
+  const TENUE = [G.TENUE, G.location && new URLSearchParams(G.location.search).get('tenue'), 'glisse'].find(k => k in TENUES), P = TENUES[TENUE];
   const grip = v => P ? GRIP * (1 + P.bas * Math.max(0, 1 - v / TOP)) : GRIP; // adhérence latérale à la vitesse v
   const vturn = (a, k) => { let v = Math.sqrt(a * GRIP / k); for (let i = 0; i < 2; i++) v = Math.sqrt(a * grip(v) / k); return v; }; // vitesse de passage d'une courbure k, à la part a de l'adhérence
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
