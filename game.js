@@ -581,6 +581,16 @@
   const panel = (x, y, w, h) => { R(hg, 'rgba(8,8,12,.82)', x, y, w, h); R(hg, Y, x, y, 2, h); R(hg, Y, x, y, w, 1); R(hg, C, x + w - 8, y + h - 1, 8, 1); };
   const tag = (s, cx, y, bg) => { hg.font = '8px ' + PS; const w = hg.measureText(s).width + 12; R(hg, bg, Math.round(cx - w / 2), y, w, 14); txt(s, cx, y + 3, 8, '#08080c', 'center'); };
   const EQN = 20, EQR = 10, peak = new Float32Array(EQN), fft = new Uint8Array(32);
+  // minicarte : tracé dessiné une seule fois dans un canvas hors écran (x monde vers la droite, z vers le bas = vue de dessus non inversée)
+  const MM = (() => {
+    let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9; for (const s of S) { x0 = Math.min(x0, s.x); x1 = Math.max(x1, s.x); z0 = Math.min(z0, s.z); z1 = Math.max(z1, s.z); }
+    const w = 84, h = 56, k = Math.min((w - 4) / (x1 - x0), (h - 4) / (z1 - z0)), c = document.createElement('canvas'), g = c.getContext('2d');
+    c.width = w; c.height = h;
+    const px = x => Math.round((w - (x1 - x0) * k) / 2 + (x - x0) * k), pz = z => Math.round((h - (z1 - z0) * k) / 2 + (z - z0) * k);
+    for (const s of S) R(g, '#e8e8e4', px(s.x), pz(s.z), 1, 1);
+    R(g, RD, px(S[0].x) - 2, pz(S[0].z) - 2, 5, 5); // ligne de départ
+    return { c, px, pz };
+  })();
   function drawHUD(dt, sp, r, warn) {
     hg.clearRect(0, 0, HW, HH);
     const cx = HW / 2, blink = (performance.now() / 160 | 0) % 3 > 0;
@@ -601,6 +611,12 @@
       R(hg, '#ffffff', 12 + i * 6, HH - 14 - Math.min(EQR - 1, Math.round(peak[i] * EQR)) * 4, 5, 1);
     }
     radioT -= dt; panel(HW - 126, 6, 120, 30); txt('RADIO ' + ST[station].fq, HW - 120, 11, 8, radioT > 0 && blink ? '#ffffff' : C); txt(ST[station].name, HW - 120, 23, 8, Y);
+    if (state === 'race' || state === 'count') { // minicarte, sous la radio ; un point par voiture : dot(x, z, couleur)
+      const mx = HW - 96, my = 46, dot = (x, z, c) => R(hg, c, mx + MM.px(x) - 1, my + MM.pz(z) - 1, 3, 3);
+      panel(HW - 102, 40, 96, 68); hg.drawImage(MM.c, mx, my); // 96 de large : ne touche pas les bandeaux centraux même en 4:3 (HW = 360)
+      if (ghostM.visible) dot(ghostM.position.x, ghostM.position.z, C);
+      dot(car.x, car.z, Y);
+    }
     if (car.boost > 0) tag('BOOST', cx, 82, C);
     if (splitMsg && (splitMsg.T -= dt) > 0) tag('S' + (splitMsg.i + 1) + ' ' + (splitMsg.d == null ? fmt(splitMsg.t) : (splitMsg.d <= 0 ? '-' : '+') + Math.abs(splitMsg.d).toFixed(2)), cx, 102, splitMsg.d == null ? Y : splitMsg.d <= 0 ? C : RD); // écart au record à chaque secteur
     if (warn && blink) tag(warn > 0 ? '! VIRAGE DROITE >>' : '<< VIRAGE GAUCHE !', cx, 62, Y);
