@@ -76,3 +76,19 @@ for (const M of CARTES) {
   const k = v => Math.round(v * 3.6);
   console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} boosts, ${hgl} chocs), à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);
 }
+// radio : trois stations par carte, motifs de 16 pas, notes dans le registre audible ; les timbres existent dans audio.js
+const SRC = require('fs').readFileSync(__dirname + '/audio.js', 'utf8'), seen = new Set();
+for (const M of CARTES) {
+  assert(M.radio.length === 3, M.id + ' : il faut trois stations');
+  for (const s of M.radio) {
+    const w = s.name + ' : ';
+    assert(!seen.has(s.name) && !seen.has(s.genre), w + 'nom ou genre en double'); seen.add(s.name); seen.add(s.genre);
+    assert(s.bpm >= 80 && s.bpm <= 180 && s.CH.length === s.ROOT.length && [1, 8].includes(s.CH.length), w + 'tempo ou accords');
+    for (const k of ['k', 'kB', 's', 'h', 'p', 'stab', 'gate', 'arp']) assert(s[k] == null || (typeof s[k] === 'string' && s[k].length === 16), w + 'motif ' + k);
+    for (const k of ['rifA', 'rifB']) assert(Array.isArray(s[k]) && s[k].length === 16, w + k);
+    for (const b of s.lead || []) { assert(b.length === 16, w + 'mesure de thème'); for (const n of b) assert(n == null || n === -99 || (n >= 55 && n <= 100), w + 'note de thème ' + n); }
+    for (const k of ['pad', 'stabW', 'arpW', 'leadW']) assert(!s[k] || SRC.includes(' ' + s[k] + ': { o: ['), w + 'timbre inconnu ' + s[k]);
+    assert(!s.bT || SRC.includes(' ' + s.bT + ': { o: [['), w + 'basse inconnue ' + s.bT);
+  }
+}
+console.log('OK  radio   ' + CARTES.map(M => M.radio.map(s => s.genre.toLowerCase()).join(' / ')).join(' · '));

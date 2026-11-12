@@ -49,7 +49,8 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | `cartes.js` | **les cartes**, en données : tracé, largeur, adhérence, voiture, stations de radio, thème (couleurs, ciel, lumière, interface). Ajouter une carte commence ici. |
 | `sim.js` | **physique**, sans aucun rendu : piste, moteur et boîte, glisse, murs, pilote automatique, course contre IA, trafic. Partagé entre le jeu et les tests. |
 | `game.js` | rendu three.js, décor de la ville, effets, interface, commandes, boucle de jeu |
-| `audio.js` | tout le son, synthétisé : stations de radio, séquenceur adaptatif, moteur, pneus, bruitages. Exposé au jeu par `window.SON`. |
+| `audio.js` | tout le son, synthétisé : trois stations de radio par carte (données `RADIO` dans `cartes.js`), séquenceur adaptatif, musique de menu, ambiance du lieu, tunnels, moteur, pneus, bruitages. Exposé au jeu par `window.SON`. |
+| `ecoute.html` | banc d'écoute : toutes les stations, la musique de menu, les ambiances et les bruitages sans conduire, un curseur de volume par famille, et la mesure des niveaux (RMS et crête) par rendu hors ligne |
 | `decors.js` | décors des autres cartes (forêt, baie, Paris, canal) : une fonction par carte |
 | `test-cartes.js` | tests de toutes les cartes |
 | `propositions/` | la page de conception d'origine des cartes (historique) |

@@ -458,7 +458,7 @@
     else start();
   }
   addEventListener('keydown', e => {
-    keys[e.code] = 1;
+    keys[e.code] = 1; SON.init(); // le contexte audio ne peut démarrer qu'après un geste : la musique de menu part à la première touche
     if (/^Arrow|Space/.test(e.code)) e.preventDefault();
     if (e.repeat) return;
     const key = (e.key || '').toLowerCase(); // lettre réellement tapée, pour les commandes nommées par une lettre (le pilotage, lui, reste en positions physiques)
@@ -684,7 +684,7 @@
     ghostM.visible = ghostOn && state === 'race' && !race && !!ghost && g0 + 7 < ghost.length;
     if (ghostM.visible) { ghostM.position.set(lerp(ghost[g0], ghost[g0 + 4], gf), lerp(ghost[g0 + 1], ghost[g0 + 5], gf) + 0.6, lerp(ghost[g0 + 2], ghost[g0 + 6], gf)); ghostM.rotation.y = -(ghost[g0 + 3] + wrap(ghost[g0 + 7] - ghost[g0 + 3]) * gf); }
     fxFrame(dt, now, sp, inp, hit, fx, fz);
-    SON.frame(dt, { state, car, T, hot: hot(car.idx, 50), r, sp, gas, hit, up, rpm, load, spool, stun });
+    SON.frame(dt, { state, car, T, hot: hot(car.idx, 50), tun: lm, r, sp, gas, hit, up, rpm, load, spool, stun });
 
     // alerte de virage serré, lue sur la courbure à venir
     let wk = 0;

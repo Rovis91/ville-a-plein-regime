@@ -6,24 +6,99 @@
 //   W demi-largeur de route (m) · grip adhérence latérale maxi (m/s²) · sc échelle du tracé · pts [x, z, altitude], sens horaire, départ en [0]
 //   camH hauteur de la caméra (m, 2,2 par défaut : à relever quand la voiture masque la route) · tun [a, b] tunnel entre deux points (ou null) · chaud [a, b] secteur où la musique se déchaîne · sect [a, b] les deux temps intermédiaires
 //   anticipe : le pilote automatique calcule sa distance de freinage (indispensable dès qu'il y a une épingle)
-//   rivaux : prénoms des trois adversaires du mode course (sinon ceux de la ville) · trafic : nombre de camions à doubler · car : la voiture (format CARD de sim.js) · radio : stations (format ST de game.js) · th : thème
+//   rivaux : prénoms des trois adversaires du mode course (sinon ceux de la ville) · trafic : nombre de camions à doubler · car : la voiture (format CARD de sim.js) · radio : stations (voir RADIO plus bas) · th : thème
 (function (G) {
   const _ = null;
   // voiture : up / down = régimes de passage de la boîte auto ; trac = accélération maxi que les pneus passent au sol (m/s²) ;
   // rwd = propulsion : accélérer fort prend sur l'adhérence latérale des roues arrière ; son = hauteur du moteur ; look = silhouette
   const car = (o) => Object.assign({ up: o.red * 0.94, down: o.red * 0.775, eff: 0.88, trac: 8.5, rwd: 1, son: 1 }, o);
 
-  // thème d'une station : accords sur 8 mesures, fondamentales, motifs de 16 pas
-  const DARK = [[57, 60, 64], [57, 60, 64], [53, 57, 60], [55, 59, 62], [57, 60, 64], [57, 60, 64], [58, 62, 65], [56, 59, 64]]; // Am Am F G | Am Am Bb E
-  const JAZZ = [[62, 65, 69, 72], [59, 62, 65, 67], [60, 64, 67, 71], [57, 60, 64, 67]]; // Dm7 G7 Cmaj7 Am7
-  const LEAD = [[[0, 76, 3], [3, 76, 2], [6, 74, 2], [8, 76, 4], [12, 79, 4]], [[0, 76, 6], [8, 72, 2], [10, 74, 2], [12, 72, 4]],
-    [[0, 77, 3], [3, 77, 2], [6, 76, 2], [8, 77, 4], [12, 81, 4]], [[0, 79, 6], [8, 74, 2], [10, 76, 2], [12, 74, 4]],
-    [[0, 76, 3], [3, 76, 2], [6, 74, 2], [8, 76, 4], [12, 79, 4]], [[0, 76, 6], [8, 72, 2], [10, 74, 2], [12, 72, 4]],
-    [[0, 77, 3], [3, 77, 2], [6, 74, 2], [8, 77, 4], [12, 82, 4]], [[0, 80, 8], [8, 83, 8]]];
-  const E1 = [[0, 77, 2], [2, 74, 1], [3, 77, 2], [6, 79, 2], [8, 77, 2], [10, 74, 2], [12, 72, 2], [14, 74, 2]], E2 = [[0, 76, 2], [2, 72, 1], [3, 76, 2], [6, 79, 2], [8, 76, 2], [10, 72, 2], [12, 76, 2], [14, 79, 2]];
-  const T1 = [[0, 83, 6], [6, 79, 2], [8, 76, 8]], T2 = [[0, 84, 6], [6, 79, 2], [8, 76, 4], [12, 79, 4]];
-  const P1 = [[0, 79, 4], [4, 75, 2], [6, 77, 2], [8, 79, 6], [14, 82, 2]], P2 = [[0, 84, 6], [6, 82, 2], [8, 80, 8]];
-  const L1 = [[0, 86, 6], [6, 84, 2], [8, 82, 4], [12, 79, 4]], L2 = [[0, 82, 2], [2, 84, 2], [4, 86, 8], [12, 89, 4]];
+  // ---------- radio : trois stations par carte, chacune dans un style propre au lieu (compositions originales, jouées par audio.js) ----------
+  // Une station : name, fq, vol (niveau, réglé par mesure dans ecoute.html), genre, bpm, sw (swing, en fraction de double-croche) · prog : 8 mesures d'accords, d'où CH (accords) et ROOT (basse) ·
+  //   motifs de 16 pas — k / kB grosse caisse (section A / B), s caisse claire (g = note fantôme), h charlestons (x fermé, X accentué, o ouvert, r ride),
+  //   p percussion (pT son, pR hauteur), stab accords plaqués, gate nappe hachée, arp arpège (0-3 notes de l'accord, 4-7 à l'octave) ·
+  //   kT / sT timbre de grosse caisse et de caisse claire, sMin niveau de la caisse claire hors du secteur chaud ·
+  //   bT timbre de basse, rifA / rifB lignes de basse en demi-tons depuis la fondamentale (_ = tenue), bLen tenue maxi en pas, bGl glissé (s), sat saturée ·
+  //   pad / stabW / arpW / leadW timbres (0 = pas de nappe), lead thème par mesure (mel), vib vibrato (cents), gl portamento (s) ·
+  //   pump profondeur de la pompe sous la grosse caisse (1 = aucune), sweep filtre balayé sur 8 mesures, drive saturation de tout le bus.
+  const R = -99; // silence dans un thème
+  const NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }, QUAL = { '': [0, 4, 7], m: [0, 3, 7], 7: [0, 4, 7, 10], m7: [0, 3, 7, 10], M7: [0, 4, 7, 11], m9: [0, 3, 10, 14], 9: [0, 4, 10, 14], 5: [0, 7, 12] };
+  // « Am7 D7 … » → accords autour du do central et fondamentales de basse
+  const prog = s => { const CH = [], ROOT = []; for (const c of s.split(' ')) { const [, n, acc, q] = c.match(/^([A-G])([b#]?)(.*)$/), pc = (NOTE[n] + (acc === '#' ? 1 : acc === 'b' ? -1 : 0) + 12) % 12;
+    CH.push(QUAL[q].map(i => (pc < 5 ? 60 : 48) + pc + i)); ROOT.push((pc < 4 ? 36 : 24) + pc); } return { CH, ROOT }; };
+  // thème : une mesure par segment « | », 16 pas : demi-tons au-dessus de la tonique `key`, « - » tenue, « . » silence
+  const mel = (key, s) => s.split('|').map(b => b.trim().split(/\s+/).map(x => x === '-' ? _ : x === '.' ? R : key + +x));
+  const st = o => Object.assign(o, prog(o.prog), o.lead && { lead: mel(o.key, o.lead) });
+  const F4 = 'x...x...x...x...';
+  const RADIO = {
+    ville: [
+      st({ name: 'NIGHT CITY FM', fq: '98.7', vol: 0.87, genre: 'DARKSYNTH', bpm: 128, prog: 'Am Am F G Am Am Bb E', key: 57, // façon Carpenter Brut / Perturbator : basse saturée, caisse claire à réverbération coupée, pompe
+        kT: 'dur', k: F4, kB: 'x...x...x.x.x...', sT: 'gate', sMin: 0.25, h: 'xxXxxxXxxxXxxxXx', bT: 'saw', sat: 1, pump: 0.3,
+        rifA: [0, _, 0, 0, _, _, 12, 0, _, _, 0, 3, 0, _, -2, 1], rifB: [0, _, 0, 0, _, _, 12, 0, _, 0, 7, _, 6, _, 5, 3], pad: 'saw', arp: '0121201245656456', stab: 'x..x..x....x....', leadW: 'saw',
+        lead: '19 - - 19 - . 17 - 19 - - - 22 - - - | 19 - - - - - . - 15 - 17 - 15 - - - | 20 - - 20 - . 19 - 20 - - - 24 - - - | 22 - - - - - . - 17 - 19 - 17 - - - | 19 - - 19 - . 17 - 19 - - - 22 - - - | 19 - - - - - . - 15 - 17 - 15 - - - | 20 - - 20 - . 17 - 20 - - - 25 - - - | 23 - - - - - - - 26 - - - - - - -' }),
+      st({ name: 'USINE 130', fq: '130.0', vol: 0.55, genre: 'TECHNO INDUSTRIELLE', bpm: 130, sw: 0.1, prog: 'Am', key: 57, // ni accords ni mélodie : grosse caisse saturée, caisse claire de bruit, métal, tom grave écrêté
+        kT: 'dur', k: F4, kB: 'x...x...x...x.x.', sT: 'bruit', sMin: 0.2, h: '..X...X...X...X.', p: 'x..x..x...x..x..', pT: 'cb', pR: 0.45, bT: 'dist', drive: 1, pump: 0.5,
+        rifA: [_, _, 0, _, _, _, 0, _, _, _, 0, _, _, _, 0, 1], rifB: [_, _, 0, _, _, 0, _, _, 0, _, _, 0, _, _, 1, 0], pad: 0, arp: '0..0..0.0..0.0..', arpW: 'pluck', arpV: 1.4 }),
+      st({ name: 'KAIZO BREAKS', fq: '87.5', vol: 1.16, genre: 'BIG BEAT', bpm: 132, prog: 'Em Em Em G Em Em A B', key: 64, // façon Prodigy / Chemical Brothers : breakbeat lourd, basse acide, sirène qui glisse
+        k: 'x..x......x.....', kB: 'x..x...x..x..x..', s: '....x..g.g..x..g', sT: 'sd', sMin: 0.4, h: 'x.x.x.x.x.x.x.o.', bT: 'acid', sat: 1, pump: 0.6,
+        rifA: [0, _, 0, 12, _, 0, _, 3, 0, _, 12, 0, _, 7, _, 10], rifB: [0, 0, _, 12, 0, _, 15, _, 12, _, 10, _, 7, _, 3, _], pad: 0, stab: 'x.....x.........', stabW: 'org', stabV: 1.5, leadW: 'sq', gl: 0.15,
+        lead: '12 - - - - - - - 7 - - - - - - - | 12 - - - - - - - 15 - - - 14 - - -' }),
+    ],
+    touge: [
+      st({ name: 'AKINA SPEED', fq: '155', vol: 0.93, genre: 'EUROBEAT', bpm: 155, prog: 'Dm Bb F C Dm Bb C A', key: 62, // façon Super Eurobeat : basse en octaves, cuivres plaqués, riff de synthé très chargé
+        k: F4, sT: 'cp', sMin: 0.3, h: 'x.o.x.o.x.o.x.o.', bT: 'saw', pump: 0.3,
+        rifA: [0, 0, 12, 0, 0, 12, 0, 12, 0, 0, 12, 0, 0, 12, 0, 12], rifB: [0, 0, 12, 0, 0, 12, 0, 12, 0, 0, 12, 0, 12, 12, 0, 12], pad: 'super', padV: 0.7, stab: 'x..x..x.x..x..x.', stabW: 'brass', stabAlways: 1, stabV: 1.3, leadW: 'sq', vib: 8,
+        lead: '12 - 12 14 - 15 - 14 12 - 10 - 12 - 15 - | 17 - - 15 - 14 - 15 - - 14 - 10 - - - | 12 - 12 14 - 15 - 17 19 - 17 - 15 - 17 - | 19 - - 17 - 14 - 17 - - 14 - 10 - - - | 24 - 22 - 20 - 19 - 17 - 19 - 20 - 19 - | 22 - - 20 - 17 - 20 - - 17 - 15 - 14 - | 22 - 19 - 22 - 24 - 26 - 24 - 22 - 19 - | 25 - - - 19 - 14 - 13 - - - - - - -' }),
+      st({ name: 'GRAND PRIX FM', fq: '86.2', vol: 0.98, genre: 'FUSION JAZZ-ROCK', bpm: 136, prog: 'Em9 A9 DM7 GM7 Em9 A9 F#m7 B7', key: 62, // façon T-Square / Casiopea : batterie jouée, basse claquée, piano électrique, solo
+        k: 'x..x..x...x..x..', kB: 'x..x..x..xx..x.x', s: '....x..g.g..x..g', sT: 'sd', sMin: 0.3, h: 'r.r.r.rrr.r.r.rr', bT: 'slap', pump: 0.9,
+        rifA: [0, _, 12, _, 0, 0, _, 9, _, 12, _, 0, _, 7, 9, 12], rifB: [0, _, 12, 0, _, 7, _, 9, 12, _, 9, _, 7, _, 5, 7], pad: 'str', padV: 0.5, stab: '..x..x....x..x..', stabW: 'ep', stabAlways: 1, stabL: 0.25, stabV: 1.6, leadW: 'ewi', vib: 10, gl: 0.04,
+        lead: '14 - 17 19 - 21 - 19 17 - 16 - 14 - 12 14 | 16 - - 19 - 21 23 - 21 - 19 - 16 - - - | 21 - 19 - 16 - 14 16 - 19 - 23 - 21 - - | 23 - - 21 - 19 - 16 - - 14 - 16 19 - - | 26 - 24 23 - 21 - 19 21 - 23 - 24 - 26 - | 28 - - 26 - 23 - 21 - 19 - 21 23 - - - | 21 - 23 24 - 26 - 28 - 26 - 24 - 23 21 - | 27 - - - 23 - 21 - 27 - 30 - . - - -' }),
+      st({ name: 'PLASTIC NIGHT', fq: '80.0', vol: 1.15, genre: 'CITY POP', bpm: 112, sw: 0.08, prog: 'FM7 G7 Em7 Am7 FM7 G7 Em7 A7', key: 60, // façon Tatsuro Yamashita : majeur, accords de septième, détendu, l'autoradio de la descente
+        k: 'x......x..x.....', kB: 'x..x...x..x...x.', sT: 'gate', sMin: 0.3, h: 'x.xxx.xxx.xxx.ox', bT: 'slap', pump: 0.8,
+        rifA: [0, _, _, 0, _, 12, _, _, 0, _, 12, _, _, 7, _, 12], rifB: [0, _, _, 0, _, 12, _, _, 7, _, 12, _, 7, _, 12, 7], pad: 'str', padV: 0.8, stab: '..x...x..x....x.', stabW: 'ep', stabAlways: 1, stabL: 0.3, stabV: 1.6, arp: '..4...5...6...5.', arpW: 'bell', arpL: 0.5, leadW: 'tri', vib: 12,
+        lead: '16 - - - 19 - 21 - - - 19 - 16 - - - | 14 - - - 17 - 19 - - - 17 - 14 - - - | 19 - - 16 - - 14 - 16 - - - . - - - | 12 - - 14 - - 16 - 21 - - - 19 - - - | 24 - - - 21 - 19 - - - 21 - 24 - - - | 23 - - - 19 - 17 - - - 19 - 23 - - - | 26 - - 23 - - 19 - 21 - - - . - - - | 25 - - - - - 21 - 19 - - - 16 - - -' }),
+    ],
+    wangan: [
+      st({ name: 'BAY 138', fq: '138', vol: 0.98, genre: 'TRANCE', bpm: 138, prog: 'Em C G D Em C Am B', key: 64, // façon Wangan Midnight Maximum Tune : basse à contretemps, nappe hachée, arpège, hymne en dents de scie
+        k: F4, sT: 'cp', sMin: 0.25, h: 'x.o.x.o.x.o.x.o.', bT: 'saw', bLen: 1.5, pump: 0.25,
+        rifA: [_, _, 0, _, _, _, 0, _, _, _, 0, _, _, _, 0, _], rifB: [_, _, 0, _, _, _, 0, _, _, _, 0, _, _, 0, 12, _], pad: 'super', gate: 'x.xx.xx.x.xx.xx.', arp: '0124210201242102', arpW: 'pluck', arpV: 1.3, leadW: 'saw',
+        lead: '19 - - - - - 22 - 24 - - - 22 - 19 - | 20 - - - - - 24 - 27 - - - 24 - 20 - | 22 - - - - - 26 - 27 - - - 26 - 22 - | 26 - - - - - 29 - 26 - - - 22 - - - | 19 - - - - - 22 - 24 - - - 22 - 19 - | 20 - - - - - 24 - 27 - - - 24 - 20 - | 24 - - - - - 27 - 29 - - - 27 - 24 - | 23 - - - - - 26 - 31 - - - - - - -' }),
+      st({ name: 'LIQUID 174', fq: '174', vol: 1.08, genre: 'DRUM AND BASS', bpm: 174, prog: 'Dm9 Dm9 BbM7 BbM7 Gm7 Gm7 A7 A7', key: 62, // liquid teinté acid jazz : breakbeat, basse « Reese » tenue, piano électrique, thème rare
+        k: 'x.........x.....', kB: 'x.........x..x..', s: '....x..g....x.g.', sT: 'sdh', sMin: 0.4, h: 'x.xXx.x.x.xXx.x.', bT: 'reese', bLen: 8, pump: 0.85,
+        rifA: [0, _, _, _, _, _, _, _, _, _, 0, _, _, _, 7, _], rifB: [0, _, _, _, _, _, _, _, 12, _, _, _, 10, _, 7, _], pad: 'str', padV: 0.8, stab: '...x.....x......', stabW: 'ep', stabAlways: 1, stabL: 0.5, stabV: 1.8, leadW: 'tri', vib: 8,
+        lead: '19 - - - - - - - 17 - - - 15 - - - | 14 - - - - - - - . - - - 12 - 14 - | 17 - - - - - - - 15 - - - 14 - - - | 10 - - - - - - - . - - - - - - - | 22 - - - - - - - 19 - - - 17 - - - | 15 - - - - - - - . - - - 14 - 15 - | 19 - - - - - - - 16 - - - 13 - - - | 9 - - - - - - - . - - - - - - -' }),
+      st({ name: 'MOTOR BAY', fq: '127.3', vol: 1.06, genre: 'TECHNO DE DETROIT', bpm: 127, sw: 0.06, prog: 'Cm7 Cm7 Ebm7 Ebm7 Cm7 Cm7 Fm7 Bbm7', key: 60, // façon Derrick May / Juan Atkins : accords mineurs parallèles plaqués, cordes de synthé, pas de thème
+        k: F4, sT: 'cp', sMin: 0.3, h: 'x.oxx.oxx.oxx.ox', p: '...x..x...x..x.x', pT: 'cb', pR: 1.6, bT: 'sq', pump: 0.5,
+        rifA: [0, _, _, 0, _, _, 0, _, _, 0, _, _, 12, _, 0, _], rifB: [0, _, _, 0, _, _, 0, _, _, 0, _, 12, _, 10, _, 7], pad: 'str', stab: 'x..x...x..x.....', stabW: 'pluck', stabAlways: 1, stabL: 0.3, stabV: 1.6, arp: '....4.....4...5.', arpW: 'bell' }),
+    ],
+    paris: [
+      st({ name: 'FILTRE FM', fq: '89.0', vol: 1.06, genre: 'HOUSE FILTREE', bpm: 123, sw: 0.12, prog: 'F#m7 B7 EM7 C#m7 F#m7 B7 EM7 C#m7', key: 64, // French touch façon Daft Punk / Stardust : une boucle disco qui ne change pas, le filtre et la pompe font tout
+        k: F4, sT: 'cp', sMin: 0.3, h: 'x.o.x.oxx.o.x.ox', p: '...x......x.....', bT: 'slap', sweep: 1, pump: 0.12, pumpT: 0.3,
+        rifA: [0, _, _, 0, _, 12, _, 0, _, _, 7, _, 12, _, 0, _], rifB: [0, _, _, 0, _, 12, _, 0, _, 12, _, 7, _, 12, _, 7], pad: 'str', stab: 'x..x..x.x..x.x..', stabW: 'super', stabAlways: 1, stabL: 0.2, stabV: 1.8 }),
+      st({ name: 'SATURATION', fq: '107.7', vol: 0.45, genre: 'ELECTRO SATUREE', bpm: 128, sw: 0.08, prog: 'Em Em G A Em Em C B', key: 64, // façon Justice / Ed Banger : tout le bus écrêté, basse hachée, cordes coupées net, riff de guitare synthétique
+        kT: 'dur', k: F4, kB: 'x...x...x..xx...', sT: 'sd', sMin: 0.3, h: 'x.X.x.X.x.X.x.Xx', bT: 'dist', drive: 1, pump: 0.2,
+        rifA: [0, 0, _, 0, _, _, 12, _, 0, 0, _, 3, _, 5, _, _], rifB: [0, 0, _, 0, _, _, 12, _, 10, _, 7, _, 5, _, 3, _], pad: 0, stab: 'x.x...x..x......', stabW: 'str', stabAlways: 1, stabL: 0.1, stabV: 1.8, leadW: 'gtrl',
+        lead: '12 - 12 . 15 - 12 . 10 - 12 - . - - - | 12 - 12 . 15 - 17 . 19 - 17 - 15 - - - | 19 - 19 . 22 - 19 . 17 - 19 - . - - - | 21 - 21 . 24 - 21 . 17 - 21 - 24 - - -' }),
+      st({ name: 'COSMOS', fq: '102.3', vol: 1.06, genre: 'DISCO SPATIAL', bpm: 118, prog: 'Am7 D7 GM7 CM7 Am7 D7 Em7 Em7', key: 55, // façon Cerrone / Space : basse à l'octave, cocotte de guitare, cordes, arpégiateur ; ni pompe ni saturation
+        k: F4, sT: 'cp', sMin: 0.3, h: 'xxoxxxoxxxoxxxox', bT: 'sq', pump: 1,
+        rifA: [0, _, 12, _, 0, _, 12, _, 0, _, 12, _, 0, _, 12, _], rifB: [0, _, 12, _, 0, _, 12, _, 0, _, 12, _, 7, _, 12, 14], pad: 'str', padV: 1.4, stab: '.xx..xx..xx..xx.', stabW: 'gtr', stabAlways: 1, stabL: 0.07, stabV: 1.4, arp: '0213021302130213', arpW: 'pluck', leadW: 'str',
+        lead: '14 - - - 12 - 14 - 17 - - - 14 - - - | 19 - - - 17 - 19 - 23 - - - 19 - - - | 23 - - - 21 - 19 - 16 - - - 19 - - - | 21 - - - 19 - 17 - 16 - - - . - - - | 26 - - - 24 - 26 - 29 - - - 26 - - - | 31 - - - 29 - 26 - 23 - - - 26 - - - | 28 - - - 26 - 24 - 23 - - - 21 - - - | 19 - - - - - - - . - - - - - - -' }),
+    ],
+    canal: [
+      st({ name: 'K-LOW', fq: '94.0', vol: 1.1, genre: 'G-FUNK', bpm: 94, sw: 0.1, prog: 'Gm7 Gm7 Cm7 Cm7 Gm7 Gm7 EbM7 D7', key: 55, // façon Dr. Dre / Warren G : lent, caisse claire en avant, basse ronde qui glisse, sifflement de synthé à portamento
+        k: 'x......x..x.....', kB: 'x..x...x..x...x.', sT: 'sd', sMin: 0.45, h: 'x.x.x.xxx.x.x.o.', bT: 'moog', bLen: 4, bGl: 0.07, pump: 0.9,
+        rifA: [0, _, _, _, _, _, 0, _, _, _, 7, _, 10, _, 12, _], rifB: [0, _, _, _, _, _, 0, _, 12, _, 10, _, 7, _, 5, 3], pad: 'str', padV: 0.6, stab: '..x.......x..x..', stabW: 'ep', stabAlways: 1, stabL: 0.4, stabV: 1.8, leadW: 'sine', gl: 0.09, vib: 6,
+        lead: '31 - - - - - 34 - 36 - - - 34 - 31 - | 29 - - - - - 27 - 31 - - - - - - - | 32 - - - - - 34 - 36 - - - 39 - 36 - | 34 - - - - - 32 - 29 - - - - - - - | 38 - - - - - 36 - 34 - - - 31 - 34 - | 36 - - - - - - - 31 - - - - - - - | 39 - - - - - 36 - 34 - - - 32 - 34 - | 35 - - - - - 38 - 41 - - - - - - -' }),
+      st({ name: '808 BOULEVARD', fq: '102.9', vol: 1.06, genre: 'ELECTRO-FUNK', bpm: 122, prog: 'Dm Dm Dm Dm Dm Dm C C', key: 62, // façon Egyptian Lover / Zapp : TR-808 sèche et syncopée, cloche, basse séquencée, talkbox
+        k: 'x..x..x...x.x...', kB: 'x..x..x..xx.x..x', sT: 'cp', sMin: 0.4, h: 'xxXxxxXxxxXxxxox', p: 'x..x..x..x..x.x.', pT: 'cb', bT: 'sq', bLen: 1, pump: 1,
+        rifA: [0, _, 0, _, 12, _, 0, _, 0, _, 0, 12, _, 0, 10, _], rifB: [0, _, 0, _, 12, _, 0, _, 10, _, 12, _, 15, _, 12, 10], pad: 0, arp: '0.2.1.2.0.2.1.3.', leadW: 'talk', gl: 0.05,
+        lead: '12 - 12 - 15 - 12 - 10 - 12 - . - - - | 12 - 12 - 15 - 17 - 19 - - - 17 - 15 - | 12 - 12 - 15 - 12 - 10 - 7 - . - - - | 10 - 12 - . - 10 - 12 - - - - - - -' }),
+      st({ name: 'HIGH DESERT', fq: '66.6', vol: 0.78, genre: 'ROCK DU DESERT', bpm: 112, prog: 'C5 C5 C5 C5 Eb5 Eb5 F5 Bb5', key: 48, // façon Kyuss / Queens of the Stone Age : accordé en do, riff de guitare saturée, batterie rock ; aucun synthé, aucune 808
+        kT: 'rock', k: 'x.....x.x.....x.', kB: 'x..x..x.x..x..x.', sT: 'rock', sMin: 0.45, h: 'X.X.X.X.X.X.X.o.', bT: 'fuzz', bLen: 3, pump: 1,
+        rifA: [0, _, _, 0, _, 3, _, 0, _, _, 5, _, 3, _, 0, _], rifB: [0, _, _, 0, _, 3, _, 5, _, 6, _, 5, _, 3, _, -2], pad: 0, stab: 'x.....x.....x...', stabW: 'pwr', stabO: -12, stabL: 0.4, leadW: 'gtrl', vib: 14, gl: 0.05,
+        lead: '24 - - 27 - - 29 - - 27 - - 24 - 22 - | 24 - - - - - - - 31 - - - 29 27 - - | 34 - - 31 - - 29 - - 27 - - 29 - 31 - | 36 - - - - - - - . - - - - - - -' }),
+    ],
+  };
 
   G.CARTES = [
     { id: 'ville', nom: 'VILLE A PLEIN REGIME', camH: 3.8, W: 9, grip: 44, sc: 0.85, tun: [6, 12], chaud: [6, 12], sect: [6, 12],
@@ -35,14 +110,7 @@
         tq: [0, 200, 330, 450, 520, 540, 535, 505, 420], // couple (N·m) tous les 1000 tr/min : 540 N·m à 5200, 500 ch à 6800 (forme de la courbe estimée)
         up: 7500, down: 6200, trac: 11, rwd: 0, son: 1, // 4 roues motrices : ~1,1 g de motricité, pas de survirage à l'accélérateur
         look: { col: 0xff2030, l: 1, w: 1, h: 1, nez: 0.62, cab: [-0.5, 2.1, 0.5], aileron: 1, neon: 0x00f0ff } },
-      radio: [
-        { name: 'NIGHT CITY FM', fq: '98.7', bpm: 126, CH: DARK, ROOT: [33, 33, 29, 31, 33, 33, 34, 28], kick: '1000100010001000', kickB: '1000100010101000', clapMin: 0,
-          rifA: [0, _, 0, 0, _, _, 12, 0, _, _, 0, 3, 0, _, -2, 1], rifB: [0, _, 0, 0, _, _, 12, 0, _, 0, 7, _, 6, _, 5, 3], sat: 1, arp: 1, stab: [0, 3, 6, 11], stabAlways: 0, lead: LEAD }, // darksynth
-        { name: 'PULSE 104', fq: '104.2', bpm: 122, CH: [...JAZZ, ...JAZZ], ROOT: [38, 31, 36, 33, 38, 31, 36, 33], kick: '1000100010001000', kickB: '1000100010001000', clapMin: 0.3,
-          rifA: [0, _, _, 0, _, _, 12, _, 0, _, _, 12, _, 7, _, 10], rifB: [0, _, _, 0, _, _, 12, _, 0, _, 12, _, 10, _, 7, _], sat: 0, arp: 1, stab: [2, 6, 10, 14], stabAlways: 1, lead: null, cb: 1 }, // house filtrée
-        { name: 'KAIZO BREAKS', fq: '87.5', bpm: 168, CH: DARK, ROOT: [33, 33, 29, 31, 33, 33, 34, 28], kick: '1000000000100000', kickB: '1000000100100000', clapMin: 0.4,
-          rifA: [0, _, _, _, _, _, _, _, _, _, 0, _, 3, _, _, _], rifB: [0, _, _, _, _, _, 7, _, _, _, 6, _, 5, _, 3, _], sat: 1, arp: 0, stab: [], stabAlways: 0, lead: LEAD, sn: 1 }, // breakbeat
-      ],
+      radio: RADIO.ville,
       th: { decor: 'ville', fog: 0x1f0a36, fogD: [60, 800], sky: [[0, '#03020a'], [0.36, '#120a2e'], [0.47, '#5a1058'], [0.5, '#1f0a36'], [1, '#1f0a36']], stars: 140,
         astre: { dir: [0.45, 0.8, 0.4], col: '#d8e8ff', ombre: '#a8b8e0', taille: 170 }, hemi: [0x5a6cff, 0xff2a6a, 0.55], sun: [0x8fb0ff, 0.35], phares: 2.6, bloom: 0.13, scan: 0.12,
         pluie: 1, orage: 1, alarme: 1, chev: 1, piles: -61, tubes: 1, reflets: '#00a8b8', pubs: 1, murH: 1.4,
@@ -57,10 +125,7 @@
       // Mazda RX-7 Spirit R Type A (FD3S, 2002) : birotor biturbo 13B-REW, 280 ch à 6500 tr/min, 314 N·m à 5000, 1270 kg, propulsion (rapports à vérifier sur fiche)
       car: car({ nom: 'MAZDA RX-7 SPIRIT R', ratios: [3.483, 2.015, 1.391, 1.000, 0.719], final: 4.1, wheel: 0.318, mass: 1345, idle: 900, red: 8000, cd: 0.31, area: 1.8,
         tq: [0, 150, 220, 270, 300, 314, 308, 290, 240], son: 1.5, look: { col: 0xf4f0e0, l: 0.95, w: 0.96, h: 0.9, nez: 0.72, cab: [-0.35, 1.9, 0.48], aileron: 1 } }),
-      radio: [{ name: 'USUI FM', fq: '156', bpm: 156, CH: [[58, 62, 65], [60, 64, 67], [62, 65, 69], [62, 65, 69], [58, 62, 65], [60, 64, 67], [57, 61, 64], [57, 61, 64]], ROOT: [34, 36, 38, 38, 34, 36, 33, 33],
-        kick: '1000100010001000', kickB: '1000100010001010', clapMin: 0.35, rifA: [0, 0, 12, 0, 0, 0, 12, 0, 0, 0, 12, 0, 0, 12, 0, 12], rifB: [0, 0, 12, 0, 0, 0, 12, 0, 0, 12, 0, 12, 7, 12, 10, 12], sat: 0, arp: 0, stab: [2, 6, 10, 14], stabAlways: 1,
-        lead: [E1, E2, [[0, 81, 3], [3, 79, 3], [6, 77, 2], [8, 76, 2], [10, 77, 2], [12, 74, 4]], [[0, 74, 2], [2, 77, 2], [4, 81, 2], [6, 82, 2], [8, 81, 4], [12, 77, 2], [14, 76, 2]],
-          E1, E2, [[0, 76, 3], [3, 73, 3], [6, 76, 2], [8, 81, 3], [11, 79, 3], [14, 76, 2]], [[0, 73, 2], [2, 76, 2], [4, 79, 2], [6, 81, 2], [8, 85, 8]]] }], // eurobeat
+      radio: RADIO.touge,
       th: { decor: 'touge', fog: 0x0b1614, fogD: [45, 560], sky: [[0, '#02040a'], [0.4, '#0a1420'], [0.49, '#1a2a30'], [0.5, '#0b1614'], [1, '#0b1614']], stars: 240,
         astre: { dir: [-0.3, 0.75, 0.5], col: '#f4f8ff', ombre: '#c8d0e0', taille: 230 }, hemi: [0x7a96c0, 0x16302a, 0.55], sun: [0xbfd0ff, 0.5], phares: 3.2, bloom: 0.1, scan: 0.1,
         chev: 1, murH: 1.1, route: ['#26282c', '#34363c', '#e8e6da', '#ff8c1a', '#26282c', '#26282c', false], mur: ['#34363a', '#e8e6da', '#a8a69c', '#101214'], depart: [0xff8c1a, 0xe8e6da, '#e8e6da'],
@@ -72,9 +137,7 @@
       // Toyota Supra RZ (JZA80, 1997) : 6 en ligne biturbo 2JZ-GTE, fiche export 320 ch, 427 N·m à 4000 tr/min, 1510 kg, Getrag V160 (rapports à vérifier sur fiche)
       car: car({ nom: 'TOYOTA SUPRA RZ', ratios: [3.827, 2.360, 1.685, 1.312, 1.000, 0.793], final: 3.266, wheel: 0.318, mass: 1585, idle: 800, red: 6800, cd: 0.32, area: 1.95,
         tq: [0, 180, 300, 400, 427, 420, 400, 340, 260], son: 0.95, look: { col: 0x4a4e5c, l: 1.02, w: 1, h: 0.96, nez: 0.66, cab: [-0.45, 2.1, 0.5], aileron: 2 } }),
-      radio: [{ name: 'BAY 138', fq: '138', bpm: 138, CH: [[64, 67, 71], [60, 64, 67], [59, 62, 67], [62, 66, 69], [64, 67, 71], [60, 64, 67], [59, 62, 67], [62, 66, 69]], ROOT: [28, 36, 31, 38, 28, 36, 31, 38],
-        kick: '1000100010001000', kickB: '1000100010001000', clapMin: 0.2, rifA: [_, _, 0, 0, _, _, 0, 0, _, _, 0, 0, _, _, 0, 12], rifB: [_, _, 0, 0, _, _, 0, 0, _, _, 0, 12, _, _, 7, 12], sat: 0, arp: 1, stab: [], stabAlways: 0,
-        lead: [T1, T2, [[0, 86, 6], [6, 83, 2], [8, 79, 8]], [[0, 81, 4], [4, 78, 4], [8, 81, 4], [12, 78, 2], [14, 81, 2]], T1, T2, [[0, 86, 6], [6, 83, 2], [8, 91, 8]], [[0, 90, 8], [8, 86, 8]]] }], // trance
+      radio: RADIO.wangan,
       th: { decor: 'wangan', fog: 0x0c1424, fogD: [90, 1300], sky: [[0, '#02030a'], [0.38, '#0a1024'], [0.47, '#4a2c18'], [0.5, '#0c1424'], [1, '#0c1424']], stars: 40,
         astre: { dir: [0.5, 0.7, -0.4], col: '#e8e0d0', ombre: '#b8b0a0', taille: 120 }, hemi: [0x4a5a8a, 0xff9a2e, 0.55], sun: [0x8fa0d0, 0.25], phares: 2.4, bloom: 0.1, scan: 0.1,
         chev: 1, piles: -14, murH: 1.4, route: ['#24262e', '#30323c', '#f4f1e0', '#f4f1e0', '#24262e', '#24262e', false], mur: ['#3a3e46', '#c9ced6', '#ff9a2e', '#16181e'], depart: [0x1f8f5a, 0xc9ced6, '#f4f1e0'],
@@ -88,9 +151,7 @@
       // Renault 5 Maxi Turbo (1985, Groupe B) : 4 cylindres turbo 1,5 L, 350 ch, 905 kg, moteur central arrière, propulsion (rapports estimés)
       car: car({ nom: 'RENAULT 5 MAXI TURBO', ratios: [3.36, 2.06, 1.38, 1.06, 0.82], final: 3.89, wheel: 0.29, mass: 980, idle: 1000, red: 7500, cd: 0.40, area: 1.9,
         tq: [0, 120, 220, 330, 400, 420, 400, 370, 300], son: 1.25, look: { col: 0xf2c400, l: 0.8, w: 0.98, h: 1.12, nez: 0.3, cab: [-0.25, 2.3, 0.62], aileron: 0 } }),
-      radio: [{ name: 'RADIO 5H30', fq: '89.0', bpm: 120, CH: [[60, 63, 67], [56, 60, 63], [53, 56, 60], [55, 59, 62], [60, 63, 67], [56, 60, 63], [53, 56, 60], [55, 59, 62]], ROOT: [36, 32, 29, 31, 36, 32, 29, 31],
-        kick: '1000100010001000', kickB: '1000100010001000', clapMin: 0.3, rifA: [0, _, 12, _, 0, _, 12, _, 0, _, 12, _, 0, _, 12, 12], rifB: [0, _, 12, _, 0, _, 12, _, 0, 12, 7, 12, 0, 12, 10, 12], sat: 0, arp: 1, stab: [], stabAlways: 0, leadW: 'tri',
-        lead: [P1, P2, [[0, 77, 4], [4, 80, 2], [6, 84, 2], [8, 82, 4], [12, 80, 4]], [[0, 79, 4], [4, 83, 4], [8, 86, 8]], P1, P2, [[0, 77, 4], [4, 80, 2], [6, 84, 2], [8, 87, 4], [12, 84, 4]], [[0, 83, 8], [8, 79, 8]]] }], // disco spatiale
+      radio: RADIO.paris,
       th: { decor: 'paris', fog: 0xf0b89a, fogD: [140, 1500], sky: [[0, '#2b3a67'], [0.26, '#2b3a67'], [0.27, '#5a6a9a'], [0.38, '#5a6a9a'], [0.39, '#c08a9a'], [0.45, '#c08a9a'], [0.46, '#f0b89a'], [1, '#f0b89a']], stars: 0,
         astre: { dir: [0.8, 0.14, 0.3], col: '#fff0c0', ombre: '#fff0c0', taille: 260 }, hemi: [0xa8b8e8, 0xd9c9a8, 0.95], sun: [0xffc890, 0.75], phares: 0.5, bloom: 0.03, scan: 0.05,
         rues: [[0, 'boulevard'], [3, 'place'], [8, 'avenue'], [11, 'rue'], [13, 'ruelle'], [19, 'rue'], [24, 'avenue'], [26, 'quai'], [31, 'avenue'], [33, 'boulevard']],
@@ -105,9 +166,7 @@
       // Dodge Viper GTS (1996) : V10 de 8,0 L, 450 ch à 5200 tr/min, 664 N·m à 3700, 1535 kg, propulsion, boîte T56 (rapports à vérifier sur fiche)
       car: car({ nom: 'DODGE VIPER GTS', ratios: [2.66, 1.78, 1.30, 1.00, 0.74, 0.50], final: 3.07, wheel: 0.333, mass: 1610, idle: 800, red: 6000, cd: 0.35, area: 1.9,
         tq: [0, 420, 560, 640, 664, 625, 540, 400, 0], son: 0.8, look: { col: 0x1848c8, l: 1.03, w: 1.05, h: 0.88, nez: 0.7, cab: [-0.95, 1.7, 0.46], aileron: 0, bandes: 0xf4f0e0 } }),
-      radio: [{ name: 'KDAY 94', fq: '94.0', bpm: 94, CH: [[58, 62, 65, 67], [58, 62, 65, 67], [58, 62, 63, 67], [58, 62, 63, 67], [58, 62, 65, 67], [58, 62, 65, 67], [58, 60, 63, 67], [57, 60, 62, 66]], ROOT: [31, 31, 27, 27, 31, 31, 36, 38],
-        kick: '1000000010100000', kickB: '1000000010100100', clapMin: 0.45, rifA: [0, _, _, 0, _, _, 7, _, _, _, 10, _, 12, _, _, _], rifB: [0, _, _, 0, _, _, 7, _, _, 10, _, 12, _, 10, 7, _], sat: 0, arp: 0, stab: [], stabAlways: 0, leadW: 'sine', sw: 0.3, sn: 1,
-        lead: [L1, L2, [[0, 87, 6], [6, 86, 2], [8, 82, 4], [12, 79, 4]], [[0, 77, 4], [4, 79, 12]], L1, L2, [[0, 87, 6], [6, 84, 2], [8, 82, 4], [12, 84, 4]], [[0, 86, 4], [4, 81, 4], [8, 78, 8]]] }], // g-funk
+      radio: RADIO.canal,
       th: { decor: 'canal', fog: 0xe89060, fogD: [160, 1700], sky: [[0, '#3d2a5c'], [0.24, '#3d2a5c'], [0.25, '#7a4078'], [0.36, '#7a4078'], [0.37, '#d85a50'], [0.44, '#d85a50'], [0.45, '#ff9a4a'], [0.49, '#ff9a4a'], [0.5, '#e89060'], [1, '#e89060']], stars: 0,
         astre: { dir: [-0.85, 0.11, 0.35], col: '#fff4c0', ombre: '#fff4c0', taille: 340 }, hemi: [0xb898c8, 0xb8ad9a, 0.85], sun: [0xffa860, 0.9], phares: 0.4, bloom: 0.03, scan: 0.05,
         murH: 1.3, route: ['#7a7066', '#867c70', '#f4f0e0', '#2aa39a', '#e83f8c', '#f4f0e0', true], mur: ['#2a2030', '#f4f0e0', '#e83f8c', '#1a1420'], depart: [0xff7a3d, 0x3d2a5c, '#f4f0e0'],

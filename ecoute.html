@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banc d'écoute — Ville à plein régime</title>
+<style>
+  body { margin: 0; padding: 16px; background: #0b0b10; color: #e8e8e4; font: 15px/1.45 system-ui, sans-serif; }
+  main { max-width: 860px; margin: auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; } h2 { font-size: 15px; margin: 22px 0 8px; color: #fcee0a; text-transform: uppercase; letter-spacing: .06em; }
+  p { margin: 4px 0 10px; color: #a8a8b4; }
+  button, select { font: inherit; color: inherit; background: #1c1c28; border: 1px solid #3a3a4c; border-radius: 6px; padding: 7px 12px; margin: 0 6px 6px 0; cursor: pointer; }
+  button:hover { border-color: #00f0ff; } button.on { background: #00505a; border-color: #00f0ff; }
+  button small { display: block; color: #a8a8b4; font-size: 11px; }
+  label { display: inline-flex; align-items: center; gap: 8px; margin: 0 16px 8px 0; }
+  .fam label { display: flex; } .fam span.n { width: 190px; } .fam output { width: 44px; font-variant-numeric: tabular-nums; color: #fcee0a; font-weight: 600; }
+  input[type=range] { width: 220px; accent-color: #00f0ff; }
+  table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; } td, th { padding: 3px 10px; border-bottom: 1px solid #2a2a38; text-align: right; } td:first-child, th:first-child { text-align: left; }
+  #voile { position: fixed; inset: 0; background: rgba(8, 8, 12, .92); display: grid; place-items: center; } #voile button { font-size: 20px; padding: 16px 28px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Banc d'écoute</h1>
+<p>Tout ce que le jeu fait entendre, sans conduire. Les curseurs de volume affichent leur valeur : dictez-les pour qu'ils deviennent les réglages du jeu (1,00 = réglage actuel).</p>
+
+<h2>Volumes par famille</h2>
+<div class="fam" id="fam"></div>
+
+<h2>Carte</h2>
+<div id="cartes"></div>
+
+<h2>Musique</h2>
+<div id="stations"></div>
+<label><input type="checkbox" id="plein"> secteur chaud (arrangement plein)</label>
+<label><input type="checkbox" id="glisse"> en glisse (ligne acide)</label>
+<label><input type="checkbox" id="tunnel"> dans un tunnel</label>
+<label><input type="checkbox" id="pause"> jeu en pause</label><br>
+<label>vitesse <input type="range" id="vit" min="0" max="1" step="0.01" value="0.7"><output></output></label>
+
+<h2>Ambiance du lieu</h2>
+<p>Elle joue en continu sous le reste. Bouton « seul » de la famille Ambiance pour l'isoler ; les événements (grillons, oiseaux, corne de navire, hélicoptère, sirène) reviennent au hasard.</p>
+<button data-fx="evenement">Événement du lieu maintenant</button><button data-fx="tonnerre">Tonnerre</button>
+
+<h2>Bruitages</h2>
+<label>régime moteur <input type="range" id="rpm" min="0.1" max="1" step="0.01" value="0.3"><output></output></label>
+<label><input type="checkbox" id="gaz"> gaz</label><br>
+<label>angle de glisse (dérapage) <input type="range" id="slide" min="0" max="1" step="0.01" value="0"><output></output></label><br>
+<button data-fx="choc">Choc</button><button data-fx="grosChoc">Gros choc</button><button data-fx="frottement">Frottement (maintenir)</button><button data-fx="boost">Boost</button>
+<button data-fx="rapport">Passage de rapport</button><button data-fx="petarade">Pétarade (lever de pied)</button><button data-fx="bip">Bip du décompte</button><button data-fx="depart">Départ</button><button data-fx="record">Record</button><button data-fx="pasRecord">Tour sans record</button>
+
+<h2>Niveaux mesurés</h2>
+<p>Rendu hors ligne de chaque source seule, sur 8 s, à la sortie du jeu. RMS et crête en dB pleine échelle (0 = écrêtage).</p>
+<button id="mesurer">Mesurer la carte affichée</button><button id="mesurerTout">Mesurer les 5 cartes</button>
+<div id="mesures"></div>
+</main>
+<div id="voile"><button id="go">Allumer le son</button></div>
+
+<script src="cartes.js"></script>
+<script src="samples.js"></script>
+<script src="audio.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id), FAM = { mus: 'Musique', mot: 'Moteur', pneu: 'Pneus (dérapage)', choc: 'Chocs, frottement, boost, bips', amb: 'Ambiance et vent' };
+  let M = CARTE, menu = true, solo = null;
+  const pulse = {}, held = {}; // déclencheurs d'une image, boutons maintenus
+  const etat = { plein: false, glisse: false, tunnel: false, pause: false, gaz: false, vit: 0.7, rpm: 0.3, slide: 0 };
+  // l'état de course simulé, au format de SON.frame : c'est le vrai code du jeu qui joue
+  const frameState = (s = etat, p = pulse, h = held) => ({
+    state: s.pause ? 'pause' : menu ? 'title' : 'race', T: { h0: 500, h1: 700, n: 1000 }, hot: s.plein ? 1 : 0, tun: s.tunnel ? 1 : 0,
+    car: { vl: s.slide ? 4 + 14 * s.slide : 0, boost: p.boost ? 1 : 0, idx: s.plein ? 600 : 0, dist: 1, drift: s.glisse, rub: h.frottement ? 1 : 0 },
+    r: s.vit, sp: s.vit * 80, gas: p.petarade ? 0 : s.gaz || p.gazAvant ? 1 : 0, hit: p.grosChoc ? 12 : p.choc ? 6 : 0, up: !!p.rapport,
+    rpm: p.petarade || p.gazAvant ? 0.9 : s.rpm, load: s.gaz ? 1 : 0, spool: p.petarade ? 1 : s.rpm, stun: 0 });
+  setInterval(() => { // setInterval et non requestAnimationFrame : continue quand la fenêtre est masquée
+    if (!SON.ac || !SON.live) return; // pas pendant une mesure hors ligne
+    if (pulse.petarade === 1) { pulse.petarade = 0; pulse.gazAvant = 1; SON.frame(1 / 60, frameState()); pulse.gazAvant = 0; pulse.petarade = 2; } // une image plein gaz, puis le lever de pied
+    SON.frame(1 / 60, frameState()); for (const k in pulse) pulse[k] = 0;
+  }, 16);
+
+  function volumes() { for (const k in FAM) { const v = +$('v-' + k).value; $('o-' + k).textContent = v.toFixed(2).replace('.', ','); SON.volume(k, solo && solo !== k ? 0 : v); $('s-' + k).className = solo === k ? 'on' : ''; } }
+  for (const k in FAM) $('fam').insertAdjacentHTML('beforeend', `<label><span class="n">${FAM[k]}</span><input type="range" id="v-${k}" min="0" max="2" step="0.05" value="1"><output id="o-${k}"></output><button id="s-${k}">seul</button></label>`);
+  for (const k in FAM) { $('v-' + k).oninput = volumes; $('s-' + k).onclick = e => { e.preventDefault(); solo = solo === k ? null : k; volumes(); }; }
+
+  function stations() {
+    $('cartes').innerHTML = CARTES.map(c => `<button data-c="${c.id}" class="${c === M ? 'on' : ''}">${c.nom}</button>`).join('');
+    $('stations').innerHTML = `<button data-s="-1" class="${menu ? 'on' : ''}">Musique de menu<small>boucle calme, couleur de la carte</small></button>` +
+      M.radio.map((s, i) => `<button data-s="${i}" class="${!menu && SON.station === i ? 'on' : ''}">${s.name} ${s.fq}<small>${s.genre.toLowerCase()} · ${s.bpm} bpm</small></button>`).join('');
+  }
+  $('cartes').onclick = e => { const id = e.target.closest('button')?.dataset.c; if (!id) return; M = CARTES.find(c => c.id === id); SON.carte(M); stations(); };
+  $('stations').onclick = e => { const b = e.target.closest('button'); if (!b) return; const i = +b.dataset.s; menu = i < 0; if (!menu) SON.setStation(i); stations(); };
+  for (const id of ['plein', 'glisse', 'tunnel', 'pause', 'gaz']) $(id).onchange = e => { etat[id] = e.target.checked; };
+  for (const id of ['vit', 'rpm', 'slide']) { const el = $(id), out = el.nextElementSibling; (el.oninput = () => { etat[id] = +el.value; out.textContent = (+el.value).toFixed(2).replace('.', ','); })(); }
+  const FX = { tonnerre: () => SON.tonnerre(), bip: () => SON.beep(440), depart: () => { SON.beep(880); SON.crash(); }, record: () => SON.stinger(true), pasRecord: () => SON.stinger(false), evenement: () => SON.evenement() };
+  for (const b of document.querySelectorAll('[data-fx]')) { const k = b.dataset.fx;
+    b.onpointerdown = () => { held[k] = 1; FX[k] ? FX[k]() : pulse[k] = 1; }; b.onpointerup = b.onpointerleave = () => { held[k] = 0; }; }
+  $('go').onclick = () => { SON.init(); volumes(); stations(); $('voile').remove(); };
+
+  // mesure : chaque source seule dans un contexte hors ligne, piloté pas à pas par le même SON.frame
+  const dB = v => v > 1e-6 ? (20 * Math.log10(v)).toFixed(1) : '-inf';
+  async function rendre(carte, seul, s, opt = {}) {
+    const sr = 44100, dur = 8, ctx = new OfflineAudioContext(2, sr * dur, sr), saved = { menu, station: SON.station };
+    SON.carte(carte); SON.init(ctx); await SON.pret; menu = !!opt.menu; if (opt.station != null) SON.setStation(opt.station);
+    for (const k in FAM) SON.volume(k, !seul || seul === k ? 1 : 0);
+    const st = Object.assign({ plein: false, glisse: false, tunnel: false, pause: false, gaz: false, vit: 0.7, rpm: 0.3, slide: 0 }, s);
+    const pas = t => { const p = {}; if (opt.chocs && Math.round(t * 20) % 10 === 0) p.grosChoc = 1; for (let i = 0; i < 3; i++) SON.frame(1 / 60, frameState(st, i ? {} : p, opt.held || {})); SON.pump(); };
+    pas(0); for (let t = 0.05; t < dur; t += 0.05) ctx.suspend(t).then(() => { pas(t); ctx.resume(); });
+    const buf = await ctx.startRendering(); let sum = 0, peak = 0, n = 0;
+    for (let c = 0; c < 2; c++) { const x = buf.getChannelData(c); for (let i = sr * 2; i < x.length; i++) { sum += x[i] * x[i]; peak = Math.max(peak, Math.abs(x[i])); n++; } } // les 2 premières secondes (attaques, filtres qui s'ouvrent) sont écartées
+    menu = saved.menu; return { rms: dB(Math.sqrt(sum / n)), crete: dB(peak) };
+  }
+  async function mesurer(carte) {
+    const L = [];
+    const add = async (nom, seul, s, opt) => L.push(Object.assign({ carte: carte.id, source: nom }, await rendre(carte, seul, s, opt)));
+    for (let i = 0; i < carte.radio.length; i++) { const n = carte.radio[i].genre.toLowerCase();
+      await add('musique ' + n + ', léger', 'mus', { vit: 0.6 }, { station: i }); await add('musique ' + n + ', plein', 'mus', { plein: true, vit: 0.9 }, { station: i }); }
+    await add('musique de menu', 'mus', {}, { menu: true });
+    await add('moteur au ralenti', 'mot', { rpm: 0.15, vit: 0 }); await add('moteur plein gaz, haut régime', 'mot', { rpm: 0.95, gaz: true });
+    await add('dérapage à fond', 'pneu', { slide: 1, vit: 0.8 }); await add('dérapage léger', 'pneu', { slide: 0.3, vit: 0.8 });
+    await add('frottement contre le mur', 'choc', { vit: 0.8 }, { held: { frottement: 1 } }); await add('gros chocs répétés', 'choc', { vit: 0.8 }, { chocs: 1 });
+    await add("ambiance à l'arrêt", 'amb', { vit: 0 }); await add('ambiance + vent à fond', 'amb', { vit: 1 });
+    for (let i = 0; i < carte.radio.length; i++) await add('TOUT ENSEMBLE, pire cas, ' + carte.radio[i].genre.toLowerCase(), null, { plein: true, vit: 1, rpm: 0.95, gaz: true, slide: 1, glisse: true, tunnel: !!carte.tun }, { station: i, chocs: 1, held: { frottement: 1 } });
+    return L;
+  }
+  async function lancer(cartes) {
+    $('mesures').textContent = 'Mesure en cours…'; const L = [], m0 = M, snap = Object.entries(localStorage).filter(([k]) => k.startsWith('vpr.radio')); // la mesure ne doit pas changer la station mémorisée
+    for (const c of cartes) L.push(...await mesurer(c));
+    for (const k of Object.keys(localStorage)) if (k.startsWith('vpr.radio')) localStorage.removeItem(k); for (const [k, v] of snap) localStorage.setItem(k, v);
+    SON.carte(m0); SON.init(); volumes(); stations(); window.__mesures = L;
+    $('mesures').innerHTML = '<table><tr><th>carte</th><th>source</th><th>RMS (dB)</th><th>crête (dB)</th></tr>' + L.map(l => `<tr><td>${l.carte}</td><td>${l.source}</td><td>${l.rms}</td><td>${l.crete}</td></tr>`).join('') + '</table>';
+    return L;
+  }
+  $('mesurer').onclick = () => lancer([M]); $('mesurerTout').onclick = () => lancer(CARTES);
+  window.__banc = { lancer, mesurer, rendre };
+  stations();
+})();
+</script>
+</body>
+</html>
