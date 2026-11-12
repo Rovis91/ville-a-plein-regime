@@ -30,7 +30,7 @@
   // pre / fx / fin : GLSL de la passe finale — avant lecture (u = coordonnée), sur la couleur c de la scène, puis après le HUD. Aucun flou, aucun halo.
   const STYLES = {
     fin: { h: 540, fx: 'c = floor(c * 64. + bayer(v / px) * .35 + .5) / 64.;' },
-    net: { h: 0 },
+    net: { h: 0, brut: 1 }, // la scène et le HUD, rien d'autre : pas même la vignette
     encre: { h: 0, z: 1, fx: 'c = aplat(pow(c, vec3(.72)), 6.) + .03; c *= 1. - .95 * smoothstep(.007, .018, arete(u, px * 1.5));' },
     demiteinte: { h: 540, fx: `float l = sqrt(lum(c)) * 3.2, i = min(floor(l), 2.); vec2 g = mat2(.707, -.707, .707, .707) * v * ecr / (ecr.y / 200.);
       float pt = smoothstep(-.08, .08, l - i - length(fract(g) - .5) * 1.414);
@@ -118,7 +118,7 @@
         vec2 u = v; ${ST.pre || ''}
         vec3 c = texture2D(t, u).rgb; ${ST.fx || ''}
         vec4 hd = texture2D(h, u); c = mix(c, hd.rgb, hd.a); ${ST.fin || ''}
-        vec2 d = v - vec2(.5, .42); c *= 1. - .35 * dot(d, d);
+        ${ST.brut ? '' : 'vec2 d = v - vec2(.5, .42); c *= 1. - .35 * dot(d, d);'}
         gl_FragColor = vec4(c, 1.);
       }`;
   }
