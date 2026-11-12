@@ -25,6 +25,30 @@
   const TUN_AMB = 0.55; // tunnels : part de lumière ambiante sur sol, parois et plafond ; le reste vient des luminaires
   const TREMBLE = 0;    // tremblement des sommets façon première console 3D : pas de la grille en pixels, 0 = aucun
 
+  // ---------- styles visuels à comparer : ?style=<nom> (sans paramètre : rendu actuel, inchangé) ; planche des captures dans styles.html ----------
+  // h : lignes de la cible interne (0 = celles de l'écran) ; z : la passe lit la profondeur (contours) ; tremble / affine : sommets et textures façon console 32 bits
+  // pre / fx / fin : GLSL de la passe finale — avant lecture (u = coordonnée), sur la couleur c de la scène, puis après le HUD. Aucun flou, aucun halo.
+  const STYLES = {
+    fin: { h: 540, fx: 'c = floor(c * 64. + bayer(v / px) * .35 + .5) / 64.;' },
+    net: { h: 0 },
+    encre: { h: 0, z: 1, fx: 'c = aplat(pow(c, vec3(.72)), 6.) + .03; c *= 1. - .95 * smoothstep(.007, .018, arete(u, px * 1.5));' },
+    demiteinte: { h: 540, fx: `float l = sqrt(lum(c)) * 3.2, i = min(floor(l), 2.); vec2 g = mat2(.707, -.707, .707, .707) * v * ecr / (ecr.y / 200.);
+      float pt = smoothstep(-.08, .08, l - i - length(fract(g) - .5) * 1.414);
+      vec3 enc = mix(i < .5 ? pal[0] : i < 1.5 ? pal[1] : pal[2], i < .5 ? pal[1] : i < 1.5 ? pal[2] : pal[3], pt);
+      c = c.r - max(c.g, c.b) > .22 ? pal[4] * (.55 + .45 * pt) : enc;` },
+    cathodique: { h: 360, pre: 'u = u * 2. - 1.; u *= 1. + .028 * u.yx * u.yx; u = u * .5 + .5;',
+      fin: `c *= 1.45 * (1. - .55 * smoothstep(.22, .5, abs(fract(u.y / px.y) - .5)));
+      c *= mix(vec3(.72), vec3(1.2), vec3(equal(vec3(mod(floor(v.x * ecr.x), 3.)), vec3(0., 1., 2.))));
+      if (u != clamp(u, 0., 1.)) c = vec3(0.);` },
+    console32: { h: 360, tremble: 1, affine: .3, fx: 'c = floor(c * 32. + bayer(v / px) * .5 + .5) / 32.;' },
+    lisere: { h: 0, z: 1, fx: `float e = smoothstep(.007, .018, arete(u, px * 1.5)); c = aplat(c, 9.);
+      c = mix(c, min(c * 2.6 + vec3(.1, .2, .26), 1.), e * (.4 + .6 * smoothstep(0., .012, W(u))));` },
+  };
+  const ST = STYLES[new URLSearchParams(location.search).get('style')];
+  // demi-teinte : quatre encres de la plus sombre à la plus claire, et une encre de signal (feux, néons rouges), par carte
+  const PAL = { ville: [0x0a0614, 0x3a1a6a, 0xff3a8a, 0xfff0c8, 0xff2a3a], touge: [0x06100c, 0x1c4a3a, 0x7ab890, 0xfff2c8, 0xff5030], wangan: [0x060a16, 0x1a3a6a, 0xf0a040, 0xfff4d8, 0xff3030],
+    paris: [0x100c14, 0x4a3a5a, 0xd89a70, 0xfff0d8, 0xe83a30], canal: [0x0c0a12, 0x5a2a4a, 0xf08a50, 0xfff0c0, 0xff3a40] }[M.id];
+
   // ---------- rendu basse définition : scène → cible 270p → passe finale (flou de vitesse, HUD, scanlines) ----------
   const renderer = new THREE.WebGLRenderer({ antialias: false });
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.BasicShadowMap;
@@ -60,8 +84,32 @@
   });
   const postScene = new THREE.Scene(), postCam = new THREE.Camera(), quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post);
   quad.frustumCulled = false; postScene.add(quad);
-  let HW = 480; const HH = 270;
-  const resize = () => { HW = clamp(Math.round(HH * innerWidth / (innerHeight || 1)), 360, 960); renderer.setSize(HW, HH, false); rt.setSize(HW, HH); hudC.width = HW; hudC.height = HH; post.uniforms.px.value.set(1 / HW, 1 / HH); cam.aspect = HW / HH; cam.updateProjectionMatrix(); };
+  if (ST) { // passe finale des styles : la scène telle quelle, l'effet du style, le HUD (toujours sur sa grille de 270 lignes), une vignette légère
+    if (ST.z) { rt.depthTexture = new THREE.DepthTexture(1, 1); rt.depthTexture.type = THREE.UnsignedIntType; }
+    Object.assign(post.uniforms, { dz: { value: rt.depthTexture }, ecr: { value: new THREE.Vector2(1, 1) }, pal: { value: PAL.map(c => new THREE.Color(c)) } });
+    post.fragmentShader = `uniform sampler2D t, h, dz; uniform vec2 px, ecr; uniform vec3 pal[5]; varying vec2 v;
+      float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); }
+      float bayer(vec2 q){ return b2(.5 * q) * .25 + b2(q) - .5; }
+      float lum(vec3 c){ return dot(c, vec3(.3, .59, .11)); }
+      vec3 aplat(vec3 c, float n){ float g = sqrt(max(lum(c), 1e-4)), a = (floor(g * n) + .5) / n; return c * (a * a / (g * g)); } // paliers de clarté, teinte gardée
+      float W(vec2 u){ return 1. - texture2D(dz, u).x; } // proportionnel à 1 / distance : affine à l'écran sur une facette plane
+      float arete(vec2 u, vec2 e){ float w = W(u); // courbure de W : nulle sur une facette, forte à une silhouette ou à un pli
+        return (abs(W(u + vec2(e.x, 0.)) + W(u - vec2(e.x, 0.)) - 2. * w) + abs(W(u + vec2(0., e.y)) + W(u - vec2(0., e.y)) - 2. * w)) / max(w, 1e-6); }
+      void main(){
+        vec2 u = v; ${ST.pre || ''}
+        vec3 c = texture2D(t, u).rgb; ${ST.fx || ''}
+        vec4 hd = texture2D(h, u); c = mix(c, hd.rgb, hd.a); ${ST.fin || ''}
+        vec2 d = v - vec2(.5, .42); c *= 1. - .35 * dot(d, d);
+        gl_FragColor = vec4(c, 1.);
+      }`;
+  }
+  let HW = 480, RW = 480, RH = 270; const HH = 270; // HW × HH : grille du HUD ; RW × RH : cible de la scène (la même sans style)
+  const resize = () => {
+    HW = clamp(Math.round(HH * innerWidth / (innerHeight || 1)), 360, 960);
+    const OW = Math.round(innerWidth * devicePixelRatio), OH = Math.round(innerHeight * devicePixelRatio), k = ST ? (ST.h || OH) / HH : 1; RW = Math.round(HW * k); RH = Math.round(HH * k);
+    if (ST) { renderer.setSize(OW, OH, false); post.uniforms.ecr.value.set(OW, OH); } else renderer.setSize(HW, HH, false);
+    rt.setSize(RW, RH); hudC.width = HW; hudC.height = HH; post.uniforms.px.value.set(1 / RW, 1 / RH); cam.aspect = HW / HH; cam.updateProjectionMatrix();
+  };
   addEventListener('resize', resize); resize();
 
   const tex = (w, h, draw) => {
@@ -107,7 +155,11 @@
       lw = instanceMatrix * lw;
     #endif
     vLw = (modelMatrix * lw).xyz;
-    if (uRes.x > 0.) gl_Position.xy = floor(gl_Position.xy / gl_Position.w * uRes + .5) / uRes * gl_Position.w; }
+    if (uRes.x > 0.) gl_Position.xy = floor(gl_Position.xy / gl_Position.w * uRes + .5) / uRes * gl_Position.w;
+    #ifdef USE_UV
+      vAf = vec3(vUv, 1.) * gl_Position.w;
+    #endif
+    }
     `;
   const LU_H = `#define NL ${NL}
     uniform vec4 uLP[NL]; uniform vec3 uLC[NL]; uniform vec3 uHP, uHD, uHC, uSunD, uSunC, uSky; uniform mat4 uBox; uniform float uGloss, uRetro; uniform int uN; varying vec3 vLw;
@@ -149,8 +201,10 @@
     const lit = m.fog !== false && m.blending === THREE.NormalBlending; // le ciel et les plans additifs ne reçoivent rien, mais tremblent avec le reste
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, LUX, { uGloss: { value: m.userData.gloss || 0 }, uRetro: { value: m.userData.retro || 0 } });
-      sh.vertexShader = 'varying vec3 vLw; uniform vec2 uRes;\n' + sh.vertexShader.replace('#include <fog_vertex>', LU_V + '#include <fog_vertex>');
+      sh.vertexShader = 'varying vec3 vLw, vAf; uniform vec2 uRes;\n' + sh.vertexShader.replace('#include <fog_vertex>', LU_V + '#include <fog_vertex>');
       if (lit) sh.fragmentShader = LU_H + sh.fragmentShader.replace('#include <fog_fragment>', LU_F + '#include <fog_fragment>');
+      // textures sans correction de perspective : vAf = uv × w, interpolé puis divisé par w interpolé, redonne l'interpolation affine à l'écran
+      if (ST && ST.affine) sh.fragmentShader = 'varying vec3 vAf;\n' + sh.fragmentShader.replace('#include <map_fragment>', THREE.ShaderChunk.map_fragment.replace('vUv', `mix(vUv, vAf.xy / vAf.z, ${ST.affine})`));
     };
     m.customProgramCacheKey = () => 'lu' + lit;
   };
@@ -735,7 +789,7 @@
   }
 
   const ROUGE = new THREE.Color(0xff1828), PHARE = new THREE.Color(0xfff2d0), NEONC = new THREE.Color(L.neon || 0), BOITE = new THREE.Matrix4().makeScale(2.35, 0.64, 1.02).setPosition(0, 0.8, 0); // BOITE : englobe toute la caisse, pour l'ombre (un point dedans ou dessus n'est pas ombré)
-  let lumIdx = -1;
+  let lumIdx = -1; const TRB = ST && ST.tremble || TREMBLE;
   function frame(now) {
     const dt = state === 'pause' ? 0 : clamp((now - last) / 1000 || 0, 0, 0.1); last = Math.max(last, now); // en pause le temps s'arrête, l'image reste
     if (state === 'count') {
@@ -798,7 +852,7 @@
     const cp = Math.cos(pitch);
     LUX.uHP.value.set(car.x + fx * 1.9, carY + 0.62, car.z + fz * 1.9); LUX.uHD.value.set(fx * cp, Math.sin(pitch), fz * cp);
     carG.updateMatrixWorld(); LUX.uBox.value.copy(carG.matrixWorld).multiply(BOITE).invert();
-    LUX.uSunC.value.copy(SUNC).multiplyScalar(1 - lm); LUX.uSky.value.copy(scene.fog.color); LUX.uRes.value.set(TREMBLE ? HW / 2 / TREMBLE : 0, HH / 2 / TREMBLE);
+    LUX.uSunC.value.copy(SUNC).multiplyScalar(1 - lm); LUX.uSky.value.copy(scene.fog.color); LUX.uRes.value.set(TRB ? RW / 2 / TRB : 0, RH / 2 / TRB);
     let nl = 0;
     const put = (x, y, z, c, r, k) => { if (nl < NL) { LUX.uLP.value[nl].set(x, y, z, r); LUX.uLC.value[nl++].copy(c).multiplyScalar(k * LUM_GAIN); } };
     put(car.x - fx * 4.4, carY + 0.35, car.z - fz * 4.4, ROUGE, 9, NUIT * (inp.brake ? 2.4 : 0.45)); // feux arrière : ils teintent ce qui suit, davantage au freinage
@@ -848,5 +902,5 @@
   }
   const loop = now => { requestAnimationFrame(loop); frame(now); };
   requestAnimationFrame(loop);
-  window.__g = { frame, start, M, scene, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
+  window.__g = { frame, start, M, T, scene, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
 })();

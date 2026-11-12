@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Styles visuels — planche comparée</title>
+<style>
+  body { margin: 0; padding: 16px; background: #08080c; color: #e8e8e4; font: 14px/1.4 system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 4px; } p { margin: 0 0 14px; color: #a8a8b4; max-width: 110ch; }
+  table { border-collapse: collapse; width: 100%; } th, td { padding: 6px; vertical-align: top; text-align: left; }
+  thead th { color: #a8a8b4; font-weight: 500; } tbody tr { border-top: 1px solid #24242e; }
+  th.s { width: 230px; font-weight: 400; } th.s b { font-size: 16px; color: #fcee0a; display: block; } th.s small { color: #a8a8b4; display: block; margin: 4px 0; }
+  a { color: #3ae0ff; } img { width: 100%; aspect-ratio: 16 / 9; display: block; image-rendering: pixelated; } /* le témoin (480 × 270) s'agrandit en pixels francs, comme en jeu */
+</style>
+</head>
+<body>
+<h1>Styles visuels — 8 propositions, 4 points de vue</h1>
+<p>Même scène low poly, même éclairage : seules changent la résolution interne et la passe finale. Aucun flou, aucun halo dans les sept propositions.
+Captures 1920 × 1080 (clic = taille réelle), pilote auto, mêmes instants d'un style à l'autre. Temps d'image : carte ville en sortie de tunnel, 1920 × 1080,
+300 images avec <code>gl.finish</code>, carte graphique intégrée ; le témoin est à 3,9 ms — les écarts sont dans le bruit de mesure (±0,5 ms), le calcul hors rendu domine.</p>
+<table>
+<thead><tr><th>Style</th><th>Ville — sortie de tunnel</th><th>Touge — épingle</th><th>Wan-9 — pont</th><th>Paris — tunnel</th></tr></thead>
+<tbody id="t"></tbody>
+</table>
+<script>
+  const STYLES = [
+    ['actuel', 'Témoin : 270 lignes, 32 niveaux tramés, flou de vitesse et halo.', '3,9 ms'],
+    ['fin', 'Le même en 540 lignes, 64 niveaux, trame à peine visible.', '3,7 ms'],
+    ['net', 'Low poly en pleine résolution, aplats bruts, ni trame ni quantification.', '4,4 ms'],
+    ['encre', 'Pleine résolution, ombres relevées en paliers, contours noirs sur silhouettes et arêtes.', '4,1 ms'],
+    ['demiteinte', '540 lignes, points de trame d\'impression, 4 encres + 1 encre de signal par carte.', '3,6 ms'],
+    ['cathodique', '360 lignes, lignes de balayage, masque RVB, légère courbure ; pixels nets.', '4,0 ms'],
+    ['console32', '360 lignes, sommets calés sur la grille, textures à demi sans correction, 32 niveaux.', '3,3 ms'],
+    ['lisere', 'Libre : pleine résolution, paliers de lumière, liseré clair sur silhouettes et arêtes.', '4,2 ms'],
+  ], CARTES = ['ville', 'touge', 'wangan', 'paris'];
+  document.getElementById('t').innerHTML = STYLES.map(([s, d, c]) => `<tr><th class="s"><b>${s}</b>${d}<small>Temps d'image : ${c}</small>` +
+    CARTES.map(m => `<a href="index.html?carte=${m}${s === 'actuel' ? '' : '&style=' + s}">${m}</a>`).join(' · ') + '</th>' +
+    CARTES.map(m => `<td><a href="styles/${s}-${m}.jpg"><img src="styles/${s}-${m}.jpg" alt="${s}, ${m}"></a></td>`).join('') + '</tr>').join('');
+</script>
+</body>
+</html>
