@@ -5,7 +5,7 @@
   const M = G.CARTE, W = M.W, TOP = 55; // demi-largeur de route (m) ; vitesse de référence (m/s) pour le braquage et les effets visuels
   const GRIP = M.grip; // adhérence latérale maxi (m/s²) : 44 sur la ville (arcade : à fond on passe tout ce qui fait plus de 70 m de rayon), 15 à 24 ailleurs
   const CARD = M.car; // mécanique : fiche technique de la voiture de la carte
-  const WALL_RUB = 0.35, WALL_SOFT = 0.2, WALL_LOSS = 3, WALL_HARD = 0.45; // murs : frein du frottement (1/s) ; sinus de l'angle d'arrivée sous lequel ça gratte sans perte, et au-dessus duquel le moteur coupe
+  const WALL_RUB = 0.35, WALL_SOFT = 0.2, WALL_LOSS = 7, WALL_HARD = 0.45, WALL_MU = 10; // murs : frein du frottement (1/s) ; sinus de l'angle d'arrivée sous lequel ça gratte sans perte ; pente de la perte au-delà (choc franc) ; sinus au-dessus duquel le moteur coupe ; frottement du mur extérieur d'un virage (part de la force centripète qu'il fournit à la place des pneus, perdue en vitesse)
   const torque = rpm => { const x = Math.max(0, Math.min(8, rpm / 1000)), i = Math.min(7, x | 0); return CARD.tq[i] + (CARD.tq[i + 1] - CARD.tq[i]) * (x - i); };
   // Points de contrôle (x,z) en mètres, sens horaire = virages à droite. Départ en [0]. HGT = altitude de chaque point.
   const SC = M.sc, HGT = M.pts.map(p => p[2]), PTS = M.pts.map(p => [p[0] * SC, p[1] * SC]);
@@ -26,10 +26,22 @@
     const len = curve.getLength(), n = Math.round(len / 2), P = curve.getSpacedPoints(n), S = [];
     for (let i = 0; i < n; i++) {
       const p = P[i], q = P[i + 1], dx = q.x - p.x, dz = q.z - p.z, l = Math.hypot(dx, dz);
-      S.push({ x: p.x, y: p.y, z: p.z, tx: dx / l, tz: dz / l, k: 0, sl: (q.y - p.y) / l }); // sl = pente
+      S.push({ x: p.x, y: p.y, z: p.z, tx: dx / l, tz: dz / l, k: 0, sl: (q.y - p.y) / l, dl: 0, kl: 0 }); // sl = pente ; dl, kl = écart au centre et courbure de la trajectoire du pilote automatique
     }
     // courbure signée (>0 = virage à droite), lissée sur ±3 échantillons
-    S.forEach((s, i) => { const a = S[(i - 3 + n) % n], b = S[(i + 3) % n]; s.k = (a.tx * b.tz - a.tz * b.tx) / (6 * len / n); });
+    S.forEach((s, i) => { const a = S[(i - 3 + n) % n], b = S[(i + 3) % n]; s.k = s.kl = (a.tx * b.tz - a.tz * b.tx) / (6 * len / n); });
+    // cartes à épingles : la trajectoire du pilote automatique est la ligne de moindre courbure qui tient dans la route, à 2,1 m des murs (extérieur, corde, extérieur).
+    // Un point tous les 8 m, chacun ramené là où ses 4 voisins le voudraient pour que la ligne tourne le moins possible ; puis sa courbure, par le cercle passant par 3 points.
+    if (M.anticipe) {
+      const m = 4, N = Math.floor(n / m), D = new Float64Array(N), lim = W - 3.2, pt = (i, d) => { const s = S[(i + n) % n]; return [s.x - s.tz * d, s.z + s.tx * d]; }, pj = j => pt((j + N) % N * m, D[(j + N) % N]);
+      for (let it = 0; it < 6000; it++) for (let j = 0; j < N; j++) {
+        const s = S[j * m], a = pj(j - 1), b = pj(j + 1), a2 = pj(j - 2), b2 = pj(j + 2);
+        D[j] = clamp(-((4 * (a[0] + b[0]) - a2[0] - b2[0]) / 6 - s.x) * s.tz + ((4 * (a[1] + b[1]) - a2[1] - b2[1]) / 6 - s.z) * s.tx, -lim, lim);
+      }
+      S.forEach((s, i) => { const j = Math.floor(i / m) % N, f = i / m - Math.floor(i / m); s.dl = D[j] + (D[(j + 1) % N] - D[j]) * f; });
+      S.forEach((s, i) => { const a = pt(i - m, S[(i - m + n) % n].dl), b = pt(i, s.dl), c = pt(i + m, S[(i + m) % n].dl), ux = b[0] - a[0], uz = b[1] - a[1], vx = c[0] - b[0], vz = c[1] - b[1];
+        s.kl = 2 * (ux * vz - uz * vx) / (Math.hypot(ux, uz) * Math.hypot(vx, vz) * Math.hypot(c[0] - a[0], c[1] - a[1])); });
+    }
     const near = p => { let b = 0, bd = 1e9; S.forEach((s, i) => { const d = (s.x - p[0]) ** 2 + (s.z - p[1]) ** 2; if (d < bd) { bd = d; b = i; } }); return b; };
     const at = i => near(PTS[i]), TUN = M.tun || [0, 0];
     // tun : la carte a un tunnel, de t0 à t1 ; h0-h1 : secteur « chaud » pour la musique ; sp : les deux temps intermédiaires (indices d'échantillons)
@@ -49,7 +61,7 @@
     let fx = Math.cos(c.th), fz = Math.sin(c.th);
     let vf = c.vx * fx + c.vz * fz, vl = c.vz * fx - c.vx * fz;
     const sp = Math.abs(vf), hand = inp.hand && sp > 12;
-    // Glisse continue : sl = part de glisse (0 = accroche, 1 = pleine dérive), beta = angle de dérive.
+    // Glisse continue : sl = part de glisse (0 = accroche, 1 = pleine dérive).
     // Le braquage donne plus de rotation en glisse ; un couple de rappel ramène le nez vers la trajectoire,
     // donc l'angle de dérive se règle au volant et la voiture se redresse seule quand on lâche.
     const sl = clamp((Math.abs(vl) - 3) / 8, 0, 1);
@@ -118,7 +130,8 @@
     if (o > 0) {
       const sg = Math.sign(c.d), vn = (c.vx * nx + c.vz * nz) * sg;
       c.x -= nx * sg * o; c.z -= nz * sg * o; c.d = sg * L; c.rub = 1;
-      const sc = Math.exp(-WALL_RUB * dt); c.vx *= sc; c.vz *= sc; // frotter le mur freine en continu
+      // frotter le mur freine en continu ; et le mur extérieur d'un virage ne remplace pas les pneus : ce qu'il fait tourner au-delà de leur adhérence se paie en vitesse (rien le long d'un mur droit)
+      const v = Math.hypot(c.vx, c.vz), sc = Math.exp(-(WALL_RUB + WALL_MU * Math.max(0, -s.k * sg * v - g / Math.max(v, 1))) * dt); c.vx *= sc; c.vz *= sc;
       const rel = wrap(c.th - Math.atan2(s.tz, s.tx)), into = rel * sg > 0 && Math.abs(rel) < 1.5; // nez tourné vers le mur
       c.th -= rel * Math.min(1, (into ? 25 : 4) * dt); // le mur redresse la voiture : volant braqué vers lui, elle glisse le long au lieu de s'y planter
       if (vn > 0) {
@@ -137,7 +150,7 @@
   // lvl = niveau du pilote (1 = tour propre de référence ; plus bas = moins de gaz et virages plus lents).
   // others = voitures à éviter : il se décale pour doubler une voiture plus lente, ne se rabat pas tant qu'elle est à sa hauteur, et freine s'il est bloqué derrière.
   function autopilot(c, T, lvl = 1, others = []) {
-    const S = T.S, n = T.n, sp = Math.hypot(c.vx, c.vz), look = M.anticipe ? 4 + Math.floor(sp * 0.2) : 6 + Math.floor(sp * 0.35);
+    const S = T.S, n = T.n, sp = Math.hypot(c.vx, c.vz), look = M.anticipe ? 3 + Math.floor(sp * 0.1) : 6 + Math.floor(sp * 0.35);
     let off = 0, vcap = 1e9, best = 1e9;
     for (const o of others) {
       if (o === c) continue;
@@ -152,15 +165,14 @@
       vcap = g > 0 && Math.abs(want) > 5.5 ? so * 0.9 : g > 0 && Math.abs(c.d - o.d) < 2.4 && g * 2 - 7 < (sp * sp - so * so) / 28 ? so : 1e9;
     }
     const la = S[(c.idx + look) % n];
-    const e = wrap(Math.atan2(la.z + la.tx * off - c.z, la.x - la.tz * off - c.x) - c.th);
+    const e = wrap(Math.atan2(la.z + la.tx * (off || la.dl) - c.z, la.x - la.tz * (off || la.dl) - c.x) - c.th);
     let km = 0, va = 1e9;
     for (let j = 0; j < 8 + sp * 0.7; j++) km = Math.max(km, Math.abs(S[(c.idx + j) % n].k));
-    // cartes à épingles : vitesse permise = celle de chaque virage à venir, plus ce qu'on peut perdre en freinant d'ici là (10 m/s², 2 m par échantillon)
-    if (M.anticipe) for (let j = 0; j < 200; j++) va = Math.min(va, Math.sqrt(vturn(0.85, Math.abs(S[(c.idx + j) % n].k) + 1e-4) ** 2 + 40 * j));
+    // cartes à épingles : vitesse permise = celle de chaque virage de la trajectoire à venir, plus ce qu'on peut perdre en freinant d'ici là (10 m/s², 2 m par échantillon)
+    if (M.anticipe) for (let j = 0; j < 200; j++) va = Math.min(va, Math.sqrt(vturn(0.87, Math.abs(S[(c.idx + j) % n].kl) + 1e-4) ** 2 + 40 * j));
     const vt = Math.min(vcap, (M.anticipe ? va : vturn(1.5, km + 1e-4)) * lvl * (off ? 0.9 : 1)); // hors trajectoire, on passe moins vite
     const st = clamp(e * 3, -1, 1);
-    // en propulsion le pilote dose : moins de gaz tant que le volant est braqué, sinon l'arrière décroche en sortie d'épingle
-    return { steer: st, gas: sp < vt ? lvl * (CARD.rwd ? 1 - 0.75 * Math.min(1, Math.abs(st) * 1.5) : 1) : 0, brake: sp > vt + 3 ? 1 : 0, hand: false };
+    return { steer: st, gas: sp < vt ? lvl : 0, brake: sp > vt + 3 ? 1 : 0, hand: false };
   }
 
   // ---------- Course contre des adversaires IA ----------
