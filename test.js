@@ -1,4 +1,4 @@
-// node test.js — géométrie du circuit, tour complet au pilote auto, mécanique réaliste, glisse (déclenchement, tenue, rattrapage, boost), boîte manuelle.
+// node test.js — géométrie du circuit, tour complet au pilote auto, mécanique réaliste, murs, glisse (déclenchement, verrouillage, boost), boîte manuelle, course.
 const assert = require('assert');
 const THREE = require('./three.min.js');
 require('./sim.js');
@@ -49,34 +49,21 @@ for (const [deg, keep, steer] of [[6, 0.82, 0], [12, 0.72, 0], [6, 0.7, 1]]) { /
 // transfert de charge : à pleine vitesse, volant à fond, la voiture pivote plus vite au frein que sur les gaz, et au moins autant pied levé
 const lacet = (gas, brake) => { const c = newCar(T); run(c, I(0, 1), 8); run(c, I(1, gas, brake), 0.3); return c.yaw; };
 assert(lacet(0, 1) > 1.15 * lacet(1, 0) && lacet(0, 0) >= lacet(1, 0), `freiner ou lever le pied n'aide pas à tourner: ${lacet(1, 0)} / ${lacet(0, 0)} / ${lacet(0, 1)}`);
-// un tour mené en glissant (là où le pilote lèverait le pied en virage : coup de frein à main, puis volant tenu et gaz tant que ça glisse)
-// doit déclencher des boosts et rester aussi rapide que le tour propre (à 0,3 s près : la ville se passe presque à fond, la glisse y rapporte peu ; ailleurs elle gagne, voir test-cartes.js)
-c = newCar(T); let boosts = 0, pb = 0, dh = 0, td = 0; const st = {};
-while (c.dist < n && td < 180) {
-  let inp = autopilot(c, T); const sp = Math.hypot(c.vx, c.vz);
-  if (!st.until && !inp.gas && Math.abs(inp.steer) > 0.2 && sp > 30 && td > (st.cool || 0)) { st.until = td + 0.1; st.dir = Math.sign(inp.steer); st.hold = td + 0.5; st.cool = td + 1; }
-  if (st.until) { if (td < st.until) inp = I(st.dir, 1, 0, true); else if (td < st.hold && c.slide > 0.3) inp = I(st.dir, 1); else st.until = 0; }
-  step(c, inp, T, H); td += H; if (c.boost > 0 && pb <= 0) boosts++; pb = c.boost; if (c.hit > 3) dh++;
-}
-assert(boosts >= 1 && dh <= 1, `tour en glisse : ${boosts} boosts, ${dh} chocs`);
-assert(td <= t + 0.3, `le tour en glisse (${td}) doit être aussi rapide que le tour propre (${t})`);
-
 // glisse : braquer sans frein à main à vitesse moyenne ne décroche pas
 c = newCar(T); run(c, I(0, 1), 4); run(c, I(0.5, 1), 0.4);
 assert(!c.drift, 'décrochage sans raison');
-// frein à main + braquage -> dérive nette ; on relâche et on laisse le pilote redresser -> rattrapée en moins de 2 s
-c = newCar(T); run(c, I(0, 1), 8); run(c, I(1, 0, 0, true), 0.35);
+// frein à main tenu + volant -> glisse nette, verrouillée dans son sens ; frein à main relâché -> la glisse s'arrête tout de suite, avec un boost si elle a duré (tours en glisse : test-cartes.js)
+c = newCar(T); run(c, I(0, 1), 4); run(c, I(1, 1, 0, true), 0.1); run(c, I(-1, 1, 0, true), 0.6); // volant vers l'extérieur : elle ouvre mais continue de tourner du même côté
 const beta = Math.atan2(Math.abs(c.vl), Math.abs(c.vf)) * 180 / Math.PI;
 assert(c.drift && beta > 8 && beta < 60, 'angle de dérive hors plage: ' + beta);
-let rec = 0;
-while (c.drift && rec < 3) { step(c, autopilot(c, T), T, H); rec += H; }
-assert(rec < 2, 'glisse non rattrapable: ' + rec);
+assert(c.yaw > 0, 'le volant ne doit pas inverser la glisse');
+run(c, I(0, 1), H); assert(!c.drift && c.boost > 0, 'pas de boost en sortie de glisse');
 
 // boîte manuelle : en 1re la vitesse plafonne au rupteur (8000 tr/min = 72 km/h), et un rétrogradage abusif met en surrégime sans dépasser la zone rouge affichée
 c = newCar(T); c.manual = true; run(c, I(0, 1), 6);
 assert(c.gear === 0 && c.vf * 3.6 > 62 && c.vf * 3.6 < 76, 'rupteur de 1re mal placé: ' + c.vf * 3.6);
 
-console.log(`OK  longueur ${T.len | 0} m, rayon mini ${rmin | 0} m, tour auto ${t.toFixed(2)} s (à fond sans freiner : ${tf.toFixed(2)} s, ${fh} chocs), vmax ${(vmax * 3.6) | 0} km/h, 0-100 en ${t100.toFixed(1)} s, passages à ${shifts.join(' / ')} km/h, tour en glisse ${td.toFixed(2)} s (${boosts} boosts, ${dh} chocs), dérive ${beta | 0}°, rattrapage ${rec.toFixed(2)} s`);
+console.log(`OK  longueur ${T.len | 0} m, rayon mini ${rmin | 0} m, tour auto ${t.toFixed(2)} s (à fond sans freiner : ${tf.toFixed(2)} s, ${fh} chocs), vmax ${(vmax * 3.6) | 0} km/h, 0-100 en ${t100.toFixed(1)} s, passages à ${shifts.join(' / ')} km/h, dérive en glisse ${beta | 0}°`);
 
 // ---------- course : collisions, pilotes IA, classement ----------
 const fin = c => [c.x, c.z, c.vx, c.vz, c.th].every(Number.isFinite);
@@ -110,8 +97,8 @@ for (let i = 0; i < 1 / H; i++) { stepRace(R, I(0.15, 1), H); bump = Math.max(bu
 assert(bump > 0.5 && b.d > 2.5, 'le contact latéral doit pousser: ' + b.d);
 assert(a.vf > 36 && Math.hypot(b.vx, b.vz) > 36, 'le contact latéral ne doit pas arrêter: ' + a.vf);
 
-// le tour d'une voiture seule ne doit pas bouger quand on touche à la course (records vpr5.* comparables)
-assert(Math.abs(t - 44.17) < 0.01 && Math.abs(td - 44.15) < 0.01, `le tour solo a changé: ${t} / ${tf} / ${td}`);
+// le tour d'une voiture seule ne doit pas bouger quand on touche à la course (records comparables)
+assert(Math.abs(t - 42.58) < 0.01, `le tour solo a changé: ${t} / ${tf}`);
 // les 3 niveaux d'IA, seuls : du plus rapide au plus lent, tous derrière le tour propre, à moins de 2 s
 const laps = AI_LVL.map(lvl => { const c = newCar(T); let t = 0; while (c.dist < n && t < 180) { step(c, autopilot(c, T, lvl), T, H); t += H; assert(c.hit < 3, 'IA seule dans le mur'); } return t; });
 assert(laps.every((l, i) => l > t && l < t + 2 && (!i || l > laps[i - 1] + 0.2)), 'rythme des IA hors plage: ' + laps);

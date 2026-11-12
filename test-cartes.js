@@ -13,10 +13,10 @@ for (const M of CARTES) {
   assert(cross > 2 * W + 8, `${M.id} : la piste se recoupe (${cross})`);
   assert(T.sp[0] < T.sp[1] && T.h0 < T.h1 && (!T.tun || T.t0 < T.t1), `${M.id} : secteurs dans le désordre`);
   // deux tours au pilote automatique : le second, lancé, donne les chiffres
-  let c = newCar(T), t = 0, t1 = 0, hits = 0, vmax = 0, vmin = 1e9, slid = 0;
+  let c = newCar(T), t = 0, t1 = 0, hits = 0, vmax = 0, vmin = 1e9;
   while (c.dist < 2 * n && t < 900) {
     step(c, autopilot(c, T), T, H); t += H; assert(Math.abs(c.d) <= W && Number.isFinite(c.x));
-    if (c.dist >= n) { if (!t1) t1 = t; const v = Math.hypot(c.vx, c.vz); vmax = Math.max(vmax, v); vmin = Math.min(vmin, v); if (c.hit > 3) hits++; if (c.drift) slid += H; }
+    if (c.dist >= n) { if (!t1) t1 = t; const v = Math.hypot(c.vx, c.vz); vmax = Math.max(vmax, v); vmin = Math.min(vmin, v); if (c.hit > 3) hits++; }
   }
   assert(c.dist >= 2 * n, `${M.id} : le pilote automatique ne boucle pas le tour`);
   assert(hits <= 2, `${M.id} : le pilote automatique tape les murs (${hits})`);
@@ -24,43 +24,44 @@ for (const M of CARTES) {
   c = newCar(T); let t100 = 0;
   for (let i = 0; i < 8 / H && !t100; i++) { step(c, { steer: 0, gas: 1, brake: 0, hand: false }, T, H); if (c.vf >= 100 / 3.6) t100 = (i + 1) * H; assert(c.rpm <= CARD.red + 200); }
   assert(t100 > 2.5 && t100 < 6.5, `${M.id} : 0 à 100 km/h en ${t100} s`);
-  // frein à main + braquage : la voiture doit partir en glisse sur toutes les cartes
-  c = newCar(T); for (let i = 0; i < 5 / H; i++) step(c, autopilot(c, T), T, H);
-  for (let i = 0; i < 0.5 / H; i++) step(c, { steer: 1, gas: 0, brake: 0, hand: true }, T, H);
-  assert(c.drift || c.hit, `${M.id} : pas de glisse au frein à main`);
-  // --- tenue de route, en plan ouvert (sans murs : un seul échantillon de piste, recollé sous la voiture à chaque pas) ---
+  // --- conduite, en plan ouvert (sans murs : un seul échantillon de piste, recollé sous la voiture à chaque pas) ---
   const O = { x: 0, y: 0, z: 0, tx: 1, tz: 0, k: 0, sl: 0 }, TO = { S: [O], n: 1 }, I = (steer, gas, brake = 0, hand = false) => ({ steer, gas, brake, hand });
   const go = (c, inp, sec) => { for (let i = 0; i < sec / H; i++) { O.x = c.x; O.z = c.z; const v = Math.hypot(c.vx, c.vz) || 1; O.tx = c.vx / v; O.tz = c.vz / v; step(c, inp, TO, H); } return c; };
-  const lance = kmh => { const c = Object.assign(newCar(T), { idx: 0 }); while (Math.hypot(c.vx, c.vz) < kmh / 3.6) go(c, I(0, 1), H); return c; };
-  const cap = c => Math.atan2(c.vz, c.vx), der = c => deg(Math.atan2(Math.abs(c.vl), Math.abs(c.vf)));
-  // rayon de la trajectoire, volant à fond : mesuré entre 1 et 1,5 s
-  const rayon = (kmh, gas, brake) => { const c = go(lance(kmh), I(1, gas, brake), 1), a = cap(c); let d = 0; for (let i = 0; i < 60; i++) { go(c, I(1, gas, brake), H); d += Math.hypot(c.vx, c.vz) * H; } return d / Math.abs(Math.atan2(Math.sin(cap(c) - a), Math.cos(cap(c) - a))); };
-  const ext = rmin + W - 1.1, r60 = rayon(60, 1), r60l = rayon(60, 0), r180 = rayon(180, 1), r180l = rayon(180, 0);
-  // à 60 km/h on tourne plus serré que le virage le plus serré de la carte, même gaz à fond ; à 180 km/h gaz à fond on ne le passe pas, et lever le pied resserre
-  assert(r60l < rmin && r60 < ext, `${M.id} : braquage trop large à 60 km/h (${r60} m sur les gaz, ${r60l} m pied levé, virage de ${rmin} m)`);
-  assert(r180 > ext && r180l < 0.9 * r180, `${M.id} : à 180 km/h, rayon ${r180} m sur les gaz, ${r180l} m pied levé (virage de ${rmin} m)`);
+  const lance = v => { const c = Object.assign(newCar(T), { idx: 0 }); let i = 0; while (Math.hypot(c.vx, c.vz) < v && i++ < 60 / H) go(c, I(0, 1), H); return c; };
+  const cap = c => Math.atan2(c.vz, c.vx), der = c => deg(Math.atan2(Math.abs(c.vl), Math.abs(c.vf))), wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
+  // rayon de la trajectoire (signé : positif si elle tourne du côté du premier coup de volant), mesuré entre 0,7 et 1,2 s après le début de la commande
+  const rayon = (c, inp) => { go(c, inp, 0.7); let d = 0, tw = 0, p = cap(c); for (let i = 0; i < 60; i++) { go(c, inp, H); d += Math.hypot(c.vx, c.vz) * H; tw += wrap(cap(c) - p); p = cap(c); } return d / tw; };
+  const vtop = Math.hypot(lance(999).vx, lance(999).vz), ext = rmin + W, v120 = 120 / 3.6, v200 = 200 / 3.6, glisse = v => go(lance(v), I(1, 0, 0, true), 0.3);
+  const r120 = rayon(lance(v120), I(1, 1)), r120l = rayon(lance(v120), I(1, 0)), rtop = rayon(lance(vtop - 0.5), I(1, 1)), r240 = rayon(lance(240 / 3.6), I(1, 1));
+  const gin = rayon(glisse(v200), I(1, 1, 0, true)), gn = rayon(glisse(v200), I(0, 1, 0, true)), gout = rayon(glisse(v200), I(-1, 1, 0, true)), g200 = rayon(lance(v200), I(1, 1));
+  // le volant commande une rotation : à 120 km/h, volant à fond, on tourne plus serré que le virage le plus serré de la carte élargi de la demi-route, et lever le pied resserre encore
+  assert(r120 < ext && r120l < 0.9 * r120, `${M.id} : à 120 km/h, rayon ${r120} m sur les gaz, ${r120l} m pied levé (virage de ${rmin} m, ${ext} m avec la demi-largeur)`);
+  // le rayon dépend peu de la vitesse : doubler la vitesse ne fait pas plus que le tripler (une limite d'adhérence le quadruplerait)
+  assert(r240 < 3 * r120, `${M.id} : rayon ${r120} m à 120 km/h, ${r240} m à 240`);
+  // mais à la vitesse de pointe, sans glisse, le virage le plus serré ne passe pas : il faut lever le pied, freiner ou glisser
+  assert(rtop > ext, `${M.id} : à ${vtop * 3.6} km/h le rayon (${rtop} m) passe le virage le plus serré sans rien faire`);
+  // glisse à 200 km/h (frein à main tenu) : volant vers l'intérieur elle serre plus que le virage le plus serré et bien plus qu'en adhérence ; au neutre puis vers l'extérieur elle ouvre, sans jamais changer de sens
+  assert(gin < ext && gin < 0.6 * g200 && gin < gn && gn < gout && gout > 0, `${M.id} : glisse à 200 km/h, rayons ${gin} / ${gn} / ${gout} m (adhérence ${g200} m)`);
   // réponse au volant : à 120 km/h, 0,2 s après le coup de volant la voiture tourne déjà à 85 % de son régime
-  const y02 = go(lance(120), I(1, 1), 0.2).yaw, y06 = go(lance(120), I(1, 1), 0.6).yaw;
+  const y02 = go(lance(v120), I(1, 1), 0.2).yaw, y06 = go(lance(v120), I(1, 1), 0.6).yaw;
   assert(y02 > 0.85 * y06, `${M.id} : volant trop lent (${deg(y02)} °/s à 0,2 s, ${deg(y06)} à 0,6 s)`);
-  // glisse à 150 km/h : frein à main 0,35 s -> elle part ; volant tenu + gaz 1 s -> elle tient entre 15 et 45° ;
-  // volant lâché -> rattrapée en moins de 1,2 s ; contre-braquage 0,6 s -> redressée sans repartir de l'autre côté
-  const tenue = () => go(go(lance(150), I(1, 0, 0, true), 0.35), I(1, 1), 1);
-  c = tenue(); const dtenue = der(c);
-  assert(c.drift && dtenue > 15 && dtenue < 45, `${M.id} : glisse non tenue (${dtenue}°)`);
-  let rat = 0; while ((c.slide > 0.15 || der(c) > 3) && rat < 3) { go(c, I(0, 1), H); rat += H; }
-  assert(rat < 1.2, `${M.id} : glisse non rattrapée volant lâché (${rat} s)`);
-  c = go(tenue(), I(-1, 1), 0.6);
-  assert(!c.drift && der(c) < 10, `${M.id} : le contre-braquage ne redresse pas proprement (${der(c)}°)`);
-  // ordre des trois façons de boucler un tour lancé : à fond sans freiner, en s'appuyant sur les murs, on perd au moins 3 % sur le tour propre du pilote automatique ;
-  // en glisse (coup de frein à main dans les virages serrés, puis volant tenu et gaz tant que ça glisse) on déclenche des boosts et on fait jeu égal avec le tour propre, à 0,3 s près. La ville a son test dans test.js.
-  const tour = drive => { const c = newCar(T), st = {}; let t = 0, t1 = 0, b = 0, pb = 0; while (c.dist < 2 * n && t < 900) { step(c, drive(c, t, st), T, H); t += H; if (!t1 && c.dist >= n) t1 = t; if (t1 && c.boost > 0 && pb <= 0) b++; pb = c.boost; } return [t - t1, b]; };
-  const lap = t - t1, [tfond] = tour(c => ({ ...autopilot(c, T), gas: 1, brake: 0 })), [tgl, boosts] = tour((c, t, st) => {
-    let inp = autopilot(c, T);
-    if (!st.until && Math.abs(inp.steer) > 0.2 && Math.abs(S[c.idx].kl) > 0.012 && Math.hypot(c.vx, c.vz) > 25 && t > (st.cool || 0)) { st.until = t + 0.1; st.dir = Math.sign(inp.steer); st.hold = t + 0.6; st.cool = t + 5; }
-    if (st.until) { if (t < st.until) inp = I(st.dir, 1, 0, true); else if (t < st.hold && c.slide > 0.3) inp = I(st.dir, 1); else st.until = 0; }
-    return inp; });
-  assert(tfond > lap * 1.03, `${M.id} : à fond dans les murs (${tfond} s) pas assez lent face au tour propre (${lap} s)`);
-  assert(M.id === 'ville' || boosts && tgl <= lap + 0.3, `${M.id} : tour en glisse (${tgl} s, ${boosts} boosts) plus lent que le tour propre (${lap} s)`);
+  // glisse tenue 1 s : en travers de 10 à 40°, presque sans perdre de vitesse ; frein à main relâché : boost, et la voiture est de nouveau droite en moins de 0,5 s. Une glisse de 0,3 s ne donne pas de boost
+  c = go(glisse(v200), I(1, 1, 0, true), 0.7); const dtenue = der(c), vgl = Math.hypot(c.vx, c.vz);
+  assert(c.drift && dtenue > 10 && dtenue < 40 && vgl > 0.9 * v200, `${M.id} : glisse non tenue (${dtenue}°, ${vgl * 3.6} km/h)`);
+  go(c, I(0, 1), H); assert(!c.drift && c.boost > 0.5, M.id + ' : pas de boost en sortie de glisse');
+  let rat = H; while (der(c) > 3 && rat < 3) { go(c, I(0, 1), H); rat += H; }
+  assert(rat < 0.5, `${M.id} : voiture pas redressée après la glisse (${rat} s)`);
+  c = go(glisse(v200), I(0, 1), H); assert(!c.drift && !(c.boost > 0), M.id + ' : boost après une glisse trop courte');
+  // ordre des trois façons de boucler un tour lancé : en glisse avec boosts (le plus rapide), propre au pilote automatique, à fond sans freiner dans les murs (le plus lent).
+  // Pilote en glisse : frein à main dès que la trajectoire demande plus de 90 % du braquage, tenu tant qu'elle en demande plus de 30 % du même côté, volant dosé pour la suivre ; en glisse il s'autorise 20 % de vitesse de plus que le pilote propre.
+  const tour = drive => { const c = newCar(T); let t = 0, t1 = 0, b = 0, pb = 0, h = 0; while (c.dist < 2 * n && t < 900) { step(c, drive(c), T, H); t += H; if (!t1 && c.dist >= n) t1 = t; if (t1 && c.boost > 0 && pb <= 0) b++; if (t1 && c.hit > 3) h++; pb = c.boost; } return [t - t1, b, h]; };
+  const lap = t - t1, [tfond, , hfond] = tour(c => ({ ...autopilot(c, T), gas: 1, brake: 0 })), [tgl, boosts, hgl] = tour(c => {
+    const a = autopilot(c, T, c.dd ? 1.2 : 1), sp = Math.hypot(c.vx, c.vz), la = S[(c.idx + 3 + Math.floor(sp * 0.1)) % n], dem = s => s.kl * sp / omega(sp); // dem = part du braquage que demande la trajectoire
+    const m = wrap(Math.atan2(la.z + la.tx * la.dl - c.z, la.x - la.tz * la.dl - c.x) - (c.dd ? cap(c) : c.th)) * 3; // en glisse le nez est en travers : on vise avec la direction de la vitesse
+    if (c.dd ? m * c.dd > 0 && Math.max(dem(S[c.idx]) * c.dd, dem(la) * c.dd) > 0.3 : Math.abs(dem(la)) > 0.9 && dem(la) * m > 0 && sp > 15) { const d = c.dd || Math.sign(m), f = Math.max(m * d, 0.35); return I(d * Math.max(-1, Math.min(1, f < 1.1 ? (f - 1.1) / 0.75 : f - 1.1)), a.gas ? 1 : 0, a.brake, true); }
+    return { ...a, gas: a.gas ? 1 : 0 }; });
+  assert(boosts > 1 && tgl < lap, `${M.id} : tour en glisse (${tgl} s, ${boosts} boosts, ${hgl} chocs) pas plus rapide que le tour propre (${lap} s)`);
+  assert(hfond && tfond > lap * 1.01, `${M.id} : à fond dans les murs (${tfond} s, ${hfond} chocs) pas plus lent que le tour propre (${lap} s)`);
   // trafic : positions finies, sur la route ; une voiture arrêtée sur une file se fait pousser sans être traversée
   if (M.trafic) {
     for (const tt of [0, 37.3, 400]) for (const k of trafic(T, tt)) assert(Number.isFinite(k.x) && Math.abs(k.d) < W - 1.4, `${M.id} : camion hors route`);
@@ -73,5 +74,5 @@ for (const M of CARTES) {
   while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && Math.abs(x.d) <= W, M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }
   assert(R.done, M.id + ' : la course ne se termine pas');
   const k = v => Math.round(v * 3.6);
-  console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs, ${slid.toFixed(1)} s de glisse, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${boosts} boosts), à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %) ; rayon à 60 km/h ${r60.toFixed(0)} m (levé ${r60l.toFixed(0)}), à 180 km/h ${r180.toFixed(0)} m (levé ${r180l.toFixed(0)}), glisse tenue ${dtenue.toFixed(0)}°, rattrapée en ${rat.toFixed(2)} s ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);
+  console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} boosts, ${hgl} chocs), à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);
 }
