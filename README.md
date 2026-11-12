@@ -18,7 +18,7 @@ Prenez le volant d'une bête de 500 chevaux et lâchez-la dans les artères d'un
 
 ### 🏁 CINQ MODES DE JEU EXPLOSIFS !
 
-- **CONTRE-LA-MONTRE** : enchaînez les tours, battez vos records… et rattrapez le **fantôme** de la médaille que vous visez : **bronze**, **argent**, puis **or** !
+- **CONTRE-LA-MONTRE** : enchaînez les tours, battez vos records… et rattrapez le **fantôme** de la médaille que vous visez : **bronze**, **argent**, puis **or** ! Un tour dont vous êtes fier ? Envoyez-le à un ami par un simple **lien de défi** : il affrontera votre fantôme.
 - **GLISSE** : 2 tours pour le style. Plus ça glisse vite, de travers et longtemps, plus ça paie… et le **multiplicateur** grimpe tant que vous enchaînez sans toucher un mur !
 - **COURSE** : 3 tours, 3 rivaux sans pitié. **KENJI**, **REI** et **JUN** ne vous feront aucun cadeau.
 - **ÉLIMINATION** : 4 voitures, 4 tours. À chaque passage sur la ligne, **le dernier sort**. Jusqu'au duel final !
@@ -99,7 +99,8 @@ puis ouvrir http://localhost:8123/.
 | C | station de radio suivante |
 | M | couper / remettre la musique |
 | F | fantôme du contre-la-montre : bronze, argent, or, aucun, son propre record (au menu et en piste) |
-| Échap ou P | menu pause (reprendre, recommencer, boîte, radio, musique, fantôme, quitter) |
+| L | copier le lien de défi du dernier tour bouclé (contre-la-montre) |
+| Échap ou P | menu pause (reprendre, recommencer, boîte, radio, musique, fantôme, lien de défi, quitter) |
 | R | recommencer |
 | Manette | stick ou croix : volant et menus · ZR ou B : gaz · ZL ou Y : frein · A : glisse · X : nitro · clic du stick : radio · L / R : rapports · − : boîte manuelle / automatique · + : pause · B : valider |
 | Joy-Con seul, à l'horizontale | touche J une fois pour l'autoriser (Chrome ou Edge) · stick : volant et menus · bouton de droite : gaz et valider · gauche : boîte manuelle / automatique · haut / bas : rapport supérieur / inférieur · SR : glisse · SL : nitro · clic du stick : radio · + ou − : pause |
@@ -127,6 +128,16 @@ En contre-la-montre, un fantôme roule avec le joueur. La touche F (au menu ou e
 - À relancer si la physique ou un tracé change : `node outils/traces-or.js` (ou `node outils/traces-or.js wangan` pour une seule carte). `test-cartes.js` échoue si une trace sort de la route ou n'est plus sous le seuil or.
 
 Les médailles sont des temps de tour lancé : au premier tour, départ arrêté, le fantôme part devant.
+
+### Défi par lien
+
+Après un tour de contre-la-montre, la touche L (ou « copier le lien de défi » dans le menu de pause) copie dans le presse-papiers un lien qui porte ce tour. Celui qui l'ouvre arrive sur la bonne carte, en contre-la-montre, face au fantôme de l'expéditeur (en rose) : le menu affiche le temps à battre, chaque tour dit de combien le défi est manqué ou battu, et L renvoie un lien à son tour. Il n'y a pas de serveur : tout est dans l'adresse.
+
+- Forme : `…/index.html#defi=<version>.<carte>.<données>`. Tout tient dans le fragment (après `#`), que le navigateur n'envoie jamais au serveur.
+- Les données : le temps du tour, puis la position et le cap de la voiture cinq fois par seconde, quantifiés à 10 cm et à 1/256 de tour, écrits en différences (en différences secondes pour x et z : presque toujours un octet par valeur), avec deux octets de contrôle, le tout en base64 pour URL. Environ 27 caractères par seconde de tour : 1 100 pour un tour de 38 s, 2 600 pour le plus long tour plausible (`wangan` au temps de bronze, chiffre affiché par `test-cartes.js`). Certaines messageries coupent les liens de cette taille : un lien coupé est refusé, il ne donne jamais un fantôme faux.
+- On transporte des positions, jamais des commandes : la simulation ne donne pas exactement le même résultat d'un navigateur à l'autre. Entre deux points, le fantôme est interpolé en ligne droite (moins d'un mètre d'écart à la trace d'origine).
+- La version est celle de la physique (`DEFI_V` dans `sim.js`, la même que celle des clés de records `vpr7`) : à augmenter avec elle. Un lien d'une autre version, abîmé, tronqué, ou pour une carte inconnue est refusé avec un message au menu, et le jeu s'ouvre normalement.
+- `defiCode(carte, temps, trace)` et `defiLit(lien)` sont des fonctions pures de `sim.js`, testées sous Node (aller-retour à la précision de quantification, liens tronqués à toute longueur, abîmés à tout caractère, d'une autre version). Le fantôme reçu n'est pas enregistré : il vit le temps de la page.
 
 ### Mode Glisse
 
@@ -171,7 +182,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | `icon.svg` | icône de l'app (favicon) |
 | `docs/` | captures d'écran du README |
 | `cartes.js` | **les cartes**, en données : tracé, largeur, adhérence, voiture, stations de radio, thème (couleurs, ciel, lumière, interface). Ajouter une carte commence ici. |
-| `sim.js` | **physique**, sans aucun rendu : piste, moteur et boîte, glisse, murs, pilote automatique, course contre IA, trafic. Partagé entre le jeu et les tests. |
+| `sim.js` | **physique**, sans aucun rendu : piste, moteur et boîte, glisse, murs, pilote automatique, course contre IA, trafic, traces des fantômes et liens de défi. Partagé entre le jeu et les tests. |
 | `game.js` | rendu three.js, décor de la ville, effets, interface, commandes, boucle de jeu |
 | `audio.js` | tout le son, synthétisé : trois stations de radio par carte (données `RADIO` dans `cartes.js`), chacune avec ses timbres (`PATCH`), sa batterie (`KIT`), ses effets et sa forme en sections ; musique de menu, ambiance du lieu par zones, tunnels, moteur, boîte, pneus, bruitages. Exposé au jeu par `window.SON`. |
 | `ecoute.html` | banc d'écoute : chaque station, ambiance et bruitage joué seul (amplifié pour l'écoute, vumètre, « tout arrêter »), le mélange de course avec un curseur par famille, et trois vérifications : auto-test des boutons, niveaux (RMS et crête) et variété des stations (corrélation des spectres), par rendu hors ligne |
@@ -196,13 +207,13 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 node test.js
 ```
 
-Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, la jauge de nitro (remplissage, poussée, choc, vol), l'aspiration, la course contre IA, le score du mode Glisse (une glisse rapide rapporte plus qu'une lente, l'enchaînement multiplie, un choc le casse, des zigzags lents ne rapportent rien) la course à élimination (personne ne sort au premier tour, classement = ordre inverse des sorties) et la Tournée (points et grille sur des classements donnés, départ sur la grille demandée). Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
+Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, la jauge de nitro (remplissage, poussée, choc, vol), l'aspiration, la course contre IA, le score du mode Glisse (une glisse rapide rapporte plus qu'une lente, l'enchaînement multiplie, un choc le casse, des zigzags lents ne rapportent rien) la course à élimination (personne ne sort au premier tour, classement = ordre inverse des sorties) et la Tournée (points et grille sur des classements donnés, départ sur la grille demandée), les traces des fantômes de médaille et les liens de défi (aller-retour, liens invalides refusés). Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
 
 ```bash
 node test-cartes.js
 ```
 
-Passe chaque carte dans la physique : tracé sans recoupement, tour bouclé au pilote automatique, 0 à 100 km/h plausible, glisse au frein à main, trafic. Affiche longueur, temps au tour et vitesses de chaque carte.
+Passe chaque carte dans la physique : tracé sans recoupement, tour bouclé au pilote automatique, 0 à 100 km/h plausible, glisse au frein à main, trafic, trace or du fantôme (lisible, sur la route, sous le seuil or). Affiche longueur, temps au tour et vitesses de chaque carte.
 
 Dans le navigateur, `?auto` fait conduire le pilote automatique, et `window.__g` expose l'état du jeu pour le débogage.
 

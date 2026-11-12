@@ -268,6 +268,14 @@ let elimTxt;
     for (let i = 0; i < nl; i++) { const e = Math.max(Math.abs(lu.trace[i * 4] - tr[i * 4]), Math.abs(lu.trace[i * 4 + 1] - tr[i * 4 + 1]), Math.abs(lu.trace[i * 4 + 2] - tr[i * 4 + 2])); e20 = Math.max(e20, e);
       if (i % 4 === 0) { e5 = Math.max(e5, e); ea = Math.max(ea, Math.abs(w(lu.trace[i * 4 + 3] - tr[i * 4 + 3]))); } }
     assert(e5 <= 0.05 + 1e-9 && ea <= Math.PI / 256 + 1e-9 && e20 < 1, `aller-retour : ${e5} m et ${ea} rad aux points transmis, ${e20} m entre deux`);
+    // liens refusés, toujours par un message et jamais par une exception : tronqué (à n'importe quelle longueur), d'une autre version de la physique, abîmé (un caractère changé, n'importe où), pour une autre carte que celle du tour, ou sans rapport
+    const refus = l => { let r; try { r = defiLit(l); } catch (e) { assert.fail('defiLit lève une exception sur ' + String(l).slice(0, 30) + ' : ' + e.message); } return typeof r.err === 'string' && r.err.length > 5 && !r.trace ? r.err : ''; };
+    for (let i = 0; i < lien.length; i++) assert(refus(lien.slice(0, i)), 'lien tronqué à ' + i + ' caractères accepté');
+    const autre = lien.replace(/^\d+/, v => +v - 1); assert(refus(autre) && refus(autre) !== refus(lien.slice(0, 500)) && /VERSION/.test(refus(autre)), 'lien d\'une autre version : ' + refus(autre));
+    for (let i = lien.indexOf('.', 3) + 1; i < lien.length; i++) assert(refus(lien.slice(0, i) + (lien[i] === 'A' ? 'B' : 'A') + lien.slice(i + 1)), 'lien abîmé au caractère ' + i + ' accepté');
+    assert(refus(lien.replace('.ville.', '.touge.')), 'lien recollé sur une autre carte accepté');
+    for (const l of ['', 'bonjour', '7.ville.', '7.ville.!!!', '7..AAAA', lien + '=', ' ' + lien, null, undefined, 42, {}]) assert(refus(l), 'lien sans rapport accepté : ' + l);
+    assert(defiLit(defiCode('ville', 1, tr.slice(0, 80))).trace, 'un lien court mais entier doit se relire');
     fantTxt += ` ; lien de défi ${lien.length} caractères pour ${ref.t.toFixed(1)} s, écart ${(e5 * 100).toFixed(0)} cm aux points transmis, ${(e20 * 100).toFixed(0)} cm entre deux`;
   }
 }

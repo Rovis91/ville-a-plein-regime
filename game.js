@@ -638,7 +638,11 @@
   // secteurs (entrée et sortie de l'échangeur) et fantôme du record : [x, y, z, cap] à 20 Hz
   // mode : 'solo' (contre-la-montre à tours enchaînés), 'glisse' (deux tours, à points : le score est tenu par sim.js, voir GL), 'course' (3 tours contre les IA de sim.js) 'elim' (course à élimination : le dernier sort à chaque passage de ligne) ou 'tournee' (toutes les cartes à la suite, voir plus bas) ; race = la course en cours, sinon null
   const MODES = ['solo', 'glisse', 'course', 'elim', 'tournee'], AVEC_IA = ['course', 'elim', 'tournee'], enCourse = () => AVEC_IA.includes(mode);
-  let mode = MODES.find(m => pref('vpr7.mode', '') === JSON.stringify(m)) || 'solo', race = null, raceEnd = false; // le mode est mémorisé une fois pour toutes les cartes
+  // défi par lien : l'adresse « …#defi=version.carte.données » (defiCode de sim.js) porte le tour d'un autre joueur. cartes.js a déjà ouvert sa carte ; ici on relit la trace : le jeu s'ouvre en contre-la-montre face à ce fantôme.
+  // Lien illisible, abîmé, d'une autre version de la physique ou pour une carte inconnue : DEFI reste nul et le menu dit pourquoi (defiErr).
+  const lienLu = (h => h && defiLit(h[1]))(/^#defi=(.*)$/.exec(location.hash)), defiErr = lienLu && (lienLu.err || (lienLu.carte !== M.id ? 'LIEN DE DEFI : CARTE INCONNUE' : '')), DEFI = lienLu && !defiErr ? lienLu : null;
+  addEventListener('hashchange', () => location.reload()); // un lien collé dans l'onglet du jeu ne recharge pas la page tout seul
+  let mode = DEFI ? 'solo' : MODES.find(m => pref('vpr7.mode', '') === JSON.stringify(m)) || 'solo', race = null, raceEnd = false; // le mode est mémorisé une fois pour toutes les cartes
   const vivantes = () => race.cars.filter(c => !c.out), partie = c => c.out && race.t - c.out > 5; // élimination : voitures encore en course ; voiture sortie depuis 5 s, qu'on ne montre plus
   let si = 0, cur = [], bestSpl = store.get('splits'), ghost = store.get('ghost'), recG = [], splitMsg = null, lapN = 1, rLap = 0, rLapT = 0, prev = 'race', psel = 0;
   const keys = {}, H = 1 / 120;
@@ -650,12 +654,19 @@
   // fantôme du contre-la-montre, au choix (touche F, ou menu de pause) : aucun, son propre record, ou la médaille visée. fant = indice dans FANT, gardé par carte ; au départ, la première médaille pas encore gagnée.
   // Bronze et argent : la trace du tour de référence ralentie au ratio de la médaille. Or : la trace de la carte dans traces-or.js (un tour avec glisses et nitro, que le pilote automatique ne sait pas faire), ramenée au temps du seuil or.
   // Battre le fantôme d'une médaille, c'est donc la gagner : le fantôme passe alors à la suivante (après l'or : au record).
-  const FANT = ['NON', 'RECORD', ...MEDN], FANTC = ['#000000', '#00f0ff', ...MEDC], medF = [];
-  let fant = (f => FANT[f] ? f : medal(best) < 3 ? medal(best) + 2 : 1)(store.get('fantome'));
-  const traceF = () => { const i = fant - 2; if (fant < 2) return fant ? ghost : null; if (medF[i]) return medF[i];
+  const FANT = ['NON', 'RECORD', ...MEDN, ...(DEFI ? ['DEFI'] : [])], FANTC = ['#000000', '#00f0ff', ...MEDC, '#ff4fd8'], medF = []; // (venu par un lien de défi : un choix de plus, le fantôme de l'expéditeur, en rose)
+  let fant = DEFI ? 5 : (f => FANT[f] ? f : medal(best) < 3 ? medal(best) + 2 : 1)(store.get('fantome'));
+  const traceF = () => { const i = fant - 2; if (fant < 2) return fant ? ghost : null; if (fant === 5) return DEFI.trace; if (medF[i]) return medF[i];
     const or = i === 2 ? defiLit((window.TRACES_OR || {})[M.id]) : { err: 1 }; return medF[i] = or.err ? etire(REFT.trace, MED[i]) : etire(or.trace, REF * MED[2] / or.t); };
-  const nomF = () => FANT[fant] + (fant > 1 ? ' ' + fmt(REF * MED[fant - 2]) : fant && best ? ' ' + fmt(best) : '');
+  const nomF = () => FANT[fant] + (fant === 5 ? ' ' + fmt(DEFI.t) : fant > 1 ? ' ' + fmt(REF * MED[fant - 2]) : fant && best ? ' ' + fmt(best) : '');
   const choixF = f => { fant = f; if (!AUTO) store.set('fantome', fant); padDit('FANTÔME : ' + nomF()); };
+  // lien de défi du dernier tour bouclé sur cette carte (touche L, ou menu de pause) : copié dans le presse-papiers ; si le navigateur le refuse, montré dans une boîte d'où le copier
+  let dernier = null;
+  function lienDefi() {
+    if (!dernier) { padDit("BOUCLE D'ABORD UN TOUR EN CONTRE-LA-MONTRE"); return; }
+    const url = location.origin + location.pathname + '#defi=' + defiCode(M.id, dernier.t, dernier.trace), dit = () => padDit('LIEN DE DÉFI COPIÉ : ' + fmt(dernier.t)), montre = () => prompt('Lien de défi à copier :', url);
+    try { navigator.clipboard.writeText(url).then(dit, montre); } catch (e) { montre(); }
+  }
   // mode Glisse : le score ne compte que si les deux tours sont bouclés en moins de GLT (deux tours au temps de bronze, plus 30 %) ; record et médailles par carte
   // GLM = [bronze, argent, or] en points, fixés à la main par carte d'après le pilote en glisse de test-cartes.js sur deux tours (son score vaut à peu près le bronze). Carte sans ligne ici : 8, 16 et 28 points par mètre de tour
   const GLT = 2 * REF * MED[0] * 1.3, GLM = { ville: [20000, 40000, 70000], touge: [20000, 40000, 70000], wangan: [50000, 90000, 140000], paris: [15000, 30000, 55000], canal: [150000, 250000, 350000], barrage: [15000, 30000, 55000], stade: [25000, 50000, 80000], givre: [40000, 75000, 120000], terre: [90000, 160000, 240000] }[M.id] || [8, 16, 28].map(k => Math.round(k * T.len / 1000) * 1000);
@@ -692,14 +703,14 @@
     car = race ? race.cars[0] : newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 3; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1; rLap = 0; rLapT = 0; result = null;
   }
   function finish() { // tour bouclé : on l'enregistre, on affiche son temps 4 s, et le chrono repart aussitôt pour un tour lancé
-    const rec = !best || tRace < best; result = { rec, first: !best, diff: best ? tRace - best : 0, t: tRace, n: lapN, T: 5, b: bilan() };
+    const rec = !best || tRace < best; result = { rec, first: !best, diff: best ? tRace - best : 0, t: tRace, n: lapN, T: 5, b: bilan(), defi: DEFI && tRace - DEFI.t }; dernier = { t: tRace, trace: recG };
     if (rec && AUTO) best = tRace; else if (rec) { // le pilote automatique (?auto) n'enregistre rien
       best = tRace; bestSpl = cur; ghost = recG; store.set('best', best); store.set('splits', cur); store.set('ghost', ghost); }
-    if (fant > 1 && tRace <= REF * MED[fant - 2]) choixF(fant < 4 ? fant + 1 : 1); // médaille visée battue : au fantôme de la suivante
+    if (fant > 1 && fant < 5 && tRace <= REF * MED[fant - 2]) choixF(fant < 4 ? fant + 1 : 1); // médaille visée battue : au fantôme de la suivante
     SON.stinger(rec);
     lapN++; car.dist -= N; tRace = 0; si = 0; cur = []; recG = [];
   }
-  const pauseItems = () => ['REPRENDRE', 'RECOMMENCER', 'BOITE : ' + (manual ? 'MANUELLE' : 'AUTO'), 'RADIO : ' + SON.nom, 'MUSIQUE : ' + (SON.musicOn ? 'OUI' : 'NON'), 'FANTOME : ' + nomF(), 'QUITTER'];
+  const pauseItems = () => ['REPRENDRE', 'RECOMMENCER', 'BOITE : ' + (manual ? 'MANUELLE' : 'AUTO'), 'RADIO : ' + SON.nom, 'MUSIQUE : ' + (SON.musicOn ? 'OUI' : 'NON'), 'FANTOME : ' + nomF(), 'COPIER LE LIEN DE DEFI', 'QUITTER'];
   function pauseAct() {
     if (psel === 0) state = prev;
     else if (psel === 1) start();
@@ -707,6 +718,7 @@
     else if (psel === 3) zap();
     else if (psel === 4) SON.toggleMusic();
     else if (psel === 5) choixF((fant + 1) % FANT.length);
+    else if (psel === 6) lienDefi();
     else toMenu();
   }
   function toMenu() { clos(); tnFin = null; state = 'title'; race = null; raceEnd = false; glFin = null; car = newCar(T); cth = car.th; carY = S[car.idx].y; tRace = 0; lapN = 1; result = null; hist.length = 0; msel = 3; }
@@ -740,8 +752,8 @@
     const key = (e.key || '').toLowerCase(); // lettre réellement tapée, pour les commandes nommées par une lettre (le pilotage, lui, reste en positions physiques)
     if (state === 'pause') {
       if (e.code === 'Escape' || key === 'p') state = prev;
-      else if (e.code === 'ArrowUp' || e.code === 'KeyW') psel = (psel + 6) % 7;
-      else if (e.code === 'ArrowDown' || e.code === 'KeyS') psel = (psel + 1) % 7;
+      else if (e.code === 'ArrowUp' || e.code === 'KeyW') psel = (psel + 7) % 8;
+      else if (e.code === 'ArrowDown' || e.code === 'KeyS') psel = (psel + 1) % 8;
       else if (e.code === 'Enter' || e.code === 'Space') pauseAct();
       return;
     }
@@ -761,6 +773,7 @@
     if (key === 'g') { manual = !manual; car.manual = manual; car.gear = gear; setPref('vpr.boite', manual ? 'm' : 'a'); }
     if (manual && (e.code === 'KeyE' || e.code === 'KeyQ')) car.gear = clamp(car.gear + (e.code === 'KeyE' ? 1 : -1), 0, CARD.ratios.length - 1); // physiquement A / E autour du Z en AZERTY
     if (key === 'f' && mode === 'solo') choixF((fant + 1) % FANT.length);
+    if (key === 'l' && mode === 'solo') lienDefi();
     if (key === 'c') zap();
     if (key === 'm') SON.toggleMusic();
   };
@@ -878,7 +891,7 @@
       if (!enCourse()) { const gl = mode === 'glisse', m = gl ? medG(bestG) : medal(best); if (m) txt(MEDN[m - 1], cx + 152, 196, 8, MEDC[m - 1], 'right'); if (m < 3) txt('VISE ' + MEDN[m] + ' ' + (gl ? GLM[m] + ' PTS' : fmt(REF * MED[m])), cx - 58, 218, 8, MEDC[m]);
         if (!gl) txt('F : FANTOME ' + nomF(), cx - 58, 229, 8, fant ? FANTC[fant] : '#e8e8e4'); } // médaille acquise, et la prochaine à aller chercher
       txt('HAUT/BAS : CHOISIR  GAUCHE/DROITE : CHANGER', cx, 245, 8, '#e8e8e4', 'center'); txt('FLECHES / ZQSD   ESPACE : GLISSE   X : NITRO', cx, 257, 8, '#e8e8e4', 'center');
-      if (anciens) tag('NITRO : RECORDS REMIS A ZERO', cx, 88, Y);
+      if (defiErr) tag(defiErr, cx, 88, RD); else if (DEFI) tag('DEFI : ' + fmt(DEFI.t) + ' A BATTRE', cx, 88, FANTC[5]); else if (anciens) tag('NITRO : RECORDS REMIS A ZERO', cx, 88, Y);
       hudT.needsUpdate = true; return;
     }
     // chrono
@@ -940,6 +953,8 @@
       tag('TOUR ' + result.n + '  ' + fmt(result.t), cx, 28, Y); if (result.pos) tag('PLACE ' + result.pos + '/' + result.of, cx, 44, C); else tag(result.first ? 'PREMIER TEMPS' : result.rec ? 'NOUVEAU RECORD' : '+' + result.diff.toFixed(2) + ' S', cx, 44, result.rec ? C : RD);
       const b = result.b, m = medal(result.t), L = [];
       if (!race) L.push(m < 3 ? [MEDN[m] + ' A -' + (result.t - REF * MED[m]).toFixed(2), MEDC[m]] : ['TOUR EN OR', MEDC[2]]); // ce qui manquait à ce tour pour la médaille suivante
+      if (result.defi != null) L.push(result.defi < 0 ? ['DEFI BATTU ' + result.defi.toFixed(2), FANTC[5]] : ['DEFI A -' + result.defi.toFixed(2), RD]); // face au tour reçu par lien
+      if (!race) L.push(['L : LIEN DEFI', '#e8e8e4']);
       if (b) L.push(['GLISSES ' + b[0], '#e8e8e4'], ['NITRO ' + b[1], C], ['MURS ' + b[2], b[2] ? RD : '#e8e8e4']);
       panel(6, 60, 132, 8 + L.length * 11); L.forEach(([s, c], i) => txt(s, 12, 65 + i * 11, 8, c));
     }
@@ -965,7 +980,7 @@
     }
     if (state === 'pause') {
       R(hg, 'rgba(8,8,12,.95)', 0, 0, HW, HH); txt('PAUSE', cx, 36, 32, Y, 'center', 2);
-      pauseItems().forEach((s, i) => i === psel ? tag('> ' + s + ' <', cx, 92 + i * 20, Y) : txt(s, cx, 95 + i * 20, 8, '#e8e8e4', 'center'));
+      pauseItems().forEach((s, i) => i === psel ? tag('> ' + s + ' <', cx, 92 + i * 18, Y) : txt(s, cx, 95 + i * 18, 8, '#e8e8e4', 'center'));
       txt('HAUT / BAS : CHOISIR   ENTREE : VALIDER', cx, 246, 8, C, 'center');
     }
     hudT.needsUpdate = true;
@@ -1128,6 +1143,6 @@
     rt.dispose(); if (rt.depthTexture) rt.depthTexture.dispose(); hudT.dispose(); post.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
   };
   try { if (sessionStorage.getItem('vpr.go')) { sessionStorage.removeItem('vpr.go'); if (mode === 'tournee') start(); } } catch (e) { } // arrivée sur la carte d'une manche de Tournée : la course part tout de suite
-  window.__g = { frame, start, fin, libere, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return tnFin; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
+  window.__g = { frame, start, fin, libere, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return tnFin; }, get defi() { return { DEFI, defiErr, dernier }; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
 })();
 if (/[?&]perf\b/.test(location.search)) import('./outils/perf.js').then(m => m.suite()); // banc de performance : voir outils/perf.js

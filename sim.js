@@ -455,7 +455,7 @@
     const vi = () => { let v = 0, k = 1, b; do { if (i >= fin) { ok = false; return 0; } b = B[i++]; v += (b & 127) * k; k *= 128; } while (b > 127); return v % 2 ? -(v + 1) / 2 : v / 2; };
     while (i < fin && ok) { for (let k = 0; k < 2; k++) { d[k] += vi(); p[k] += d[k]; } p[2] += vi(); if (i >= fin) { ok = false; break; } p[3] = (p[3] + B[i++]) & 255; tr.push(p[0] / 10, p[2] / 10, p[1] / 10, p[3] * Math.PI / 128); }
     const t = (B[0] + B[1] * 256 + B[2] * 65536) / 1000;
-    return ok && tr.length >= 8 && t > 0 ? { carte: m[2], t, trace: etire(tr, 4) } : { err: DEFI_ERR[2] };
+    return ok && tr.length >= 8 && t > 0 && Math.abs((tr.length / 4 - 1) / 5 - t) < 1.5 ? { carte: m[2], t, trace: etire(tr, 4) } : { err: DEFI_ERR[2] };
   }
 
   Object.assign(G, { DEFI_V, DEFI_ERR, defiCode, defiLit, etire, tourRef,sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, tournee, BAREME, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, SURF, GL });
