@@ -156,6 +156,7 @@
   // Éditeur de musique (editeur.html) : ses réglages, par nom de station, sont enregistrés dans localStorage « vpr.musique » et appliqués par-dessus
   // les valeurs écrites ici (champs MUS.cles, dans leur forme déjà lue : motifs découpés en mesures, accords par leur nom). Sans effet sous node.
   G.MUS = { accorder, GAMME, QUAL, R, RADIO, cles: ['vol', 'bpm', 'sw', 'pump', 'rev', 'echo', 'eq', 'drive', 'cv', 'lV', 'lO', 'kit', 'mx', 'accords', 'k', 's', 'h', 'p', 'b', 'd', 'c', 'g', 'a', 'l', 'sec', 'form'] };
+  G.MUS.origine = {}; for (const id in RADIO) for (const o of RADIO[id]) G.MUS.origine[o.name] = JSON.stringify(G.MUS.cles.map(k => o[k])); // valeurs du dépôt, pour comparer avant / après dans l'éditeur
   try { const s = JSON.parse(localStorage.getItem('vpr.musique')) || {}; for (const id in RADIO) for (const o of RADIO[id]) if (s[o.name]) { Object.assign(o, s[o.name]); accorder(o); } } catch (e) { }
 
   G.CARTES = [
