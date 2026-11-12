@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Diagnostic manette</title>
+<style>
+  body { background: #111; color: #ddd; font: 14px/1.5 Consolas, monospace; margin: 20px; }
+  h1 { font-size: 18px; } button { font: inherit; padding: 8px 16px; cursor: pointer; }
+  pre { background: #1c1c1c; padding: 12px; white-space: pre-wrap; }
+  .ok { color: #7d7; } .ko { color: #f77; }
+</style>
+</head>
+<body>
+<h1>Diagnostic manette</h1>
+<p>Clique dans cette page, puis appuie sur <b>chaque</b> bouton de la manette et bouge le stick. Ensuite : <button id="copie">Copier le rapport</button> <span id="fait"></span></p>
+<pre id="vue" aria-live="off"></pre>
+<script>
+// Page autonome : montre ce que le navigateur voit des manettes, sans rien supposer de leur disposition.
+const journal = [], vus = {}; // vus[index] = { b: boutons déjà enfoncés, a: { axe: [min, max] } }
+const h = () => new Date().toLocaleTimeString('fr-FR');
+for (const ev of ['gamepadconnected', 'gamepaddisconnected'])
+  addEventListener(ev, e => journal.push(h() + ' ' + ev + ' : #' + e.gamepad.index + ' « ' + e.gamepad.id + ' »'));
+function rapport() {
+  const L = ['Navigateur : ' + navigator.userAgent,
+    'Contexte sécurisé : ' + (isSecureContext ? 'oui' : 'NON') + ' · API Gamepad : ' + (navigator.getGamepads ? 'présente' : 'ABSENTE') + ' · page active : ' + (document.hasFocus() ? 'oui' : 'non (clique dedans)'), ''];
+  const pads = navigator.getGamepads ? [...navigator.getGamepads()] : [];
+  if (!pads.some(p => p)) L.push('AUCUNE manette vue par le navigateur (appuie sur un bouton, la page doit être active).');
+  pads.forEach((p, i) => {
+    if (!p) return;
+    const v = vus[i] = vus[i] || { b: {}, a: {} };
+    L.push('Manette #' + p.index + ' « ' + p.id + ' »', '  mapping : "' + p.mapping + '" · connected : ' + p.connected + ' · ' + p.buttons.length + ' boutons · ' + p.axes.length + ' axes');
+    const enf = []; p.buttons.forEach((b, n) => { if (b.pressed || b.value > 0.1) { enf.push(n + (b.value < 1 ? '=' + b.value.toFixed(2) : '')); v.b[n] = 1; } });
+    L.push('  boutons enfoncés maintenant : ' + (enf.join(', ') || '-'), '  boutons vus depuis le début  : ' + (Object.keys(v.b).join(', ') || '-'));
+    p.axes.forEach((x, n) => { const m = v.a[n] = v.a[n] || [x, x]; m[0] = Math.min(m[0], x); m[1] = Math.max(m[1], x);
+      L.push('  axe ' + n + ' : ' + x.toFixed(2).padStart(5) + '   (vu de ' + m[0].toFixed(2) + ' à ' + m[1].toFixed(2) + ')' + (m[1] - m[0] > 0.3 ? '  ← bouge' : '')); });
+    L.push('');
+  });
+  L.push('Journal :', ...(journal.length ? journal : ['  (aucun événement)']));
+  return L.join('\n');
+}
+const vue = document.getElementById('vue');
+(function boucle() { vue.textContent = rapport(); requestAnimationFrame(boucle); })();
+document.getElementById('copie').onclick = async () => {
+  const t = rapport(), fait = document.getElementById('fait');
+  try { await navigator.clipboard.writeText(t); fait.textContent = 'copié'; fait.className = 'ok'; }
+  catch (e) { // presse-papiers refusé : on sélectionne le texte pour un Ctrl+C manuel
+    getSelection().selectAllChildren(vue); fait.textContent = 'copie refusée : texte sélectionné, fais Ctrl+C'; fait.className = 'ko'; }
+};
+</script>
+</body>
+</html>
