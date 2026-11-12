@@ -2,6 +2,9 @@
 (function () {
   const A = 0.62; // pente du toit du refuge (rad)
   Object.assign(FORMES, {
+    // pylône de la ligne à haute tension de la vallée (treillis : quatre montants, trois consoles)
+    pyloneCol: () => [...[-1, 1].flatMap(a => [-1, 1].map(b => ['acier', 0.35, 34, 0.35, a * 1.6, 17, b * 1.6, null, 1])),
+      ...[14, 24, 32].flatMap(y => [['acier', 4, 0.3, 4, 0, y, 0], ['acier', 0.4, 0.4, 16 - (y - 14) * 0.25, 0, y + 1.2, 0]])],
     // jalon à neige : le piquet qui dépasse des congères au bord des routes de col, coiffé d'une bague rétroréfléchissante
     jalon: () => [['piquet', 0.14, 2.8, 0.14, 0, 1.4, 0], ['bague', 0.2, 0.35, 0.2, 0, 2.45, 0]],
     // refuge du col, pignon vers la route (X = vers la route) : murs de planches sur un soubassement de pierre, toit à deux pans chargé de neige, deux fenêtres éclairées et la porte au pignon, cheminée
