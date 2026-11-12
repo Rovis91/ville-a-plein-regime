@@ -1,6 +1,7 @@
 // Piste + physique pures (sans rendu) : partagées par le jeu et par `node test.js`.
 (function (G) {
   const W = 9, TOP = 55; // demi-largeur de route (m) ; vitesse de référence (m/s) pour le braquage et les effets visuels
+  const WALL_RUB = 0.35, WALL_SOFT = 0.2, WALL_LOSS = 3, WALL_HARD = 0.45; // murs : frein du frottement (1/s) ; sinus de l'angle d'arrivée sous lequel ça gratte sans perte, et au-dessus duquel le moteur coupe
   const GRIP = 44; // adhérence latérale maxi (m/s²) : à fond on ne passe que les courbes de plus de 70 m de rayon, le reste se freine
   // Mécanique : données constructeur de la Nismo Skyline GT-R Z-tune (R34, 6 cylindres en ligne biturbo « Z2 » de 2,8 L, boîte Getrag 6 rapports).
   const CARD = {
@@ -101,19 +102,22 @@
     c.dist += ((b - c.idx + n + n / 2) % n) - n / 2;
     c.idx = b;
     const s = S[b], nx = -s.tz, nz = s.tx, L = W - 1.1;
-    c.d = (c.x - s.x) * nx + (c.z - s.z) * nz; c.hit = 0;
+    c.d = (c.x - s.x) * nx + (c.z - s.z) * nz; c.hit = 0; c.rub = 0; c.wallT = (c.wallT || 0) - dt;
     const o = Math.abs(c.d) - L;
     if (o > 0) {
       const sg = Math.sign(c.d), vn = (c.vx * nx + c.vz * nz) * sg;
-      c.x -= nx * sg * o; c.z -= nz * sg * o; c.d = sg * L;
-      const sc = Math.exp(-1.2 * dt); c.vx *= sc; c.vz *= sc; // frotter le mur freine en continu
-      c.th += wrap(Math.atan2(s.tz, s.tx) - c.th) * Math.min(1, 4 * dt); // ... et remet le nez dans l'axe, pour ne pas rester collé
+      c.x -= nx * sg * o; c.z -= nz * sg * o; c.d = sg * L; c.rub = 1;
+      const sc = Math.exp(-WALL_RUB * dt); c.vx *= sc; c.vz *= sc; // frotter le mur freine en continu
+      const rel = wrap(c.th - Math.atan2(s.tz, s.tx)), into = rel * sg > 0 && Math.abs(rel) < 1.5; // nez tourné vers le mur
+      c.th -= rel * Math.min(1, (into ? 25 : 4) * dt); // le mur redresse la voiture : volant braqué vers lui, elle glisse le long au lieu de s'y planter
       if (vn > 0) {
-        const k = 1 - clamp(vn * 0.05, 0.2, 0.7); // tout contact coûte au moins 20 % de la vitesse
-        c.vx = (c.vx - nx * sg * vn * 1.3) * k; c.vz = (c.vz - nz * sg * vn * 1.3) * k; c.hit = vn;
+        // la perte sèche ne tombe qu'à l'arrivée sur le mur : rester appuyé dessus, volant braqué, ne fait que frotter
+        const fresh = !(c.wallT > 0), sa = vn / Math.max(Math.hypot(c.vx, c.vz), 1), k = fresh ? 1 - clamp((sa - WALL_SOFT) * WALL_LOSS, 0, 0.7) : 1;
+        c.vx = (c.vx - nx * sg * vn) * k; c.vz = (c.vz - nz * sg * vn) * k; c.hit = fresh ? vn : 0; // pas de rebond : on glisse le long du mur
         c.th += wrap(Math.atan2(s.tz, s.tx) - c.th) * Math.min(0.5, vn * 0.03);
-        if (vn > 3) { c.driftT = 0; c.boost = 0; c.stun = 0.8; } // un vrai choc annule le boost et coupe le moteur 0,8 s
+        if (fresh && sa > WALL_HARD && vn > 5) { c.driftT = 0; c.boost = 0; c.stun = 0.8; } // un vrai choc annule le boost et coupe le moteur 0,8 s
       }
+      c.wallT = 0.4;
     }
     c.vf = vf; c.vl = vl;
   }

@@ -35,6 +35,17 @@ assert(c.rpm >= CARD.idle && c.rpm <= CARD.red + 200, 'régime hors limites: ' +
 c = newCar(T); let tf = 0, fh = 0;
 while (c.dist < n && tf < 180) { step(c, { ...autopilot(c, T), gas: 1, brake: 0 }, T, H); tf += H; if (c.hit > 0) fh++; }
 
+assert(tf > t + 3, 'rouler à fond dans les murs doit rester plus lent que freiner: ' + tf);
+// frôler le mur en biais gratte (étincelles) mais ne casse pas la vitesse ni ne coupe le moteur
+for (const [deg, keep, steer] of [[6, 0.82, 0], [12, 0.72, 0], [6, 0.7, 1]]) { // dernier cas : volant tenu à fond vers le mur
+  const c = newCar(T), v = () => Math.hypot(c.vx, c.vz); run(c, I(0, 1), 6);
+  const s = S[c.idx], a = deg * Math.PI / 180, th = Math.atan2(s.tz, s.tx) + a, v0 = v(), o = W - 1.3 - c.d; // posée au ras du mur, le nez tourné de `deg` vers lui
+  c.x += -s.tz * o; c.z += s.tx * o; c.th = th; c.vx = Math.cos(th) * v0; c.vz = Math.sin(th) * v0;
+  let stun = 0, rub = 0; for (let i = 0; i < 120; i++) { step(c, I(steer, 1), T, H); stun = Math.max(stun, c.stun || 0); rub += c.rub; }
+  assert(rub > 0, 'frôlement : mur non atteint');
+  assert(v() > v0 * keep && stun <= 0, `frôlement à ${deg}° trop pénalisé: ${v0.toFixed(1)} -> ${v().toFixed(1)} m/s, coupure ${stun}`);
+}
+
 // freiner fort en braquant à fond fait décrocher ; une glisse tenue donne un boost à la reprise d'adhérence
 c = newCar(T); run(c, I(0, 1), 8); run(c, I(1, 0, 1), 0.7);
 assert(c.drift, 'freinage appuyé en virage : pas de glisse');
@@ -98,7 +109,7 @@ assert(bump > 0.5 && b.d > 2.5, 'le contact latéral doit pousser: ' + b.d);
 assert(a.vf > 36 && Math.hypot(b.vx, b.vz) > 36, 'le contact latéral ne doit pas arrêter: ' + a.vf);
 
 // le tour d'une voiture seule ne doit pas bouger quand on touche à la course (records vpr5.* comparables)
-assert(Math.abs(t - 44.79) < 0.01 && Math.abs(tf - 52.68) < 0.01 && Math.abs(td - 46.19) < 0.01, `le tour solo a changé: ${t} / ${tf} / ${td}`);
+assert(Math.abs(t - 44.79) < 0.01 && Math.abs(td - 46.19) < 0.01, `le tour solo a changé: ${t} / ${tf} / ${td}`);
 // les 3 niveaux d'IA, seuls : du plus rapide au plus lent, entre le tour propre et le tour en glisse
 const laps = AI_LVL.map(lvl => { const c = newCar(T); let t = 0; while (c.dist < n && t < 180) { step(c, autopilot(c, T, lvl), T, H); t += H; assert(c.hit < 3, 'IA seule dans le mur'); } return t; });
 assert(laps.every((l, i) => l > 44.79 && l < 46.19 && (!i || l > laps[i - 1] + 0.2)), 'rythme des IA hors plage: ' + laps);
