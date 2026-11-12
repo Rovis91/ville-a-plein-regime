@@ -1,6 +1,6 @@
 # Ville à plein régime
 
-Jeu de course arcade solo, contre-la-montre de nuit dans une ville cyberpunk en 3D pixelisée. Un circuit, une voiture, une radio à trois stations dont la musique réagit à la course.
+Jeu de course arcade solo, de nuit dans une ville cyberpunk en 3D pixelisée. Un circuit, une voiture, une radio à trois stations dont la musique réagit à la course. Deux modes, à choisir sur l'écran titre : contre-la-montre à tours enchaînés (records et fantôme), ou course de 3 tours contre 3 adversaires pilotés par l'ordinateur.
 
 Tout tourne dans le navigateur, sans étape de build ni dépendance à installer.
 
@@ -19,6 +19,7 @@ puis ouvrir http://localhost:8123/.
 
 | Touche | Action |
 |---|---|
+| ← → (écran titre) | choisir le mode : contre-la-montre ou course |
 | Entrée | démarrer |
 | ↑ ↓ ← → ou ZQSD | accélérer, freiner, tourner |
 | Espace | frein à main (déclenche la glisse) |
@@ -36,7 +37,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | Fichier | Rôle |
 |---|---|
 | `index.html` | page, polices, ordre de chargement des scripts |
-| `sim.js` | **circuit et physique**, sans aucun rendu : tracé, voiture, moteur et boîte, glisse, murs, pilote automatique. Partagé entre le jeu et les tests. |
+| `sim.js` | **circuit et physique**, sans aucun rendu : tracé, voiture, moteur et boîte, glisse, murs, pilote automatique, course (adversaires, chocs entre voitures, classement). Partagé entre le jeu et les tests. |
 | `game.js` | tout le reste : rendu three.js, effets, audio, interface, commandes, boucle de jeu |
 | `samples.js` | sons de batterie encodés en base64 (généré depuis `samples/`) |
 | `samples/` | sons de Roland TR-808 d'origine et leur note d'auteur |
@@ -52,7 +53,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 node test.js
 ```
 
-Vérifie la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse et le boost.
+Vérifie la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse et le boost, puis la course : chocs entre voitures, dépassement, course complète de 3 tours et classement.
 
 Dans le navigateur, `?auto` fait conduire le pilote automatique, et `window.__g` expose l'état du jeu pour le débogage.
 
@@ -67,6 +68,7 @@ Dans `sim.js`, en haut du fichier :
 | `PTS`, `HGT` | points de contrôle et altitudes du circuit |
 | `CARD` | la voiture : rapports de boîte, courbe de couple, masse, aérodynamique |
 | `TOP` | vitesse de référence pour le braquage et les effets visuels |
+| `AI_LVL` | niveau de chaque adversaire du mode course (1 = tour propre du pilote automatique) |
 
 Dans `game.js` :
 
@@ -80,6 +82,7 @@ Dans `game.js` :
 | `cam.fov =` | grand-angle de la caméra selon la vitesse |
 | `function drawHUD(` | toute l'interface et les écrans |
 | `const pauseItems` | entrées du menu pause |
+| `const OPP = [` | noms et couleurs des adversaires |
 
 Les records, le fantôme et les préférences sont stockés dans le navigateur sous les clés `vpr5.*`. Quand la physique change au point de rendre les anciens temps incomparables, incrémenter ce préfixe.
 

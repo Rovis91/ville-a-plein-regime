@@ -332,6 +332,13 @@
   }
 
   const ghostM = box(4.4, 0.9, 1.9, addMat(null, { color: 0x00f0ff, opacity: 0.4, polygonOffset: false }), 0, 0, 0); ghostM.visible = false; // fantôme : simple silhouette lumineuse
+  // adversaires du mode course : copies de la voiture du joueur, une couleur chacune (roues fixes) ; [nom, couleur]
+  const OPP = [['KENJI', '#00c8ff'], ['REI', '#ff8a00'], ['JUN', '#40ff80']];
+  const opps = OPP.map(([, col]) => {
+    const g = carG.clone(), m = new THREE.MeshLambertMaterial({ color: col }), b = brakeMat.clone();
+    g.traverse(o => { if (o.material === carMat) o.material = m; else if (o.material === brakeMat) o.material = b; });
+    g.visible = false; g.userData.y = 0; scene.add(g); return g;
+  });
   scene.traverse(o => { if (o.isInstancedMesh) o.frustumCulled = false; }); // r128 calcule le culling sur la géométrie de base, pas sur les instances
 
   // ---------- audio : tout est synthétisé (bande-son originale et adaptative) ----------
@@ -517,12 +524,15 @@
   const fmt = t => `${t / 60 | 0}'${String(t % 60 | 0).padStart(2, '0')}"${String(t * 100 % 100 | 0).padStart(2, '0')}`;
   let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, cth = car.th, lm = 0, carY = S[car.idx].y, pitch = 0, result = null, manual = false;
   // secteurs (entrée et sortie de l'échangeur) et fantôme du record : [x, y, z, cap] à 20 Hz
+  // mode : 'solo' (contre-la-montre à tours enchaînés) ou 'course' (3 tours contre les IA de sim.js) ; race = la course en cours, sinon null
+  let mode = store.get('mode') === 'course' ? 'course' : 'solo', race = null, raceEnd = false;
   let si = 0, cur = [], bestSpl = store.get('splits'), ghost = store.get('ghost'), recG = [], splitMsg = null, lapN = 1, prev = 'race', psel = 0, ghostOn = !!store.get('ghostOn');
   const keys = {}, H = 1 / 120;
 
   function start() {
     if (!AC) initAudio(); AC.resume();
-    car = newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 1.8; shown = 0; tRace = 0; acc = 0; lapN = 1; result = null;
+    race = mode === 'course' ? newRace(T) : null; raceEnd = false;
+    car = race ? race.cars[0] : newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 1.8; shown = 0; tRace = 0; acc = 0; lapN = 1; result = null;
   }
   function finish() { // tour bouclé : on l'enregistre, on affiche son temps 4 s, et le chrono repart aussitôt pour un tour lancé
     const rec = !best || tRace < best; result = { rec, diff: best ? tRace - best : 0, t: tRace, n: lapN, T: 4 };
@@ -539,7 +549,7 @@
     else if (psel === 3) setStation(station + 1);
     else if (psel === 4) toggleMusic();
     else if (psel === 5) { ghostOn = !ghostOn; store.set('ghostOn', ghostOn); }
-    else { state = 'title'; car = newCar(T); cth = car.th; carY = S[car.idx].y; tRace = 0; lapN = 1; result = null; hist.length = 0; }
+    else { state = 'title'; race = null; car = newCar(T); cth = car.th; carY = S[car.idx].y; tRace = 0; lapN = 1; result = null; hist.length = 0; }
   }
   addEventListener('keydown', e => {
     keys[e.code] = 1;
@@ -554,7 +564,8 @@
       return;
     }
     if ((e.code === 'Escape' || key === 'p') && (state === 'race' || state === 'count')) { prev = state; state = 'pause'; psel = 0; return; }
-    if ((e.code === 'Enter' && state === 'title') || key === 'r') start();
+    if (state === 'title' && /^(Arrow(Left|Right)|Key[AD])$/.test(e.code)) { mode = mode === 'solo' ? 'course' : 'solo'; store.set('mode', mode); }
+    if ((e.code === 'Enter' && (state === 'title' || raceEnd)) || key === 'r') start();
     if (key === 'g') { manual = !manual; car.manual = manual; car.gear = gear; }
     if (manual && (e.code === 'KeyE' || e.code === 'KeyQ')) car.gear = clamp(car.gear + (e.code === 'KeyE' ? 1 : -1), 0, 5); // physiquement A / E autour du Z en AZERTY
     if (key === 'c') setStation(station + 1);
@@ -595,8 +606,9 @@
     hg.clearRect(0, 0, HW, HH);
     const cx = HW / 2, blink = (performance.now() / 160 | 0) % 3 > 0;
     // chrono
-    panel(6, 6, 132, 50); txt('TOUR ' + lapN, 12, 11, 8, C); txt('ラップ', 132, 6, 16, C, 'right', 0, JP);
-    txt(fmt(tRace), 12, 24, 16, Y, 'left', 1); txt(best ? 'REC ' + fmt(best) : 'REC --', 12, 44, 8, RD);
+    panel(6, 6, 132, 50); txt(race ? 'TOUR ' + car.lap + '/' + race.laps : 'TOUR ' + lapN, 12, 11, 8, C); txt('ラップ', 132, 6, 16, C, 'right', 0, JP);
+    txt(fmt(tRace), 12, 24, 16, Y, 'left', 1); txt(race ? 'PLACE ' + car.pos + '/' + race.cars.length : best ? 'REC ' + fmt(best) : 'REC --', 12, 44, 8, RD);
+    if (race && !raceEnd) txt(car.pos + '/' + race.cars.length, cx, 8, 16, Y, 'center', 1);
     // vitesse
     panel(HW - 126, HH - 64, 120, 58); txt('KM/H', HW - 120, HH - 59, 8, C); txt('スピード', HW - 12, HH - 64, 16, C, 'right', 0, JP);
     txt(String(sp * 3.6 | 0), HW - 10, HH - 42, 32, Y, 'right', 1);
@@ -615,6 +627,7 @@
       const mx = HW - 96, my = 46, dot = (x, z, c) => R(hg, c, mx + MM.px(x) - 1, my + MM.pz(z) - 1, 3, 3);
       panel(HW - 102, 40, 96, 68); hg.drawImage(MM.c, mx, my); // 96 de large : ne touche pas les bandeaux centraux même en 4:3 (HW = 360)
       if (ghostM.visible) dot(ghostM.position.x, ghostM.position.z, C);
+      if (race) race.cars.forEach((c, i) => i && dot(c.x, c.z, OPP[i - 1][1]));
       dot(car.x, car.z, Y);
     }
     if (car.boost > 0) tag('BOOST', cx, 82, C);
@@ -625,12 +638,18 @@
       R(hg, 'rgba(8,8,12,.8)', 0, 0, HW, HH);
       txt('夜間タイムアタック', cx, 30, 16, C, 'center', 0, JP); txt('CONTRE-LA-MONTRE NOCTURNE', cx, 52, 8, C, 'center');
       txt('VILLE À', cx, 76, 24, Y, 'center', 2); txt('PLEIN REGIME', cx, 106, 24, Y, 'center', 2);
-      if (blink) tag('> ENTREE : DEMARRER <', cx, 148, Y);
-      ['FLECHES OU ZQSD : PILOTER', 'ESPACE : FREIN A MAIN / GLISSE', 'G : BOITE MANUELLE (A / E : RAPPORTS)', 'C : RADIO   M : SON   ECHAP : PAUSE'].forEach((s, i) => txt(s, cx, 172 + i * 13, 8, '#e8e8e4', 'center'));
+      txt(mode === 'solo' ? '< MODE : CONTRE-LA-MONTRE >' : '< MODE : COURSE, 3 TOURS CONTRE 3 IA >', cx, 136, 8, C, 'center');
+      if (blink) tag('> ENTREE : DEMARRER <', cx, 150, Y);
+      ['FLECHES OU ZQSD : PILOTER', 'ESPACE : FREIN A MAIN / GLISSE', 'G : BOITE MANUELLE (A / E : RAPPORTS)', 'C : RADIO   M : SON   ECHAP : PAUSE', 'GAUCHE / DROITE : CHANGER DE MODE'].forEach((s, i) => txt(s, cx, 172 + i * 13, 8, '#e8e8e4', 'center'));
     } else if (state === 'count' && shown) txt(String(shown), cx, 90, 64, Y, 'center', 3);
     else if (goT > 0) txt('GO', cx, 90, 64, Y, 'center', 3);
     if (result && state !== 'title' && (result.T -= dt) > 0) { // résultat du tour qu'on vient de boucler, sans arrêter la course
       tag('TOUR ' + result.n + '  ' + fmt(result.t), cx, 122, Y); tag(result.rec ? 'NOUVEAU RECORD' : '+' + result.diff.toFixed(2) + ' S', cx, 138, result.rec ? C : RD);
+    }
+    if (raceEnd && state === 'race') { // arrivée : classement, complété à mesure que les autres passent la ligne
+      panel(cx - 134, 60, 268, 132); txt('ARRIVEE : ' + car.pos + (car.pos === 1 ? 'ER' : 'E'), cx, 68, 16, Y, 'center', 1);
+      raceOrder(race).forEach((c, i) => { const j = race.cars.indexOf(c); txt((i + 1) + '. ' + (j ? OPP[j - 1][0] : 'VOUS'), cx - 96, 96 + i * 16, 8, j ? OPP[j - 1][1] : Y); txt(c.fin ? fmt(c.fin) : '--', cx + 96, 96 + i * 16, 8, j ? '#e8e8e4' : Y, 'right'); });
+      txt('ENTREE : REJOUER   ECHAP : PAUSE', cx, 172, 8, C, 'center');
     }
     if (state === 'pause') {
       R(hg, 'rgba(8,8,12,.86)', 0, 0, HW, HH); txt('PAUSE', cx, 36, 32, Y, 'center', 2);
@@ -658,11 +677,17 @@
     }
     if (goT > 0) goT -= dt;
     const keyIn = input();
-    const inp = state === 'race' ? (AUTO ? autopilot(car, T) : keyIn) : { steer: 0, gas: 0, brake: 0, hand: false };
+    const inp = state === 'race' ? (AUTO || raceEnd ? autopilot(car, T) : keyIn) : { steer: 0, gas: 0, brake: 0, hand: false };
     let hit = 0;
     for (acc += dt; acc >= H; acc -= H) {
-      step(car, inp, T, H); hit = Math.max(hit, car.hit);
-      if (state === 'race') { tRace += H; if (car.dist >= N) finish(); }
+      // en course, sim.js fait avancer tout le monde ; inp = null : l'IA conduit la voiture du joueur (?auto, ou une fois arrivé)
+      if (race && state === 'race') stepRace(race, AUTO || raceEnd ? null : inp, H); else step(car, inp, T, H);
+      hit = Math.max(hit, car.hit, car.bump || 0); // shortcut: un choc entre voitures réutilise les effets du choc mur (étincelles côté mur), à séparer si ça se voit
+      if (state === 'race' && !raceEnd) {
+        tRace += H;
+        if (race) { if (car.fin) { raceEnd = true; tRace = car.fin; car.manual = false; stinger(car.pos === 1); } }
+        else if (car.dist >= N) finish();
+      }
     }
     const sp = Math.hypot(car.vx, car.vz), r = Math.min(1, sp / TOP), gas = state === 'count' ? keyIn.gas : inp.gas;
     const beat = AC ? Math.max(0, (AC.currentTime - t0) / (4 * S16)) : 0, pulse = AC ? Math.exp(-(beat % 1) * 5) : 0; // battement calé sur le kick
@@ -673,6 +698,11 @@
     const sc = S[car.idx], fx = Math.cos(car.th), fz = Math.sin(car.th);
     carY += (sc.y - carY) * Math.min(1, dt * 18); pitch += (Math.atan(sc.sl) - pitch) * Math.min(1, dt * 10);
     carG.position.set(car.x, carY, car.z); carG.rotation.set(0, -car.th, pitch); body.rotation.x = car.steer * r * 0.07;
+    opps.forEach((g, i) => {
+      const c = race && race.cars[i + 1]; g.visible = !!c; if (!c) return;
+      const so = S[c.idx]; g.userData.y += (so.y - g.userData.y) * Math.min(1, dt * 18);
+      g.position.set(c.x, g.userData.y, c.z); g.rotation.set(0, -c.th, Math.atan(so.sl));
+    });
     cth += wrap(car.th - cth) * Math.min(1, dt * 6);
     const cx = Math.cos(cth), cz = Math.sin(cth), back = 8.2 - 1.4 * r;
     let px = car.x - cx * back, pz = car.z - cz * back;
@@ -703,12 +733,12 @@
     }
     rainGeo.attributes.position.needsUpdate = true;
 
-    if (state === 'race') {
+    if (state === 'race' && !race) {
       while (recG.length / 4 <= tRace * 20) recG.push(+car.x.toFixed(2), +carY.toFixed(2), +car.z.toFixed(2), +car.th.toFixed(3));
       if (si < 2 && car.dist >= [T.t0, T.t1][si]) { cur[si] = tRace; splitMsg = { i: si, t: tRace, d: bestSpl ? tRace - bestSpl[si] : null, T: 2.5 }; si++; }
     }
     const gi = tRace * 20, g0 = Math.floor(gi) * 4, gf = gi % 1;
-    ghostM.visible = ghostOn && state === 'race' && !!ghost && g0 + 7 < ghost.length;
+    ghostM.visible = ghostOn && state === 'race' && !race && !!ghost && g0 + 7 < ghost.length;
     if (ghostM.visible) { ghostM.position.set(lerp(ghost[g0], ghost[g0 + 4], gf), lerp(ghost[g0 + 1], ghost[g0 + 5], gf) + 0.6, lerp(ghost[g0 + 2], ghost[g0 + 6], gf)); ghostM.rotation.y = -(ghost[g0 + 3] + wrap(ghost[g0 + 7] - ghost[g0 + 3]) * gf); }
     fxFrame(dt, now, sp, inp, hit, fx, fz);
     if (AC) audioFrame(dt, r, sp, gas, hit, up);
@@ -723,5 +753,5 @@
   }
   const loop = now => { requestAnimationFrame(loop); frame(now); };
   requestAnimationFrame(loop);
-  window.__g = { frame, start, keys, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return AC; }, get out() { return master; }, get smp() { return Object.keys(smp); } }; // prise de test
+  window.__g = { frame, start, keys, get car() { return car; }, get state() { return state; }, get race() { return race; }, get t() { return tRace; }, get ac() { return AC; }, get out() { return master; }, get smp() { return Object.keys(smp); } }; // prise de test
 })();
