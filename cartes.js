@@ -359,6 +359,6 @@
         hud: { y: '#ffffff', c: '#ffb03a', r: '#e8482a', fond: 'rgba(70,36,16,.9)', style: 'trait', split: 0, jp: null, sur: [null, 'SPECIALE 7 · FIN DE JOURNEE'], titre: ['SPECIALE', 'DES OCRES'] } } },
   ];
   let id = 'ville';
-  if (typeof location !== 'undefined') try { id = new URLSearchParams(location.search).get('carte') || localStorage.getItem('vpr.carte') || id; } catch (e) { }
+  if (typeof location !== 'undefined') try { id = (/^#defi=\d+\.([a-z0-9]+)\./.exec(location.hash) || [])[1] || new URLSearchParams(location.search).get('carte') || localStorage.getItem('vpr.carte') || id; } catch (e) { } // un lien de défi (#defi=version.carte.données, voir defiCode dans sim.js) ouvre sa carte
   G.CARTE = G.CARTE || G.CARTES.find(m => m.id === id) || G.CARTES[0];
 })(typeof window !== 'undefined' ? window : globalThis);
