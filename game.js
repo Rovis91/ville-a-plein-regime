@@ -631,12 +631,12 @@
   let padNoteT = 0; const padDit = s => { padNote.textContent = s; padNote.style.display = ''; clearTimeout(padNoteT); padNoteT = setTimeout(() => { padNote.style.display = 'none'; }, 3000); };
   addEventListener('gamepaddisconnected', e => { delete padRepos[e.gamepad.index]; if (e.gamepad.index === padIdx) { padIdx = -1; padDit('MANETTE DÉCONNECTÉE'); } });
   // Joy-Con lu en direct (WebHID) : sous Windows, Chrome reçoit ses rapports mais ne le montre pas à l'API Gamepad (constaté sur Chrome 156, Joy-Con (R) en Bluetooth).
-  // Rapport 0x3f, Joy-Con seul tenu à l'horizontale : octet 0 = boutons (1 bas, 2 droite, 4 gauche, 8 haut, 16 SL, 32 SR), octet 1 = − ou + (1, 2), octet 2 = stick en 8 directions (0 = haut, sens horaire, 8 et plus = repos).
+  // Rapport 0x3f, Joy-Con seul tenu à l'horizontale : octet 0 = boutons (1 droite, 2 haut, 4 bas, 8 gauche, 16 SL, 32 SR), octet 1 = − ou + (1, 2), octet 2 = stick en 8 directions (0 = haut, sens horaire, 8 et plus = repos).
   // Présenté comme une manette « standard », pour que padFrame le traite comme les autres. shortcut: stick en tout-ou-rien, passer au rapport 0x30 (stick 12 bits + étalonnage) pour un volant progressif.
   let hidPad = null;
   const hidLire = e => {
     if (e.reportId !== 0x3f || !hidPad) return; const d = new Uint8Array(e.data.buffer, e.data.byteOffset), h = d[2], set = (i, v) => { hidPad.buttons[i].pressed = !!v; hidPad.buttons[i].value = v ? 1 : 0; };
-    [4, 0, 2, 5, 3, 1].forEach((b, i) => set(b, d[0] & 1 << i)); set(9, d[1] & 3); // bits A, X, B, Y, SL, SR -> rapport -, gaz et valider, frein, rapport +, radio, glisse (choix de l'auteur)
+    [0, 5, 4, 2, 3, 1].forEach((b, i) => set(b, d[0] & 1 << i)); set(9, d[1] & 3); // Joy-Con (R) couché, SL / SR vers le haut : bits droite (X), haut (Y, constaté), bas (A), gauche (B), SL, SR -> gaz et valider, rapport +, rapport -, frein, radio, glisse (choix de l'auteur)
     hidPad.axes = [h > 0 && h < 4 ? 1 : h > 4 && h < 8 ? -1 : 0, h === 7 || h < 2 ? -1 : h > 2 && h < 6 ? 1 : 0];
   };
   const hidOuvre = async d => {
