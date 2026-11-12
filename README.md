@@ -159,6 +159,7 @@ Dans `cartes.js`, pour chaque carte :
 | Pluie au son | `pluieFrame` d'`audio.js`, famille « pluie » (bouton « Pluie » d'`ecoute.html`) : rideau étouffé par la carrosserie, qui suit la force (`T.pluie`) et la vitesse, coupé en tunnel ; gerbe grave en aquaplaning (`car.aq`) |
 | `trafic` | nombre de camions sur la route |
 | `sauts`, `cuv` | le relief (carte Roche-Sourde) : tremplins `[point, longueur, hauteur, fosse, profondeur]` et murs roulables `[a, b, largeur, rayon]`. Déclarer l'un ou l'autre donne à la voiture une hauteur et une gravité (`GRAV`, `DROOP`, `LAND0`, `LANDK`, `LANDX` en tête de `sim.js` : pesanteur, débattement avant de « voler », seuil et pente de la perte de vitesse à la réception). Sans eux, la carte reste à plat comme avant. |
+| `bis` | un itinéraire bis (Paris : les toits) : `{ de, a, w, pts, sauts }`, un second ruban de demi-largeur `w` qui quitte le tracé au point `de` et le rejoint au point `a`. On y entre en sortant de la route là où elle s'ouvre ; le relief y joue toujours ; le pilote automatique l'ignore (`?auto&bis` le lui fait prendre). `sim.js` : `T.bis`, `c.bis`, `c.ib`, `bascule()` |
 
 Dans `sim.js` : `TOP` est la vitesse de référence pour le braquage et les effets visuels, `AI_LVL` le niveau de chaque adversaire du mode course (1 = tour propre du pilote automatique).
 

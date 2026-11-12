@@ -7,6 +7,7 @@
 // Fait un tour en pilote auto et enregistre une capture 960 × 540 à intervalles réguliers, sans que personne regarde l'écran.
 // À servir par outils/capture.py. Paramètres :
 //   carte=ville|touge|wangan|paris|canal   pas=10 (secondes de course entre deux captures)   tours=1   style=net (vide = rendu par défaut)
+//   bis   le pilote prend la bretelle de la carte (itinéraire bis)
 //   idx=700,1351   à la place de pas : une capture au passage de ces échantillons de piste (pour revoir un endroit précis)
 //   vue=angle,distance,hauteur   caméra d'inspection autour de la voiture (window.__g.vue), sinon la caméra de course
 // Résultat : captures/<carte>-NN.jpg et captures/<carte>.json = { vues: [{ n, t, idx, kmh, tunnel }], erreurs, msParImage, tour }.
@@ -15,7 +16,7 @@
   const q = new URLSearchParams(location.search), carte = q.get('carte') || 'ville', pas = +(q.get('pas') || 10), tours = +(q.get('tours') || 1), style = q.get('style') ?? 'net';
   const cibles = (q.get('idx') || '').split(',').filter(Boolean).map(Number), log = t => { document.getElementById('log').textContent += t + '\n'; };
   const f = document.createElement('iframe'); f.style.cssText = 'width:960px;height:540px;border:0;display:block';
-  f.src = '../index.html?auto&carte=' + carte + (style ? '&style=' + style : '') + '&v=' + Date.now(); document.body.prepend(f);
+  f.src = '../index.html?auto' + (q.has('bis') ? '&bis' : '') + '&carte=' + carte + (style ? '&style=' + style : '') + '&v=' + Date.now(); document.body.prepend(f);
   await new Promise(r => { f.onload = r; });
   const w = f.contentWindow, erreurs = [];
   w.console.error = (...a) => erreurs.push(a.join(' ').slice(0, 300)); w.addEventListener('error', e => erreurs.push(e.message + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno));
