@@ -190,6 +190,27 @@ assert(arr[3].fin - arr[0].fin < 8, 'course trop étalée: ' + arr.map(c => c.fi
 R = newRace(T, 1); while (!R.cars.slice(1).every(c => c.fin) && R.t < 100) stepRace(R, I(0, 0), H);
 assert(R.cars[0].pos === 4 && !R.cars[0].fin && !R.done && R.t < 60, 'course à 1 tour avec joueur immobile');
 
+// ---------- Tournée : barème 10 / 6 / 3 / 1 par manche, grille dans l'ordre inverse du classement général (voitures désignées par leur indice : 0 = joueur, 1 à 3 = rivaux de la carte) ----------
+{
+  // avant la première manche : tout le monde à 0, la grille est celle d'une course ordinaire (joueur dernier)
+  assert.deepStrictEqual(tournee([0, 0, 0, 0]), { pts: [0, 0, 0, 0], classement: [0, 3, 2, 1], grille: [3, 0, 1, 2] });
+  // manche 1 : arrivée rival 2, joueur, rival 3, rival 1
+  const m1 = tournee([0, 0, 0, 0], [2, 0, 3, 1]);
+  assert.deepStrictEqual(m1, { pts: [6, 1, 10, 3], classement: [2, 0, 3, 1], grille: [2, 0, 3, 1] }); // le meneur (rival 2) part dernier, le dernier (rival 1) en pole
+  // manche 2 : le joueur gagne, les points s'ajoutent ; à égalité (16 partout en tête), le joueur est classé devant
+  const m2 = tournee(m1.pts, [0, 2, 1, 3]);
+  assert.deepStrictEqual(m2, { pts: [16, 4, 16, 4], classement: [0, 2, 3, 1], grille: [3, 0, 2, 1] });
+  assert.deepStrictEqual(m1.pts, [6, 1, 10, 3], 'tournee ne doit pas modifier les points reçus');
+  // une voiture qui n'est pas à l'arrivée ne marque rien
+  assert.deepStrictEqual(tournee([0, 0, 0, 0], [1, 2]).pts, [0, 10, 6, 0]);
+  // la course part sur la grille demandée : 8 m entre deux places, en quinconce ; sans grille, rien ne change (joueur dernier)
+  const g = newRace(T, 3, AI_LVL, 0, { grille: m2.grille }).cars, d = newRace(T).cars;
+  assert.deepStrictEqual(g.map(c => c.dist), [-20, -8, -16, -12], 'grille de la tournée');
+  assert.deepStrictEqual(g.map(c => c.pos), [4, 1, 3, 2]);
+  assert.deepStrictEqual(d.map(c => c.dist), [-20, -8, -12, -16], 'grille par défaut');
+  console.log(`OK  tournée : barème ${BAREME.join(' / ')}, après deux manches ${m2.pts.join(' / ')} points, grille ${m2.grille.join(' ')}`);
+}
+
 // ---------- course à élimination : autant de tours que de voitures ; à chaque passage de ligne du meneur à partir de la fin du tour 2, la dernière sort ----------
 let elimTxt;
 {

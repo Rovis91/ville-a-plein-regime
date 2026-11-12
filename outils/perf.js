@@ -48,6 +48,21 @@ export async function suite() { // lancé par ?perf : chaque carte à son tour
   else { console.table(tout.map(({ piresLots, piresCpu, sectMs, sectAppels, ...t }) => t)); window.__perf = tout; }
 }
 
+// Mémoire sur l'enchaînement des cartes sans rechargement, comme en Tournée : index.html?auto, mode course, puis dans la console : (await import('./outils/perf.js')).chaine()
+// Chaque carte de la liste est chargée à la suite de la précédente (tours fois toute la liste), roule `images` images en course, puis on relève ce que le GPU tient (géométries, textures, shaders)
+// et le tas JS (Chrome seulement ; lancer avec --js-flags=--expose-gc pour un relevé après ramasse-miettes). Sain : les chiffres d'une carte sont les mêmes au second passage qu'au premier.
+export async function chaine({ tours = 2, images = 300 } = {}) {
+  if (window.__g.mode !== 'course') throw new Error('passer en mode course au menu');
+  const out = []; let now = performance.now() + 1e7;
+  for (let k = 1; k <= tours; k++) for (const { id } of CARTES) {
+    const av = window.__g; if (av.M.id !== id) { av.carte(id); while (window.__g === av) await cede(); }
+    const g = window.__g, i = g.renderer.info; g.start(); for (let n = 0; n < images; n++) { g.frame(now += 1000 / 60); if (n % 30 === 0) await cede(); } // (la première image libère la carte précédente)
+    if (window.gc) window.gc();
+    out.push({ tour: k, carte: id, geometries: i.memory.geometries, textures: i.memory.textures, shaders: i.programs.length, tasMo: performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null });
+  }
+  console.table(out); return out;
+}
+
 // Contrôle de la fusion du décor (game.js, « fusion ») : liste ce qui bouge ou change de visibilité pendant 15 s de course parmi les maillages simples.
 // Tout ce qui sort ici en dehors du ciel, de la voiture et des adversaires doit porter userData.dyn = 1 (lui ou un parent), sinon la fusion le figerait.
 export function mobiles() {
