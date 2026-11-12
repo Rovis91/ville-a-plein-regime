@@ -82,17 +82,17 @@
     voile(g, 0.4, () => { for (let x = 0; x < 64; x += 9) R(g, '#000', x, 0, 1, 26); R(g, '#000', 0, 0, 64, 2); R(g, '#000', 26, 3, 12, 22); });
     voile(g, 0.2, () => R(g, '#fff', 27, 4, 10, 20)); R(g, '#16161a', 0, 26, 64, 6); for (const x of [6, 14, 46, 54]) R(g, '#2c2c34', x, 27, 5, 5);
   }],
-  // carrosserie claire, à teinter, vue de côté sur une seule boîte : bandeau vitré à montants, portes, bas de caisse et roues
+  // carrosserie claire, à teinter, vue de côté sur une seule boîte : bandeau vitré, un joint de porte, bas de caisse et roues. Volontairement plus sobre que les voitures du jeu (textures-voitures.js)
   carrosserie: () => [64, 32, (g, o) => {
     const { R, voile } = o; R(g, '#ececec', 0, 0, 64, 32);
-    R(g, '#141820', 10, 3, 42, 10); for (const x of [10, 24, 38, 51]) R(g, '#ececec', x, 3, 2, 10); voile(g, 0.2, () => { R(g, '#fff', 13, 4, 9, 2); R(g, '#fff', 27, 4, 9, 2); });
-    voile(g, 0.3, () => { R(g, '#000', 0, 14, 64, 1); R(g, '#000', 25, 14, 1, 12); R(g, '#000', 39, 14, 1, 12); R(g, '#000', 0, 24, 64, 1); R(g, '#fff', 0, 15, 64, 1); semis(g, o, 40, '#000'); });
+    R(g, '#1a1e26', 10, 3, 42, 10); R(g, '#ececec', 30, 3, 2, 10);
+    voile(g, 0.2, () => { R(g, '#000', 0, 14, 64, 1); R(g, '#000', 31, 14, 1, 12); });
     R(g, '#101014', 0, 28, 64, 4); for (const x of [8, 46]) { R(g, '#101014', x, 22, 11, 10); R(g, '#3a3a44', x + 3, 25, 5, 5); }
   }],
-  // laque claire, à teinter : le bas de caisse d'une voiture garée. Joints de portes, passages de roue, filet
+  // laque claire, à teinter : le bas de caisse d'une voiture garée. Un joint de porte, passages de roue ; sobre, pour laisser la vedette aux voitures du jeu
   laque: () => [64, 16, (g, o) => {
     const { R, voile } = o; R(g, '#ececec', 0, 0, 64, 16);
-    voile(g, 0.3, () => { R(g, '#fff', 0, 2, 64, 1); R(g, '#000', 0, 9, 64, 1); for (const x of [21, 36]) R(g, '#000', x, 0, 1, 12); semis(g, o, 30, '#000'); });
+    voile(g, 0.2, () => R(g, '#000', 30, 0, 1, 12));
     R(g, '#101014', 0, 13, 64, 3); for (const x of [7, 46]) { R(g, '#101014', x, 6, 11, 10); R(g, '#3a3a44', x + 3, 9, 5, 5); }
   }],
   // entrepôt : bardage nervuré, portes de quai, bandeau de vitres hautes, salissures
