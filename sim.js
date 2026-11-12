@@ -58,6 +58,26 @@
       drift: false, slide: 0, driftT: 0, dd: 0, sa: 0, boost: 0, stun: 0, manual: false, gear: 0, lastGear: 0, shiftT: 0, rpm: CARD.idle };
   }
 
+  // Contact avec un mur : N = normale unitaire vers le mur, o = enfoncement, T = sens du mur dans le sens de la marche, sgT = côté du mur par rapport à T
+  // (+1 = à droite), kw = courbure du mur dans le sens où il fait tourner la voiture (mur extérieur d'un virage > 0)
+  function mur(c, Nx, Nz, o, Tx, Tz, sgT, kw, dt) {
+    const vn = c.vx * Nx + c.vz * Nz;
+    c.x -= Nx * o; c.z -= Nz * o; c.rub = 1;
+    // frotter le mur freine en continu ; et le mur extérieur d'un virage ne remplace pas les pneus : s'y appuyer pour tourner se paie en vitesse, en proportion de ce qu'il fait tourner (rien le long d'un mur droit)
+    const v = Math.hypot(c.vx, c.vz), sc = Math.exp(-(WALL_RUB + WALL_MU * Math.max(0, kw * v - 0.1)) * dt); c.vx *= sc; c.vz *= sc;
+    const rel = wrap(c.th - Math.atan2(Tz, Tx)), into = rel * sgT > 0 && Math.abs(rel) < 1.5; // nez tourné vers le mur
+    c.th -= rel * Math.min(1, (into ? 25 : 4) * dt); // le mur redresse la voiture : volant braqué vers lui, elle glisse le long au lieu de s'y planter
+    if (vn > 0) {
+      // la perte sèche ne tombe qu'à l'arrivée sur le mur : rester appuyé dessus, volant braqué, ne fait que frotter
+      const fresh = !(c.wallT > 0), sa = vn / Math.max(Math.hypot(c.vx, c.vz), 1), k = fresh ? 1 - clamp((sa - WALL_SOFT) * WALL_LOSS, 0, 0.7) : 1;
+      c.vx = (c.vx - Nx * vn) * k; c.vz = (c.vz - Nz * vn) * k; c.hit = fresh ? vn : 0; // pas de rebond : on glisse le long du mur
+      c.th += wrap(Math.atan2(Tz, Tx) - c.th) * Math.min(0.5, vn * 0.03);
+      if (fresh && sa > WALL_HARD && vn > 5) { c.dd = 0; c.driftT = 0; c.boost = 0; c.stun = 0.8; } // un vrai choc annule le boost et coupe le moteur 0,8 s
+    }
+    c.wallT = 0.4;
+  }
+  const dansPlace = (x, z) => !!M.place && Math.hypot(x - M.place.c[0], z - M.place.c[1]) < M.place.r; // sur la place, on roule partout
+
   // inp: {steer:-1..1 (droite>0), gas:0..1, brake:0..1, hand:bool}
   function step(c, inp, T, dt) {
     const S = T.S, n = T.n;
@@ -112,27 +132,26 @@
     c.x += c.vx * dt; c.z += c.vz * dt;
     // position sur la piste + murs (impossible de couper : un tour bouclé est toujours valide)
     let b = c.idx, bd = 1e9;
-    for (let j = -6; j <= 14; j++) { const i = (c.idx + j + n) % n, s = S[i], d = (s.x - c.x) ** 2 + (s.z - c.z) ** 2; if (d < bd) { bd = d; b = i; } }
+    // sur la place on coupe où l'on veut : on cherche l'échantillon le plus proche bien plus loin devant
+    for (let j = -6, jm = dansPlace(c.x, c.z) ? 250 : 14; j <= jm; j++) { const i = (c.idx + j + n) % n, s = S[i], d = (s.x - c.x) ** 2 + (s.z - c.z) ** 2; if (d < bd) { bd = d; b = i; } }
     c.dist += ((b - c.idx + n + n / 2) % n) - n / 2;
     c.idx = b;
     const s = S[b], nx = -s.tz, nz = s.tx, L = s.w - 1.1;
     c.d = (c.x - s.x) * nx + (c.z - s.z) * nz; c.hit = 0; c.rub = 0; c.wallT = (c.wallT || 0) - dt;
-    const o = Math.abs(c.d) - L;
-    if (o > 0) {
-      const sg = Math.sign(c.d), vn = (c.vx * nx + c.vz * nz) * sg;
-      c.x -= nx * sg * o; c.z -= nz * sg * o; c.d = sg * L; c.rub = 1;
-      // frotter le mur freine en continu ; et le mur extérieur d'un virage ne remplace pas les pneus : s'y appuyer pour tourner se paie en vitesse, en proportion de ce qu'il fait tourner (rien le long d'un mur droit)
-      const v = Math.hypot(c.vx, c.vz), sc = Math.exp(-(WALL_RUB + WALL_MU * Math.max(0, -s.k * sg * v - 0.1)) * dt); c.vx *= sc; c.vz *= sc;
-      const rel = wrap(c.th - Math.atan2(s.tz, s.tx)), into = rel * sg > 0 && Math.abs(rel) < 1.5; // nez tourné vers le mur
-      c.th -= rel * Math.min(1, (into ? 25 : 4) * dt); // le mur redresse la voiture : volant braqué vers lui, elle glisse le long au lieu de s'y planter
-      if (vn > 0) {
-        // la perte sèche ne tombe qu'à l'arrivée sur le mur : rester appuyé dessus, volant braqué, ne fait que frotter
-        const fresh = !(c.wallT > 0), sa = vn / Math.max(Math.hypot(c.vx, c.vz), 1), k = fresh ? 1 - clamp((sa - WALL_SOFT) * WALL_LOSS, 0, 0.7) : 1;
-        c.vx = (c.vx - nx * sg * vn) * k; c.vz = (c.vz - nz * sg * vn) * k; c.hit = fresh ? vn : 0; // pas de rebond : on glisse le long du mur
-        c.th += wrap(Math.atan2(s.tz, s.tx) - c.th) * Math.min(0.5, vn * 0.03);
-        if (fresh && sa > WALL_HARD && vn > 5) { c.dd = 0; c.driftT = 0; c.boost = 0; c.stun = 0.8; } // un vrai choc annule le boost et coupe le moteur 0,8 s
+    const o = Math.abs(c.d) - L, P = M.place, pr = P ? Math.hypot(c.x - P.c[0], c.z - P.c[1]) - (P.r - 1.1) : Infinity; // pr > 0 : hors du cercle de la place
+    if (o > 0 && pr > 0) { // hors de la chaussée et hors de la place : le mur le plus proche
+      if (pr < o) { const dx = (c.x - P.c[0]) / (pr + P.r - 1.1), dz = (c.z - P.c[1]) / (pr + P.r - 1.1), t = c.vx * -dz + c.vz * dx > 0 ? 1 : -1; mur(c, dx, dz, pr, -dz * t, dx * t, -t, 1 / P.r, dt); }
+      else { const sg = Math.sign(c.d); c.d = sg * L; mur(c, nx * sg, nz * sg, o, s.tx, s.tz, sg, -s.k * sg, dt); }
+    }
+    // les piles d'un monument posé sur la place (arc de triomphe) : boîtes dans le repère du monument, deux cercles par voiture comme pour les chocs entre voitures
+    if (P && P.piles) { const cs = Math.cos(P.a), sn = Math.sin(P.a);
+      for (const j of [-CO, CO]) for (const [px, pz, hx, hz] of P.piles) {
+        const qx = c.x + Math.cos(c.th) * j - P.c[0], qz = c.z + Math.sin(c.th) * j - P.c[1], lx = qx * cs - qz * sn, lz = qx * sn + qz * cs;
+        const ex = lx - clamp(lx, px - hx, px + hx), ez = lz - clamp(lz, pz - hz, pz + hz), d = Math.hypot(ex, ez);
+        if (d >= CR || d < 1e-6) continue;
+        const ax = -ex / d, az = -ez / d, Nx = ax * cs + az * sn, Nz = -ax * sn + az * cs, t = c.vx * -Nz + c.vz * Nx > 0 ? 1 : -1; // normale vers la pile, en repère du monde
+        mur(c, Nx, Nz, CR - d, -Nz * t, Nx * t, -t, 0, dt);
       }
-      c.wallT = 0.4;
     }
     c.vf = vf; c.vl = vl;
   }
@@ -246,5 +265,5 @@
     }
   }
 
-  Object.assign(G, { buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, TOP, CARD, vturn, omega });
+  Object.assign(G, { dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, TOP, CARD, vturn, omega });
 })(typeof window !== 'undefined' ? window : globalThis);

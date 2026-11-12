@@ -15,7 +15,7 @@ for (const M of CARTES) {
   // deux tours au pilote automatique : le second, lancé, donne les chiffres
   let c = newCar(T), t = 0, t1 = 0, hits = 0, vmax = 0, vmin = 1e9;
   while (c.dist < 2 * n && t < 900) {
-    step(c, autopilot(c, T), T, H); t += H; assert(Math.abs(c.d) <= S[c.idx].w && Number.isFinite(c.x));
+    step(c, autopilot(c, T), T, H); t += H; assert((Math.abs(c.d) <= S[c.idx].w || dansPlace(c.x, c.z)) && Number.isFinite(c.x));
     if (c.dist >= n) { if (!t1) t1 = t; const v = Math.hypot(c.vx, c.vz); vmax = Math.max(vmax, v); vmin = Math.min(vmin, v); if (c.hit > 3) hits++; }
   }
   assert(c.dist >= 2 * n, `${M.id} : le pilote automatique ne boucle pas le tour`);
@@ -69,9 +69,30 @@ for (const M of CARTES) {
     let hit = 0; for (let i = 0; i < 4 / H; i++) { step(c, { steer: 0, gas: 0, brake: 0, hand: false }, T, H); hitTrafic(c, T, i * H); hit = Math.max(hit, c.hit); }
     assert(hit > 5 && Math.hypot(c.vx, c.vz) > 5, `${M.id} : le camion ne pousse pas la voiture (${hit})`);
   }
+  // place où l'on roule partout : on traverse l'arche par son axe sans toucher ; lancé sur une pile, on la heurte sans entrer dedans ; on reprend la piste en sortant
+  if (M.place) {
+    const P = M.place, ux = Math.sin(P.a), uz = Math.cos(P.a), lance = (ox, oz, th) => { const c = newCar(T), s0 = S.reduce((b, s, k) => Math.hypot(s.x - ox, s.z - oz) < Math.hypot(S[b].x - ox, S[b].z - oz) ? k : b, 0);
+      return Object.assign(c, { x: ox, z: oz, th, vx: Math.cos(th) * 25, vz: Math.sin(th) * 25, idx: s0, dist: s0 }); };
+    let c = lance(P.c[0] - ux * 40, P.c[1] - uz * 40, Math.atan2(uz, ux)), h = 0;
+    for (let i = 0; i < 2.5 / H; i++) { step(c, { steer: 0, gas: 0.3, brake: 0, hand: false }, T, H); if (c.hit > 0) h++; }
+    const fait = (c.x - P.c[0]) * ux + (c.z - P.c[1]) * uz;
+    assert(h === 0 && fait > 20, `${M.id} : on ne traverse pas l'arche (${h} chocs, ${fait | 0} m après le centre)`);
+    // de l'avenue d'arrivée, par l'arche, jusqu'à l'avenue de départ : la progression le long de la piste suit, on repart sur la piste
+    { const e = S.findIndex(s => Math.hypot(s.x - P.c[0], s.z - P.c[1]) < P.r) - 10, x = S.findIndex((s, k) => k > e + 20 && Math.hypot(s.x - P.c[0], s.z - P.c[1]) > P.r) + 40, Wp = [[P.c[0] - ux * 40, P.c[1] - uz * 40], [P.c[0] + ux * 40, P.c[1] + uz * 40], [S[x].x, S[x].z]];
+      c = Object.assign(newCar(T), { x: S[e].x, z: S[e].z, idx: e, dist: e, th: Math.atan2(S[e].tz, S[e].tx), vx: S[e].tx * 25, vz: S[e].tz * 25 }); let k = 0, hh = 0;
+      for (let i = 0; i < 20 / H && !(k === 2 && c.idx >= x - 10); i++) { if (k < 2 && Math.hypot(Wp[k][0] - c.x, Wp[k][1] - c.z) < 8) k++; const a = wrap(Math.atan2(Wp[k][1] - c.z, Wp[k][0] - c.x) - c.th);
+        step(c, { steer: Math.max(-1, Math.min(1, a * 3)), gas: 0.35, brake: 0, hand: false }, T, H); if (c.hit > 3) hh++; }
+      assert(k === 2 && c.idx >= x - 10 && c.dist >= x - 10 && !hh, `${M.id} : traversée de la place par l'arche (étape ${k}, échantillon ${c.idx} sur ${x}, ${hh} chocs)`); }
+    const [px, pz] = P.piles[0], wx = P.c[0] + px * Math.cos(P.a) + pz * Math.sin(P.a), wz = P.c[1] - px * Math.sin(P.a) + pz * Math.cos(P.a), ax = wx - 30;
+    c = lance(ax, wz, 0); let hit = 0, dedans = 0;
+    for (let i = 0; i < 2 / H; i++) { step(c, { steer: 0, gas: 1, brake: 0, hand: false }, T, H); hit = Math.max(hit, c.hit);
+      const qx = c.x - P.c[0], qz = c.z - P.c[1], lx = qx * Math.cos(P.a) - qz * Math.sin(P.a), lz = qx * Math.sin(P.a) + qz * Math.cos(P.a);
+      if (P.piles.some(([x, z, a, b]) => Math.abs(lx - x) < a - 0.3 && Math.abs(lz - z) < b - 0.3)) dedans++; }
+    assert(hit > 3 && !dedans, `${M.id} : la pile de l'arc ne bloque pas (choc ${hit}, ${dedans} pas dedans)`);
+  }
   // course : 3 tours à 4 pilotes automatiques sur le tracé de la carte ; tout le monde arrive, personne ne sort ni ne reste bloqué
   const R = newRace(T); let wall = 0, bump = 0;
-  while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && Math.abs(x.d) <= S[x.idx].w, M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }
+  while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && (Math.abs(x.d) <= S[x.idx].w || dansPlace(x.x, x.z)), M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }
   assert(R.done, M.id + ' : la course ne se termine pas');
   const k = v => Math.round(v * 3.6);
   console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} boosts, ${hgl} chocs), à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);
