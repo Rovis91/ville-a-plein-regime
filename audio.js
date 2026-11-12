@@ -19,9 +19,10 @@
   let lastRoll = -9; // dernière mesure de montée : le drop la suit
   let bigS = false, lastFill = -9, sortie = -1, grit = 0, curRoot = 33, lap = 1, lapN = -1; const was = {}; // lap : 0 premier tour (sobre), 1 normal, 2 dernier tour (le plus intense) ; // refrain en cours ; dernière relance ; parties qui jouaient à la mesure précédente
   let W = {}; const strip = {}; // ondes sur mesure ; tranches de mixage par partie (b basse, d nappe, c g accords, a arpège, l thème)
-  let mix = 0, inten = 0, driftL = 0, drums = 0, fin = false, wasIn = false, wasNear = false, wasBoost = false, lastGas = 0;
+  let mix = 0, inten = 0, driftL = 0, drums = 0, fin = false, wasIn = false, wasNear = false, wasBoost = false;
   let rubT = 0, satT = 0, platine = 0; // frottement bref entre voitures ; saturation de la musique après un choc ; ralenti de platine (1 → 0)
-  let eng, sq, scrubG, scrapeG, windG, pluie, ambBed, ambT = 2, inZone = false, uiF;
+  const VX = [], UN = [], PANJ = 0.35; // voix moteur + boîte + pneus : VX[0] celle du solo (au centre, branchée comme toujours), VX[1] et VX[2] celles de l'écran partagé (joueur 1 à gauche, joueur 2 à droite) ; UN : liste d'un seul joueur, réutilisée quand le jeu n'en passe pas
+  let scrapeG, windG, pluie, ambBed, ambT = 2, inZone = false, uiF;
   const RK = () => 'vpr.radio' + (M.id === 'ville' ? '' : '.' + M.id); // dernière station écoutée, par carte
   let station = 0, S16 = 60 / ST[0].bpm / 4;
 
@@ -355,6 +356,27 @@
     while (nextT < AC.currentTime - 0.2) { nextT += S16; stp++; } // onglet en veille : on saute au lieu de rattraper
     while (nextT < AC.currentTime + 0.12) { sched(stp++, nextT); nextT += S16 / (1 - 0.3 * platine); }
   }
+  // Une voix = ce qu'un joueur entend de sa voiture. Moteur : 3 oscillateurs (ordre 1, 1/2, 3/2) → saturation → filtre de charge → formant d'échappement → battement.
+  // Pneus : la glisse se tient longtemps, donc un feulement grave et large plutôt qu'un sifflement ; + grondement de ripage.
+  // ns : la source de bruit ; mot, pneu : où sortent le moteur (et la boîte) et les pneus ; src : ce qu'il faudra arrêter pour retirer la voix
+  function voix(ns, mot, pneu, src = []) {
+    const out = gain(0, mot), am = gain(1, out), pk = filt('peaking', 140, 1.5, am); pk.gain.value = 6; // résonance d'échappement, dans le grave
+    const lp = filt('lowpass', 800, 0.7, pk), drive = gain(0.6, shaper(3, lp));
+    const mk = (type, g) => { const o = AC.createOscillator(); o.type = type; o.connect(gain(g, drive)); o.start(); src.push(o); return o; };
+    const lfo = AC.createOscillator(), lfoG = gain(0.2, am.gain);
+    lfo.connect(lfoG); lfo.start(); src.push(lfo);
+    const g = gain(0, pneu), sqL = filt('lowpass', 1500, 0.7, g), b1 = filt('bandpass', 420, 5, sqL), b2 = filt('bandpass', 640, 4, gain(0.5, sqL));
+    ns.connect(b1); ns.connect(b2);
+    const scrub = gain(0, pneu); ns.connect(filt('lowpass', 160, 0.7, scrub));
+    return { a: mk('sawtooth', 0.5), b: mk('square', 0.45), c: mk('sawtooth', 0.08), lfo, lfoG, lp, drive, out, g, b1, b2, scrub, mot, src, gas: 0 }; // gas : l'accélérateur à l'image précédente (pétarade au lever de pied)
+  }
+  // voix d'un joueur de l'écran partagé : la même, derrière un panoramique, avec son propre bruit (arrêter ses sources suffit alors à tout libérer).
+  // Le panoramique à puissance constante ôte 3 dB à chaque voix : deux moteurs ensemble pèsent ce que pèse celui du solo, la marge du compresseur ne bouge pas.
+  function voixPan(p) {
+    const pm = AC.createStereoPanner(), pp = AC.createStereoPanner(), ns = AC.createBufferSource(); pm.pan.value = pp.pan.value = p; pm.connect(V.mot); pp.connect(V.pneu);
+    ns.buffer = nbuf; ns.loop = true; ns.start(0, Math.random() * 2); return voix(ns, pm, pp, [ns]);
+  }
+  const tait = (v, t) => { v.out.gain.setTargetAtTime(0, t, 0.05); v.g.gain.setTargetAtTime(0, t, 0.05); v.scrub.gain.setTargetAtTime(0, t, 0.05); };
   function initAudio(ctx) { // ctx : contexte hors ligne pour la mesure des niveaux (banc d'écoute) ; sans argument, le contexte audio du navigateur
     if (AC && live && !ctx) return AC.resume();
     if (AC && live) AC.close();
@@ -394,18 +416,8 @@
       const bin = atob(window.SMP[k]), u8 = Uint8Array.from(bin, ch => ch.charCodeAt(0));
       AC.decodeAudioData(u8.buffer, b => { smp[k] = b; ok(); }, ok);
     })));
-    // moteur : 3 oscillateurs (ordre 1, 1/2, 3/2) → saturation → filtre de charge → formant d'échappement → battement
-    const out = gain(0, V.mot), am = gain(1, out), pk = filt('peaking', 140, 1.5, am); pk.gain.value = 6; // résonance d'échappement, dans le grave
-    const lp = filt('lowpass', 800, 0.7, pk), drive = gain(0.6, shaper(3, lp));
-    const mk = (type, g) => { const o = AC.createOscillator(); o.type = type; o.connect(gain(g, drive)); o.start(); return o; };
-    const lfo = AC.createOscillator(), lfoG = gain(0.2, am.gain);
-    lfo.connect(lfoG); lfo.start();
-    eng = { a: mk('sawtooth', 0.5), b: mk('square', 0.45), c: mk('sawtooth', 0.08), lfo, lfoG, lp, drive, out };
-    // pneus : la glisse se tient longtemps, donc un feulement grave et large plutôt qu'un sifflement ; + grondement de ripage
     const ns = AC.createBufferSource(); ns.buffer = nbuf; ns.loop = true; ns.start();
-    const sqG = gain(0, V.pneu), sqL = filt('lowpass', 1500, 0.7, sqG), b1 = filt('bandpass', 420, 5, sqL), b2 = filt('bandpass', 640, 4, gain(0.5, sqL));
-    ns.connect(b1); ns.connect(b2); sq = { g: sqG, b1, b2 };
-    scrubG = gain(0, V.pneu); ns.connect(filt('lowpass', 160, 0.7, scrubG));
+    VX.length = 0; VX[0] = voix(ns, V.mot, V.pneu); // un contexte neuf repart avec la seule voix du solo
     // frottement : tôle (bande médium et grondement) mêlée à une meule (bande aiguë étroite hachée à 72 Hz, étincelles)
     scrapeG = gain(0, V.choc); ns.connect(filt('bandpass', 1700, 1.2, scrapeG)); ns.connect(filt('lowpass', 260, 0.7, gain(1.5, scrapeG)));
     { const g = gain(0.55, scrapeG), l = AC.createOscillator(); l.type = 'square'; l.frequency.value = 72; l.connect(gain(0.45, g.gain)); l.start(); ns.connect(filt('bandpass', 2800, 6, gain(2.2, g))); ns.connect(filt('highpass', 7000, 0.7, gain(0.1, scrapeG))); }
@@ -425,17 +437,17 @@
     nz(t, 0.018, CLAC, V.ui, 'bandpass', 1900, 2.5); osc('triangle', 150, t, 0.05, CLAC * 0.25, V.ui);
     nz(t + 0.07, 0.03, CLAC * 1.4, V.ui, 'bandpass', 2850, 2); nz(t + 0.07, 0.012, CLAC * 0.6, V.ui, 'highpass', 4000); osc('square', 320, t + 0.07, 0.03, CLAC * 0.15, V.ui);
   }
-  function clac(down, t = AC.currentTime) { // passage de rapport : coup sourd de transmission, puis soupape de décharge en montée, coup de gaz en rétrogradant ; la coupure de poussée vient de la physique
-    const o = osc('sine', 110, t, 0.1, 0.45, V.mot); o && o.frequency.exponentialRampToValueAtTime(55, t + 0.08);
-    nz(t, 0.03, 0.25, V.mot, 'lowpass', 700);
-    if (down) { const b = osc('sawtooth', 130, t + 0.03, 0.14, 0.22, filt('lowpass', 1100, 0.7, V.mot)); b && b.frequency.exponentialRampToValueAtTime(230, t + 0.12); }
-    else { const h = nz(t + 0.03, 0.22, 0.2, V.mot, 'bandpass', 2600, 1.2); h && h.frequency.exponentialRampToValueAtTime(900, t + 0.24); }
+  function clac(down, t = AC.currentTime, d = V.mot) { // d : la sortie de la voix du joueur · // passage de rapport : coup sourd de transmission, puis soupape de décharge en montée, coup de gaz en rétrogradant ; la coupure de poussée vient de la physique
+    const o = osc('sine', 110, t, 0.1, 0.45, d); o && o.frequency.exponentialRampToValueAtTime(55, t + 0.08);
+    nz(t, 0.03, 0.25, d, 'lowpass', 700);
+    if (down) { const b = osc('sawtooth', 130, t + 0.03, 0.14, 0.22, filt('lowpass', 1100, 0.7, d)); b && b.frequency.exponentialRampToValueAtTime(230, t + 0.12); }
+    else { const h = nz(t + 0.03, 0.22, 0.2, d, 'bandpass', 2600, 1.2); h && h.frequency.exponentialRampToValueAtTime(900, t + 0.24); }
   }
-  function levier(down, t = AC.currentTime) { // boîte manuelle : c'est le pilote qui passe le rapport — le cran qui lâche, la course du levier dans la grille, puis le verrouillage métallique, franc
-    nz(t, 0.012, LEV * 0.6, V.mot, 'bandpass', 3800, 6); nz(t + 0.045, 0.02, LEV * 0.4, V.mot, 'bandpass', 900, 1.2);
+  function levier(down, t = AC.currentTime, d = V.mot) { // boîte manuelle : c'est le pilote qui passe le rapport — le cran qui lâche, la course du levier dans la grille, puis le verrouillage métallique, franc
+    nz(t, 0.012, LEV * 0.6, d, 'bandpass', 3800, 6); nz(t + 0.045, 0.02, LEV * 0.4, d, 'bandpass', 900, 1.2);
     const tt = t + 0.085, f = down ? 1150 : 1500;
-    nz(tt, 0.02, LEV, V.mot, 'bandpass', 4600, 5); osc('sine', 150, tt, 0.07, LEV * 0.4, V.mot);
-    for (const [k, v] of [[1, 0.1], [2.76, 0.06], [5.4, 0.03]]) osc('sine', f * k, tt, 0.09, LEV * v, V.mot); // tintement : partiels d'une barre de métal, plus grave au rétrogradage
+    nz(tt, 0.02, LEV, d, 'bandpass', 4600, 5); osc('sine', 150, tt, 0.07, LEV * 0.4, d);
+    for (const [k, v] of [[1, 0.1], [2.76, 0.06], [5.4, 0.03]]) osc('sine', f * k, tt, 0.09, LEV * v, d); // tintement : partiels d'une barre de métal, plus grave au rétrogradage
   }
   function coupMusique(v, t = AC.currentTime) { // un choc s'entend aussi dans la musique : grosse caisse et coup de basse sur la fondamentale de la mesure, et tout plonge un instant
     if (menu) return; const st = ST[station], P = PATCH[st.b.p];
@@ -449,8 +461,9 @@
     for (let i = 0; i < 9; i++) nz(t + 0.15 + Math.random() * 0.65, 0.012, v * (0.1 + Math.random() * 0.2), V.choc, 'highpass', 3000);
   }
   function boostFx(t = AC.currentTime) { const o = osc('sawtooth', 220, t, 0.5, 0.1, filt('lowpass', 3000, 0.5, V.choc)); o.frequency.exponentialRampToValueAtTime(880, t + 0.4); const w = nz(t, 0.6, 0.08, V.choc, 'bandpass', 500, 1.5); w.frequency.exponentialRampToValueAtTime(4000, t + 0.5); } // départ de la nitro : sifflement + souffle
-  function petarade(spool = 1, t = AC.currentTime) { nz(t, 0.25, 0.04 * spool, V.mot, 'bandpass', 1400, 1.5); for (let i = 0; i < 3; i++) nz(t + 0.08 + Math.random() * 0.4, 0.035, 0.12, V.mot, 'lowpass', 900); } // lever de pied à haut régime
+  function petarade(spool = 1, t = AC.currentTime, d = V.mot) { nz(t, 0.25, 0.04 * spool, d, 'bandpass', 1400, 1.5); for (let i = 0; i < 3; i++) nz(t + 0.08 + Math.random() * 0.4, 0.035, 0.12, d, 'lowpass', 900); } // lever de pied à haut régime
   // e : état de la course pour cette image — { state, car, T, hot (0..1 dans le secteur chaud), tour / tours (tour en cours à partir de 0, nombre de tours ; 0 hors mode course), tun (0..1 dans le tunnel), amb (0..1 dans une zone d'ambiance), r (vitesse 0..1), sp, gas, hit, bump (choc entre voitures, m/s), up / down (rapport monté / descendu), rpm, load, spool, stun }
+  // Écran partagé : e.cars = les voitures humaines, une par joueur — [{ car, r, sp, gas, hit, bump, up, down, rpm, load, spool }] ; le reste de e (state, car, T, hot, tour, tun, amb, r, sp, hit, bump, fini) est alors celui de l'humain le mieux placé encore en course, qui pilote la musique, le tunnel, la pluie et l'ambiance. Sans e.cars, e est le seul joueur (banc d'écoute).
   // Pluie : rideau étouffé à travers la carrosserie, plus fort et plus clair avec la vitesse. pl = force 0..3 (T.pluie), déjà coupée en tunnel ; r = vitesse 0..1 ; aq = aquaplaning (sim.js)
   function pluieFrame(pl, r, aq, k) {
     k(pluie.rid.gain, 0.045 * Math.min(pl, 3) / 3 * (0.6 + 0.4 * r), 0.4); k(pluie.rl.frequency, 400 + 700 * r, 0.3);
@@ -458,28 +471,34 @@
   }
   function audioFrame(dt, e) {
     if (!AC) return;
-    const { state, car, T, r, sp, gas, hit, up, rpm, load, spool, stun } = e, N = T.n, tun = e.tun || 0, CARD = M.car;
-    if (state === 'pause') { for (const p of [eng.out.gain, sq.g.gain, scrubG.gain, scrapeG.gain, windG.gain, pluie.rid.gain, pluie.aq.gain]) p.setTargetAtTime(0, AC.currentTime, 0.05); return; } // en pause : la radio continue, la voiture se tait
-    const t = AC.currentTime, racing = state === 'race', k = (p, v, tc = 0.04) => p.setTargetAtTime(v, t, tc);
+    const { state, car, T, r, sp } = e, N = T.n, tun = e.tun || 0, CARD = M.car, t = AC.currentTime, racing = state === 'race', k = (p, v, tc = 0.04) => p.setTargetAtTime(v, t, tc);
+    if (state === 'pause') { for (const v of VX) tait(v, t); k(scrapeG.gain, 0, 0.05); k(windG.gain, 0, 0.05); k(pluie.rid.gain, 0, 0.05); k(pluie.aq.gain, 0, 0.05); return; } // en pause : la radio continue, les voitures se taisent
     if ((state === 'title') !== menu) { menu = !menu; retune(t + 0.05); tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.3); } // menu ↔ course : la boucle de menu laisse la place à la station
-    // moteur (discret sous la musique) : coupure au passage de rapport, timbre selon la charge, turbo, pétarades au lever de pied
-    if (up || e.down) (car.manual ? levier : clac)(e.down, t); // boîte manuelle : le levier ; automatique : la transmission
-    const f = rpm * CARD.red / 40 * CARD.son; // la moitié de la fréquence d'allumage d'un 6 cylindres (3 explosions par tour) : même montée en régime, une octave plus grave
-    k(eng.a.frequency, f); k(eng.b.frequency, f / 2); k(eng.c.frequency, f * 2); k(eng.lfo.frequency, f / 3);
-    k(eng.lp.frequency, 180 + rpm * 320 + load * 380); k(eng.drive.gain, 0.35 + 0.5 * load); k(eng.lfoG.gain, 0.1 + 0.15 * load); // filtre bas : le grave domine
-    k(eng.out.gain, state === 'title' ? 0.004 : 0.014 + 0.024 * load + 0.008 * rpm); // sous la musique, mais présent (+6 dB par rapport au réglage précédent, timbre inchangé)
-    if (lastGas && !gas && racing && rpm > 0.55 && spool > 0.5) petarade(spool, t);
-    lastGas = gas;
-    // pneus : rien en appui normal ; le feulement monte lentement avec l'angle de glisse, en volume plus qu'en hauteur
-    const slip = Math.abs(car.vl), a = sp > 8 ? clamp((slip - 4) / 14, 0, 1) : 0, fq = 380 + 150 * a + 10 * Math.sin(t * 21);
-    k(sq.b1.frequency, fq, 0.05); k(sq.b2.frequency, fq * 1.52, 0.05); k(sq.g.gain, 0.22 * a, 0.2);
-    k(scrubG.gain, 0.5 * clamp(slip / 12, 0, 1) * r, 0.08);
+    // une voix par joueur : seul, celle du centre, inchangée ; à deux, une de chaque côté, créées à l'arrivée du deuxième joueur et retirées à son départ (fondu, puis arrêt des sources)
+    const L = e.cars || (UN[0] = e, UN), duo = L.length > 1; let hit = 0, bump = 0, rub = false; // chocs et frottement : ceux de n'importe quel joueur s'entendent (la musique, elle, n'encaisse que ceux du mieux placé)
+    if (duo !== VX.length > 1) { if (duo) { VX[1] = voixPan(-PANJ); VX[2] = voixPan(PANJ); } else { for (let i = 1; i < 3; i++) { tait(VX[i], t); for (const s of VX[i].src) s.stop(t + 0.3); } VX.length = 1; } }
+    if (duo) tait(VX[0], t);
+    for (let i = 0, n = duo ? 2 : 1; i < n; i++) { const j = L[i], v = VX[duo ? i + 1 : 0], c = j.car, { rpm, load } = j;
+      // moteur (discret sous la musique) : coupure au passage de rapport, timbre selon la charge, turbo, pétarades au lever de pied
+      if (j.up || j.down) (c.manual ? levier : clac)(j.down, t, v.mot); // boîte manuelle : le levier ; automatique : la transmission
+      const f = rpm * CARD.red / 40 * CARD.son; // la moitié de la fréquence d'allumage d'un 6 cylindres (3 explosions par tour) : même montée en régime, une octave plus grave
+      k(v.a.frequency, f); k(v.b.frequency, f / 2); k(v.c.frequency, f * 2); k(v.lfo.frequency, f / 3);
+      k(v.lp.frequency, 180 + rpm * 320 + load * 380); k(v.drive.gain, 0.35 + 0.5 * load); k(v.lfoG.gain, 0.1 + 0.15 * load); // filtre bas : le grave domine
+      k(v.out.gain, state === 'title' ? 0.004 : 0.014 + 0.024 * load + 0.008 * rpm); // sous la musique, mais présent (+6 dB par rapport au réglage précédent, timbre inchangé)
+      if (v.gas && !j.gas && racing && rpm > 0.55 && j.spool > 0.5) petarade(j.spool, t, v.mot);
+      v.gas = j.gas;
+      // pneus : rien en appui normal ; le feulement monte lentement avec l'angle de glisse, en volume plus qu'en hauteur
+      const slip = Math.abs(c.vl), a = j.sp > 8 ? clamp((slip - 4) / 14, 0, 1) : 0, fq = 380 + 150 * a + 10 * Math.sin(t * 21);
+      k(v.b1.frequency, fq, 0.05); k(v.b2.frequency, fq * 1.52, 0.05); k(v.g.gain, 0.22 * a, 0.2);
+      k(v.scrub.gain, 0.5 * clamp(slip / 12, 0, 1) * j.r, 0.08);
+      hit = Math.max(hit, j.hit || 0); bump = Math.max(bump, j.bump || 0); rub = rub || !!c.rub;
+    }
     k(windG.gain, 0.045 * clamp((r - 0.5) * 2, 0, 1) ** 2 * (1 - tun), 0.2); // vent : un souffle à haute vitesse seulement, loin sous le moteur, coupé en tunnel
     pluieFrame(state === 'title' ? 0 : (e.pluie != null ? e.pluie : T.pluie ? T.pluie[car.idx] : 0) * (1 - tun), r, car.aq || 0, k);
-    rubT -= dt; if (e.bump > 0.3) rubT = 0.35; // deux voitures qui se touchent : un petit choc, puis elles frottent un instant
-    k(scrapeG.gain, car.rub || rubT > 0 ? 0.1 + 0.2 * r : 0, 0.05);
-    if ((hit > 3 || e.bump > 0.3) && t - lastHit > 0.15) { lastHit = t; const v = Math.max(hit, e.bump > 0.3 ? 5 + e.bump * 2 : 0); choc(v, t);
-      if (racing && t - lastMus > 2) { lastMus = t; coupMusique(v, t); satT = 0.5; if (hit > 8) platine = 1; } } // au plus une fois toutes les 2 s : en rebondissant de mur en mur (pluie), la musique restait plongée, ralentie et saturée en continu // la musique encaisse : coup de basse, demi-seconde de saturation, et sur un gros choc elle ralentit comme une platine qu'on freine
+    rubT -= dt; if (bump > 0.3) rubT = 0.35; // deux voitures qui se touchent : un petit choc, puis elles frottent un instant
+    k(scrapeG.gain, rub || rubT > 0 ? 0.1 + 0.2 * r : 0, 0.05);
+    if ((hit > 3 || bump > 0.3) && t - lastHit > 0.15) { lastHit = t; choc(Math.max(hit, bump > 0.3 ? 5 + bump * 2 : 0), t);
+      if (racing && t - lastMus > 2 && (e.hit > 3 || e.bump > 0.3)) { lastMus = t; coupMusique(Math.max(e.hit, e.bump > 0.3 ? 5 + e.bump * 2 : 0), t); satT = 0.5; if (e.hit > 8) platine = 1; } } // au plus une fois toutes les 2 s : en rebondissant de mur en mur (pluie), la musique restait plongée, ralentie et saturée en continu // la musique encaisse : coup de basse, demi-seconde de saturation, et sur un gros choc elle ralentit comme une platine qu'on freine
     // glisse (car.dd, car.driftT) : la tension monte en 1,5 s, palier à 0,6 s (la jauge de nitro se remplit alors à plein débit) ; nitro déclenchée (car.boost) : tout s'ouvre d'un coup et le refrain joue tant qu'elle pousse
     const gl = racing && car.dd ? car.driftT || 0 : 0, vise = car.boost > 0 ? 0 : clamp(gl / 1.5, 0, 1);
     glisse = gl > 0.15; acquis = gl > 0.6; if (!glisse) acqDit = false; boostL = racing && car.boost > 0;
