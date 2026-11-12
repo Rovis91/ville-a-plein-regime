@@ -191,7 +191,8 @@
       h.pose('tourPrise', { beton: h.mat('beton'), vitre: h.mat('peinture', { c: 0x2a4a5a }) }, h.scene, [584, 14, 540]);
       // portiques des tremplins, 30 m avant le bout
       const peau = { acier: h.mat('acier'), banderole: h.mat('banderoleSaut', { lum: 1, side: THREE.DoubleSide }) };
-      for (const [p] of h.M.sauts) h.pose('portiqueSaut', peau, repere(h, S[(pt(h, p) - 15 + N) % N]), [0, 0, 0], W);
+      for (const [p] of h.M.sauts) { const i = pt(h, p); h.pose('portiqueSaut', peau, repere(h, S[(i - 15 + N) % N]), [0, 0, 0], W);
+        h.ribbon((i - 7 + N) % N, 7, -W + 0.6, 0.05, W - 0.6, 0.05, h.mat('banderoleSaut', { lum: 1, rep: [4, 1] }), 3.5); } // et les 14 derniers mètres du tremplin peints de chevrons
       // ligne à haute tension qui descend de la centrale, le long de la ligne droite
       for (let x = -200; x <= 760; x += 160) h.pose('pyloneHT', { acier: h.mat('acier') }, h.scene, [x, g.hAt(x, -60), -60]);
       // sapins : par bouquets sur l'alpage, jamais sur la route ni dans le chenal

@@ -246,7 +246,7 @@
 
     // Roche-Sourde : la route de service d'un barrage-voûte, en plein midi. Carte du relief : tremplin de la ligne droite (réception en descente), bosse de la montée,
     // grand virage relevé sur le parement de la voûte (le mur est plus rapide que la corde), tremplin par-dessus le déversoir (trop lent, on tombe dedans et on en ressort par sa rampe), épingle et chicane du retour.
-    { id: 'barrage', nom: 'ROCHE-SOURDE', rivaux: ['MAEL', 'ZOE', 'TIAGO'], W: 8, grip: 20, sc: 1, tun: null, chaud: [11, 21], amb: [[10, 16]], sect: [11, 23], anticipe: 1,
+    { id: 'barrage', nom: 'ROCHE-SOURDE', rivaux: ['MAEL', 'ZOE', 'TIAGO'], med: [1.08, 1, 0.94], W: 8, grip: 20, sc: 1, tun: null, chaud: [11, 21], amb: [[10, 16]], sect: [11, 23], anticipe: 1,
       sauts: [[2, 40, 0.8], [20, 30, 1, 36, 6]], cuv: [[10, 16, 10, 9]],
       pts: [[0, 0, 10], [120, 0, 10], [220, 0, 10], [300, 0, 3], [400, 0, -4], [500, 15, -4], [585, 75, 0], [620, 170, 11], [620, 262, 19.6], [620, 285, 20.8], [620, 308, 19.8], [620, 430, 17], [609.5, 455.5, 17], [584, 466, 17], [558.5, 455.5, 17], [548, 430, 17], [548, 385, 17], [533, 345, 17], [498, 330, 17], [400, 330, 16.5], [300, 330, 16], [200, 330, 15.5], [100, 330, 15], [-80, 330, 14.5], [-115, 320, 14.5], [-130, 290, 14], [-130, 200, 12.5], [-150, 130, 11.5], [-130, 60, 11], [-115, 15, 10.2], [-80, 0, 10]],
       // voiture inventée : une petite quatre roues motrices de rallye, 4 cylindres turbo de 2 L, 340 ch, 1150 kg
