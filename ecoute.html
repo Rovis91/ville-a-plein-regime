@@ -23,6 +23,10 @@
   #db { width: 150px; font-variant-numeric: tabular-nums; } #voyant { width: 12px; height: 12px; border-radius: 50%; background: #3a3a4c; } #voyant.on { background: #40ff80; box-shadow: 0 0 8px #40ff80; }
   #quoi { color: #a8a8b4; margin-top: 6px; min-height: 1.4em; } #quoi b { color: #e8e8e4; }
   table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; } td, th { padding: 3px 10px; border-bottom: 1px solid #2a2a38; text-align: right; } td:first-child, th:first-child { text-align: left; } td.ok { color: #40ff80; } td.ko { color: #ff003c; font-weight: 600; }
+  #avis table { width: 100%; } #avis td { text-align: left; vertical-align: middle; } #avis td.c { color: #fcee0a; font-weight: 600; padding-top: 12px; border: 0; }
+  #avis button { margin: 0 4px 0 0; padding: 4px 9px; } #avis button.ok.on { background: #14532d; border-color: #40ff80; } #avis button.ko.on { background: #5a1018; border-color: #ff003c; }
+  #avis input[type=text], #bilanTxt { font: inherit; color: inherit; background: #14141c; border: 1px solid #3a3a4c; border-radius: 6px; padding: 5px 8px; width: 100%; box-sizing: border-box; }
+  #avis tr.joue td { background: #10262a; }
   #voile { position: fixed; inset: 0; background: rgba(8, 8, 12, .94); display: grid; place-items: center; z-index: 3; } #voile button { font-size: 20px; padding: 16px 28px; }
 </style>
 </head>
@@ -33,6 +37,12 @@
   <div id="vu"><span id="voyant" title="du signal sort"></span><div id="barre"><div id="niv"></div><div id="tenue"></div></div><span id="db">silence</span><button id="stop">■ Tout arrêter</button></div>
   <div id="quoi">Rien ne joue. Cliquez un son : il joue seul, tout le reste est coupé.</div>
 </header>
+
+<h2>Validation des musiques</h2>
+<p>Une ligne par musique. ▶ la joue seule ; « plein » passe au refrain du secteur chaud. Marquez-la validée ou à changer, écrivez ce qui ne va pas, puis « Copier le bilan » et collez-le dans la conversation. Vos avis restent enregistrés dans ce navigateur.</p>
+<div id="avis"></div>
+<button id="bilan">Copier le bilan</button><button id="raz">Effacer mes avis</button>
+<textarea id="bilanTxt" readonly rows="6" style="display:none"></textarea>
 
 <h2>Carte</h2>
 <div id="cartes"></div>
@@ -159,13 +169,38 @@
     $('cartes').innerHTML = CARTES.map(c => `<button data-c="${c.id}" class="${c === M ? 'on' : ''}">${c.nom}</button>`).join('');
     for (const g of ['mus', 'mot', 'pneu', 'choc', 'amb', 'ui', 'mix']) $('g-' + g).innerHTML = Object.keys(SC).filter(id => SC[id][0] === g).map(id => `<button data-sc="${id}" class="${scene === SC[id] ? 'on' : ''}">${titre(id)}<small>${sous(id)}</small></button>`).join('');
   }
-  document.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.sc) jouer(b.dataset.sc); else if (b.dataset.c) { stop(); M = CARTES.find(c => c.id === b.dataset.c); SON.carte(M); boutons(); } });
+  // validation : avis par musique, gardés dans le navigateur
+  let AV = {}; try { AV = JSON.parse(localStorage.getItem('vpr.avis') || '{}'); } catch (e) { }
+  const garde = () => { try { localStorage.setItem('vpr.avis', JSON.stringify(AV)); } catch (e) { } };
+  const pistes = () => CARTES.flatMap(c => [...c.radio.map((r, i) => ({ k: c.id + ':' + i, c, i, nom: r.name + ' ' + r.fq, genre: r.genre.toLowerCase() + ' · ' + r.bpm + ' bpm' })), { k: c.id + ':m', c, i: -1, nom: 'Musique de menu', genre: 'boucle calme' }]);
+  let enEcoute = null;
+  function avis() {
+    let h = '<table>', carte = null;
+    for (const p of pistes()) { const a = AV[p.k] || {};
+      if (p.c !== carte) { carte = p.c; h += '<tr><td class="c" colspan="4">' + p.c.nom + '</td></tr>'; }
+      h += '<tr class="' + (enEcoute === p.k ? 'joue' : '') + '"><td style="white-space:nowrap"><button data-av="' + p.k + '">▶</button>' + (p.i >= 0 ? '<button data-av="' + p.k + '" data-plein="1">▶ plein</button>' : '') + '</td><td><b>' + p.nom + '</b><br><small style="color:#a8a8b4">' + p.genre + '</small></td>' +
+        '<td style="white-space:nowrap"><button class="ok' + (a.v === 1 ? ' on' : '') + '" data-v="' + p.k + ':1">Validée</button><button class="ko' + (a.v === 0 ? ' on' : '') + '" data-v="' + p.k + ':0">À changer</button></td>' +
+        '<td style="width:45%"><input type="text" data-n="' + p.k + '" placeholder="ce qui ne va pas, ce que vous voulez" value="' + (a.n || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"></td></tr>'; }
+    $('avis').innerHTML = h + '</table>';
+  }
+  $('avis').addEventListener('input', e => { const k = e.target.dataset.n; if (k) { (AV[k] = AV[k] || {}).n = e.target.value; garde(); } });
+  function bilan() {
+    const L = pistes().map(p => { const a = AV[p.k] || {}; return p.c.id + ' — ' + p.nom + ' (' + p.genre + ') : ' + (a.v === 1 ? 'VALIDÉE' : a.v === 0 ? 'À CHANGER' : 'pas encore jugée') + (a.n ? ' — ' + a.n : ''); }).join('\n');
+    $('bilanTxt').style.display = 'block'; $('bilanTxt').value = L; $('bilanTxt').select();
+    if (navigator.clipboard) navigator.clipboard.writeText(L).then(() => { $('bilan').textContent = 'Bilan copié'; setTimeout(() => { $('bilan').textContent = 'Copier le bilan'; }, 2000); }, () => { });
+    return L;
+  }
+  $('bilan').onclick = bilan; $('raz').onclick = () => { if (confirm('Effacer tous vos avis ?')) { AV = {}; garde(); avis(); } };
+  document.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.av) { const [id, i] = b.dataset.av.split(':'), c = CARTES.find(x => x.id === id); if (c !== M) { stop(); M = c; SON.carte(M); }
+      u.plein = !!b.dataset.plein; $('plein').checked = u.plein; enEcoute = b.dataset.av; jouer(i === 'm' ? 'menu' : 'st' + i); boutons(); avis(); return; }
+    if (b.dataset.v) { const k = b.dataset.v.slice(0, -2), v = +b.dataset.v.slice(-1); AV[k] = AV[k] || {}; AV[k].v = AV[k].v === v ? undefined : v; garde(); avis(); return; } if (b.dataset.sc) jouer(b.dataset.sc); else if (b.dataset.c) { stop(); M = CARTES.find(c => c.id === b.dataset.c); SON.carte(M); boutons(); } });
   for (const k in FAM) $('fam').insertAdjacentHTML('beforeend', `<label><span class="n">${FAM[k]}</span><input type="range" id="v-${k}" min="0" max="2" step="0.05" value="1"><output id="o-${k}"></output></label>`);
   for (const k in FAM) $('v-' + k).oninput = volumes;
   $('chocMus').onclick = () => { pulse.hit = 1; }; $('tour').onchange = e => { u.tour = +e.target.value; };
   for (const id of ['plein', 'glisse', 'tunnel', 'mur', 'gaz']) $(id).onchange = e => { u[id] = e.target.checked; };
   for (const id of ['vit', 'rpm', 'slide']) { const el = $(id), out = el.nextElementSibling; (el.oninput = () => { u[id] = +el.value; out.textContent = (+el.value).toFixed(2).replace('.', ','); })(); }
-  $('stop').onclick = stop;
+  $('stop').onclick = () => { stop(); enEcoute = null; avis(); };
   $('go').onclick = () => { SON.init(); stop(); boutons(); $('voile').remove(); };
 
   // vumètre : ce qui sort vraiment de la page (après l'amplification d'écoute)
@@ -248,8 +283,8 @@
   }
   $('variete').onclick = variete;
   $('autotest').onclick = autotest; $('mesurer').onclick = () => lancer([M]); $('mesurerTout').onclick = () => lancer(CARTES);
-  window.__banc = { lancer, mesurer, rendre, autotest, variete, profil, corr, jouer, stop, SC, u };
-  boutons(); volumes();
+  window.__banc = { bilan, avis, lancer, mesurer, rendre, autotest, variete, profil, corr, jouer, stop, SC, u };
+  boutons(); volumes(); avis();
 })();
 </script>
 </body>
