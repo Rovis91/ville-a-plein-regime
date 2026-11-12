@@ -171,9 +171,9 @@
         sec: { i: 'k0 h0 b0 lo', a: 'k0 s0 h0 b0 a0', b: 'k0 s0 h1 b0 a0 c0', c: 'k1 s1 h1 b1 a1 c0 d l0 p0', x: 'd a0 c1 l1 P1', u: 'k0 h1 b1 a1 roll P1', e: 'k1 s1 h1 b1 c1 d l1 P1 p0' }, form: 'iabcbxucecbc' }),
     ],
     stade: [
-      st({ name: 'ARENA ROCK FM', fq: '105.5', vol: 0.4, genre: 'HARD ROCK', bpm: 140, gamme: 'mineur', bPar: [0, 3, 5, 7, 10, -2], key: 52, kit: 'rock', eq: [-4, 1200, 7, 3], rev: 0.35, pump: 1, // rock de stade : accords de puissance, batterie dans sa salle, solo de guitare qui monte ; aucun synthé
+      st({ name: 'ARENA ROCK FM', fq: '105.5', vol: 0.4, genre: 'HARD ROCK', bpm: 140, gamme: 'mineur', bPar: [0, 3, 5, 7, 10, -2], key: 52, kit: 'rock', eq: [3, 500, 3, -5], lO: -12, rev: 0.35, pump: 1, // rock de stade : accords de puissance, batterie dans sa salle, solo de guitare qui monte ; aucun synthé. Registre grave : thème une octave plus bas, médium-aigu rentré (elle criait)
         prog: ['E5 E5 G5 A5 E5 E5 C5 D5', 'C5 D5 E5 E5'], k: ['x.....x.x.....x.', 'x..x..x.x..x..x.', 'x...x...x...x...'], s: [SN, '....x.......x.xx'], h: ['X.x.X.x.X.x.X.x.', 'o.o.o.o.o.o.o.o.', 'r.r.r.r.r.r.r.r.'],
-        b: ['bPick', '0 - 0 - 0 - 0 - 0 - 0 - 0 - 3 5', '0 0 0 0 0 0 0 0 0 0 0 0 7 7 10 10'], c: ['pwr', 'x..x..x...x.x...', 'x.......x.......'], cO: -12, g: ['gtrMute', 'xxxxxxxxxxxxxxxx'],
+        b: ['bPick', '0 - 0 - 0 - 0 - 0 - 0 - 0 - 3 5', '0 0 0 0 0 0 0 0 0 0 0 0 7 7 10 10'], c: ['pwr', 'x..x..x...x.x...', 'x.......x.......'], cO: -12, g: ['gtrMute', 'x.x.x.x.x.x.x.x.'],
         l: ['ldGtr', '24 - - - 27 - 24 - 22 - 24 - - - . - | 24 - - - 27 - 29 - 31 - - - 27 - - - | 22 - - - 26 - 22 - 19 - 22 - - - . - | 22 - - - 24 - 29 - 34 - - - 31 - - - | 36 - - - 34 - 31 - 34 - 36 - - - . - | 36 - - - 39 - 36 - 34 - - - 31 - - - | 31 - - - 36 - 31 - 27 - 31 - - - . - | 34 - - - 31 - - - 26 - - - - - - -',
           '31 - 27 - 24 - 27 - 31 - 36 - 31 - - - | 34 - 29 - 26 - 29 - 34 - 38 - 34 - - - | 36 - - 31 - - 27 - 31 - - - 36 - - - | 36 - - - - - - - . - - - - - - -'],
         sec: { i: 'g0 h0', a: 'k0 s0 h0 b0 g0', b: 'k0 s0 h1 b0 c0', c: 'k1 s1 h1 b0 c0 l0', x: 'h2 b1 g0 l1 P1', e: 'k1 s1 h1 b1 c0 l1 P1', q: 'k2 s0 h2 b1 c1' }, form: 'iabcqxecabcc' }),
@@ -320,15 +320,18 @@
     // le saut par-dessus la fosse (trop lent, on tombe dedans et on en ressort par sa rampe), la grande bosse du fond. Deux demi-tours relevés côté est, une épingle à plat au milieu,
     // et le grand virage relevé de la tribune ouest qui ramène à la ligne (le mur y est plus rapide que la corde).
     { id: 'stade', nom: 'GRAND VACARME', rivaux: ['NOUR', 'ENZO', 'JADE'], med: [1.08, 1, 0.94], W: 9, grip: 20, sc: 1, tun: null, chaud: [23, 29], amb: [[0, 4], [23, 29]], sect: [9, 23], anticipe: 1,
-      sauts: [[2, 40, 1.5], [9, 36, 1.5, 40, 5], [16, 30, 1.2], [22, 60, 2]], cuv: [[4, 8, 10, 9], [17, 21, 10, 9], [25, 29, 10, 9]],
-      pts: [[0, 0, 0], [80, 0, 0], [150, 0, 0], [230, 0, 0], [300, 0, 0], [339, 16, 0], [355, 55, 0], [339, 94, 0], [300, 110, 0], [220, 110, 0], [150, 110, 0], [80, 110, 0], [45, 125, 0], [30, 160, 0], [45, 195, 0], [80, 210, 0], [190, 210, 0], [300, 210, 0], [339, 226, 0], [355, 265, 0], [339, 304, 0], [300, 320, 0], [190, 320, 0], [100, 320, 0], [0, 320, 0], [-60, 320, 0], [-173, 273, 0], [-220, 160, 0], [-173, 47, 0], [-60, 0, 0]],
+      // lignes droites du départ et du fond élargies ; au centre, l'aire ouverte : on y roule partout, on coupe l'épingle par l'arche de feu (et l'on saute alors la butte de sortie)
+      large: [[0, 3, 18], [22, 24, 16]], place: { c: [150, 160], r: 59, a: 0, piles: [[34.5, 0, 24.5, 3], [-35.5, 0, 12.5, 1]] },
+      // six tremplins (le deuxième par-dessus la fosse), trois hauteurs de mur roulable : 5, 7 et 10 m
+      sauts: [[2, 40, 1.5], [9, 30, 1.7], [16, 24, 1.4], [22, 60, 2, 40, 5], [24, 30, 1.5]], cuv: [[4, 8, 6, 6], [17, 21, 10, 9], [25, 29, 13, 12]],
+      pts: [[0, 0, 0], [80, 0, 0], [150, 0, 0], [230, 0, 0], [300, 0, 0], [339, 16, 0], [355, 55, 0], [339, 94, 0], [300, 110, 0], [255, 110, 0], [150, 110, 0], [80, 110, 0], [45, 125, 0], [30, 160, 0], [45, 195, 0], [80, 210, 0], [126, 210, 0], [300, 210, 0], [339, 226, 0], [355, 265, 0], [339, 304, 0], [300, 320, 0], [190, 320, 0], [100, 320, 0], [0, 320, 0], [-60, 320, 0], [-173, 273, 0], [-220, 160, 0], [-173, 47, 0], [-60, 0, 0]],
       // voiture inventée : un pick-up de stade à châssis tubulaire, V8 atmosphérique de 6 L, 600 ch, 1300 kg, propulsion, grands débattements
       car: car({ nom: 'MASTIFF V8 ARENA', ratios: [2.9, 1.95, 1.45, 1.15, 0.95], final: 5.2, wheel: 0.36, mass: 1375, idle: 900, red: 7200, cd: 0.45, area: 2.3,
         tq: [0, 380, 500, 580, 640, 660, 640, 590, 480], son: 0.85, look: { col: 0xffc21a, l: 0.9, w: 1.04, h: 1.2, nez: 0.45, cab: [-0.1, 1.9, 0.62], aileron: 2, bandes: 0x16161c } }),
       radio: RADIO.stade,
       th: { decor: 'stade', fog: 0x0e0c18, fogD: [120, 900], sky: [[0, '#05050a'], [1, '#05050a']], stars: 0,
-        astre: { dir: [0.2, 0.95, 0.25], col: '#05050a', ombre: '#05050a', taille: 1 }, hemi: [0xdfe6ff, 0x6a5038, 0.9], sun: [0xfff6e0, 0.55], phares: 1.2, bloom: 0.1, scan: 0.08,
-        murH: 1.2, paroi: 'paroiArene', route: ['#7a5a3c', '#86643f', '#f4f0e0', '#ffc21a', '#e8362a', '#f4f0e0', false], mur: ['#f4f0e0', '#e8362a', '#1c3fa8', '#c8c4b8'], depart: [0xe8362a, 0x20242c, '#f4f0e0'],
+        astre: { dir: [0.2, 0.95, 0.25], col: '#05050a', ombre: '#05050a', taille: 1 }, hemi: [0xe6ecff, 0x3c3c48, 0.85], sun: [0xffffff, 0.5], phares: 0.5, bloom: 0.1, scan: 0.08, ciel: 'SOUS LE TOIT',
+        murH: 0, paroi: 'paroiArene', route: ['#3e3a40', '#4c464c', '#f4f0e0', '#ff8a1a', '#e8362a', '#f4f0e0', false], mur: ['#f4f0e0', '#e8362a', '#1c3fa8', '#c8c4b8'], depart: [0xe8362a, 0x20242c, '#f4f0e0'],
         hud: { y: '#ffffff', c: '#ffc21a', r: '#e8362a', fond: 'rgba(16,14,28,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'ARENE COUVERTE · COMPLET'], titre: ['GRAND', 'VACARME'] } } },
     // Nuit Blanche : la route d'un col fermé pour l'hiver, à l'aube. Neige tassée partout, glace vive là où le soleil ne vient jamais (elle luit, sombre, sur la route claire) :
     // le pied de la falaise après le départ, le replat entre les deux lacets, la crête du col balayée par le vent, le pont sur la gorge, le bois de mélèzes du retour.
