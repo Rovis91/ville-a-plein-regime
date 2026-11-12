@@ -52,7 +52,8 @@
   function newCar(T) {
     const i = T.n - 8, s = T.S[i]; // 16 m avant la ligne
     return { x: s.x, z: s.z, th: Math.atan2(s.tz, s.tx), vx: 0, vz: 0, steer: 0, yaw: 0, idx: i, dist: -8, d: 0, hit: 0, vf: 0, vl: 0,
-      drift: false, slide: 0, driftT: 0, dd: 0, sa: 0, boost: 0, stun: 0, manual: false, gear: 0, lastGear: 0, shiftT: 0, rpm: CARD.idle };
+      drift: false, slide: 0, driftT: 0, dd: 0, sa: 0, boost: 0, stun: 0, nDrift: 0, nBoost: 0, nWall: 0, combo: 0, comboMax: 0, // n… : bilan de glisse (glisses, boosts, chocs mur, boosts enchaînés sans choc)
+      manual: false, gear: 0, lastGear: 0, shiftT: 0, rpm: CARD.idle };
   }
 
   // inp: {steer:-1..1 (droite>0), gas:0..1, brake:0..1, hand:bool}
@@ -64,8 +65,8 @@
     const sp = Math.abs(vf);
     // Glisse (frein à main tenu + volant, au-dessus de 45 km/h) : elle verrouille son sens (c.dd) tant que le frein à main est tenu ; le volant ne fait plus qu'ouvrir ou fermer le rayon.
     // La voiture se met en travers de c.sa (angle de dérive) mais sa trajectoire tourne au lacet commandé : on serre plus qu'en adhérence, sans perdre de vitesse.
-    if (!c.dd && inp.hand && sp > 12 && Math.abs(inp.steer) > 0.3) c.dd = Math.sign(inp.steer);
-    if (c.dd && (!inp.hand || sp < 10)) { if (c.driftT > 0.6 && sp >= 10) c.boost = Math.min(1.5, c.driftT * 0.8); c.dd = 0; c.driftT = 0; } // glisse tenue plus de 0,6 s : boost à la sortie
+    if (!c.dd && inp.hand && sp > 12 && Math.abs(inp.steer) > 0.3) { c.dd = Math.sign(inp.steer); c.nDrift++; }
+    if (c.dd && (!inp.hand || sp < 10)) { if (c.driftT > 0.6 && sp >= 10) { c.boost = Math.min(1.5, c.driftT * 0.8); c.nBoost++; c.comboMax = Math.max(c.comboMax, ++c.combo); } c.dd = 0; c.driftT = 0; } // glisse tenue plus de 0,6 s : boost à la sortie
     const om = omega(sp) * Math.min(1, sp / 10), sd = c.steer * (c.dd || 0);
     const w = c.dd ? c.dd * om * lerp(KT.dn, sd > 0 ? KT.din : KT.dout, Math.abs(sd)) : c.steer * om * (inp.gas && !inp.brake ? 1 : KT.lift);
     c.yaw += (w - c.yaw) * Math.min(1, dt * 18); // un rien d'inertie : la réponse est quasi immédiate
@@ -125,7 +126,7 @@
       if (vn > 0) {
         // la perte sèche ne tombe qu'à l'arrivée sur le mur : rester appuyé dessus, volant braqué, ne fait que frotter
         const fresh = !(c.wallT > 0), sa = vn / Math.max(Math.hypot(c.vx, c.vz), 1), k = fresh ? 1 - clamp((sa - WALL_SOFT) * WALL_LOSS, 0, 0.7) : 1;
-        c.vx = (c.vx - nx * sg * vn) * k; c.vz = (c.vz - nz * sg * vn) * k; c.hit = fresh ? vn : 0; // pas de rebond : on glisse le long du mur
+        c.vx = (c.vx - nx * sg * vn) * k; c.vz = (c.vz - nz * sg * vn) * k; c.hit = fresh ? vn : 0; if (fresh && vn > 2) { c.nWall++; c.combo = 0; } // pas de rebond : on glisse le long du mur
         c.th += wrap(Math.atan2(s.tz, s.tx) - c.th) * Math.min(0.5, vn * 0.03);
         if (fresh && sa > WALL_HARD && vn > 5) { c.dd = 0; c.driftT = 0; c.boost = 0; c.stun = 0.8; } // un vrai choc annule le boost et coupe le moteur 0,8 s
       }
@@ -174,15 +175,18 @@
   //     c.bump = vitesse d'impact (m/s) d'un choc contre une autre voiture pendant ce pas, sinon 0 (c.hit reste le choc contre un mur)
   //     c.dist = progression en échantillons de 2 m depuis la ligne (tours cumulés) ; c.lvl = niveau du pilote
   //   raceOrder(R) = les voitures triées par place.
+  // DIFF : les trois difficultés du menu. k multiplie le niveau des adversaires ; el = élastique : jusqu'à ±el de rythme selon l'écart au joueur (plein effet à 300 m),
+  // l'IA de tête lève un peu le pied quand le joueur est loin derrière et pousse quand il mène. Niveau plafonné à LVL_MAX : au-delà le pilote automatique touche les murs.
+  const DIFF = [{ nom: 'DETENTE', k: 0.93, el: 0.05 }, { nom: 'NORMAL', k: 1, el: 0.03 }, { nom: 'CHAUD', k: 1.04, el: 0.015 }], LVL_MAX = 1.04;
   const AI_LVL = [0.99, 0.97, 0.95]; // niveau de chaque adversaire : le seul réglage de rythme (1 = tour propre du pilote automatique)
   const CR = 1.1, CO = 1.2; // une voiture = 2 cercles de rayon CR, à ±CO m le long de son axe (4,6 m × 2,2 m)
 
-  function newRace(T, laps = 3, lvls = AI_LVL) {
+  function newRace(T, laps = 3, lvls = AI_LVL, el = 0) {
     const cars = [1, ...lvls].map((lvl, i) => {
       const c = newCar(T), k = i ? i - 1 : lvls.length, j = T.n - 8 - 4 * k, s = T.S[j], d = k % 2 ? 3 : -3; // grille en quinconce, 8 m entre deux places
       return Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, th: Math.atan2(s.tz, s.tx), idx: j, dist: -8 - 4 * k, d, lvl, pos: k + 1, lap: 1, fin: 0, bump: 0 });
     });
-    return { T, cars, laps, t: 0, done: false };
+    return { T, cars, laps, el, t: 0, done: false };
   }
 
   const raceOrder = R => [...R.cars].sort((a, b) => (a.fin || 1e9) - (b.fin || 1e9) || b.dist - a.dist);
@@ -202,7 +206,9 @@
   function stepRace(R, inp, dt) {
     const { T, cars } = R;
     R.t += dt;
-    const ins = cars.map((c, i) => i || !inp ? autopilot(c, T, c.lvl, cars) : inp);
+    const p = cars[0], rub = c => Math.min(LVL_MAX, c.lvl * (1 - R.el * clamp((c.dist - p.dist) / 150, -1, 1)));
+    // une voiture arrivée lève le pied : elle finit son tour au ralenti au lieu de repartir à fond
+    const ins = cars.map((c, i) => i || !inp ? autopilot(c, T, c.fin ? 0.45 : i ? rub(c) : c.lvl, cars) : inp);
     for (const c of cars) c.bump = 0;
     // les chocs entre voitures d'abord, puis step() : les murs ont le dernier mot, aucune voiture ne peut être poussée hors piste
     for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) collide(cars[i], cars[j]);
@@ -243,5 +249,5 @@
     }
   }
 
-  Object.assign(G, { buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, TOP, CARD, vturn, omega });
+  Object.assign(G, { buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega });
 })(typeof window !== 'undefined' ? window : globalThis);
