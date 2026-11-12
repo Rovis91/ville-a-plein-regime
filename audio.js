@@ -383,7 +383,7 @@
     nz(t, 0.018, CLAC, V.mot, 'bandpass', f, 2.5); osc('triangle', 150, t, 0.05, CLAC * 0.25, V.mot);
     nz(t + 0.07, 0.03, CLAC * 1.4, V.mot, 'bandpass', f * 1.5, 2); nz(t + 0.07, 0.012, CLAC * 0.6, V.mot, 'highpass', 4000); osc('square', 320, t + 0.07, 0.03, CLAC * 0.15, V.mot);
   }
-  function choc(hit, t = AC.currentTime) { nz(t, 0.25, Math.min(0.6, hit * 0.04), V.choc, 'lowpass', 400); }
+  function choc(hit, t = AC.currentTime) { const v = Math.min(0.6, hit * 0.04); nz(t, 0.25, v, V.choc, 'lowpass', 400); nz(t, 0.07, v * 0.7, V.choc, 'bandpass', 1200, 0.8); } // coup sourd + claquement de tôle, pour qu'il s'entende sur de petits haut-parleurs
   function boostFx(t = AC.currentTime) { const o = osc('sawtooth', 220, t, 0.5, 0.1, filt('lowpass', 3000, 0.5, V.choc)); o.frequency.exponentialRampToValueAtTime(880, t + 0.4); const w = nz(t, 0.6, 0.08, V.choc, 'bandpass', 500, 1.5); w.frequency.exponentialRampToValueAtTime(4000, t + 0.5); } // boost de sortie de glisse : sifflement + souffle
   function petarade(spool = 1, t = AC.currentTime) { nz(t, 0.25, 0.04 * spool, V.mot, 'bandpass', 1400, 1.5); for (let i = 0; i < 3; i++) nz(t + 0.08 + Math.random() * 0.4, 0.035, 0.12, V.mot, 'lowpass', 900); } // lever de pied à haut régime
   // e : état de la course pour cette image — { state, car, T, hot (0..1 dans le secteur chaud), tun (0..1 dans le tunnel), amb (0..1 dans une zone d'ambiance), r (vitesse 0..1), sp, gas, hit, up / down (rapport monté / descendu), rpm, load, spool, stun }
@@ -398,7 +398,7 @@
     const f = rpm * CARD.red / 40 * CARD.son; // la moitié de la fréquence d'allumage d'un 6 cylindres (3 explosions par tour) : même montée en régime, une octave plus grave
     k(eng.a.frequency, f); k(eng.b.frequency, f / 2); k(eng.c.frequency, f * 2); k(eng.lfo.frequency, f / 3);
     k(eng.lp.frequency, 180 + rpm * 320 + load * 380); k(eng.drive.gain, 0.35 + 0.5 * load); k(eng.lfoG.gain, 0.1 + 0.15 * load); // filtre bas : le grave domine
-    k(eng.out.gain, state === 'title' ? 0.004 : 0.007 + 0.012 * load + 0.004 * rpm); // volontairement sous la musique
+    k(eng.out.gain, state === 'title' ? 0.004 : 0.014 + 0.024 * load + 0.008 * rpm); // sous la musique, mais présent (+6 dB par rapport au réglage précédent, timbre inchangé)
     if (lastGas && !gas && racing && rpm > 0.55 && spool > 0.5) petarade(spool, t);
     lastGas = gas;
     // pneus : rien en appui normal ; le feulement monte lentement avec l'angle de glisse, en volume plus qu'en hauteur
