@@ -204,9 +204,9 @@
   // tour d'horizon (0 à 1) d'une direction [x, z] sur la sphère du ciel ; 'astre' = là où est la lune ou le soleil
   const CIEL = TH.ciel || {}, uCiel = d => { const [x, z] = d === 'astre' ? [TH.astre.dir[0], TH.astre.dir[2]] : d; return (Math.atan2(z, -x) / 6.2832 + 1) % 1; };
   const skyMat = mat('ciel', { lum: 1, side: THREE.BackSide, fog: false, net: 1 }, TH.sky, TH.stars, Object.assign({}, CIEL, { lueurs: (CIEL.lueurs || []).map(([d, ...r]) => [uCiel(d), ...r]) }));
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(2500, 16, 12), skyMat); scene.add(sky);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(2500, 48, 24), skyMat); scene.add(sky);
   // nuages : une seconde sphère, à l'intérieur de la première, qui tourne lentement ; elle s'épaissit sous l'averse et s'efface en tunnel
-  const nuages = CIEL.nuages || CIEL.voile ? new THREE.Mesh(new THREE.SphereGeometry(2300, 16, 12), mat('nuages', { lum: 1, side: THREE.BackSide, fog: false, net: 1, transparent: true, depthWrite: false }, CIEL)) : null;
+  const nuages = CIEL.nuages || CIEL.voile ? new THREE.Mesh(new THREE.SphereGeometry(2300, 48, 24), mat('nuages', { lum: 1, side: THREE.BackSide, fog: false, net: 1, transparent: true, depthWrite: false }, CIEL)) : null;
   if (nuages) scene.add(nuages);
   const SD = new V3(...TH.astre.dir).normalize();
   const sunDisc = new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, map: tx('astre', TH.astre.col, TH.astre.ombre, TH.astre.soleil) }));
@@ -838,14 +838,16 @@
     cam.fov = 62 + 26 * r + 3 * car.slide + (car.boost > 0 ? 6 : 0);
     const vue = window.__g.vue; // shortcut: debug console seulement, __g.vue = [angle° autour de la voiture, distance, hauteur] pour inspecter le modèle ; à remplacer par un vrai mode photo si on en veut un
     if (vue) { const a = car.th + vue[0] * Math.PI / 180; cam.position.set(car.x + Math.cos(a) * vue[1], carY + vue[2], car.z + Math.sin(a) * vue[1]); cam.lookAt(car.x, carY + 0.7, car.z); cam.fov = 45; }
+    const rg = window.__g.regard; // shortcut: debug seulement, __g.regard = [azimut°, élévation°] : la caméra reste en place et regarde par là, pour inspecter le ciel
+    if (rg) { const az = rg[0] * Math.PI / 180, el = rg[1] * Math.PI / 180; cam.lookAt(cam.position.x + Math.cos(az) * Math.cos(el), cam.position.y + Math.sin(el), cam.position.z + Math.sin(az) * Math.cos(el)); cam.fov = 70; }
     cam.updateProjectionMatrix();
-    sky.position.copy(cam.position); sunDisc.position.copy(cam.position).addScaledVector(SD, 2000); sunFollow();
+    sky.position.copy(cam.position); sunDisc.position.copy(cam.position).addScaledVector(SD, TH.astre.soleil ? 2000 : 2400); sunFollow();
 
     // lumière : nuit néon ↔ échangeur en alarme rouge qui bat avec la musique
     lm += (zone(car.idx, 10) - lm) * Math.min(1, dt * 8);
     scene.fog.color.copy(FOG_OUT).lerp(FOG_IN, lm); scene.fog.near = lerp(TH.fogD[0], 15, lm); scene.fog.far = lerp(TH.fogD[1], 320, lm);
     skyMat.color.copy(WHITE).lerp(FOG_IN, lm);
-    if (nuages) { nuages.position.copy(cam.position); nuages.rotation.y += dt * (CIEL.vent || 0.004); nuages.material.opacity = Math.min(1, (CIEL.op || 0.9) + 0.1 * pluieAt(car.idx)) * (1 - lm); }
+    if (nuages) { nuages.position.copy(cam.position); nuages.rotation.y += dt * (CIEL.vent || 0.004); nuages.material.opacity = Math.min(1, (CIEL.op || 0.9) + (CIEL.averse || 0.1) * pluieAt(car.idx)) * (1 - lm); }
     if (TH.alarme) { carMat.emissive.setRGB(0.3 * lm, 0.01 * lm, 0.03 * lm); for (const m of tunMats) m.color.setScalar((m.userData.amb || 1) * (0.75 + 0.5 * pulse)); }
     // lumière dynamique : phares, boîte d'ombre de la voiture, reflets, puis la liste des luminaires
     const cp = Math.cos(pitch);

@@ -8,11 +8,14 @@
 // À servir par outils/capture.py. Paramètres :
 //   carte=ville|touge|wangan|paris|canal   pas=10 (secondes de course entre deux captures)   tours=1   style=net (vide = rendu par défaut)
 //   idx=700,1351   à la place de pas : une capture au passage de ces échantillons de piste (pour revoir un endroit précis)
+//   regard=azimut,élévation (degrés) ou regard=astre   la caméra reste en place et regarde par là : pour inspecter le ciel, la lune, le soleil
 //   vue=angle,distance,hauteur   caméra d'inspection autour de la voiture (window.__g.vue), sinon la caméra de course
 // Résultat : captures/<carte>-NN.jpg et captures/<carte>.json = { vues: [{ n, t, idx, kmh, tunnel }], erreurs, msParImage, tour }.
 // Quand le titre de la page passe à « FINI », tout est écrit.
 (async () => {
-  const q = new URLSearchParams(location.search), carte = q.get('carte') || 'ville', pas = +(q.get('pas') || 10), tours = +(q.get('tours') || 1), style = q.get('style') ?? 'net';
+  const q = new URLSearchParams(location.search), carte = q.get('carte') || 'ville', pas = +(q.get('pas') || 10), tours = +(q.get('tours') || 1), style = q.get('style') ?? 'net', nom = q.get('nom') || carte; // nom : préfixe des fichiers, pour garder plusieurs séries
+  // un onglet masqué bride setTimeout (jusqu'à une minuterie par minute) : on rend la main et on attend par MessageChannel, qui ne l'est pas
+  const souffle = () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = r; c.port2.postMessage(0); }), attendre = async ms => { const t = performance.now(); while (performance.now() - t < ms) await souffle(); };
   const cibles = (q.get('idx') || '').split(',').filter(Boolean).map(Number), log = t => { document.getElementById('log').textContent += t + '\n'; };
   const f = document.createElement('iframe'); f.style.cssText = 'width:960px;height:540px;border:0;display:block';
   f.src = '../index.html?auto&carte=' + carte + (style ? '&style=' + style : '') + '&v=' + Date.now(); document.body.prepend(f);
@@ -20,15 +23,16 @@
   const w = f.contentWindow, erreurs = [];
   w.console.error = (...a) => erreurs.push(a.join(' ').slice(0, 300)); w.addEventListener('error', e => erreurs.push(e.message + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno));
   w.requestAnimationFrame = () => 0; Object.defineProperty(w, 'devicePixelRatio', { get: () => 1 }); w.dispatchEvent(new Event('resize'));
-  await new Promise(r => setTimeout(r, 1000));
-  const g = w.__g; if (!g) { log('ERREUR : le jeu ne démarre pas — ' + erreurs.join(' | ')); document.title = 'FINI (erreur)'; return; }
+  await attendre(1000);
+  const g = w.__g; if (!g) { log('ERREUR : le jeu ne démarre pas — ' + erreurs.join(' | ')); document.title = 'FINI (erreur)'; parent.postMessage('FINI', '*'); return; }
   if (q.get('vue')) g.vue = q.get('vue').split(',').map(Number);
+  if (q.get('regard')) { const d = g.M.th.astre.dir, n = Math.hypot(...d); g.regard = q.get('regard') === 'astre' ? [Math.atan2(d[2], d[0]) * 57.3, Math.asin(d[1] / n) * 57.3 * 0.6] : q.get('regard').split(',').map(Number); }
   const gl = g.renderer.getContext(), T = g.T, vues = [], post = (nom, corps) => fetch('/captures/' + nom, { method: 'POST', body: corps });
   const prise = async () => {
     const n = String(vues.length).padStart(2, '0'), c = g.car;
-    await post(carte + '-' + n + '.jpg', await (await fetch(g.renderer.domElement.toDataURL('image/jpeg', 0.8))).blob());
+    await post(nom + '-' + n + '.jpg', await (await fetch(g.renderer.domElement.toDataURL('image/jpeg', 0.8))).blob());
     vues.push({ n, t: +g.t.toFixed(1), idx: c.idx, kmh: Math.round(Math.hypot(c.vx, c.vz) * 3.6), tunnel: T.tun && ((c.idx - T.t0 + T.n) % T.n) < T.t1 - T.t0 });
-    log(carte + '-' + n + '  t=' + g.t.toFixed(1) + ' s  échantillon ' + c.idx + '/' + T.n);
+    log(nom + '-' + n + '  t=' + g.t.toFixed(1) + ' s  échantillon ' + c.idx + '/' + T.n);
   };
   g.start();
   let k = 0, dernier = -1;
@@ -36,11 +40,11 @@
     g.frame(1e7 + k * 100);
     if (cibles.length) { const i = cibles.findIndex(c => ((g.car.idx - c + T.n) % T.n) < 8); if (i >= 0) { cibles.splice(i, 1); await prise(); if (!cibles.length) break; } }
     else if (Math.floor(g.t / pas) > dernier && g.t > 0.5) { dernier = Math.floor(g.t / pas); await prise(); }
-    if (k % 30 === 0) await new Promise(r => setTimeout(r, 0));
+    if (k % 30 === 0) await souffle();
   }
   gl.finish(); const t0 = performance.now(); for (let i = 0; i < 200; i++, k++) { g.frame(1e7 + k * 100); gl.finish(); }
   const bilan = { carte, vues, erreurs, msParImage: +((performance.now() - t0) / 200).toFixed(2), tour: +g.t.toFixed(1), glErreur: gl.getError() };
-  await post(carte + '.json', JSON.stringify(bilan, null, 1)); log(JSON.stringify(bilan.erreurs) + '  ' + bilan.msParImage + ' ms par image'); document.title = 'FINI';
+  await post(nom + '.json', JSON.stringify(bilan, null, 1)); log(JSON.stringify(bilan.erreurs) + '  ' + bilan.msParImage + ' ms par image'); document.title = 'FINI'; parent.postMessage('FINI', '*'); // prévient une page qui enchaîne plusieurs séries
 })();
 </script>
 </body>
