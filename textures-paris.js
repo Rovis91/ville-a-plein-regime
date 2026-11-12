@@ -46,6 +46,23 @@ Object.assign(TEXTURES, {
   // roof de péniche : bois verni à grosses fenêtres carrées et hublots, rideaux de couleur, quelques fenêtres allumées
   roof: () => [64, 16, (g, { R, alea }) => { R(g, '#6a4a2a', 0, 0, 64, 16); for (let x = 0; x < 64; x += 2) R(g, '#5a3c22', x, 0, 1, 16);
     for (let x = 3; x < 62; x += 8) { R(g, alea() < 0.3 ? '#ffd890' : '#24303a', x, 4, 5, 6); R(g, ['#c84a3a', '#e8d8a0', '#3a6a8a'][alea() * 3 | 0], x, 4, 1, 6); } R(g, '#2a2a2a', 0, 14, 64, 2); }],
+  // rose gothique : roue de verre bleu et rouge sombre à remplages rayonnants dans un carré de pierre
+  rose: () => [64, 64, (g, { R, alea }) => {
+    R(g, '#c9b896', 0, 0, 64, 64); g.fillStyle = '#4a4030'; g.beginPath(); g.arc(32, 32, 30, 0, 6.2832); g.fill();
+    for (let r = 27; r > 3; r -= 4) for (let k = 0; k < 24; k++) { const a = k / 24 * 6.2832 + r * 0.1; R(g, ['#1a2a6a', '#6a1a2a', '#2a4a8a', '#c8a040', '#1a4a3a'][alea() * 5 | 0], 32 + Math.cos(a) * r - 1 | 0, 32 + Math.sin(a) * r - 1 | 0, 3, 3); }
+    g.strokeStyle = '#d8c8a8'; g.lineWidth = 1; for (let k = 0; k < 12; k++) { const a = k / 12 * 6.2832; g.beginPath(); g.moveTo(32, 32); g.lineTo(32 + Math.cos(a) * 29, 32 + Math.sin(a) * 29); g.stroke(); }
+    g.lineWidth = 2; for (const r of [29, 18, 6]) { g.beginPath(); g.arc(32, 32, r, 0, 6.2832); g.stroke(); }
+  }],
+  // plomb des toits : feuilles à tasseaux verticaux, gris bleuté patiné
+  plomb: () => [64, 64, (g, { R, alea, voile }) => { R(g, '#5a6470', 0, 0, 64, 64); for (let x = 0; x < 64; x += 4) R(g, '#6e7884', x, 0, 1, 64); voile(g, 0.2, () => { for (let i = 0; i < 40; i++) R(g, '#fff', alea() * 64 | 0, alea() * 64 | 0, 2, 3); }); }, 8],
+  // mur gothique : travées de 4 m entre contreforts, hautes fenêtres en ogive à vitraux sombres et meneau, larmier à mi-hauteur ; tuile de 8 m
+  murGothique: () => [64, 64, (g, { R, alea, voile }) => {
+    R(g, '#d8ccb2', 0, 0, 64, 64);
+    for (let x = 0; x < 64; x += 32) { R(g, '#bfb298', x, 0, 4, 64); voile(g, 0.35, () => R(g, '#000', x + 4, 0, 1, 64)); }
+    for (const x of [10, 42]) for (const y0 of [4, 36]) { g.fillStyle = '#28304a'; g.beginPath(); g.moveTo(x, y0 + 26); g.lineTo(x, y0 + 8); g.quadraticCurveTo(x, y0, x + 6, y0 - 2); g.quadraticCurveTo(x + 12, y0, x + 12, y0 + 8); g.lineTo(x + 12, y0 + 26); g.fill();
+      for (let i = 0; i < 10; i++) R(g, ['#5a2a3a', '#2a4a7a', '#7a6a3a'][alea() * 3 | 0], x + 1 + (alea() * 10 | 0), y0 + 4 + (alea() * 20 | 0), 1, 2); R(g, '#c8bca2', x + 5, y0 + 2, 2, 24); }
+    R(g, '#a89c84', 0, 31, 64, 2); voile(g, 0.15, () => { for (let i = 0; i < 6; i++) R(g, '#000', alea() * 64 | 0, alea() * 20 | 0, 1, 10 + alea() * 20 | 0); });
+  }, 8],
   // pierre sculptée : figures en haut-relief, éclairées par-dessus (haut clair, bas ombré), sur fond de pierre de taille
   basRelief: () => [64, 64, (g, { R, alea, voile }) => {
     R(g, '#a89676', 0, 0, 64, 64);

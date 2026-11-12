@@ -36,6 +36,27 @@
       ['plantes', 1.2, 0.7, 1.2, 14, 1.2, 1.5], ['plantes', 1.2, 0.9, 1.2, 15.8, 1.3, -1.4], ['plantes', 0.9, 0.6, 0.9, -8.5, 1.2, 1.7]],
     // anneau d'amarrage de bronze scellé dans le mur de quai, origine au scellement, le mur est le plan X = 0, l'anneau pend vers -Y
     anneau: () => [['fer', 0.25, 0.25, 0.25, 0, 0, 0], ...paire(sz => ['fer', 0.08, 0.5, 0.08, 0.12, -0.35, sz * 0.22]), ['fer', 0.08, 0.08, 0.5, 0.12, -0.6, 0]],
+    // île dans le fleuve, longue dans l'axe X : murs de quai de pierre de l'eau (y0) au sol (y1), pointes en proue aux deux bouts ; zones : quai (pierre), sol (dessus)
+    ile: (L, D, y0, y1) => { const h = y1 - y0, c = (y0 + y1) / 2, p = D / Math.SQRT2; return [['quai', L, h, D, 0, c, 0, null, 1], ...paire(sx => ['quai', p, h, p, sx * L / 2, c, 0, [0, 0.785, 0]]),
+      ['sol', L, 0.1, D - 0.4, 0, y1 + 0.05, 0], ...paire(sx => ['sol', p - 0.3, 0.1, p - 0.3, sx * L / 2, y1 + 0.05, 0, [0, 0.785, 0]])]; },
+    // cathédrale gothique, longue dans l'axe X : façade ouest à -X (deux tours carrées à abat-son, galerie, rose, trois portails), nef haute et bas-côtés, transept à roses,
+    // chœur et abside, arcs-boutants volant au-dessus des bas-côtés jusqu'à des culées à pinacles, toits de plomb, flèche à la croisée. Zones : mur (murs à fenêtres), pierre, plomb, rose, sombre (portails, abat-son)
+    cathedrale: () => {
+      const B = [], toit = (x, l, w, y, ax = 'x') => { for (const [k, f] of [[0, 1], [1, 0.66], [2, 0.33]]) B.push(ax === 'x' ? ['plomb', l, 3.4, w * f, x, y + 1.7 + k * 3.4, 0] : ['plomb', w * f, 3.4, l, x, y + 1.7 + k * 3.4, 0]); };
+      B.push(['mur', 100, 33, 14, -5, 16.5, 0, null, 1], ...paire(sz => ['mur', 92, 18, 12, -1, 9, sz * 13, null, 1]), ...paire(sz => ['plomb', 92, 1.2, 12.6, -1, 18.4, sz * 13]));
+      toit(-5, 100, 14, 33); toit(5, 50, 14, 33, 'z');
+      B.push(['mur', 14, 33, 50, 5, 16.5, 0, null, 1], ...paire(sz => ['rose', 0.3, 10, 10, 5, 24, sz * 25.1]), ...paire(sz => ['sombre', 5, 8, 0.3, 5, 4, sz * 25.1]));
+      for (let k = 0; k < 5; k++) { const a = (k - 2) * 0.55; B.push(['mur', 6, 33, 7, 45 + Math.cos(a) * 4.5, 16.5, Math.sin(a) * 4.5, [0, -a, 0], 1], ['mur', 6, 18, 9, 47 + Math.cos(a) * 12, 9, Math.sin(a) * 12, [0, -a, 0]]); }
+      for (const x of [-38, -29, -20, -11, 20, 29, 38, 47]) for (const sz of [-1, 1]) {
+        const zx = x === 47 ? 0.6 : 1; // l'abside a les siens, plus courts
+        B.push(['pierre', 2.2, 23, 3, x, 11.5, sz * 21 * zx], ['pierre', 1, 6, 1, x, 26, sz * 21 * zx], ['pierre', 1.6, 2, Math.hypot(14 * zx, 7) + 1, x, 27, sz * (7 + 14 * zx / 2), [sz * Math.atan2(7, 14 * zx), 0, 0]]);
+      }
+      B.push(['pierre', 16, 43, 42, -62, 21.5, 0, null, 1], ['rose', 0.3, 11, 11, -70.1, 26, 0], ...[-12, 0, 12].map(z => ['sombre', 0.4, z ? 8 : 10, z ? 5 : 6, -70.1, z ? 4 : 5, z]),
+        ['pierre', 16.4, 1, 42.4, -62, 15, 0], ['pierre', 16.4, 1, 42.4, -62, 34, 0], ['pierre', 4, 4, 16, -66, 45, 0]);
+      for (const sz of [-1, 1]) B.push(['pierre', 14, 26, 14, -63, 56, sz * 14, null, 1], ['pierre', 14.6, 1, 14.6, -63, 69.5, sz * 14], ...[-1, 1].map(o => ['sombre', 0.3, 14, 2.4, -70.1, 55, sz * 14 + o * 3]), ...[-1, 1].map(o => ['sombre', 2.4, 14, 0.3, -63 + o * 3, 55, sz * (14 + 7.1)]));
+      [[3, 8], [2.2, 10], [1.5, 12], [0.9, 14], [0.4, 12]].reduce((y, [w, hh]) => { B.push(['plomb', w, hh, w, 5, y + hh / 2, 0]); return y + hh; }, 41);
+      return B;
+    },
     // arc de triomphe : 45 m de large (X), 22 de profondeur (Z), 50 de haut. Grande arche de 14,6 m sous 29 m dans l'axe Z, arches latérales de 8,4 m sous 18,7 m dans l'axe X ;
     // quatre piles à socle et groupes sculptés, voûtes en gradins, corniche, frise, attique à écussons. Zones : pierre, relief (parties sculptées)
     arc: () => {
