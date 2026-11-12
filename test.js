@@ -71,6 +71,9 @@ assert(c.nitro > 0.02 && c.nitro < 0.5, 'la glisse tenue doit remplir la jauge d
   assert(ecart(vide, temoin) === 0 && !vide.boost, 'nitro sans jauge : aucun effet');
   assert(mi.boost && mi.nitro > 0.3 && mi.nitro < 0.9, 'la jauge doit se vider peu à peu pendant la poussée: ' + mi.nitro);
   assert(avec.nitro === 0 && !avec.boost && avec.dist > sans.dist + 15 && avec.vf > sans.vf + 5, `la nitro doit faire gagner du terrain en ligne droite: ${avec.dist * 2} m contre ${sans.dist * 2} m, ${avec.vf} contre ${sans.vf} m/s`);
+  // boîte manuelle : la nitro ne passe le rupteur que sur le dernier rapport ; tenue en 1re, elle ne fait pas dépasser les 72 km/h du rupteur
+  const m1 = newCar(T); m1.manual = true; m1.nitro = 1; run(m1, { ...I(0, 1), nitro: true }, 3);
+  assert(m1.gear === 0 && m1.vf * 3.6 < 80, `nitro en 1re : ${m1.vf * 3.6} km/h, le rupteur ne tient plus`);
   // un choc franc contre le mur vide la jauge
   const c = newCar(T); c.nitro = 1; run(c, I(0, 1), 4);
   const s = S[c.idx], th = Math.atan2(s.tz, s.tx) + 0.9, v0 = c.vf, o = W - 1.3 - c.d; c.x += -s.tz * o; c.z += s.tx * o; c.th = th; c.vx = Math.cos(th) * v0; c.vz = Math.sin(th) * v0;
@@ -190,6 +193,27 @@ assert(arr[3].fin - arr[0].fin < 8, 'course trop étalée: ' + arr.map(c => c.fi
 R = newRace(T, 1); while (!R.cars.slice(1).every(c => c.fin) && R.t < 100) stepRace(R, I(0, 0), H);
 assert(R.cars[0].pos === 4 && !R.cars[0].fin && !R.done && R.t < 60, 'course à 1 tour avec joueur immobile');
 
+// ---------- Tournée : barème 10 / 6 / 3 / 1 par manche, grille dans l'ordre inverse du classement général (voitures désignées par leur indice : 0 = joueur, 1 à 3 = rivaux de la carte) ----------
+{
+  // avant la première manche : tout le monde à 0, la grille est celle d'une course ordinaire (joueur dernier)
+  assert.deepStrictEqual(tournee([0, 0, 0, 0]), { pts: [0, 0, 0, 0], classement: [0, 3, 2, 1], grille: [3, 0, 1, 2] });
+  // manche 1 : arrivée rival 2, joueur, rival 3, rival 1
+  const m1 = tournee([0, 0, 0, 0], [2, 0, 3, 1]);
+  assert.deepStrictEqual(m1, { pts: [6, 1, 10, 3], classement: [2, 0, 3, 1], grille: [2, 0, 3, 1] }); // le meneur (rival 2) part dernier, le dernier (rival 1) en pole
+  // manche 2 : le joueur gagne, les points s'ajoutent ; à égalité (16 partout en tête), le joueur est classé devant
+  const m2 = tournee(m1.pts, [0, 2, 1, 3]);
+  assert.deepStrictEqual(m2, { pts: [16, 4, 16, 4], classement: [0, 2, 3, 1], grille: [3, 0, 2, 1] });
+  assert.deepStrictEqual(m1.pts, [6, 1, 10, 3], 'tournee ne doit pas modifier les points reçus');
+  // une voiture qui n'est pas à l'arrivée ne marque rien
+  assert.deepStrictEqual(tournee([0, 0, 0, 0], [1, 2]).pts, [0, 10, 6, 0]);
+  // la course part sur la grille demandée : 8 m entre deux places, en quinconce ; sans grille, rien ne change (joueur dernier)
+  const g = newRace(T, 3, AI_LVL, 0, { grille: m2.grille }).cars, d = newRace(T).cars;
+  assert.deepStrictEqual(g.map(c => c.dist), [-20, -8, -16, -12], 'grille de la tournée');
+  assert.deepStrictEqual(g.map(c => c.pos), [4, 1, 3, 2]);
+  assert.deepStrictEqual(d.map(c => c.dist), [-20, -8, -12, -16], 'grille par défaut');
+  console.log(`OK  tournée : barème ${BAREME.join(' / ')}, après deux manches ${m2.pts.join(' / ')} points, grille ${m2.grille.join(' ')}`);
+}
+
 // ---------- course à élimination : autant de tours que de voitures ; à chaque passage de ligne du meneur à partir de la fin du tour 2, la dernière sort ----------
 let elimTxt;
 {
@@ -222,7 +246,43 @@ let elimTxt;
   elimTxt = `${E.laps} tours, sorties à ${sorties.reverse().map(c => nom(E, c) + ' ' + c.out.toFixed(2)).join(', ')} s, vainqueur ${nom(E, gagnant)} en ${gagnant.fin.toFixed(2)} s`;
 }
 
+// --- fantôme des médailles : la trace du tour de référence (pilote automatique, jauge pleine), ralentie au ratio de la médaille ---
+// une trace = [x, y, z, cap, …] à 20 Hz. Ralentie de 10 %, elle passe aux mêmes endroits 10 % plus tard, et finit au même point
 // ---------- relief : sauts, réceptions, murs roulables (sur la carte du barrage, qui les déclare) ----------
+{
+  const ref = tourRef(T), tr = ref.trace, pts = tr.length / 4, d = (a, i, b, j) => Math.hypot(a[i * 4] - b[j * 4], a[i * 4 + 2] - b[j * 4 + 2]);
+  assert(ref.t > 30 && ref.t < 40 && Math.abs((pts - 1) / 20 - ref.t) < 0.06, `tour de référence : ${ref.t} s pour ${pts} points à 20 Hz`);
+  assert(Math.hypot(tr[0] - S[0].x, tr[2] - S[0].z) < 5 && d(tr, 0, tr, pts - 1) < 5, 'la trace de référence ne part pas de la ligne ou n\'y revient pas');
+  const br = etire(tr, 1.1), nb = br.length / 4;
+  assert(Math.abs((nb - 1) / 20 - 1.1 * ref.t) < 0.11, `fantôme bronze : ${(nb - 1) / 20} s au lieu de ${1.1 * ref.t}`);
+  assert(d(br, 110, tr, 100) < 1e-6 && d(br, 220, tr, 200) < 1e-6 && d(br, nb - 1, tr, pts - 1) < 5 && d(br, 55, tr, 50) < 1e-6, 'fantôme bronze : pas aux mêmes endroits 10 % plus tard');
+  const vite = etire(tr, 0.5); assert(d(vite, 50, tr, 100) < 1e-6 && Math.abs(vite.length / 4 - pts / 2) <= 1, 'trace accélérée : deux fois plus courte');
+  // le cap tourne par le plus court : entre 3,1 et -3,1 rad on passe par pi, pas par zéro
+  const cap = etire([0, 0, 0, 3.1, 1, 0, 0, -3.1], 2)[7]; assert(Math.abs(Math.abs(cap) - Math.PI) < 0.05, 'cap interpolé par le mauvais côté : ' + cap);
+  var fantTxt = `référence ${ref.t.toFixed(2)} s (${pts} points), bronze ${((nb - 1) / 20).toFixed(2)} s`;
+  // --- défi par lien : le fragment porte version, carte, temps et positions à 5 Hz ; aller-retour à la précision de quantification (10 cm, 1,5°) ---
+  {
+    const lien = defiCode('ville', ref.t, tr), lu = defiLit(lien), w = a => Math.atan2(Math.sin(a), Math.cos(a));
+    assert(/^\d+\.ville\.[A-Za-z0-9_-]+$/.test(lien), 'lien de défi : caractères hors URL : ' + lien.slice(0, 40));
+    assert(!lu.err && lu.carte === 'ville' && Math.abs(lu.t - ref.t) < 0.001, 'lien de défi relu : ' + JSON.stringify(lu).slice(0, 80));
+    // un point sur quatre de la trace (5 Hz) est rendu à la quantification près ; entre deux, la trace relue suit l'originale à moins d'un mètre
+    let e5 = 0, ea = 0, e20 = 0; const nl = lu.trace.length / 4;
+    assert(nl > pts - 4 && nl <= pts, `trace relue : ${nl} points pour ${pts}`);
+    for (let i = 0; i < nl; i++) { const e = Math.max(Math.abs(lu.trace[i * 4] - tr[i * 4]), Math.abs(lu.trace[i * 4 + 1] - tr[i * 4 + 1]), Math.abs(lu.trace[i * 4 + 2] - tr[i * 4 + 2])); e20 = Math.max(e20, e);
+      if (i % 4 === 0) { e5 = Math.max(e5, e); ea = Math.max(ea, Math.abs(w(lu.trace[i * 4 + 3] - tr[i * 4 + 3]))); } }
+    assert(e5 <= 0.05 + 1e-9 && ea <= Math.PI / 256 + 1e-9 && e20 < 1, `aller-retour : ${e5} m et ${ea} rad aux points transmis, ${e20} m entre deux`);
+    // liens refusés, toujours par un message et jamais par une exception : tronqué (à n'importe quelle longueur), d'une autre version de la physique, abîmé (un caractère changé, n'importe où), pour une autre carte que celle du tour, ou sans rapport
+    const refus = l => { let r; try { r = defiLit(l); } catch (e) { assert.fail('defiLit lève une exception sur ' + String(l).slice(0, 30) + ' : ' + e.message); } return typeof r.err === 'string' && r.err.length > 5 && !r.trace ? r.err : ''; };
+    for (let i = 0; i < lien.length; i++) assert(refus(lien.slice(0, i)), 'lien tronqué à ' + i + ' caractères accepté');
+    const autre = lien.replace(/^\d+/, v => +v - 1); assert(refus(autre) && refus(autre) !== refus(lien.slice(0, 500)) && /VERSION/.test(refus(autre)), 'lien d\'une autre version : ' + refus(autre));
+    for (let i = lien.indexOf('.', 3) + 1; i < lien.length; i++) assert(refus(lien.slice(0, i) + (lien[i] === 'A' ? 'B' : 'A') + lien.slice(i + 1)), 'lien abîmé au caractère ' + i + ' accepté');
+    assert(refus(lien.replace('.ville.', '.touge.')), 'lien recollé sur une autre carte accepté');
+    for (const l of ['', 'bonjour', '7.ville.', '7.ville.!!!', '7..AAAA', lien + '=', ' ' + lien, null, undefined, 42, {}]) assert(refus(l), 'lien sans rapport accepté : ' + l);
+    assert(defiLit(defiCode('ville', 1, tr.slice(0, 80))).trace, 'un lien court mais entier doit se relire');
+    fantTxt += ` ; lien de défi ${lien.length} caractères pour ${ref.t.toFixed(1)} s, écart ${(e5 * 100).toFixed(0)} cm aux points transmis, ${(e20 * 100).toFixed(0)} cm entre deux`;
+  }
+}
+
 {
   globalThis.CARTE = CARTES.find(m => m.id === 'barrage'); delete require.cache[require.resolve('./sim.js')]; require('./sim.js');
   const T = buildTrack(THREE), { S, n } = T, G = 9.81, v = c => Math.hypot(c.vx, c.vz), near = p => S.reduce((b, s, i) => Math.hypot(s.x - p[0], s.z - p[1]) < Math.hypot(S[b].x - p[0], S[b].z - p[1]) ? i : b, 0);
@@ -280,3 +340,4 @@ let elimTxt;
 console.log(`OK  course : IA seules ${laps.map(l => l.toFixed(2)).join(' / ')} s au tour (niveaux ${AI_LVL.join(' / ')}), dépassement en ${tpass.toFixed(1)} s, 3 tours à 4 IA : ${arr.map(c => R0(c) + ' ' + c.fin.toFixed(2)).join(', ')} (${walls} chocs mur, ${bumps} chocs voiture)`);
 console.log(`OK  élimination : ${elimTxt}`);
 console.log(`OK  glisse : ${glisseTxt}`);
+console.log(`OK  fantôme des médailles : ${fantTxt}`);

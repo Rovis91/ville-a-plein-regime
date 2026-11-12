@@ -16,12 +16,13 @@ Prenez le volant d'une bête de 500 chevaux et lâchez-la dans les artères d'un
 
 <p align="center"><img src="docs/course-1.png" alt="En course, les adversaires dans les rétros"></p>
 
-### 🏁 QUATRE MODES DE JEU EXPLOSIFS !
+### 🏁 CINQ MODES DE JEU EXPLOSIFS !
 
-- **CONTRE-LA-MONTRE** : enchaînez les tours, battez vos records… puis battez votre propre **fantôme** !
+- **CONTRE-LA-MONTRE** : enchaînez les tours, battez vos records… et rattrapez le **fantôme** de la médaille que vous visez : **bronze**, **argent**, puis **or** ! Un tour dont vous êtes fier ? Envoyez-le à un ami par un simple **lien de défi** : il affrontera votre fantôme.
 - **GLISSE** : 2 tours pour le style. Plus ça glisse vite, de travers et longtemps, plus ça paie… et le **multiplicateur** grimpe tant que vous enchaînez sans toucher un mur !
 - **COURSE** : 3 tours, 3 rivaux sans pitié. **KENJI**, **REI** et **JUN** ne vous feront aucun cadeau.
 - **ÉLIMINATION** : 4 voitures, 4 tours. À chaque passage sur la ligne, **le dernier sort**. Jusqu'au duel final !
+- **TOURNÉE** : toutes les cartes à la suite, des points à chaque manche, grille inversée… et un **trophée** au bout !
 
 <p align="center"><img src="docs/depart.png" alt="La grille de départ"></p>
 
@@ -97,7 +98,9 @@ puis ouvrir http://localhost:8123/.
 | A / E | rapport inférieur / supérieur (en manuelle) |
 | C | station de radio suivante |
 | M | couper / remettre la musique |
-| Échap ou P | menu pause (reprendre, recommencer, boîte, radio, musique, fantôme, quitter) |
+| F | fantôme du contre-la-montre : bronze, argent, or, aucun, son propre record (au menu et en piste) |
+| L | copier le lien de défi du dernier tour bouclé (contre-la-montre) |
+| Échap ou P | menu pause (reprendre, recommencer, boîte, radio, musique, fantôme, lien de défi, quitter) |
 | R | recommencer |
 | Manette | stick ou croix : volant et menus · ZR ou B : gaz · ZL ou Y : frein · A : glisse · X : nitro · clic du stick : radio · L / R : rapports · − : boîte manuelle / automatique · + : pause · B : valider |
 | Joy-Con seul, à l'horizontale | touche J une fois pour l'autoriser (Chrome ou Edge) · stick : volant et menus · bouton de droite : gaz et valider · gauche : boîte manuelle / automatique · haut / bas : rapport supérieur / inférieur · SR : glisse · SL : nitro · clic du stick : radio · + ou − : pause |
@@ -114,6 +117,27 @@ La jauge de nitro (en bas à droite) remplace l'ancien boost automatique de sort
 X ou N la dépense : une jauge pleine pousse 3 secondes, gaz ouverts et roues au sol (rien en l'air), y compris au-delà du rupteur. Un choc franc contre un mur ou un camion la vide. Réglages : `NI` en tête de `sim.js`.
 
 Les médailles se mesurent toujours au tour lancé du pilote automatique, qui part avec une jauge pleine et la dépense en ligne droite. La physique ayant changé, les records d'avant la V2 (clés `vpr6.*`) ne comptent plus : le menu le signale une fois.
+
+### Fantôme des médailles
+
+En contre-la-montre, un fantôme roule avec le joueur. La touche F (au menu ou en piste) ou la ligne « fantôme » du menu de pause choisit lequel : **bronze**, **argent**, **or**, aucun, ou son propre **record**. Le choix est gardé par carte (clé `vpr7.<carte>.fantome`) ; au premier lancement, c'est la première médaille pas encore gagnée. Le fantôme porte la couleur de sa médaille (cyan pour le record), sur la piste comme sur la minicarte.
+
+- Un fantôme de médaille boucle son tour exactement au temps du seuil : le battre, c'est gagner la médaille. Le fantôme passe alors de lui-même à la médaille suivante, et après l'or au record du joueur.
+- **Bronze et argent** : la trace du tour de référence des médailles (`tourRef` dans `sim.js` : le pilote automatique, jauge pleine), ralentie au ratio de la médaille (`etire`). Calculée au chargement de la carte.
+- **Or** : le pilote automatique ne glisse pas, il ne sait pas faire un tour en or. Chaque carte a donc une trace de référence embarquée dans `traces-or.js`, ramenée au temps du seuil or. Faute de tours conduits à la main, ces traces viennent de la simulation : `node outils/traces-or.js` fait rouler un pilote qui glisse au frein à main et dépense sa nitro, balaie ses réglages et garde le meilleur tour lancé. Les neuf traces passent sous le seuil or ; huit sans toucher un mur, celle de `wangan` en en touchant un (aucun réglage essayé n'y passe sous l'or proprement). Pour remplacer une trace par un vrai tour, coller dans `traces-or.js` ce qui suit `#defi=` dans un lien de défi : c'est le même format.
+- À relancer si la physique ou un tracé change : `node outils/traces-or.js` (ou `node outils/traces-or.js wangan` pour une seule carte). `test-cartes.js` échoue si une trace sort de la route ou n'est plus sous le seuil or.
+
+Les médailles sont des temps de tour lancé : au premier tour, départ arrêté, le fantôme part devant.
+
+### Défi par lien
+
+Après un tour de contre-la-montre, la touche L (ou « copier le lien de défi » dans le menu de pause) copie dans le presse-papiers un lien qui porte ce tour. Celui qui l'ouvre arrive sur la bonne carte, en contre-la-montre, face au fantôme de l'expéditeur (en rose) : le menu affiche le temps à battre, chaque tour dit de combien le défi est manqué ou battu, et L renvoie un lien à son tour. Il n'y a pas de serveur : tout est dans l'adresse.
+
+- Forme : `…/index.html#defi=<version>.<carte>.<données>`. Tout tient dans le fragment (après `#`), que le navigateur n'envoie jamais au serveur.
+- Les données : le temps du tour, puis la position et le cap de la voiture cinq fois par seconde, quantifiés à 10 cm et à 1/256 de tour, écrits en différences (en différences secondes pour x et z : presque toujours un octet par valeur), avec deux octets de contrôle, le tout en base64 pour URL. Environ 27 caractères par seconde de tour : 1 100 pour un tour de 38 s, 2 600 pour le plus long tour plausible (`wangan` au temps de bronze, chiffre affiché par `test-cartes.js`). Certaines messageries coupent les liens de cette taille : un lien coupé est refusé, il ne donne jamais un fantôme faux.
+- On transporte des positions, jamais des commandes : la simulation ne donne pas exactement le même résultat d'un navigateur à l'autre. Entre deux points, le fantôme est interpolé en ligne droite (moins d'un mètre d'écart à la trace d'origine).
+- La version est celle de la physique (`DEFI_V` dans `sim.js`, la même que celle des clés de records `vpr7`) : à augmenter avec elle. Un lien d'une autre version, abîmé, tronqué, ou pour une carte inconnue est refusé avec un message au menu, et le jeu s'ouvre normalement.
+- `defiCode(carte, temps, trace)` et `defiLit(lien)` sont des fonctions pures de `sim.js`, testées sous Node (aller-retour à la précision de quantification, liens tronqués à toute longueur, abîmés à tout caractère, d'une autre version). Le fantôme reçu n'est pas enregistré : il vit le temps de la page.
 
 ### Mode Glisse
 
@@ -135,6 +159,19 @@ Variante de la course, au menu des modes (« ÉLIMINATION », aux trois difficul
 
 Dans `sim.js` : `newRace(T, tours, niveaux, élastique, { elim: true })` ; une voiture sortie porte `c.out` (le temps de sa sortie), et `raceOrder(R)` donne le classement.
 
+### Tournée
+
+Au menu des modes (« TOURNEE », aux trois difficultés) : toutes les cartes du jeu à la suite, dans l'ordre du menu, en courses de 3 tours contre les rivaux de chaque carte.
+
+- Barème par manche : 10, 6, 3 et 1 points du premier au dernier.
+- Après chaque manche, le classement général s'affiche, avec ce que la manche a rapporté et la place de départ de la suivante.
+- La grille de départ est l'ordre inverse du classement général : le meneur part dernier. À égalité de points, le joueur est classé devant.
+- Les rivaux changent de nom à chaque carte ; les points suivent leur rang dans la liste des rivaux de la carte (le premier nommé hérite des points du premier nommé de la carte d'avant), pas leur nom.
+- La Tournée est sauvegardée après chaque manche close (une par difficulté). Quitter en cours de manche ne perd que cette manche : au menu, « REPRENDRE » la relance, depuis n'importe quelle carte. Une manche est close quand on quitte son tableau d'arrivée (Entrée ou Échap) ; fermer l'onglet avant, c'est la rejouer.
+- Au bout de la dernière carte, finir sur le podium donne le trophée de la difficulté (or, argent, bronze), affiché au menu. Ni échelle ni rétrogradation.
+
+La liste des manches est `CARTES` (`cartes.js`), lue telle quelle : une carte ajoutée entre dans la Tournée sans rien changer. Le calcul est une fonction pure de `sim.js`, `tournee(points, arrivée)`, qui rend les points, le classement et la grille ; `newRace` prend la grille par `{ grille }`. Dans `game.js`, voir « Tournée » : état dans `localStorage` sous `vpr7.tournee` (par difficulté : prochaine manche et points) et `vpr7.trophee`. On passe d'une carte à l'autre sans recharger la page ; la mémoire tenue d'une carte à l'autre se mesure avec `chaine()` de `outils/perf.js` (voir « Performances »).
+
 Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/E sur un clavier QWERTY. Les autres commandes sont lues par la lettre tapée.
 
 ## Fichiers
@@ -145,7 +182,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | `icon.svg` | icône de l'app (favicon) |
 | `docs/` | captures d'écran du README |
 | `cartes.js` | **les cartes**, en données : tracé, largeur, adhérence, voiture, stations de radio, thème (couleurs, ciel, lumière, interface). Ajouter une carte commence ici. |
-| `sim.js` | **physique**, sans aucun rendu : piste, moteur et boîte, glisse, murs, pilote automatique, course contre IA, trafic. Partagé entre le jeu et les tests. |
+| `sim.js` | **physique**, sans aucun rendu : piste, moteur et boîte, glisse, murs, pilote automatique, course contre IA, trafic, traces des fantômes et liens de défi. Partagé entre le jeu et les tests. |
 | `game.js` | rendu three.js, décor de la ville, effets, interface, commandes, boucle de jeu |
 | `audio.js` | tout le son, synthétisé : trois stations de radio par carte (données `RADIO` dans `cartes.js`), chacune avec ses timbres (`PATCH`), sa batterie (`KIT`), ses effets et sa forme en sections ; musique de menu, ambiance du lieu par zones, tunnels, moteur, boîte, pneus, bruitages. Exposé au jeu par `window.SON`. |
 | `ecoute.html` | banc d'écoute : chaque station, ambiance et bruitage joué seul (amplifié pour l'écoute, vumètre, « tout arrêter »), le mélange de course avec un curseur par famille, et trois vérifications : auto-test des boutons, niveaux (RMS et crête) et variété des stations (corrélation des spectres), par rendu hors ligne |
@@ -153,6 +190,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | `formes.js` | **catalogue des formes** : la géométrie de chaque objet, forme simple ou assemblage de boîtes à zones nommées. Ni texture, ni emplacement. Un assemblage posé est fondu en une géométrie par zone ; `insts()` (decors.js) le pose en nombre, une passe de dessin par zone. |
 | `decors.js` | **placement** des décors des autres cartes (forêt, baie, Paris, canal), une fonction par carte : où poser quelle forme avec quelle texture, par `h.pose`, `h.geo`, `h.mat`. Le placement de la piste et de la ville est dans `game.js`. |
 | `rythme.js` | **essai indépendant** : les aplats lumineux du décor battent avec la grosse caisse de la radio. Pour le retirer, supprimer sa ligne dans `index.html` ; pour comparer, ajouter `&rythme=0` à l'adresse. |
+| `traces-or.js` | trace de référence du fantôme or de chaque carte (produit par `outils/traces-or.js`) |
 | `test-cartes.js` | tests de toutes les cartes |
 | `propositions/` | la page de conception d'origine des cartes (historique) |
 | `samples.js` | sons de batterie encodés en base64 (généré depuis `samples/`) |
@@ -169,19 +207,21 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 node test.js
 ```
 
-Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, la jauge de nitro (remplissage, poussée, choc, vol), l'aspiration, la course contre IA, le score du mode Glisse (une glisse rapide rapporte plus qu'une lente, l'enchaînement multiplie, un choc le casse, des zigzags lents ne rapportent rien) et la course à élimination (personne ne sort au premier tour, classement = ordre inverse des sorties). Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
+Vérifie sur la ville la géométrie du circuit, un tour complet au pilote automatique, les performances de la voiture (0 à 100 km/h, vitesses de passage des rapports, rupteur), la glisse, la jauge de nitro (remplissage, poussée, choc, vol), l'aspiration, la course contre IA, le score du mode Glisse (une glisse rapide rapporte plus qu'une lente, l'enchaînement multiplie, un choc le casse, des zigzags lents ne rapportent rien) la course à élimination (personne ne sort au premier tour, classement = ordre inverse des sorties) et la Tournée (points et grille sur des classements donnés, départ sur la grille demandée), les traces des fantômes de médaille et les liens de défi (aller-retour, liens invalides refusés). Ses temps de référence sont figés : s'ils bougent, les records de la ville ne sont plus comparables.
 
 ```bash
 node test-cartes.js
 ```
 
-Passe chaque carte dans la physique : tracé sans recoupement, tour bouclé au pilote automatique, 0 à 100 km/h plausible, glisse au frein à main, trafic. Affiche longueur, temps au tour et vitesses de chaque carte.
+Passe chaque carte dans la physique : tracé sans recoupement, tour bouclé au pilote automatique, 0 à 100 km/h plausible, glisse au frein à main, trafic, trace or du fantôme (lisible, sur la route, sous le seuil or). Affiche longueur, temps au tour et vitesses de chaque carte.
 
 Dans le navigateur, `?auto` fait conduire le pilote automatique, et `window.__g` expose l'état du jeu pour le débogage.
 
 ## Performances
 
 `index.html?perf&auto` mesure toutes les cartes à la suite (une minute en tout) : le pilote automatique fait un tour en course contre 3 adversaires, à pas fixe, sans rien afficher, et chaque image est chronométrée. Le tableau sort dans la console et dans `localStorage['vpr.perf']`. Le banc est dans `outils/perf.js`, avec la référence que **toute carte doit tenir** (`BUDGET`) :
+
+Pour la mémoire sur un enchaînement de cartes sans rechargement (Tournée) : `index.html?auto`, mode course, puis dans la console `(await import('./outils/perf.js')).chaine()`. Chaque carte est chargée à la suite de la précédente, deux fois toute la liste, et on relève les géométries, textures et shaders tenus par le GPU et le tas JS. Référence : les chiffres d'une carte sont les mêmes au second passage qu'au premier (relevé du 12/11/2026 sur 7 cartes et 3 passages : identiques, de 56 géométries et 45 textures au barrage à 267 et 159 sur le Wangan, 24 à 32 shaders ; tas JS entre 24 et 100 Mo sans tendance à la hausse).
 
 | mesure | référence | ce que c'est |
 |---|---|---|
