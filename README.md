@@ -112,7 +112,9 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | `game.js` | rendu three.js, décor de la ville, effets, interface, commandes, boucle de jeu |
 | `audio.js` | tout le son, synthétisé : trois stations de radio par carte (données `RADIO` dans `cartes.js`), chacune avec ses timbres (`PATCH`), sa batterie (`KIT`), ses effets et sa forme en sections ; musique de menu, ambiance du lieu par zones, tunnels, moteur, boîte, pneus, bruitages. Exposé au jeu par `window.SON`. |
 | `ecoute.html` | banc d'écoute : chaque station, ambiance et bruitage joué seul (amplifié pour l'écoute, vumètre, « tout arrêter »), le mélange de course avec un curseur par famille, et trois vérifications : auto-test des boutons, niveaux (RMS et crête) et variété des stations (corrélation des spectres), par rendu hors ligne |
-| `decors.js` | décors des autres cartes (forêt, baie, Paris, canal) : une fonction par carte |
+| `textures.js` | **catalogue des textures** : l'aspect de chaque surface, aplat (`nom: 0xrrggbb`) ou dessin sur canvas. Ni forme, ni emplacement. |
+| `formes.js` | **catalogue des formes** : la géométrie de chaque objet, forme simple ou assemblage de boîtes à zones nommées. Ni texture, ni emplacement. Un assemblage posé est fondu en une géométrie par zone ; `insts()` (decors.js) le pose en nombre, une passe de dessin par zone. |
+| `decors.js` | **placement** des décors des autres cartes (forêt, baie, Paris, canal), une fonction par carte : où poser quelle forme avec quelle texture, par `h.pose`, `h.geo`, `h.mat`. Le placement de la piste et de la ville est dans `game.js`. |
 | `rythme.js` | **essai indépendant** : les aplats lumineux du décor battent avec la grosse caisse de la radio. Pour le retirer, supprimer sa ligne dans `index.html` ; pour comparer, ajouter `&rythme=0` à l'adresse. |
 | `test-cartes.js` | tests de toutes les cartes |
 | `propositions/` | la page de conception d'origine des cartes (historique) |
@@ -122,7 +124,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | `three.min.js` | three.js r128 |
 | `test.js` | tests de la physique |
 
-`game.js` est un seul fichier découpé en sections repérées par `// ----------` : rendu et passe finale, textures, piste, ville, horizon, voiture et effets, état de jeu et commandes, interface, boucle.
+`game.js` est un seul fichier découpé en sections repérées par `// ----------` : rendu et passe finale, outils des trois entités du décor (`tx`, `mat`, `geo`, `pose`), piste, ville, horizon, voiture et effets, état de jeu et commandes, interface, boucle.
 
 ## Tests
 
@@ -152,6 +154,9 @@ Dans `cartes.js`, pour chaque carte :
 | `car` | la voiture : rapports de boîte, courbe de couple, masse, aérodynamique, motricité, silhouette |
 | `radio` | les stations (`RADIO`, en tête de `cartes.js`) : tempo, batterie, timbres, couleur, progressions, motifs, thèmes, sections et forme · `amb` : les zones où l'on entend l'ambiance du lieu |
 | `th` | le thème : ciel, brume, lumières, couleurs de route, style et couleurs de l'interface |
+| `th.pluie` | `1` = pluie partout ; ou des zones `[point a, point b, force]` (1 = pluie normale ; au-delà, averse : plus de gouttes, traînées plus longues ; Wan-9 : averse de force 3 sur le port, rien avant la sortie du pont), coupée en tunnel. Calculée une fois par `buildTrack` (`T.pluie`, lue par le dessin et le son) |
+| Pluie sur la conduite | `PL` en tête de `sim.js` : tout part de `m = (force − 1) / 2` (`T.eau`, nul en tunnel), donc la force 1 (la ville) ne change rien. `vir` lacet en courbe, `frein` et `trac` freinage et motricité, `colle` retard de la vitesse sur le nez (la voiture chasse), `vaq`/`dvaq`/`aq`/`aqc` aquaplaning au-delà de 230 − 40·m km/h. Le pilote auto et les IA en tiennent compte (virages et freinage, marge au-dessus du seuil d'aquaplaning). Wan-9 : +6 % au tour |
+| Pluie au son | `audioFrame` d'`audio.js` : `rainG` (averse, ∝ force), `wetG` (chuintement des pneus, ∝ force × vitesse), `aqG` (gerbe d'aquaplaning, `car.aq`) |
 | `trafic` | nombre de camions sur la route |
 
 Dans `sim.js` : `TOP` est la vitesse de référence pour le braquage et les effets visuels, `AI_LVL` le niveau de chaque adversaire du mode course (1 = tour propre du pilote automatique).

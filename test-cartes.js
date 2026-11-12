@@ -15,7 +15,7 @@ for (const M of CARTES) {
   // deux tours au pilote automatique : le second, lancé, donne les chiffres
   let c = newCar(T), t = 0, t1 = 0, hits = 0, vmax = 0, vmin = 1e9;
   while (c.dist < 2 * n && t < 900) {
-    step(c, autopilot(c, T), T, H); t += H; assert(Math.abs(c.d) <= W && Number.isFinite(c.x));
+    step(c, autopilot(c, T), T, H); t += H; assert(Math.abs(c.d) <= S[c.idx].w && Number.isFinite(c.x));
     if (c.dist >= n) { if (!t1) t1 = t; const v = Math.hypot(c.vx, c.vz); vmax = Math.max(vmax, v); vmin = Math.min(vmin, v); if (c.hit > 3) hits++; }
   }
   assert(c.dist >= 2 * n, `${M.id} : le pilote automatique ne boucle pas le tour`);
@@ -69,9 +69,17 @@ for (const M of CARTES) {
     let hit = 0; for (let i = 0; i < 4 / H; i++) { step(c, { steer: 0, gas: 0, brake: 0, hand: false }, T, H); hitTrafic(c, T, i * H); hit = Math.max(hit, c.hit); }
     assert(hit > 5 && Math.hypot(c.vx, c.vz) > 5, `${M.id} : le camion ne pousse pas la voiture (${hit})`);
   }
+  // pluie : la bruine (force 1) ne change rien ; une averse ralentit le pilote automatique de 2 à 12 % sans l'envoyer dans les murs, et allonge le freinage
+  assert(!T.eau.some(Boolean) === !(Array.isArray(M.th.pluie) && M.th.pluie.some(z => z[2] > 1)), M.id + ' : route mouillée là où il ne pleut pas fort');
+  if (T.eau.some(Boolean)) {
+    const E = T.eau; T.eau = null; const [sec] = tour(c => autopilot(c, T)); T.eau = E;
+    assert(lap > 1.02 * sec && lap < 1.12 * sec, `${M.id} : tour sous la pluie ${lap} s, au sec ${sec} s`);
+    const frein = e => { TO.eau = [e]; const c = lance(v200); let d = 0; while (c.vf > 1) { go(c, I(0, 0, 1), H); d += c.vf * H; } TO.eau = null; return d; };
+    assert(frein(1) > 1.2 * frein(0), M.id + ' : le freinage sous la pluie doit être plus long');
+  }
   // course : 3 tours à 4 pilotes automatiques sur le tracé de la carte ; tout le monde arrive, personne ne sort ni ne reste bloqué
   const R = newRace(T); let wall = 0, bump = 0;
-  while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && Math.abs(x.d) <= W, M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }
+  while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && Math.abs(x.d) <= S[x.idx].w, M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }
   assert(R.done, M.id + ' : la course ne se termine pas');
   const k = v => Math.round(v * 3.6);
   console.log(`OK  ${M.id.padEnd(7)} ${Math.round(T.len)} m, rayon mini ${rmin | 0} m, tour lancé ${lap.toFixed(1)} s, moyenne ${k(T.len / lap)} km/h, de ${k(vmin)} à ${k(vmax)} km/h, ${hits} chocs, 0-100 en ${t100.toFixed(1)} s ; en glisse ${tgl.toFixed(1)} s (${((tgl / lap - 1) * 100).toFixed(1)} %, ${boosts} boosts, ${hgl} chocs), à fond ${tfond.toFixed(1)} s (+${((tfond / lap - 1) * 100).toFixed(1)} %, ${hfond} chocs) ; rayon à 120 km/h ${r120.toFixed(0)} m (levé ${r120l.toFixed(0)}), à ${k(vtop)} km/h ${rtop.toFixed(0)} m, en glisse à 200 km/h ${gin.toFixed(0)} / ${gn.toFixed(0)} / ${gout.toFixed(0)} m (dedans / neutre / dehors), dérive ${dtenue.toFixed(0)}° ; course : ${raceOrder(R).map(x => x.fin.toFixed(0)).join(' / ')} s, ${wall} chocs mur, ${bump} chocs voiture`);

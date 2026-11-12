@@ -3,7 +3,7 @@
 // Changer de carte recharge la page : le décor n'est construit qu'une fois, comme avant.
 //
 // Champs d'une carte :
-//   W demi-largeur de route (m) · grip adhérence latérale maxi (m/s²) · sc échelle du tracé · pts [x, z, altitude], sens horaire, départ en [0]
+//   W demi-largeur de route (m) · large [[a, b, w], …] demi-largeur w entre les points a et b (place) · grip adhérence latérale maxi (m/s²) · sc échelle du tracé · pts [x, z, altitude], sens horaire, départ en [0]
 //   camH hauteur de la caméra (m, 3,2 par défaut : à relever quand la voiture masque la route) · tun [a, b] tunnel entre deux points (ou null) · chaud [a, b] secteur où la musique se déchaîne · amb [[a, b], …] zones où l'on entend l'ambiance du lieu · sect [a, b] les deux temps intermédiaires
 //   anticipe : le pilote automatique calcule sa distance de freinage (indispensable dès qu'il y a une épingle)
 //   rivaux : prénoms des trois adversaires du mode course (sinon ceux de la ville) · med : médailles [bronze, argent, or] en multiples du tour lancé du pilote automatique (défaut 1,1 / 1,03 / 0,97 ; plus bas là où la glisse rapporte beaucoup) · trafic : nombre de camions à doubler · car : la voiture (format CARD de sim.js) · radio : stations (voir RADIO plus bas) · th : thème
@@ -189,7 +189,7 @@
       car: car({ nom: 'TOYOTA SUPRA RZ', ratios: [3.827, 2.360, 1.685, 1.312, 1.000, 0.793], final: 3.266, wheel: 0.318, mass: 1585, idle: 800, red: 6800, cd: 0.32, area: 1.95,
         tq: [0, 180, 300, 400, 427, 420, 400, 340, 260], son: 0.95, look: { col: 0x4a4e5c, l: 1.02, w: 1, h: 0.96, nez: 0.66, cab: [-0.45, 2.1, 0.5], aileron: 2 } }),
       radio: RADIO.wangan,
-      th: { decor: 'wangan', fog: 0x0c1424, fogD: [90, 1300], sky: [[0, '#02030a'], [0.38, '#0a1024'], [0.47, '#4a2c18'], [0.5, '#0c1424'], [1, '#0c1424']], stars: 40,
+      th: { decor: 'wangan', pluie: [[9, 24, 3]], fog: 0x0c1424, fogD: [90, 1300], sky: [[0, '#02030a'], [0.38, '#0a1024'], [0.47, '#4a2c18'], [0.5, '#0c1424'], [1, '#0c1424']], stars: 40,
         astre: { dir: [0.5, 0.7, -0.4], col: '#e8e0d0', ombre: '#b8b0a0', taille: 120 }, hemi: [0x4a5a8a, 0xff9a2e, 0.55], sun: [0x8fa0d0, 0.25], phares: 2.4, bloom: 0.1, scan: 0.1,
         chev: 1, piles: -14, murH: 1.4, route: ['#24262e', '#30323c', '#f4f1e0', '#f4f1e0', '#24262e', '#24262e', false], mur: ['#3a3e46', '#c9ced6', '#ff9a2e', '#16181e'], depart: [0x1f8f5a, 0xc9ced6, '#f4f1e0'],
         tun: { sol: ['#2a2218', '#3a2e20', '#f4f1e0', '#f4f1e0', '#2a2218', '#2a2218'], murs: ['#ffb85a', '#ffb85a'], paroi: ['#3a2c18', '#6a5028', '#8a6a38', '#120e08'], plafond: ['#1a140c', '#ffb85a', '#ffb85a', '#3a2e20'],
@@ -197,21 +197,21 @@
         hud: { y: '#ffffff', c: '#ffb85a', r: '#ff2a3a', fond: 'rgba(10,84,52,.92)', style: 'panneau', split: 0, jp: ['周回', '速度'], sur: ['湾岸九号線', 'LIGNE DE BAIE'], titre: ['WAN-9', 'BAYSHORE'] } } },
 
     // Paris à l'aube : circuit de rues, relances entre des angles, pavés.
-    { id: 'paris', nom: 'PREMIER METRO', rivaux: ['LUCIE', 'MARC', 'INES'], W: 7, grip: 19, sc: 1, tun: [27, 30], chaud: [13, 22], amb: [[3, 7], [23, 26]], sect: [12, 25], anticipe: 1,
-      pts: [[0, 0, 0], [200, 0, 0], [330, 15, 0], [424, 70, 0], [476, 70, 0], [515, 37, 0], [524, -13, 0], [498, -57, 0], [430, -160, 0], [420, -300, 2], [450, -390, 4], [540, -420, 6], [700, -420, 8], [810, -435, 12], [880, -480, 19], [860, -545, 26], [800, -590, 31], [830, -660, 37], [930, -670, 42], [1020, -630, 44], [1070, -540, 38], [1040, -410, 26], [1085, -280, 14], [1060, -150, 4], [1100, 0, 0], [1090, 140, -2], [1010, 225, -4], [800, 240, -6], [600, 250, -12], [400, 250, -12], [200, 240, -6], [0, 240, -3], [-150, 225, 0], [-235, 150, 0], [-235, 60, 0], [-150, 0, 0]],
+    { id: 'paris', nom: 'PREMIER METRO', rivaux: ['LUCIE', 'MARC', 'INES'], W: 7, large: [[3, 7, 36]], grip: 19, sc: 1, tun: [27, 30], chaud: [13, 22], amb: [[3, 7], [23, 26]], sect: [12, 25], anticipe: 1,
+      pts: [[0, 0, 0], [200, 0, 0], [330, 15, 0], [420, 80, 0], [480, 80, 0], [524, 42, 0], [534, -15, 0], [505, -65, 0], [430, -160, 0], [420, -300, 2], [450, -390, 4], [540, -420, 6], [700, -420, 8], [810, -435, 12], [880, -480, 19], [860, -545, 26], [800, -590, 31], [830, -660, 37], [930, -670, 42], [1020, -630, 44], [1070, -540, 38], [1040, -410, 26], [1085, -280, 14], [1060, -150, 4], [1100, 0, 0], [1090, 140, -2], [1010, 225, -4], [800, 240, -6], [600, 250, -12], [400, 250, -12], [200, 240, -6], [0, 240, -3], [-150, 225, 0], [-235, 150, 0], [-235, 60, 0], [-150, 0, 0]],
       // Renault 5 Maxi Turbo (1985, Groupe B) : 4 cylindres turbo 1,5 L, 350 ch, 905 kg, moteur central arrière, propulsion (rapports estimés)
       car: car({ nom: 'RENAULT 5 MAXI TURBO', ratios: [3.36, 2.06, 1.38, 1.06, 0.82], final: 3.89, wheel: 0.29, mass: 980, idle: 1000, red: 7500, cd: 0.40, area: 1.9,
         tq: [0, 120, 220, 330, 400, 420, 400, 370, 300], son: 1.25, look: { col: 0xf2c400, l: 0.8, w: 0.98, h: 1.12, nez: 0.3, cab: [-0.25, 2.3, 0.62], aileron: 0 } }),
       radio: RADIO.paris,
       th: { decor: 'paris', fog: 0xf0b89a, fogD: [140, 1500], sky: [[0, '#2b3a67'], [0.26, '#2b3a67'], [0.27, '#5a6a9a'], [0.38, '#5a6a9a'], [0.39, '#c08a9a'], [0.45, '#c08a9a'], [0.46, '#f0b89a'], [1, '#f0b89a']], stars: 0,
         astre: { dir: [0.8, 0.14, 0.3], col: '#fff0c0', ombre: '#fff0c0', taille: 260 }, hemi: [0xa8b8e8, 0xd9c9a8, 0.95], sun: [0xffc890, 0.75], phares: 0.5, bloom: 0.03, scan: 0.05,
-        rues: [[0, 'boulevard'], [3, 'place'], [8, 'avenue'], [11, 'rue'], [13, 'ruelle'], [19, 'rue'], [24, 'avenue'], [26, 'quai'], [31, 'avenue'], [33, 'boulevard']],
-        murH: 0.5, route: ['#4a4a52', '#56565e', '#e8e4d8', '#e8e4d8', '#8a8478', '#8a8478', false], mur: ['#8a8478', '#b0a898', '#8a8478', '#6a665e'], depart: [0x1d2f6f, 0x2a7a4a, '#f4f0e0'],
+        rues: [[0, 'boulevard'], [3, 'place'], [8, 'avenue'], [11, 'rue'], [13, 'ruelle'], [19, 'rue'], [24, 'avenue'], [26, 'berge'], [32, 'quai'], [33, 'boulevard']],
+        murH: 0, route: ['#4a4a52', '#56565e', '#e8e4d8', '#e8e4d8', '#8a8478', '#8a8478', false], mur: ['#8a8478', '#b0a898', '#8a8478', '#6a665e'], depart: [0x1d2f6f, 0x2a7a4a, '#f4f0e0'],
         tun: { sol: ['#3a3a40', '#46464c', '#e8e4d8', '#e8e4d8', '#3a3a40', '#3a3a40'], murs: ['#dfeeff', '#dfeeff'], paroi: ['#b8b4a8', '#d8d4c8', '#8a867a', '#5a564e'], plafond: ['#3a3830', '#ffe9a0', '#ffe9a0', '#5a564e'], carreaux: 1,
           fog: 0x40382a, portail: 0x5d6b82, neons: [0xdfeeff, 0xdfeeff], coque: 14 }, // néon blanc froid, parois carrelées
         hud: { y: '#ffffff', c: '#ffd05a', r: '#ff6a5a', fond: 'rgba(24,44,110,.92)', style: 'plaque', split: 0, jp: null, sur: [null, 'PARIS · 5 H 30'], titre: ['PREMIER', 'METRO'] } } },
 
-    // Canal de Los Angeles à l'heure dorée : béton mouillé, large, la carte de la glisse. Fresques fléchées et balises à l'extérieur des courbes.
+    // Canal 6 : grand ovale à l'américaine au couchant, la piste serpente dans le lit du canal entre deux anneaux de tribunes pleines. Large, la carte de la glisse.
     { id: 'canal', nom: 'CANAL 6', rivaux: ['DRE', 'ROSA', 'CAL'], med: [1.06, 0.98, 0.9], W: 14, grip: 15, sc: 1, tun: null, chaud: [1, 8], amb: [[12, 17]], sect: [7, 19], anticipe: 1,
       pts: [[0, 0, -8], [250, -80, -8], [500, 90, -8], [750, -80, -8], [1000, 90, -8], [1250, -80, -8], [1500, 60, -8], [1720, 40, -8], [1825, 123, -5], [1828, 168, -3], [1803, 206, -1], [1760, 220, 2], [1500, 230, 4], [1300, 290, 4], [1100, 220, 4], [900, 290, 4], [700, 220, 4], [500, 290, 4], [300, 220, 4], [50, 240, 4], [-170, 230, 2], [-256, 156, -1], [-270, 110, -3], [-256, 64, -5], [-170, -10, -8]],
       // Dodge Viper GTS (1996) : V10 de 8,0 L, 450 ch à 5200 tr/min, 664 N·m à 3700, 1535 kg, propulsion, boîte T56 (rapports à vérifier sur fiche)
@@ -220,8 +220,8 @@
       radio: RADIO.canal,
       th: { decor: 'canal', fog: 0xe89060, fogD: [160, 1700], sky: [[0, '#3d2a5c'], [0.24, '#3d2a5c'], [0.25, '#7a4078'], [0.36, '#7a4078'], [0.37, '#d85a50'], [0.44, '#d85a50'], [0.45, '#ff9a4a'], [0.49, '#ff9a4a'], [0.5, '#e89060'], [1, '#e89060']], stars: 0,
         astre: { dir: [-0.85, 0.11, 0.35], col: '#fff4c0', ombre: '#fff4c0', taille: 340 }, hemi: [0xb898c8, 0xb8ad9a, 0.85], sun: [0xffa860, 0.9], phares: 0.4, bloom: 0.03, scan: 0.05,
-        murH: 1.3, route: ['#7a7066', '#867c70', '#f4f0e0', '#2aa39a', '#e83f8c', '#f4f0e0', 2], mur: ['#2a2030', '#f4f0e0', '#e83f8c', '#1a1420'], depart: [0xff7a3d, 0x3d2a5c, '#f4f0e0'],
-        hud: { y: '#ffc04a', c: '#ff7a3d', r: '#e83f8c', fond: 'rgba(40,24,56,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'LOS ANGELES · HEURE DOREE'], titre: ['CANAL', 'SIX'] } } },
+        murH: 1.3, route: ['#4c4a50', '#58565c', '#f4f0e0', '#2aa39a', '#e83f8c', '#f4f0e0', false], mur: ['#f4f0e0', '#e83f8c', '#1848c8', '#e4ddd0'], depart: [0xff7a3d, 0x3d2a5c, '#f4f0e0'],
+        hud: { y: '#ffc04a', c: '#ff7a3d', r: '#e83f8c', fond: 'rgba(40,24,56,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'SPEEDWAY · HEURE DOREE'], titre: ['CANAL', 'SIX'] } } },
   ];
   let id = 'ville';
   if (typeof location !== 'undefined') try { id = new URLSearchParams(location.search).get('carte') || localStorage.getItem('vpr.carte') || id; } catch (e) { }
