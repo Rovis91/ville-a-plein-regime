@@ -592,6 +592,7 @@
     keys[e.code] = 1; SON.init(); // le contexte audio ne peut démarrer qu'après un geste
     if (/^Arrow|Space/.test(e.code)) e.preventDefault();
     if (e.repeat) return;
+    if (e.isTrusted && e.code === 'KeyJ') hidDemande(); // avant tout le reste : marche aussi depuis l'accueil
     if (accueil) { entrer(); return; } // la première touche ne fait qu'ouvrir le menu
     const key = (e.key || '').toLowerCase(); // lettre réellement tapée, pour les commandes nommées par une lettre (le pilotage, lui, reste en positions physiques)
     if (state === 'pause') {
@@ -629,16 +630,35 @@
   padNote.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);padding:8px 12px;background:#0c0c10;color:#ffd23a;font:12px "Press Start 2P",monospace;border:2px solid #ffd23a;pointer-events:none;display:none;z-index:9';
   let padNoteT = 0; const padDit = s => { padNote.textContent = s; padNote.style.display = ''; clearTimeout(padNoteT); padNoteT = setTimeout(() => { padNote.style.display = 'none'; }, 3000); };
   addEventListener('gamepaddisconnected', e => { delete padRepos[e.gamepad.index]; if (e.gamepad.index === padIdx) { padIdx = -1; padDit('MANETTE DÉCONNECTÉE'); } });
+  // Joy-Con lu en direct (WebHID) : sous Windows, Chrome reçoit ses rapports mais ne le montre pas à l'API Gamepad (constaté sur Chrome 156, Joy-Con (R) en Bluetooth).
+  // Rapport 0x3f, Joy-Con seul tenu à l'horizontale : octet 0 = boutons (1 bas, 2 droite, 4 gauche, 8 haut, 16 SL, 32 SR), octet 1 = − ou + (1, 2), octet 2 = stick en 8 directions (0 = haut, sens horaire, 8 et plus = repos).
+  // Présenté comme une manette « standard », pour que padFrame le traite comme les autres. shortcut: stick en tout-ou-rien, passer au rapport 0x30 (stick 12 bits + étalonnage) pour un volant progressif.
+  let hidPad = null;
+  const hidLire = e => {
+    if (e.reportId !== 0x3f || !hidPad) return; const d = new Uint8Array(e.data.buffer, e.data.byteOffset), h = d[2], set = (i, v) => { hidPad.buttons[i].pressed = !!v; hidPad.buttons[i].value = v ? 1 : 0; };
+    for (let i = 0; i < 6; i++) set(i, d[0] & 1 << i); set(9, d[1] & 3);
+    hidPad.axes = [h > 0 && h < 4 ? 1 : h > 4 && h < 8 ? -1 : 0, h === 7 || h < 2 ? -1 : h > 2 && h < 6 ? 1 : 0];
+  };
+  const hidOuvre = async d => {
+    if (!d || hidPad || (d.productId !== 0x2006 && d.productId !== 0x2007)) return; // Joy-Con gauche / droit
+    try { if (!d.opened) await d.open(); } catch (e) { return; }
+    hidPad = { index: 'hid', dev: d, connected: true, axes: [0, 0], buttons: Array.from({ length: 10 }, () => ({ pressed: false, value: 0 })) }; d.oninputreport = hidLire;
+  };
+  const hidDemande = () => navigator.hid && navigator.hid.requestDevice({ filters: [{ vendorId: 0x057e }] }).then(l => l.forEach(hidOuvre)).catch(() => { }); // touche J : fenêtre du navigateur pour autoriser le Joy-Con (une fois)
+  if (navigator.hid) {
+    const cherche = () => navigator.hid.getDevices().then(l => l.forEach(hidOuvre)).catch(() => { }); // déjà autorisé : pas de fenêtre
+    cherche(); navigator.hid.addEventListener('connect', cherche);
+    navigator.hid.addEventListener('disconnect', e => { if (hidPad && e.device === hidPad.dev) { hidPad = null; padIdx = -1; padDit('MANETTE DÉCONNECTÉE'); } });
+  }
   function padFrame() {
-    const pads = [...(navigator.getGamepads ? navigator.getGamepads() : [])].filter(p => p && p.connected);
+    const pads = [...(navigator.getGamepads ? navigator.getGamepads() : [])].filter(p => p && p.connected); if (hidPad) pads.push(hidPad);
     // « entrée » = un bouton enfoncé ou un axe écarté de sa position de repos (une gâchette ou une croix vue comme axe ne repose pas à 0)
     const actif = p => { const r = padRepos[p.index] = padRepos[p.index] || [...p.axes]; return p.buttons.some(b => b.pressed) || p.axes.some((x, i) => Math.abs(x - r[i]) > 0.5); };
     pad = pads.find(p => p.index === padIdx) || null;
     if (!pad || !actif(pad)) { const n = pads.find(actif); if (n && n !== pad) { pad = n; padIdx = n.index; padDit('MANETTE CONNECTÉE'); } }
-    if (!pad) return;
-    const on = {}, ax = pad.axes;
-    pad.buttons.forEach((b, i) => { if (b.pressed && PADK[i]) on[PADK[i]] = 1; });
-    if (accueil && pad.buttons.some(b => b.pressed)) on.Enter = 1; // à l'accueil, n'importe quel bouton vaut une touche
+    const on = {}, ax = pad ? pad.axes : [0, 0]; // sans manette on passe quand même dans la boucle, pour relâcher les touches d'une manette qui vient de partir
+    if (pad) pad.buttons.forEach((b, i) => { if (b.pressed && PADK[i]) on[PADK[i]] = 1; });
+    if (accueil && pad && pad.buttons.some(b => b.pressed)) on.Enter = 1; // à l'accueil, n'importe quel bouton vaut une touche
     if (accueil || state === 'title' || state === 'pause') { if (ax[1] < -0.6) on.ArrowUp = 1; if (ax[1] > 0.6) on.ArrowDown = 1; if (ax[0] < -0.6) on.ArrowLeft = 1; if (ax[0] > 0.6) on.ArrowRight = 1; } // en course le stick est lu en analogique, pas en flèches
     for (const k of new Set([...Object.keys(on), ...Object.keys(padWas)])) {
       if (on[k] && !padWas[k]) onKey({ code: k.length > 1 ? k : '', key: k.length > 1 ? '' : k, preventDefault() { } });
