@@ -532,13 +532,13 @@
   // secteurs (entrée et sortie de l'échangeur) et fantôme du record : [x, y, z, cap] à 20 Hz
   // mode : 'solo' (contre-la-montre à tours enchaînés) ou 'course' (3 tours contre les IA de sim.js) ; race = la course en cours, sinon null
   let mode = pref('vpr6.mode', '') === '"course"' ? 'course' : 'solo', race = null, raceEnd = false; // le mode est mémorisé une fois pour toutes les cartes
-  let si = 0, cur = [], bestSpl = store.get('splits'), ghost = store.get('ghost'), recG = [], splitMsg = null, lapN = 1, prev = 'race', psel = 0, ghostOn = !!store.get('ghostOn');
+  let si = 0, cur = [], bestSpl = store.get('splits'), ghost = store.get('ghost'), recG = [], splitMsg = null, lapN = 1, rLap = 0, rLapT = 0, prev = 'race', psel = 0, ghostOn = !!store.get('ghostOn');
   const keys = {}, H = 1 / 120;
 
   function start() {
     SON.init();
     race = mode === 'course' ? newRace(T) : null; raceEnd = false;
-    car = race ? race.cars[0] : newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 3; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1; result = null;
+    car = race ? race.cars[0] : newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 3; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1; rLap = 0; rLapT = 0; result = null;
   }
   function finish() { // tour bouclé : on l'enregistre, on affiche son temps 4 s, et le chrono repart aussitôt pour un tour lancé
     const rec = !best || tRace < best; result = { rec, diff: best ? tRace - best : 0, t: tRace, n: lapN, T: 4 };
@@ -692,7 +692,7 @@
     if (state === 'count' && shown) txt(String(shown), cx, 90, 64, Y, 'center', 3);
     else if (goT > 0) txt('GO', cx, 90, 64, Y, 'center', 3);
     if (result && state !== 'title' && (result.T -= dt) > 0) { // résultat du tour qu'on vient de boucler, sans arrêter la course
-      tag('TOUR ' + result.n + '  ' + fmt(result.t), cx, 122, Y); tag(result.rec ? 'NOUVEAU RECORD' : '+' + result.diff.toFixed(2) + ' S', cx, 138, result.rec ? C : RD);
+      tag('TOUR ' + result.n + '  ' + fmt(result.t), cx, 122, Y); if (result.pos) tag('PLACE ' + result.pos + '/' + result.of, cx, 138, C); else tag(result.rec ? 'NOUVEAU RECORD' : '+' + result.diff.toFixed(2) + ' S', cx, 138, result.rec ? C : RD);
     }
     if (raceEnd && state === 'race') { // arrivée : classement, complété à mesure que les autres passent la ligne
       panel(cx - 134, 60, 268, 132); txt('ARRIVEE : ' + car.pos + (car.pos === 1 ? 'ER' : 'E'), cx, 68, 16, Y, 'center', 1);
@@ -805,6 +805,10 @@
     }
     rainGeo.attributes.position.needsUpdate = true;
 
+    if (state === 'race' && race) { // course : même bandeau « tour + temps » qu'en contre-la-montre, avec la place (le dernier tour est couvert par le classement d'arrivée)
+      const ln = Math.floor(car.dist / N);
+      if (ln > rLap && ln < race.laps) { result = { n: ln, t: race.t - rLapT, pos: car.pos, of: race.cars.length, T: 4 }; rLap = ln; rLapT = race.t; }
+    }
     if (state === 'race' && !race) {
       while (recG.length / 4 <= tRace * 20) recG.push(+car.x.toFixed(2), +carY.toFixed(2), +car.z.toFixed(2), +car.th.toFixed(3));
       if (si < 2 && car.dist >= T.sp[si]) { cur[si] = tRace; splitMsg = { i: si, t: tRace, d: bestSpl ? tRace - bestSpl[si] : null, T: 2.5 }; si++; }
