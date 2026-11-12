@@ -5,7 +5,7 @@
   const T = buildTrack(THREE), S = T.S, N = T.n, W = T.W, V3 = THREE.Vector3, M = CARTE, TH = M.th; // carte active et son thème : voir cartes.js
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
-  const AUTO = location.search.includes('auto'); // debug : le pilote auto conduit
+  const REGLAGE = location.search.includes('reglage'), AUTO = REGLAGE || location.search.includes('auto'); // debug : le pilote auto conduit ; ?reglage : panneau de réglage du rendu, le jeu roule seul derrière
   // 0 hors du secteur, 1 dedans, rampes linéaires de `ramp` échantillons (2 m) avant l'entrée / après la sortie
   const span = (a0, a1, on) => (i, ramp) => { if (!on) return 0; const a = (i - a0 + N) % N, L = a1 - a0; return a < L ? 1 : Math.max(0, 1 - (a - L) / ramp, 1 - (N - a) / ramp); };
   const zone = span(T.t0, T.t1, T.tun), hot = span(T.h0, T.h1, true); // zone = tunnel (lumière, décor) ; hot = secteur chaud (musique)
@@ -26,6 +26,12 @@
   const TRAME = 0.8;     // force du tramage ordonné de Bayer, 0 à 1
   const TUN_AMB = 0.55; // tunnels : part de lumière ambiante sur sol, parois et plafond ; le reste vient des luminaires
   const TREMBLE = 0;    // tremblement des sommets façon première console 3D : pas de la grille en pixels, 0 = aucun
+
+  // ---------- rendu rétro : ses réglages, modifiables en direct par le panneau (?reglage). Défaut ← thème de la carte (th.rendu dans cartes.js) ← réglage enregistré dans le navigateur ----------
+  // lignes : résolution interne (270 = d'origine) ; niveaux / trame : couleurs par canal et force du tramage ; flou, halo, aberration, balayage : force de chaque effet (1 = d'origine) ;
+  // vignette ; saturation, contraste, ombres (exposant : < 1 éclaircit les sombres) ; chaleur et magenta : teinte générale, de -1 à 1
+  const RG0 = { lignes: 270, niveaux: QUANT, trame: TRAME, flou: 1, halo: 1, aberration: 1, balayage: 1, vignette: 0.9, saturation: 1, contraste: 1, ombres: 1, chaleur: 0, magenta: 0 };
+  const RG = Object.assign({}, RG0, TH.rendu, (() => { try { return JSON.parse(localStorage.getItem('vpr6.rendu.' + M.id)) || {}; } catch (e) { return {}; } })());
 
   // ---------- styles visuels à comparer : ?style=<nom> (sans paramètre : rendu actuel, inchangé) ; planche des captures dans styles.html ----------
   // h : lignes de la cible interne (0 = celles de l'écran) ; z : la passe lit la profondeur (contours) ; tremble / affine : sommets et textures façon console 32 bits
@@ -82,9 +88,9 @@
   const hudC = document.createElement('canvas'), hg = hudC.getContext('2d'), hudT = new THREE.CanvasTexture(hudC);
   hudT.minFilter = hudT.magFilter = THREE.NearestFilter;
   const post = new THREE.ShaderMaterial({
-    uniforms: { t: { value: rt.texture }, h: { value: hudT }, amt: { value: 0 }, ab: { value: 0 }, res: { value: 270 }, bloom: { value: TH.bloom }, scan: { value: TH.scan }, px: { value: new THREE.Vector2(1 / 480, 1 / 270) } },
+    uniforms: { t: { value: rt.texture }, h: { value: hudT }, amt: { value: 0 }, ab: { value: 0 }, res: { value: 270 }, bloom: { value: TH.bloom }, scan: { value: TH.scan }, q: { value: 32 }, tr: { value: 0.8 }, vig: { value: 0.9 }, sat: { value: 1 }, con: { value: 1 }, gam: { value: 1 }, teinte: { value: new THREE.Vector3(1, 1, 1) }, px: { value: new THREE.Vector2(1 / 480, 1 / 270) } },
     vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0., 1.); }',
-    fragmentShader: `uniform sampler2D t, h; uniform float amt, ab, res, bloom, scan; uniform vec2 px; varying vec2 v;
+    fragmentShader: `uniform sampler2D t, h; uniform float amt, ab, res, bloom, scan, q, tr, vig, sat, con, gam; uniform vec3 teinte; uniform vec2 px; varying vec2 v;
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); } // matrice de Bayer 4×4, par récurrence
       void main(){
         vec2 c0 = vec2(.5, .42), d = v - c0; float l = length(d); vec3 c = vec3(0.);
@@ -94,12 +100,13 @@
         }
         c /= 8.;
         vec3 bl = vec3(0.); // halo : on ajoute ce qui dépasse un seuil de luminosité, prélevé en couronne
-        for (int i = 0; i < 12; i++) { float a = float(i) * .5236, rr = 2. + 2.5 * mod(float(i), 3.); bl += max(texture2D(t, v + vec2(cos(a), sin(a)) * rr * px).rgb - .5, 0.); }
+        for (int i = 0; i < 12; i++) { float a = float(i) * .5236, rr = 2. + 2.5 * mod(float(i), 3.); bl += max(texture2D(t, v + vec2(cos(a), sin(a)) * rr * px / (px.y * 270.)).rgb - .5, 0.); } // couronne de même taille à l'écran quelle que soit la résolution
         c += bl * bloom;
-        ${QUANT ? `vec2 q = v / px; c = floor(c * ${QUANT}. + (b2(.5 * q) * .25 + b2(q) - .5) * ${TRAME.toFixed(2)} + .5) / ${QUANT}.; // couleurs réduites et tramées, sur la grille de pixels du jeu` : ''}
+        c = (pow(max(c, 0.), vec3(gam)) - .5) * con + .5; c = mix(vec3(dot(c, vec3(.3, .59, .11))), c, sat) * teinte; // ombres, contraste, saturation, teinte : l'ambiance de la carte
+        if (q > 0.) { vec2 g = v / px; c = floor(c * q + (b2(.5 * g) * .25 + b2(g) - .5) * tr + .5) / q; } // couleurs réduites et tramées, sur la grille de pixels du jeu
+        c *= 1. - vig * l * l;                      // vignette : sur l'image du jeu seulement, avant l'interface
         vec4 hd = texture2D(h, v); c = mix(c, hd.rgb, hd.a);
         c *= 1. - scan * mod(floor(v.y * res), 2.); // scanlines calées sur la grille
-        c *= 1. - .9 * l * l;                       // vignette
         gl_FragColor = vec4(c, 1.);
       }`,
   });
@@ -127,11 +134,17 @@
   let HW = 480, RW = 480, RH = 270; const HH = 270; // HW × HH : grille du HUD ; RW × RH : cible de la scène (la même sans style)
   const resize = () => {
     HW = clamp(Math.round(HH * innerWidth / (innerHeight || 1)), 360, 960);
-    const OW = Math.round(innerWidth * devicePixelRatio), OH = Math.round(innerHeight * devicePixelRatio), aa = ST ? ST.aa : 1, k = ST ? (ST.h || OH) / HH * aa : 1; RW = Math.round(HW * k); RH = Math.round(HH * k);
-    if (ST) { renderer.setSize(OW, OH, false); post.uniforms.ecr.value.set(OW, OH); } else renderer.setSize(HW, HH, false);
+    const OW = Math.round(innerWidth * devicePixelRatio), OH = Math.round(innerHeight * devicePixelRatio), aa = ST ? ST.aa : 1, k = ST ? (ST.h || OH) / HH * aa : RG.lignes / HH; RW = Math.round(HW * k); RH = Math.round(HH * k);
+    if (ST) { renderer.setSize(OW, OH, false); post.uniforms.ecr.value.set(OW, OH); } else renderer.setSize(RW, RH, false);
     rt.setSize(RW, RH); hudC.width = HW; hudC.height = HH; post.uniforms.px.value.set(aa / RW, aa / RH); cam.aspect = HW / HH; cam.updateProjectionMatrix();
   };
   addEventListener('resize', resize); resize();
+  const appliqueRG = () => { // pousse les réglages dans la passe finale ; la résolution passe par resize
+    const u = post.uniforms; u.q.value = RG.niveaux; u.tr.value = RG.trame; u.vig.value = RG.vignette; u.sat.value = RG.saturation; u.con.value = RG.contraste; u.gam.value = RG.ombres;
+    u.teinte.value.set(1 + 0.22 * RG.chaleur + 0.1 * RG.magenta, 1 - 0.12 * RG.magenta, 1 - 0.22 * RG.chaleur + 0.1 * RG.magenta); u.bloom.value = TH.bloom * RG.halo; u.scan.value = TH.scan * RG.balayage;
+    if (Math.round(HH * RG.lignes / HH) !== RH && !ST) resize();
+  };
+  appliqueRG();
 
   const tex = (w, h, draw) => {
     const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'));
@@ -188,10 +201,15 @@
   const LUMI = { lum: 1 }, LUMI2 = { lum: 1, side: THREE.DoubleSide }; // lumineuse par elle-même ; idem, visible des deux côtés
 
   // ciel en bandes (nuit, aube ou couchant selon la carte), étoiles, lune ou soleil
-  const skyMat = mat('ciel', { lum: 1, side: THREE.BackSide, fog: false, net: 1 }, TH.sky, TH.stars);
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(2500, 16, 12), skyMat); scene.add(sky);
+  // tour d'horizon (0 à 1) d'une direction [x, z] sur la sphère du ciel ; 'astre' = là où est la lune ou le soleil
+  const CIEL = TH.ciel || {}, uCiel = d => { const [x, z] = d === 'astre' ? [TH.astre.dir[0], TH.astre.dir[2]] : d; return (Math.atan2(z, -x) / 6.2832 + 1) % 1; };
+  const skyMat = mat('ciel', { lum: 1, side: THREE.BackSide, fog: false, net: 1 }, TH.sky, TH.stars, Object.assign({}, CIEL, { lueurs: (CIEL.lueurs || []).map(([d, ...r]) => [uCiel(d), ...r]) }));
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(2500, 48, 24), skyMat); scene.add(sky);
+  // nuages : une seconde sphère, à l'intérieur de la première, qui tourne lentement ; elle s'épaissit sous l'averse et s'efface en tunnel
+  const nuages = CIEL.nuages || CIEL.voile ? new THREE.Mesh(new THREE.SphereGeometry(2300, 48, 24), mat('nuages', { lum: 1, side: THREE.BackSide, fog: false, net: 1, transparent: true, depthWrite: false }, CIEL)) : null;
+  if (nuages) scene.add(nuages);
   const SD = new V3(...TH.astre.dir).normalize();
-  const sunDisc = new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, map: tx('astre', TH.astre.col, TH.astre.ombre) }));
+  const sunDisc = new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, map: tx('astre', TH.astre.col, TH.astre.ombre, TH.astre.soleil) }));
   sunDisc.scale.set(TH.astre.taille, TH.astre.taille, 1); scene.add(sunDisc);
 
   const hemi = new THREE.HemisphereLight(...TH.hemi); scene.add(hemi); // bleu d'en haut, rebond magenta de la ville
@@ -892,13 +910,16 @@
     cam.fov = 62 + 26 * r + 3 * car.slide + (car.boost > 0 ? 6 : 0);
     const vue = window.__g.vue; // shortcut: debug console seulement, __g.vue = [angle° autour de la voiture, distance, hauteur] pour inspecter le modèle ; à remplacer par un vrai mode photo si on en veut un
     if (vue) { const a = car.th + vue[0] * Math.PI / 180; cam.position.set(car.x + Math.cos(a) * vue[1], carY + vue[2], car.z + Math.sin(a) * vue[1]); cam.lookAt(car.x, carY + 0.7, car.z); cam.fov = 45; }
+    const rg = window.__g.regard; // shortcut: debug seulement, __g.regard = [azimut°, élévation°] : la caméra reste en place et regarde par là, pour inspecter le ciel
+    if (rg) { const az = rg[0] * Math.PI / 180, el = rg[1] * Math.PI / 180; cam.lookAt(cam.position.x + Math.cos(az) * Math.cos(el), cam.position.y + Math.sin(el), cam.position.z + Math.sin(az) * Math.cos(el)); cam.fov = 70; }
     cam.updateProjectionMatrix();
-    sky.position.copy(cam.position); sunDisc.position.copy(cam.position).addScaledVector(SD, 2000); sunFollow();
+    sky.position.copy(cam.position); sunDisc.position.copy(cam.position).addScaledVector(SD, TH.astre.soleil ? 2000 : 2400); sunFollow();
 
     // lumière : nuit néon ↔ échangeur en alarme rouge qui bat avec la musique
     lm += (zone(car.idx, 10) - lm) * Math.min(1, dt * 8);
     scene.fog.color.copy(FOG_OUT).lerp(FOG_IN, lm); scene.fog.near = lerp(TH.fogD[0], 15, lm); scene.fog.far = lerp(TH.fogD[1], 320, lm);
     skyMat.color.copy(WHITE).lerp(FOG_IN, lm);
+    if (nuages) { nuages.position.copy(cam.position); nuages.rotation.y += dt * (CIEL.vent || 0.004); nuages.material.opacity = Math.min(1, (CIEL.op || 0.9) + (CIEL.averse || 0.1) * pluieAt(car.idx)) * (1 - lm); }
     if (TH.alarme) { carMat.emissive.setRGB(0.3 * lm, 0.01 * lm, 0.03 * lm); for (const m of tunMats) m.color.setScalar((m.userData.amb || 1) * (0.75 + 0.5 * pulse)); }
     // lumière dynamique : phares, boîte d'ombre de la voiture, reflets, puis la liste des luminaires
     const cp = Math.cos(pitch);
@@ -956,8 +977,30 @@
     for (let j = 15; j < 35 + sp * 0.6; j++) { const k = S[(car.idx + j) % N].k; if (Math.abs(k) > Math.abs(wk)) wk = k; }
     drawHUD(dt, sp, r, state === 'race' && sp > 30 && Math.abs(wk) > 0.011 ? Math.sign(wk) : 0);
     // flou de vitesse : rien sous 55 % de la vitesse de pointe, léger au-delà, franc seulement pendant le boost
-    post.uniforms.amt.value = 0.35 * Math.max(0, (r - 0.55) / 0.45) ** 2; post.uniforms.ab.value = 0.002 + 0.004 * r + (stun > 0 ? stun * 0.06 : 0);
+    post.uniforms.amt.value = (0.35 * Math.max(0, (r - 0.55) / 0.45) ** 2) * RG.flou; post.uniforms.ab.value = (0.002 + 0.004 * r + (stun > 0 ? stun * 0.06 : 0)) * RG.aberration;
     renderer.setRenderTarget(rt); renderer.render(scene, cam); renderer.setRenderTarget(null); renderer.render(postScene, postCam);
+  }
+  if (REGLAGE) { // panneau de réglage du rendu : le jeu roule seul derrière, chaque curseur agit tout de suite et s'enregistre dans le navigateur pour cette carte
+    const C = [['lignes', 'lignes (finesse)', 270, 720, 90], ['niveaux', 'niveaux de couleur', 0, 64, 4], ['trame', 'trame', 0, 1, 0.05], ['flou', 'flou de vitesse', 0, 1.5, 0.05], ['halo', 'halo', 0, 2, 0.05],
+      ['aberration', 'franges de couleur', 0, 2, 0.05], ['balayage', 'lignes de balayage', 0, 2, 0.05], ['vignette', 'vignette', 0, 1.5, 0.05], ['saturation', 'saturation', 0, 2, 0.05],
+      ['contraste', 'contraste', 0.5, 1.5, 0.01], ['ombres', 'ombres (bas = plus clair)', 0.5, 1.5, 0.01], ['chaleur', 'froid ↔ chaud', -1, 1, 0.02], ['magenta', 'vert ↔ magenta', -1, 1, 0.02]];
+    // variantes : chacune ne touche que ses propres réglages, pour combiner une finesse et une ambiance
+    const FIN = { 'Actuel 270': { lignes: 270, niveaux: 32, trame: 0.8 }, 'Rétro 360': { lignes: 360, niveaux: 32, trame: 0.6 }, 'Rétro 450': { lignes: 450, niveaux: 40, trame: 0.55 }, 'Rétro 540': { lignes: 540, niveaux: 48, trame: 0.5 } };
+    const AMB = { 'Neutre': { saturation: 1, contraste: 1, ombres: 1, chaleur: 0, magenta: 0, halo: 1 }, 'Néon': { saturation: 1.3, contraste: 1.08, ombres: 1, chaleur: 0, magenta: 0.25, halo: 1.4 }, 'Désert': { saturation: 1.1, contraste: 1.05, ombres: 0.92, chaleur: 0.5, magenta: 0, halo: 1 }, 'Froid': { saturation: 0.95, contraste: 1.05, ombres: 1, chaleur: -0.35, magenta: 0, halo: 1 } };
+    const d = document.createElement('div'), el = (t, p, o) => Object.assign(p.appendChild(document.createElement(t)), o);
+    d.style.cssText = 'position:fixed;top:8px;right:8px;z-index:9;width:260px;padding:8px 10px;background:rgba(8,8,12,.88);color:#e8e8e4;font:11px/1.5 monospace;border:1px solid #3a3a48;max-height:calc(100vh - 16px);overflow:auto;box-sizing:border-box';
+    for (const ev of ['mousemove', 'mousedown', 'click', 'keydown', 'keyup', 'wheel']) d.addEventListener(ev, e => e.stopPropagation()); // le panneau ne conduit pas et ne tourne pas la caméra
+    el('b', d, { textContent: 'Rendu — ' + M.nom }); const cartes = el('div', d, {});
+    for (const m of CARTES) el('a', cartes, { textContent: m.id, href: '?carte=' + m.id + '&reglage', style: 'color:' + (m.id === M.id ? '#fcee0a' : '#3ae0ff') + ';margin-right:8px' });
+    const champs = {}, sortie = el('textarea', document.createElement('div'), {});
+    const maj = () => { for (const [k] of C) { champs[k][0].value = RG[k]; champs[k][1].textContent = RG[k]; } appliqueRG(); const diff = {}; for (const k in RG0) if (RG[k] !== RG0[k]) diff[k] = RG[k]; sortie.value = M.id + ': ' + JSON.stringify(diff); try { localStorage.setItem('vpr6.rendu.' + M.id, JSON.stringify(diff)); } catch (e) { } };
+    const rang = (titre, V) => { const r = el('div', d, { style: 'margin:6px 0 2px' }); el('span', r, { textContent: titre + ' ' }); for (const n in V) el('button', r, { textContent: n, style: 'font:inherit;margin:0 3px 3px 0', onclick: () => { Object.assign(RG, V[n]); maj(); } }); };
+    rang('Finesse', FIN); rang('Ambiance', AMB);
+    for (const [k, nom, a, b, pas] of C) { const l = el('label', d, { style: 'display:block' }); el('span', l, { textContent: nom + ' ' }); const v = el('span', l, { style: 'color:#fcee0a' });
+      champs[k] = [el('input', l, { type: 'range', min: a, max: b, step: pas, style: 'width:100%;display:block', oninput: e => { RG[k] = +e.target.value; maj(); } }), v]; }
+    el('button', d, { textContent: 'Revenir au réglage de la carte', style: 'font:inherit;margin:6px 0', onclick: () => { Object.assign(RG, RG0, TH.rendu); maj(); try { localStorage.removeItem('vpr6.rendu.' + M.id); } catch (e) { } } });
+    el('div', d, { textContent: 'À copier pour le fixer dans cartes.js :' }); d.appendChild(sortie); sortie.style.cssText = 'width:100%;height:44px;font:inherit;background:#14141c;color:#e8e8e4;border:1px solid #3a3a48;box-sizing:border-box'; sortie.readOnly = true;
+    document.body.appendChild(d); maj(); start();
   }
   const loop = now => { requestAnimationFrame(loop); frame(now); };
   requestAnimationFrame(loop);

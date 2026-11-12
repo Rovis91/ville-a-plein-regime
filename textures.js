@@ -186,13 +186,48 @@
   }], // idem
 
   // ---------- ciel ----------
-  ciel: (bandes, etoiles) => [512, 128, (g, { R, rnd }) => {
-    const gr = g.createLinearGradient(0, 0, 0, 128);
+  // Le ciel est une sphère vue de l'intérieur : x = le tour d'horizon (1024 px), y = du zénith (0) à l'horizon (128) puis sous l'horizon.
+  // o (th.ciel de la carte) : voie = voie lactée ; halo [couleur, force] = lueur tout autour de l'horizon ; lueurs [[u, couleur, largeur, hauteur, force]] = dôme de lumière
+  // vers un point du tour d'horizon (u de 0 à 1 : une ville, le soleil), en paliers francs
+  ciel: (bandes, etoiles, o = {}) => [1024, 256, (g, { R, rnd, alea }) => {
+    const gr = g.createLinearGradient(0, 0, 0, 256);
     for (const [p, c] of bandes) gr.addColorStop(p, c);
-    R(g, gr, 0, 0, 512, 128);
-    for (let i = 0; i < etoiles; i++) R(g, i % 5 ? '#8a8ac0' : '#ffffff', rnd() * 512 | 0, rnd() * 44 | 0, 1, 1);
+    R(g, gr, 0, 0, 1024, 256);
+    for (let i = 1; i < bandes.length; i++) if (bandes[i][0] - bandes[i - 1][0] < 0.02 && bandes[i][0] < 0.5) { // deux arrêts collés = une marche franche : on la trame sur 14 lignes (Bayer 4 × 4)
+      const y0 = Math.round(bandes[i][0] * 256) - 7;
+      for (let y = 0; y < 14; y++) for (let x = 0; x < 1024; x++) R(g, ([0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5][(x & 3) + (y & 3) * 4] + 0.5) / 16 < (y + 0.5) / 14 ? bandes[i][1] : bandes[i - 1][1], x, y0 + y, 1, 1);
+    }
+    if (o.voie) for (let i = 0; i < 1500; i++) { const x = alea() * 1024, y = 44 + 26 * Math.sin(x / 1024 * 6.283 + 1) + (alea() + alea() - 1) * 13; if (y < 108) R(g, alea() < 0.3 ? '#9aa8c8' : '#4a5878', x | 0, y | 0, 1, 1); }
+    for (let i = 0; i < etoiles; i++) { const x = (rnd() * 512 | 0) * 2, y = (rnd() * 44 | 0) * 2; R(g, i % 5 ? '#8a8ac0' : '#ffffff', x, y, i % 11 ? 1 : 2, i % 11 ? 1 : 2); if (i % 23 === 0) { R(g, '#ffffff', x - 1, y, 4, 1); R(g, '#ffffff', x, y - 1, 1, 4); } } // quelques étoiles en croix
+    for (const [u, c, l, h, a] of o.lueurs || []) for (const dx of [-1024, 0, 1024]) for (let k = 4; k > 0; k--) { // dôme en 4 paliers, coupé à l'horizon
+      g.save(); g.beginPath(); g.rect(0, 0, 1024, 128); g.clip(); g.globalAlpha = a / k * 0.6; g.fillStyle = c; g.beginPath(); g.ellipse(u * 1024 + dx, 128, l * k / 4, h * k / 4, 0, 0, 7); g.fill(); g.restore(); }
+    if (o.halo) for (let k = 0; k < 4; k++) { g.globalAlpha = o.halo[1] * (1 - k / 4); R(g, o.halo[0], 0, 123 - k * 5, 1024, 5); }
+    g.globalAlpha = 1;
   }],
-  astre: (col, ombre) => [16, 16, (g, { R }) => { g.fillStyle = col; g.beginPath(); g.arc(8, 8, 7, 0, 7); g.fill(); R(g, ombre, 9, 5, 2, 2); R(g, ombre, 5, 9, 3, 2); }],
+  // Couche de nuages, sur une seconde sphère qui tourne lentement : fond transparent. o.voile [couleur, opacité, reflet] = ciel couvert ;
+  // o.nuages = bancs { f: [bas, haut] hauteur au-dessus de l'horizon (0 à 1 ; rester sous 0,35 : plus haut, la sphère se resserre et tout s'étire), n, w: [min, max], h: [min, max],
+  //   c: corps, mi: demi-teinte (facultatif), bord: liseré éclairé, cote: 'bas' (ville, soleil rasant) ou 'haut' (lune), cirrus: 1 = voile fin en lentille au lieu d'un cumulus }
+  // Un cumulus est fait de 3 à 5 dômes à base plate, côte à côte ; un cirrus d'une seule lentille très plate.
+  nuages: o => [1024, 256, (g, { R, alea }) => {
+    const P = (c, x, y, l) => { for (const ox of [-1024, 0, 1024]) R(g, c, Math.round(x) + ox, y, Math.max(1, Math.round(l)), 1); };
+    if (o.voile) { g.globalAlpha = o.voile[1]; R(g, o.voile[0], 0, 0, 1024, 128); g.globalAlpha = 1; } // plafond couvert : un voile uni, les cumulus font le relief
+    for (const b of o.nuages || []) for (let i = 0; i < b.n; i++) {
+      const w = b.w[0] + alea() * (b.w[1] - b.w[0]), h = Math.round(b.h[0] + alea() * (b.h[1] - b.h[0])), x = alea() * 1024, y = Math.round(128 * (1 - b.f[0] - alea() * (b.f[1] - b.f[0])));
+      if (b.cirrus) { for (let r = 0; r < h; r++) { const l = w * (0.35 + 0.65 * Math.sin((r + 0.5) / h * 3.1416)); P(b.cote === 'haut' ? (r ? b.c : b.bord) : r === h - 1 ? b.bord : b.c, x - l / 2 + (alea() - 0.5) * w * 0.15, y - h + r, l); } continue; }
+      const n = 3 + (alea() * 3 | 0);
+      for (let k = 0; k < n; k++) { // un dôme : demi-ellipse posée sur la base commune y
+        const lw = w * (0.35 + alea() * 0.3), lh = Math.max(2, Math.round(h * (0.5 + 0.5 * Math.sin((k + 0.5) / n * 3.1416)) * (0.75 + alea() * 0.25))), cx = x + (k + 0.5) / n * w - w / 2, yb = y + Math.round((alea() - 0.5) * h * 0.5);
+        for (let r = 0; r < lh; r++) { const l = lw * Math.sqrt(1 - ((lh - 1 - r) / lh) ** 2); P(b.cote === 'haut' ? (r < 1 ? b.bord : r < lh / 2 && b.mi ? b.mi : b.c) : (r > lh / 2 && b.mi ? b.mi : b.c), cx - l / 2, yb - lh + r, l); }
+        if (b.cote !== 'haut') P(b.bord, cx - lw * 0.32, yb - 1, lw * 0.64); // la base du dôme, éclairée par-dessous
+      }
+    }
+  }],
+  // lune (cratères, limbe dans l'ombre) ou soleil couchant (rayé de bandes qui s'épaississent vers le bas)
+  astre: (col, ombre, soleil) => [32, 32, (g, { R }) => {
+    g.fillStyle = col; g.beginPath(); g.arc(16, 16, 15, 0, 7); g.fill();
+    if (soleil) { g.globalCompositeOperation = 'destination-out'; for (let k = 0; k < 4; k++) R(g, '#000', 0, 18 + k * 4 - (k > 1), 32, 1 + (k > 1)); g.globalCompositeOperation = 'source-over'; }
+    else { g.globalCompositeOperation = 'source-atop'; g.fillStyle = ombre; g.beginPath(); g.arc(24, 12, 15, 0, 7); g.globalAlpha = 0.35; g.fill(); g.globalAlpha = 1; for (const [x, y, r] of [[9, 9, 4], [18, 19, 5], [8, 20, 3], [20, 8, 3], [13, 25, 3]]) { R(g, ombre, x, y, r, r - 1); g.globalAlpha = 0.45; R(g, '#000', x, y, r, r - 1); g.globalAlpha = 1; } g.globalCompositeOperation = 'source-over'; }
+  }],
 
   // ---------- piste ----------
   // chaussée : une dalle de 2W × 32 m. Grain, rapiéçages, joints, fissure, gomme sur les passages de roues, peinture usée.
