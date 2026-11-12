@@ -324,7 +324,13 @@
   }
   { // ligne et portique de départ
     const s = S[0], g = new THREE.Group(); g.position.set(s.x, s.y, s.z); g.rotation.y = across(s); scene.add(g);
-    pose('depart', { damier: mat('damier', { lum: 1, net: 1 }, TH.depart[2]), traverse: mat('peinture', { lum: 1, c: TH.depart[0] }), poteau: mat('peinture', { lum: 1, c: TH.depart[1] }) }, g, [0, 0, 0], W);
+    const css = n => '#' + n.toString(16).padStart(6, '0'), acc = css(TH.depart[0]), ossature = css(TH.depart[1]);
+    pose('depart', {
+      sol: mat('damierBande', { lum: 1, net: 1 }, TH.depart[2], 1), damier: mat('damierBande', { lum: 1, net: 1 }, TH.depart[2], 0.45),
+      beton: mat('beton'), acier: mat('acier', { c: TH.depart[1] }), treillis: mat('treillisPortique', { alphaTest: 0.5, side: THREE.DoubleSide }, ossature),
+      nom: mat('bandeauNom', { lum: 1, net: 1 }, acc, M.nom, TH.depart[2]), boitier: mat('matGris'), feu: mat('feuRouge', { lum: 1 }), lampe: mat('lampe', { lum: 1 }),
+    }, g, [0, 0, 0], W);
+    lum(0, s.x, s.y + 8, s.z, 0xfff2d0, 24, 1.3);
   }
   { // chevrons à l'extérieur des virages, piles du viaduc, tubes néon en bord de route (repères de vitesse)
     const dummy = new THREE.Object3D();

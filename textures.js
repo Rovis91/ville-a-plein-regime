@@ -270,5 +270,21 @@
     R(c, '#f4f0e0', 0, 0, 32, 16); R(c, '#2aa39a', 0, 0, 32, 2); R(c, '#2aa39a', 0, 14, 32, 2); c.fillStyle = '#e83f8c';
     for (const x of [3, 17]) { c.beginPath(); c.moveTo(x, 3); c.lineTo(x + 6, 3); c.lineTo(x + 12, 8); c.lineTo(x + 6, 13); c.lineTo(x, 13); c.lineTo(x + 6, 8); c.fill(); }
   }],
+
+  // ---------- portique de départ ----------
+  // treillis de portique : cadre de 3 px et une croix par cellule de 1,5 m, fond transparent (matière en alphaTest) ; c = couleur CSS
+  treillisPortique: c => [32, 32, (g, o) => {
+    const { R, voile } = o; g.clearRect(0, 0, 32, 32); R(g, c, 0, 0, 32, 3); R(g, c, 0, 29, 32, 3); R(g, c, 0, 0, 3, 32); R(g, c, 29, 0, 3, 32);
+    for (let k = 0; k < 32; k++) { R(g, c, k, k, 2, 2); R(g, c, 30 - k, k, 2, 2); }
+    voile(g, 0.3, () => { R(g, '#000', 3, 3, 26, 1); R(g, '#000', 3, 3, 1, 26); });
+  }, 1.5],
+  // damier du départ : cases de 2 × 2 px, t mètres pour deux cases ; fond = case claire
+  damierBande: (fond, t) => [2, 2, (g, { R }) => { R(g, fond, 0, 0, 2, 2); R(g, '#08080c', 0, 0, 1, 1); R(g, '#08080c', 1, 1, 1, 1); }, t],
+  // bandeau lumineux du portique : lettres de la couleur c sur fond sombre, lignes de balayage, filets en haut et en bas
+  bandeauNom: (c, txt, lettres) => [512, 64, (g, { R, voile }) => {
+    R(g, '#08080c', 0, 0, 512, 64); R(g, c, 0, 0, 512, 5); R(g, c, 0, 59, 512, 5);
+    g.fillStyle = lettres; g.font = 'bold 38px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 256, 34, 470);
+    voile(g, 0.35, () => { for (let y = 5; y < 60; y += 3) R(g, '#000', 0, y, 512, 1); });
+  }],
 };
 })();

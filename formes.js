@@ -39,7 +39,19 @@
     // ---------- assemblages ----------
     // piste (W = demi-largeur de chaussée)
     portailTunnel: W => [['portail', 2 * W + 6, 4, 3, 0, 10, 0], ...paire(sd => ['portail', 3, 12, 3, sd * (W + 1.5), 6, 0])],
-    depart: W => [['damier', 2 * W, 0.06, 4, 0, 0, 0], ['traverse', 2 * W + 3, 1.6, 1, 0, 8, 0], ...paire(sd => ['poteau', 1, 8, 1, sd * (W + 1), 4, 0])],
+    // portique de départ, X en travers : deux pieds en treillis sur embases de béton hors des glissières, jambes de force, poutre treillis de 1,5 m (damier dessous),
+    // rampe de cinq feux sur chaque face, deux projecteurs par face inclinés vers la ligne, bandeau lumineux au nom de la carte ; damier au sol
+    depart: W => {
+      const xp = W + 2.2, L = 2 * xp + 1.5, dx = 2.8, dy = 2.7, jl = Math.hypot(dx, dy), ja = Math.atan2(dx, dy), th = 0.55;
+      return [['sol', 2 * W, 0.06, 4, 0, 0, 0],
+        ...paire(sd => [['beton', 2.4, 0.7, 2.4, sd * xp, 0.35, 0], ['acier', 1.7, 0.12, 1.7, sd * xp, 0.76, 0], ['treillis', 1.5, 7.6, 1.5, sd * xp, 4.6, 0], ['acier', 1.7, 0.15, 1.7, sd * xp, 8.45, 0],
+          ...paire(a => paire(b => ['acier', 0.2, 7.6, 0.2, sd * xp + a * 0.75, 4.6, b * 0.75])).flat(),
+          ['acier', 0.22, jl, 0.22, sd * (xp - 0.75 - dx / 2), 4.5 + dy / 2, 0, [0, 0, sd * ja]]]).flat(),
+        ['treillis', L, 1.5, 1.5, 0, 7.6, 0, null, 1], ...paire(a => paire(b => ['acier', L, 0.2, 0.2, 0, 7.6 + a * 0.75, b * 0.75])).flat(), ['damier', L - 1.5, 0.45, 1.6, 0, 6.95, 0],
+        ['acier', 2 * W + 1.4, 1.9, 0.3, 0, 9.4, 0], ['nom', 2 * W + 1, 1.5, 0.4, 0, 9.4, 0],
+        ...paire(sz => [['boitier', 6.8, 1, 0.25, 0, 7.6, sz * 0.85], ...[-2, -1, 0, 1, 2].map(i => ['feu', 0.75, 0.75, 0.1, i * 1.3, 7.6, sz * 1.0]),
+          ...paire(sx => { const x = sx * (W - 1.2), r = [sz * th, 0, 0]; return [['boitier', 1, 0.5, 0.7, x, 7.9, sz * 1.15, r], ['lampe', 0.85, 0.06, 0.55, x, 7.9 - 0.28 * Math.cos(th), sz * (1.15 - 0.28 * Math.sin(th)), r]]; }).flat()]).flat()];
+    },
     portiquePub: W => [['ecran', 2 * W + 3, 4, 0.5, 0, 11.5, 0], ...paire(sd => ['beton', 0.8, 13.5, 0.8, sd * (W + 1.3), 6.75, 0])],
     portiqueAutoroute: W => [['structure', 2 * W + 3, 0.5, 0.5, 0, 10.2, 0], ...paire(sd => ['structure', 0.6, 10.5, 0.6, sd * (W + 1.2), 5.2, 0]), ['panneauGauche', 6.4, 2.6, 0.3, -3.6, 8.4, 0], ['panneauDroit', 6.4, 2.6, 0.3, 3.6, 8.4, 0]],
     pylonePont: W => [...paire(sd => ['beton', 3, 96, 3, sd * (W + 3.5), 2, 0]), ['beton', 2 * W + 10, 3, 3, 0, 46, 0]], // pylône en H d'un pont à haubans
