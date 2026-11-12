@@ -26,6 +26,7 @@
   //   sec : les sections, « k0 s1 b0 d l0! » = parties jouées et variante ; « ! » seulement dans le secteur chaud ; P1 autre progression ; roll montée
   //     (roulement et souffle) ; lo passe-bas qui s'ouvre au fil de la section ; gate nappe hachée ·
   //   cv niveau des couplets par rapport au refrain (réglé par mesure, pour que l'écart reste sous 3 dB) ·
+  //   lO transposition du thème, lV son niveau · drive de 0 à 1 ·
   //   gamme (mineur, majeur) · emprunts : accords qui sortent de la gamme, voulus · hors : notes hors gamme permises (demi-tons depuis key) ·
   //   bPar : la ligne de basse suit l'accord en parallèle, dans ces intervalles (riff de rock sur accords de puissance) ·
   //   form : la suite des sections (4 mesures chacune) · hot : le refrain (c par défaut), joué à la place de toutes les sections dans le secteur chaud, sauf la variation e.
@@ -55,19 +56,19 @@
   const F4 = 'x...x...x...x...', OFF = '..o...o...o...o.', SN = '....x.......x...', CP = '....c.......c...';
   const RADIO = {
     ville: [
-      st({ name: 'NIGHT CITY FM', fq: '98.7', vol: 0.41, genre: 'DARKSYNTH', bpm: 128, gamme: 'mineur', emprunts: 'Bb E', key: 57, kit: 'dur', eq: [4, 2500, -6, -1], rev: 0.25, pump: 0.3, // façon Carpenter Brut / Perturbator : boîte des années 80, basse saturée, chœur sombre, thème hurlant
+      st({ name: 'NIGHT CITY FM', fq: '98.7', vol: 0.41, genre: 'DARKSYNTH', bpm: 128, gamme: 'mineur', emprunts: 'Bb E', key: 57, kit: 'dur', eq: [2, 2500, 0, 10], rev: 0.25, pump: 0.3, // façon Carpenter Brut / Perturbator : boîte des années 80, basse saturée, chœur sombre, thème hurlant
         prog: ['Am Am F G Am Am Bb E', 'F G Dm E'], k: [F4, 'x...x...x.x.x...'], s: [SN], h: ['..x...x...x...x.', 'xxXxxxXxxxXxxxXx'],
         b: ['bDark', '0 - 0 0 - - 12 0 - - 0 3 0 - -2 1 | 0 - 0 0 - - 12 0 - 0 7 - 6 - 5 3', '0 0 0 0 0 0 0 0 0 0 0 0 0 0 12 0'], d: ['choir', 0], c: ['brass', 'x..x..x....x....'], a: ['pulseArp', '0121201245656456', '0.2.4.2.0.2.4.6.'],
         l: ['ldSync', '19 - - 19 - . 17 - 19 - - - 22 - - - | 19 - - - - - . - 15 - 17 - 15 - - - | 20 - - 20 - . 19 - 20 - - - 24 - - - | 22 - - - - - . - 17 - 19 - 17 - - - | 19 - - 19 - . 17 - 19 - - - 22 - - - | 19 - - - - - . - 15 - 17 - 15 - - - | 20 - - 20 - . 17 - 20 - - - 25 - - - | 23 - - - - - - - 26 - - - - - - -',
           '20 - - - 24 - - - 27 - 24 - 20 - - - | 22 - - - 26 - - - 29 - 26 - 22 - - - | 29 - - 27 - - 24 - 20 - - - 24 - - - | 23 - - - 26 - - - 31 - - - - - - -'],
         sec: { i: 'h0 d a1 lo', a: 'k0 s0 h1 b0 d a1', b: 'k0 s0 h1 b0 d a0', c: 'k1 s0 h1 b0 d a0 c0 l0', x: 'd a1 l1 P1', u: 'k0 h1 b1 d roll P1', e: 'k1 s0 h1 b1 c0 l1 P1' }, form: 'iabcxuceabcc' }),
-      st({ name: 'USINE 130', fq: '130.0', vol: 0.65, genre: 'TECHNO INDUSTRIELLE', bpm: 130, gamme: 'mineur', hors: [1], sw: 0.1, key: 57, kit: 'ind', eq: [-16, 1300, 10, -4], rev: 0.3, pump: 0.5, drive: 1, // ni accords ni mélodie : grosse caisse saturée, bruit, métal frappé, tom grave écrêté
-        prog: ['Am'], k: [F4, 'x...x...x...x.x.', 'x..x..x.x..x..x.'], s: [SN, '....x..x....x.xx'], h: ['..X...X...X...X.', 'x.X.x.X.x.X.xxXx'], p: ['k..k..k...k..k..', '..........k.....'],
-        b: ['bDist', '. . 0 - . . 0 - . . 0 - . . 0 1', '0 - . 0 - . 0 - . 0 - . 0 - 1 0'], a: ['fmMetal', '0..0..0.0..0.0..', '0.0.0.0.0.0.0.0.'],
-        sec: { i: 'k0 h0', a: 'k0 s0 h0 b0', b: 'k1 s0 h1 b0 a0', c: 'k1 s1 h1 b1 a0 p0', x: 'h0 a1 p1 lo', u: 'k0 h1 a1 roll', e: 'k2 s1 h1 b1 a1 p0' }, form: 'iabcbxuceacc' }),
-      st({ name: 'KAIZO BREAKS', fq: '87.5', vol: 1, genre: 'BIG BEAT', bpm: 132, gamme: 'mineur', key: 64, kit: 'brk', eq: [-4, 3500, 4, 8], rev: 0.15, echo: [2, 0.3], pump: 0.7, // façon Prodigy / Chemical Brothers : breakbeat sali, basse acide, orgue plaqué, sirène
+      st({ name: 'USINE 130', fq: '130.0', vol: 0.85, genre: 'TECHNO INDUSTRIELLE', bpm: 130, gamme: 'mineur', hors: [1], sw: 0.1, key: 57, kit: 'ind', eq: [-16, 1300, 10, -4], rev: 0.3, pump: 0.5, drive: 1, // ni accords ni mélodie : grosse caisse saturée, bruit, toms, séquence sur une note ; montées sans grosse caisse, puis le drop
+        prog: ['Am'], k: [F4, 'x...x...x...x.x.', 'x..x..x.x..x..x.'], s: [SN, '....x..x....x.xx'], h: ['..X...X...X...X.', 'x.X.x.X.x.X.xxXx'], p: ['3..1..3...1..3..'],
+        b: ['bDist', '. . 0 - . . 0 - . . 0 - . . 0 1', '0 - . 0 - . 0 - . 0 - . 0 - 1 0'], a: ['seqArp', '0..0..0.0..0.0..', '0.0.0.0.0.0.0.0.'],
+        sec: { i: 'k0 h0', a: 'k0 s0 h0 b0', b: 'k1 s0 h1 b0 a0', c: 'k1 s1 h1 b1 a0 p0', x: 'h0 a1 lo', u: 'h1 a1 roll lo', e: 'k2 s1 h1 b1 a1 p0' }, form: 'iabucbxuceuc' }),
+      st({ name: 'KAIZO BREAKS', fq: '87.5', vol: 1, genre: 'BIG BEAT', bpm: 132, gamme: 'mineur', key: 64, kit: 'brk', eq: [-6, 1800, 4, 8], rev: 0.22, echo: [2, 0.3], pump: 0.5, // façon Prodigy / Chemical Brothers : breakbeat sali, basse acide, guitare saturée plaquée, sirène
         prog: ['Em Em Em G Em Em Am Bm', 'Em G Am Bm'], k: ['x..x......x.....', 'x..x...x..x..x..', 'x.....x...x..x..'], s: ['....x..g.g..x..g', '....x.......x.gg'], h: ['x.x.x.x.x.x.x.o.', 'x.xxx.x.x.xxx.o.'], p: ['t.t.t.t.t.t.t.t.'],
-        b: ['bAcid', '0 - 0 12 - 0 - 3 0 - 12 0 - 7 - 10', '0 0 - 12 0 - 15 - 12 - 10 - 7 - 3 -'], c: ['organ', 'x.....x.........', 'x..x..x...x.x...'], a: ['clav', '0.0.2.0.3.0.2.0.'],
+        b: ['bAcid', '0 - 0 12 - 0 - 3 0 - 12 0 - 7 - 10', '0 0 - 12 0 - 15 - 12 - 10 - 7 - 3 -'], c: ['pwr', 'x.....x.........', 'x..x..x...x.x...'], cO: -12, a: ['seqArp', '0.0.2.0.3.0.2.0.'],
         l: ['ldSiren', '12 - - - - - - - 7 - - - - - - - | 12 - - - - - - - 15 - - - 14 - - -', '24 - - - 19 - - - 24 - - - 27 - 26 - | 22 - - - - - - - 19 - - - - - - -'],
         sec: { i: 'h0 b0 lo', a: 'k0 s0 h0 b0', b: 'k0 s0 h1 b0 c0', c: 'k1 s0 h1 b1 c1 l0 p0', x: 'b0 l1 lo', u: 'k2 h1 b0 roll', e: 'k2 s1 h1 b1 a0 c0' }, form: 'iabcaxucebcc' }),
     ],
@@ -78,7 +79,7 @@
         l: ['ldSync', '12 - 12 14 - 15 - 14 12 - 10 - 12 - 15 - | 17 - - 15 - 14 - 15 - - 14 - 10 - - - | 12 - 12 14 - 15 - 17 19 - 17 - 15 - 17 - | 19 - - 17 - 14 - 17 - - 14 - 10 - - - | 24 - 22 - 20 - 19 - 17 - 19 - 20 - 19 - | 22 - - 20 - 17 - 20 - - 17 - 15 - 14 - | 22 - 19 - 22 - 24 - 26 - 24 - 22 - 19 - | 23 - - - 19 - 14 - 11 - - - - - - -',
           '20 - 24 - 27 - 24 - 20 - 24 - 27 - 29 - | 22 - 26 - 29 - 26 - 22 - 26 - 29 - 31 - | 31 - - 29 - - 27 - 24 - - - 27 - 29 - | 31 - - - - - - - . - - - 29 - 27 -'],
         sec: { i: 'h0 a0 d lo', a: 'k0 s0 h0 b0 d', b: 'k0 s0 h1 b0 d c1 a0', c: 'k0 s1 h1 b0 d c0 l0', x: 'd a0 l1 P1', u: 'k0 h1 b1 d roll P1', e: 'k0 s1 h1 b1 c0 l1 P1' }, form: 'iabccxuceacc' }),
-      st({ name: 'GRAND PRIX FM', fq: '86.2', vol: 0.9, genre: 'FUSION JAZZ-ROCK', bpm: 136, cv: 1.2, gamme: 'majeur', emprunts: 'B7', key: 62, kit: 'acou', eq: [-8, 1100, 9, -3], rev: 0.25, pump: 1, // façon T-Square / Casiopea : batterie jouée avec ride et toms, basse claquée, piano électrique, solo à vent
+      st({ name: 'GRAND PRIX FM', fq: '86.2', lO: -12, lV: 0.7, vol: 1.1, genre: 'FUSION JAZZ-ROCK', bpm: 136, cv: 1.2, gamme: 'majeur', emprunts: 'B7', key: 62, kit: 'acou', eq: [-8, 1100, 9, -3], rev: 0.25, pump: 1, // façon T-Square / Casiopea : batterie jouée avec ride et toms, basse claquée, piano électrique, solo à vent
         prog: ['Em9 A9 DM7 GM7 Em9 A9 F#m7 B7', 'GM7 F#m7 Em9 A9'], k: ['x..x..x...x..x..', 'x..x..x..xx..x.x', 'x.....x..x....x.'], s: ['....x..g.g..x..g', '....x..g....x.g.'], h: ['r.r.r.rrr.r.r.rr', 'x.x.x.x.x.x.x.o.', 'b.r.r.b.r.r.b.r.'],
         b: ['bSlap', '0 - 12 - 0 0 - 9 - 12 - 0 - 7 9 12 | 0 - 12 0 - 7 - 9 12 - 9 - 7 - 5 7', '0 - - 0 - - 7 - 0 - - 12 - 9 7 -'], d: ['warm', 0], c: ['epFM', '..x..x....x..x..', 'x.....x...x.....'],
         l: ['ldEwi', '14 - 17 19 - 21 - 19 17 - 16 - 14 - 12 14 | 16 - - 19 - 21 23 - 21 - 19 - 16 - - - | 21 - 19 - 16 - 14 16 - 19 - 23 - 21 - - | 23 - - 21 - 19 - 16 - - 14 - 16 19 - - | 26 - 24 23 - 21 - 19 21 - 23 - 24 - 26 - | 28 - - 26 - 23 - 21 - 19 - 21 23 - - - | 21 - 23 24 - 26 - 28 - 26 - 24 - 23 21 - | 25 - - - 23 - 21 - 25 - 28 - . - - -',
@@ -115,7 +116,7 @@
         b: ['bPick', '0 - - 0 - 12 - 0 - - 7 - 12 - 0 - | 0 - - 0 - 12 - 0 - 12 - 7 - 12 - 7', '0 - - - - - 0 - - - 12 - - - 7 -'], d: ['strings', 0], c: ['super', 'x..x..x.x..x.x..', 'x..x..x.x..x.x.x'], g: ['epFM', '..x...x...x...x.'],
         l: ['ldVox', '14 - 14 . 17 - 14 . 21 - - - 17 - - - | 19 - 19 . 23 - 19 . 26 - - - 23 - - - | 16 - 16 . 19 - 16 . 24 - - - 23 - - - | 21 - 21 . 24 - 21 . 28 - - - 24 - - -'],
         sec: { i: 'k0 c0 d', a: 'k0 h0 c0 b1', b: 'k0 s0 h1 c0 b0 p1', c: 'k0 s0 h1 c1 b0 g0 l0 p0', x: 'c0 l0 d', u: 'k0 h1 c0 roll', e: 'k0 s0 h1 c1 b0 g0 d p0 P1' }, form: 'iabbcxucecbc' }),
-      st({ name: 'SATURATION', fq: '107.7', vol: 0.39, genre: 'ELECTRO SATUREE', bpm: 128, cv: 1.4, gamme: 'mineur', sw: 0.08, key: 64, kit: 'dur', eq: [-14, 2200, 10, 4], rev: 0.1, pump: 0.2, drive: 1, // façon Justice / Ed Banger : tout le bus écrêté, basse hachée, cordes coupées net, riff de guitare saturée
+      st({ name: 'SATURATION', fq: '107.7', vol: 0.46, genre: 'ELECTRO SATUREE', bpm: 128, cv: 1.4, gamme: 'mineur', sw: 0.08, key: 64, kit: 'dur', eq: [-14, 2200, 10, 4], rev: 0.1, pump: 0.2, drive: 0.5, // façon Justice / Ed Banger : tout le bus écrêté, basse hachée, cordes coupées net, riff de guitare saturée
         prog: ['Em Em G Am Em Em C Bm', 'C C D Bm'], k: [F4, 'x...x...x..xx...', 'x.x...x.x...x.x.'], s: [SN, '....x..x....x.xx'], h: ['x.X.x.X.x.X.x.Xx', '..X...X...X...X.'],
         b: ['bDist', '0 0 - 0 - - 12 - 0 0 - 3 - 5 - - | 0 0 - 0 - - 12 - 10 - 7 - 5 - 3 -', '0 - 0 - 0 - 0 - 0 - 0 - 12 - 0 -'], c: ['strings', 'x.x...x..x......', 'x...x...x...x.x.'],
         l: ['ldGtr', '12 - 12 . 15 - 12 . 10 - 12 - . - - - | 12 - 12 . 15 - 17 . 19 - 17 - 15 - - - | 19 - 19 . 22 - 19 . 17 - 19 - . - - - | 17 - 17 . 22 - 17 . 19 - 22 - 24 - - -',
@@ -129,7 +130,7 @@
         sec: { i: 'h0 a1 d lo', a: 'k0 s0 h0 b1 c0', b: 'k0 s0 h1 b0 c0 d p0', c: 'k0 s1 h1 b0 c0 d a0 l0 p0', x: 'd a1 l1 p1 P1', u: 'k0 h1 b1 a0 roll P1', e: 'k0 s1 h1 b0 c1 g0 d l1 p1 P1' }, form: 'iabccxuceabc' }),
     ],
     canal: [
-      st({ name: 'K-LOW', fq: '94.0', vol: 0.46, genre: 'G-FUNK', bpm: 94, cv: 1.25, gamme: 'mineur', emprunts: 'D7', sw: 0.1, key: 55, kit: 'k808', sMin: 0.45, eq: [7, 450, -4, 3], rev: 0.2, echo: [3, 0.35], pump: 0.9, // façon Dr. Dre / Warren G : lent, TR-808, caisse claire en avant, basse ronde qui glisse, sifflement de synthé à portamento
+      st({ name: 'K-LOW', fq: '94.0', vol: 0.46, genre: 'G-FUNK', bpm: 104, cv: 1.25, gamme: 'mineur', emprunts: 'D7', sw: 0.1, key: 55, kit: 'k808', sMin: 0.45, eq: [7, 450, -4, 3], rev: 0.2, echo: [3, 0.35], pump: 0.9, // façon Dr. Dre / Warren G : posé, TR-808, caisse claire en avant, basse ronde qui glisse, sifflement de synthé à portamento
         prog: ['Gm7 Gm7 Cm7 Cm7 Gm7 Gm7 EbM7 D7', 'EbM7 D7 Gm7 Gm7'], k: ['x......x..x.....', 'x..x...x..x...x.'], s: [SN], h: ['x.x.x.x.x.x.x.x.', 'x.x.x.xxx.x.x.o.'], p: ['m.m.m.m.m.m.m.m.'],
         b: ['bMoog', '0 - - - - - 0 - - - 7 - 10 - 12 - | 0 - - - - - 0 - 12 - 10 - 7 - 5 3', '0 - - - - - - - 0 - - - - - 7 -'], d: ['warm', 0], c: ['epFM', '..x.......x..x..', 'x.......x.......'],
         l: ['ldWhistle', '31 - - - - - 34 - 36 - - - 34 - 31 - | 29 - - - - - 27 - 31 - - - - - - - | 32 - - - - - 34 - 36 - - - 39 - 36 - | 34 - - - - - 32 - 29 - - - - - - - | 38 - - - - - 36 - 34 - - - 31 - 34 - | 36 - - - - - - - 31 - - - - - - - | 39 - - - - - 36 - 34 - - - 32 - 34 - | 35 - - - - - 38 - 41 - - - - - - -',

@@ -16,6 +16,7 @@
   // état musical piloté par la course : mix = secteur chaud, inten = vitesse, driftL = glisse, drums = batterie, fin = dernier secteur
   const MX = { b: 1, d: 1.6, c: 2, g: 2, a: 2, l: 1.6 }; // niveau de chaque tranche : le médium et l'aigu ne doivent pas disparaître sous la basse
   let tens = 0, glisse = false, acquis = false, acqDit = false, boostPend = false, boostL = false; // glisse : tension (0..1), en cours, boost acquis, palier déjà joué, relâchement à jouer, boost en cours
+  let lastRoll = -9; // dernière mesure de montée : le drop la suit
   let bigS = false, lastFill = -9, sortie = -1, grit = 0, curRoot = 33, lap = 1, lapN = -1; const was = {}; // lap : 0 premier tour (sobre), 1 normal, 2 dernier tour (le plus intense) ; // refrain en cours ; dernière relance ; parties qui jouaient à la mesure précédente
   let W = {}; const strip = {}; // ondes sur mesure ; tranches de mixage par partie (b basse, d nappe, c g accords, a arpège, l thème)
   let mix = 0, inten = 0, driftL = 0, drums = 0, fin = false, wasIn = false, wasNear = false, wasBoost = false, lastGas = 0;
@@ -27,7 +28,7 @@
   const MENU = {
     ville: { bpm: 72, v: 1.55, pad: 'choir', arp: '0...2...1...3...', CH: [[50, 57, 60, 65], [46, 53, 57, 62], [48, 55, 58, 64], [45, 52, 57, 61]] },
     touge: { bpm: 80, v: 1.05, pad: 'epFM', arp: '0.2...3...1.2...', CH: [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59]] },
-    wangan: { bpm: 84, v: 1.84, pad: 'super', arp: '0.1.2.3.2.1.3.2.', CH: [[52, 59, 62, 66], [48, 55, 59, 64], [45, 52, 55, 59], [47, 54, 57, 62]] },
+    wangan: { bpm: 84, v: 1.84, pad: 'warm', arp: '0.....2...3.....', CH: [[52, 59, 62, 66], [48, 55, 59, 64], [45, 52, 55, 59], [47, 54, 57, 62]] },
     paris: { bpm: 90, v: 1.6, pad: 'strings', arp: '..0..2..3..1..2.', CH: [[54, 57, 61, 64], [47, 51, 54, 57], [52, 56, 59, 63], [49, 52, 56, 59]] },
     canal: { bpm: 76, v: 1.05, pad: 'warm', arp: '0.....2...3.....', CH: [[55, 58, 62, 65], [55, 58, 62, 65], [48, 51, 55, 58], [48, 51, 55, 58]] },
   };
@@ -262,8 +263,10 @@
     }
     if (d && (x = on('s')) && !fill && (c = pat(st.s, x)[q]) !== '.') dSnare(hum(), big ? 0.5 : st.sMin || 0.34, K, c);
     if (fill) dFill(t, q - 16 + fillN, fillN, K);
-    if (d && sec.roll && q % ((bar & 3) < 2 ? 4 : (bar & 3) < 3 ? 2 : 1) === 0) dSnare(t, 0.12 + 0.4 * pos, K); // montée : roulement qui se resserre
+    if (d && sec.roll && !((bar & 3) === 3 && q >= 14) && q % ((bar & 3) < 2 ? 4 : (bar & 3) < 3 ? 2 : 1) === 0) dSnare(t, 0.12 + 0.4 * pos, K); // montée : roulement qui se resserre
     if (d && sec.roll && (bar & 3) === 0 && q === 0) riser(t, S16 * 64, 0.18);
+    if (d && sec.roll) lastRoll = bar;
+    else if (d && (bar & 3) === 0 && q === 0 && lastRoll === bar - 1) { crash(t, 0.7); const o = osc('sine', hz(root + 24), t, 0.7, 0.6, drumG); o && o.frequency.exponentialRampToValueAtTime(hz(root), t + 0.5); } // le drop : au bout d'une montée, cymbale et chute de sub
     if (d && (bar & 3) === 0 && q === 0 && key === st.hot && lastFill === bar - 1) crash(t, 0.35); // cymbale d'entrée de refrain, seulement au bout d'une relance de batterie
     if (fill) lastFill = bar;
     if (!d) { if (q % 4 === 2) dHat(t, 0.5, K, 'x'); } // seul tic-tac pendant le décompte
@@ -281,7 +284,7 @@
     if ((x = on('a')) && (c = pat(st.a.v, x)[q]) !== '.' && (d || q % 2 === 0)) tone(st.a.p, hz(ch[c % 4 % ch.length] + 12 + (c >= 4 ? 12 : 0)), t, 0.2, (q % 4 === 0 ? 0.05 : 0.038) * (PATCH[st.a.p].lv || 1), strip.a.in); // 0-3 : notes de l'accord ; 4-7 : à l'octave
     if (d && (x = on('l'))) { const L = pat(st.l.v, x), N = L[q];
       if (N != null && N !== R) { let n = 1; while (q + n < 16 && L[q + n] == null) n++;
-        tone(st.l.p, hz(N), t, S16 * n * 1.05, PATCH[st.l.p].lv * (st.lV || 1), strip.l.in, lastN && hz(lastN)); lastN = N;
+        const No = N + (st.lO || 0); tone(st.l.p, hz(No), t, S16 * n * 1.05, PATCH[st.l.p].lv * (st.lV || 1), strip.l.in, lastN && hz(lastN)); lastN = No;
         if (fin || lap === 2) osc('triangle', hz(N + 12), t, S16 * n, 0.04, strip.l.in); } } // dernier secteur, dernier tour : thème doublé à l'octave
     if (driftL > 0.3) osc('sawtooth', hz(ch[(q * 2) % 3] + 24), t, 0.1, 0.07 * driftL, acid); // ligne acide tant qu'on glisse
     if (d && glisse) { // la glisse tend la musique avec sa durée : roulement qui se resserre et souffle qui monte, calés sur le tempo (le grave s'amincit dans audioFrame)
@@ -300,7 +303,7 @@
     if (!AC) return;
     const e = menu ? [3, 0.5] : st.echo || [3, 0.4], q = menu ? [0, 1000, 0, 0] : st.eq || [0, 1000, 0, 0];
     dly.delayTime.value = Math.min(0.95, S16 * e[0]); dlyFb.gain.value = e[1];
-    busDry.gain.value = !menu && st.drive ? 0.3 : 1; busDrv.gain.value = !menu && st.drive ? 0.45 : 0; // saturation de tout le bus (électro saturée, techno industrielle)
+    const dv = menu ? 0 : st.drive || 0; busDry.gain.value = 1 - 0.7 * dv; busDrv.gain.value = 0.45 * dv; // saturation de tout le bus (électro saturée, techno industrielle)
     swF.frequency.cancelScheduledValues(t); swF.frequency.setValueAtTime(!menu && st.sweep ? 500 : 20000, t); swF.Q.value = !menu && st.sweep ? 5 : 0.7;
     eqL.gain.value = q[0]; eqM.frequency.value = q[1]; eqM.gain.value = q[2]; eqH.gain.value = q[3]; // couleur de la station : grave, médium, aigu
     mrevG.gain.value = menu ? 0.6 : st.rev == null ? 0.2 : st.rev; drumRv.gain.value = menu ? 0 : (KIT[st.kit] || KIT.k909).room;
@@ -354,7 +357,7 @@
     AC = ctx || new (window.AudioContext || window.webkitAudioContext)(); live = !ctx;
     const comp = AC.createDynamicsCompressor(); outG = gain(OUT, AC.destination); comp.connect(outG); // marge après le compresseur : mesuré, aucune crête au-dessus de -3 dB
     vu = AC.createAnalyser(); vu.fftSize = 2048; outG.connect(vu); // ce qui sort vraiment, pour le vumètre du banc d'écoute
-    lastHit = 0; ambT = 2; bigS = false; lastFill = -9; sortie = -1; grit = tens = 0; glisse = acquis = acqDit = boostPend = boostL = false; for (const p in was) was[p] = false; drums = 0; mix = inten = driftL = 0; fin = inZone = false; // un contexte neuf repart de l'arrêt
+    lastHit = 0; ambT = 2; bigS = false; lastFill = lastRoll = -9; sortie = -1; grit = tens = 0; glisse = acquis = acqDit = boostPend = boostL = false; for (const p in was) was[p] = false; drums = 0; mix = inten = driftL = 0; fin = inZone = false; // un contexte neuf repart de l'arrêt
     master = gain(0.9, comp); ana = AC.createAnalyser(); ana.fftSize = 64; master.connect(ana);
     for (const k in vol) V[k] = gain(vol[k], master);
     nbuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
