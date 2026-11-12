@@ -447,7 +447,7 @@
     dKick(t, k, KIT[st.kit] || KIT.k909); tone(st.b.p, hz(curRoot), t, 0.4, 0.5 * (P.lv || 1), strip.b.in);
     duckG.gain.cancelScheduledValues(t); duckG.gain.setValueAtTime(0.2, t); duckG.gain.linearRampToValueAtTime(1, t + 0.45);
   }
-  function choc(hit, t = AC.currentTime) { const v = Math.min(0.6, hit * 0.04), rnd = (a, b) => a + Math.random() * (b - a);
+  function choc(hit, t = AC.currentTime) { const v0 = Math.min(0.6, hit * 0.04), v = v0 * (VAR.choc < 2 ? 2.2 : 1), rnd = (a, b) => a + Math.random() * (b - a);
     if (VAR.choc === 1) { // tôle froissée : coup, puis une grêle de claquements de tôle, et un peu de verre
       nz(t, 0.2, v, V.choc, 'lowpass', 300); for (let i = 0; i < 7; i++) nz(t + rnd(0, 0.2), rnd(0.03, 0.07), v * rnd(0.5, 1), V.choc, 'bandpass', rnd(900, 3200), 2);
       for (let i = 0; i < 4; i++) osc('sine', rnd(4000, 7000), t + rnd(0.08, 0.35), 0.05, v * 0.12, V.choc);
@@ -491,7 +491,7 @@
     k(scrubG.gain, 0.5 * clamp(slip / 12, 0, 1) * r, 0.08);
     k(windG.gain, 0.045 * clamp((r - 0.5) * 2, 0, 1) ** 2 * (1 - tun), 0.2); // vent : un souffle à haute vitesse seulement, loin sous le moteur, coupé en tunnel
     rubT -= dt; if (VAR.contact && e.bump > 0.3) rubT = 0.35; // deux voitures qui se touchent frottent un instant
-    scr.forEach((g, i) => k(g.gain, i === VAR.frott && (car.rub || rubT > 0) ? 0.05 + 0.1 * r : 0, 0.05));
+    scr.forEach((g, i) => k(g.gain, i === VAR.frott && (car.rub || rubT > 0) ? 0.12 + 0.24 * r : 0, 0.05)); // remonté de 7,6 dB : il doit s'entendre sous la musique
     if ((hit > 3 || e.bump > 0.3) && t - lastHit > 0.15) { lastHit = t; choc(Math.max(hit, e.bump > 0.3 ? 8 + e.bump * 2 : 0), t); if (racing) reaction(Math.max(hit, e.bump > 0.3 ? 8 : 0), t); } // entre voitures les vitesses d'impact sont faibles : plancher de volume, sinon on ne l'entend pas
     // glisse (car.dd, car.driftT) : la tension monte en 1,5 s, palier quand le boost est acquis à 0,6 s ; sortie avec boost : tout s'ouvre d'un coup et le refrain joue tant que le boost dure ; glisse ratée : retour doux, sans effet
     const gl = racing && car.dd ? car.driftT || 0 : 0, vise = car.boost > 0 ? 0 : clamp(gl / 1.5, 0, 1);

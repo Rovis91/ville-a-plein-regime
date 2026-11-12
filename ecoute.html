@@ -33,7 +33,7 @@
 <body>
 <main>
 <header>
-  <h1>Banc d'écoute</h1>
+  <h1>Banc d'écoute <small style="font-weight:400;color:#a8a8b4;font-size:12px">version essais-2</small></h1>
   <div id="vu"><span id="voyant" title="du signal sort"></span><div id="barre"><div id="niv"></div><div id="tenue"></div></div><span id="db">silence</span><button id="stop">■ Tout arrêter</button></div>
   <div id="quoi">Rien ne joue. Cliquez un son : il joue seul, tout le reste est coupé.</div>
 </header>
@@ -97,9 +97,7 @@
 </main>
 <div id="voile"><button id="go">Allumer le son</button></div>
 
-<script src="cartes.js"></script>
-<script src="samples.js"></script>
-<script src="audio.js"></script>
+<script>/* le serveur local laisse le navigateur garder d'anciens fichiers : on charge toujours les scripts du jour */ for (const f of ["cartes.js", "samples.js", "audio.js"]) document.write('<script src="' + f + "?v=" + Date.now() + '"><\/script>');</script>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
@@ -220,7 +218,8 @@
   $('bilan').onclick = bilan; $('raz').onclick = () => { if (confirm('Effacer tous vos avis ?')) { AV = {}; garde(); avis(); } };
   document.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.var) { const [k, i] = b.dataset.var.split(':'); VR[k] = +i; essais(); return; }
-    if (b.dataset.ev) { if (!son()) return; if (scene !== SC.essai) jouer('essai'); SON.variante(VR); ess = { type: b.dataset.ev, t: SON.ac.currentTime }; return; }
+    if (b.dataset.ev) { if (!son()) return; if (scene !== SC.essai) jouer('essai'); SON.variante(VR); ess = { type: b.dataset.ev, t: SON.ac.currentTime };
+      $('quoi').innerHTML = 'Essai déclenché : <b>' + b.textContent + '</b> — ' + Object.keys(ESS).map(k => ESS[k][1][VR[k]]).join(' · '); b.className = 'on'; setTimeout(() => { b.className = ''; }, 600); return; }
     if (b.dataset.av) { const [id, i] = b.dataset.av.split(':'), c = CARTES.find(x => x.id === id); if (c !== M) { stop(); M = c; SON.carte(M); }
       u.plein = !!b.dataset.plein; $('plein').checked = u.plein; enEcoute = b.dataset.av; jouer(i === 'm' ? 'menu' : 'st' + i); boutons(); avis(); return; }
     if (b.dataset.v) { const k = b.dataset.v.slice(0, -2), v = +b.dataset.v.slice(-1); AV[k] = AV[k] || {}; AV[k].v = AV[k].v === v ? undefined : v; garde(); avis(); return; } if (b.dataset.sc) jouer(b.dataset.sc); else if (b.dataset.c) { stop(); M = CARTES.find(c => c.id === b.dataset.c); SON.carte(M); boutons(); } });
