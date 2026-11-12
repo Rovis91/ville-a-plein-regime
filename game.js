@@ -585,7 +585,7 @@
   function start() {
     if (!AC) initAudio(); AC.resume();
     race = mode === 'course' ? newRace(T) : null; raceEnd = false;
-    car = race ? race.cars[0] : newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 1.8; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1; result = null;
+    car = race ? race.cars[0] : newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 3; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1; result = null;
   }
   function finish() { // tour bouclé : on l'enregistre, on affiche son temps 4 s, et le chrono repart aussitôt pour un tour lancé
     const rec = !best || tRace < best; result = { rec, diff: best ? tRace - best : 0, t: tRace, n: lapN, T: 4 };
@@ -768,7 +768,7 @@
   function frame(now) {
     const dt = state === 'pause' ? 0 : clamp((now - last) / 1000 || 0, 0, 0.1); last = Math.max(last, now); // en pause le temps s'arrête, l'image reste
     if (state === 'count') {
-      count -= dt; const k = Math.ceil(count / 0.6);
+      count -= dt; const k = Math.ceil(count); // une seconde par chiffre
       if (count <= 0) { state = 'race'; goT = 0.8; beep(880); AC && crash(AC.currentTime); }
       else if (k !== shown) { shown = k; beep(440); }
     }
@@ -809,7 +809,7 @@
     const s = S[(car.idx - 4 + N) % N], nx = -s.tz, nz = s.tx, d = (px - s.x) * nx + (pz - s.z) * nz, o = Math.abs(d) - (W - 0.8);
     if (o > 0) { px -= nx * Math.sign(d) * o; pz -= nz * Math.sign(d) * o; } // la caméra reste entre les murs
     const shake = 0.04 * r * r + (stun > 0 ? stun * 0.5 : 0);
-    cam.position.set(px + (Math.random() - 0.5) * shake, yAt(car, -3) + 2.2 - 0.5 * r + (Math.random() - 0.5) * shake, pz);
+    cam.position.set(px + (Math.random() - 0.5) * shake, yAt(car, -3) + (M.camH || 2.2) - 0.5 * r + (Math.random() - 0.5) * shake, pz);
     cam.lookAt(car.x + cx * 10, yAt(car, 5) + 1.1, car.z + cz * 10);
     cam.fov = 62 + 26 * r + 3 * car.slide + (car.boost > 0 ? 6 : 0);
     const vue = window.__g.vue; // shortcut: debug console seulement, __g.vue = [angle° autour de la voiture, distance, hauteur] pour inspecter le modèle ; à remplacer par un vrai mode photo si on en veut un

@@ -4,7 +4,7 @@
 //
 // Champs d'une carte :
 //   W demi-largeur de route (m) · grip adhérence latérale maxi (m/s²) · sc échelle du tracé · pts [x, z, altitude], sens horaire, départ en [0]
-//   tun [a, b] tunnel entre deux points (ou null) · chaud [a, b] secteur où la musique se déchaîne · sect [a, b] les deux temps intermédiaires
+//   camH hauteur de la caméra (m, 2,2 par défaut : à relever quand la voiture masque la route) · tun [a, b] tunnel entre deux points (ou null) · chaud [a, b] secteur où la musique se déchaîne · sect [a, b] les deux temps intermédiaires
 //   anticipe : le pilote automatique calcule sa distance de freinage (indispensable dès qu'il y a une épingle)
 //   rivaux : prénoms des trois adversaires du mode course (sinon ceux de la ville) · trafic : nombre de camions à doubler · car : la voiture (format CARD de sim.js) · radio : stations (format ST de game.js) · th : thème
 (function (G) {
@@ -26,7 +26,7 @@
   const L1 = [[0, 86, 6], [6, 84, 2], [8, 82, 4], [12, 79, 4]], L2 = [[0, 82, 2], [2, 84, 2], [4, 86, 8], [12, 89, 4]];
 
   G.CARTES = [
-    { id: 'ville', nom: 'VILLE A PLEIN REGIME', W: 9, grip: 44, sc: 0.85, tun: [6, 12], chaud: [6, 12], sect: [6, 12],
+    { id: 'ville', nom: 'VILLE A PLEIN REGIME', camH: 3.8, W: 9, grip: 44, sc: 0.85, tun: [6, 12], chaud: [6, 12], sect: [6, 12],
       pts: [[0, 0, 0], [220, 0, 0], [420, 10, 4], [560, 90, 10], [600, 240, 12], [520, 370, 6], [360, 400, -2], [230, 340, -10], [110, 400, -14], [0, 520, -14], [-150, 560, -10], [-300, 500, -4], [-360, 360, 2], [-300, 240, 8], [-380, 120, 6], [-330, 10, 2], [-180, 0, 0]],
       // Nismo Skyline GT-R Z-tune (R34, 6 cylindres en ligne biturbo « Z2 » de 2,8 L, boîte Getrag 6 rapports) : données constructeur
       car: { nom: 'NISMO GT-R Z-TUNE', ratios: [3.827, 2.360, 1.685, 1.312, 1.000, 0.793], final: 3.545, // démultiplications
