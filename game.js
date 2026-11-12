@@ -201,10 +201,15 @@
   const LUMI = { lum: 1 }, LUMI2 = { lum: 1, side: THREE.DoubleSide }; // lumineuse par elle-même ; idem, visible des deux côtés
 
   // ciel en bandes (nuit, aube ou couchant selon la carte), étoiles, lune ou soleil
-  const skyMat = mat('ciel', { lum: 1, side: THREE.BackSide, fog: false, net: 1 }, TH.sky, TH.stars);
+  // tour d'horizon (0 à 1) d'une direction [x, z] sur la sphère du ciel ; 'astre' = là où est la lune ou le soleil
+  const CIEL = TH.ciel || {}, uCiel = d => { const [x, z] = d === 'astre' ? [TH.astre.dir[0], TH.astre.dir[2]] : d; return (Math.atan2(z, -x) / 6.2832 + 1) % 1; };
+  const skyMat = mat('ciel', { lum: 1, side: THREE.BackSide, fog: false, net: 1 }, TH.sky, TH.stars, Object.assign({}, CIEL, { lueurs: (CIEL.lueurs || []).map(([d, ...r]) => [uCiel(d), ...r]) }));
   const sky = new THREE.Mesh(new THREE.SphereGeometry(2500, 16, 12), skyMat); scene.add(sky);
+  // nuages : une seconde sphère, à l'intérieur de la première, qui tourne lentement ; elle s'épaissit sous l'averse et s'efface en tunnel
+  const nuages = CIEL.nuages || CIEL.voile ? new THREE.Mesh(new THREE.SphereGeometry(2300, 16, 12), mat('nuages', { lum: 1, side: THREE.BackSide, fog: false, net: 1, transparent: true, depthWrite: false }, CIEL)) : null;
+  if (nuages) scene.add(nuages);
   const SD = new V3(...TH.astre.dir).normalize();
-  const sunDisc = new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, map: tx('astre', TH.astre.col, TH.astre.ombre) }));
+  const sunDisc = new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, map: tx('astre', TH.astre.col, TH.astre.ombre, TH.astre.soleil) }));
   sunDisc.scale.set(TH.astre.taille, TH.astre.taille, 1); scene.add(sunDisc);
 
   const hemi = new THREE.HemisphereLight(...TH.hemi); scene.add(hemi); // bleu d'en haut, rebond magenta de la ville
@@ -840,6 +845,7 @@
     lm += (zone(car.idx, 10) - lm) * Math.min(1, dt * 8);
     scene.fog.color.copy(FOG_OUT).lerp(FOG_IN, lm); scene.fog.near = lerp(TH.fogD[0], 15, lm); scene.fog.far = lerp(TH.fogD[1], 320, lm);
     skyMat.color.copy(WHITE).lerp(FOG_IN, lm);
+    if (nuages) { nuages.position.copy(cam.position); nuages.rotation.y += dt * (CIEL.vent || 0.004); nuages.material.opacity = Math.min(1, (CIEL.op || 0.9) + 0.1 * pluieAt(car.idx)) * (1 - lm); }
     if (TH.alarme) { carMat.emissive.setRGB(0.3 * lm, 0.01 * lm, 0.03 * lm); for (const m of tunMats) m.color.setScalar((m.userData.amb || 1) * (0.75 + 0.5 * pulse)); }
     // lumière dynamique : phares, boîte d'ombre de la voiture, reflets, puis la liste des luminaires
     const cp = Math.cos(pitch);
