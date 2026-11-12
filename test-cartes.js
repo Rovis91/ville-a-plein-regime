@@ -85,9 +85,9 @@ for (const M of CARTES) {
     assert(ras[0] > 0.05 && !ras[1] && lrg[0] === 0 && !lrg[1] && dedans[1] > 5 && dedans[0] === 0, `${M.id} : camion doublé au ras (jauge ${ras[0]}, choc ${ras[1]}), au large (${lrg}), percuté (jauge ${dedans[0]}, choc ${dedans[1]})`);
   }
   // pluie : la bruine (force 1) ne change rien ; une averse ralentit le pilote automatique de 2 à 12 % sans l'envoyer dans les murs, et allonge le freinage
-  // aucune carte du jeu ne déclare de surface : la route est sèche partout (T.surf[i] === SURF.sec), sauf sous une averse
-  assert(!M.surf && T.surf.length === n && T.surf.every(q => q === SURF.sec) === !(Array.isArray(M.th.pluie) && M.th.pluie.some(z => z[2] > 1)), M.id + ' : route mouillée là où il ne pleut pas fort');
-  if (T.surf.some(q => q !== SURF.sec)) {
+  // sans surface déclarée (champ surf), la route est sèche partout (T.surf[i] === SURF.sec), sauf sous une averse
+  assert(T.surf.length === n && (M.surf || T.surf.every(q => q === SURF.sec) === !(Array.isArray(M.th.pluie) && M.th.pluie.some(z => z[2] > 1))), M.id + ' : route mouillée là où il ne pleut pas fort');
+  if (!M.surf && T.surf.some(q => q !== SURF.sec)) {
     const E = T.surf; T.surf = null; const [sec] = tour(c => autopilot(c, T)); T.surf = E;
     assert(lap > 1.02 * sec && lap < 1.12 * sec, `${M.id} : tour sous la pluie ${lap} s, au sec ${sec} s`);
   }

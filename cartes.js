@@ -190,6 +190,26 @@
           '29 - - - 33 - - - 36 - - - 33 - - - | 31 - - - 35 - - - 38 - - - 35 - - - | 33 - - 36 - - 40 - 36 - 33 - 36 - - - | 33 - - - - - - - . - - - - - - -'],
         sec: { i: 'd a1 lo', a: 'k0 h0 b0 d', b: 'k0 s0 h1 b0 d a0', c: 'k0 s1 h1 b1 d c0 l0', x: 'd a1 l1 P1', u: 'k0 h1 b0 d roll P1', e: 'k0 s1 h1 b1 c1 l1 P1' }, form: 'iabcxucceabc' }),
     ],
+    terre: [
+      st({ name: 'RADIO CAILLOU', fq: '88.8', vol: 0.45, genre: 'PUNK ROCK', bpm: 176, gamme: 'majeur', key: 57, kit: 'rock', eq: [-4, 1500, 6, 3], rev: 0.2, pump: 1, // trois accords de puissance en majeur, tout droit, batterie à fond : la radio de l'assistance
+        prog: ['A5 A5 D5 E5 A5 F#5 D5 E5', 'D5 E5 F#5 E5'], k: ['x.....x.x.....x.', 'x..x..x.x..x..x.', 'x.x.x.x.x.x.x.x.'], s: [SN, '....x.......x.xx'], h: ['X.X.X.X.X.X.X.o.', 'r.r.r.r.r.r.r.r.'],
+        b: ['bPick', '0 0 0 0 0 0 0 0 0 0 0 0 0 0 7 7', '0 - 0 - 0 - 0 - 0 - 0 - 7 - 12 -'], c: ['pwr', 'x.x.x.x.x.x.x.x.', 'x.....x.....x...'], cO: -12, g: ['gtrMute', 'x.xxx.xxx.xxx.xx'],
+        l: ['ldGtr', '28 - 28 - 26 - 24 - 26 - 28 - 31 - - - | 29 - 29 - 28 - 26 - 28 - - - 24 - - - | 28 - 28 - 26 - 24 - 26 - 28 - 33 - - - | 31 - - - 28 - - - 26 - - - . - - -',
+          '36 - 35 - 33 - 31 - 33 - - - 31 - - - | 33 - 31 - 29 - 28 - 29 - - - 28 - - - | 31 - 33 - 35 - 36 - 38 - - - 36 - - - | 40 - - - - - - - . - - - - - - -'],
+        sec: { i: 'g0 h0', a: 'k0 s0 h0 b0 g0', b: 'k1 s0 h0 b0 c1', c: 'k2 s1 h0 b0 c0 l0', x: 'h1 b1 g0 l1 P1', e: 'k2 s1 h0 b1 c0 l1 P1', q: 'k1 s0 h1 b1 c1' }, form: 'iabcqxecabcc' }),
+      st({ name: 'SKA DES PINS', fq: '93.3', vol: 0.9, genre: 'SKA', bpm: 150, gamme: 'mineur', key: 62, kit: 'acou', eq: [2, 1000, 5, 1], rev: 0.25, pump: 1, // guitare à contretemps, orgue, riff de cuivres et saxophone : le bal du village un soir de rallye
+        prog: ['Dm Gm C F Dm Gm Bb C', 'Bb C Dm Dm'], k: ['x.......x.......', 'x.....x.x.....x.'], s: [SN, '....x..g....x.xx'], h: [OFF, 'x.x.x.x.x.x.x.o.'], p: ['t.t.t.t.t.t.t.t.', '..h..l.h..h.l.l.'],
+        b: ['bSlap', '0 - - 0 - - 7 - 0 - - 0 - 7 12 -', '0 - 0 - 7 - 7 - 12 - 12 - 7 - 7 -'], d: ['organ', 0], c: ['gtrMute', '..x...x...x...x.', '..xx..xx..xx..xx'], g: ['brass', 'x.......x..x....', 'x..x....x.x.....'],
+        l: ['ldSax', '24 - . 24 - . 27 - 26 - 24 - 22 - - - | 22 - . 22 - . 26 - 24 - 22 - 19 - - - | 19 - . 22 - . 24 - 26 - - - 24 - - - | 24 - - - 20 - - - 17 - - - . - - - | 24 - . 24 - . 27 - 29 - 27 - 26 - - - | 26 - . 26 - . 29 - 31 - 29 - 26 - - - | 29 - . 27 - . 26 - 24 - - - 22 - - - | 24 - - - 26 - - - 24 - - - - - - -',
+          '29 - - 27 - - 24 - 27 - - - 29 - - - | 31 - - 29 - - 26 - 29 - - - 31 - - - | 34 - - 31 - - 29 - 26 - - - 29 - - - | 26 - - - - - - - . - - - - - - -'],
+        sec: { i: 'h0 c0 d', a: 'k0 s0 h0 b0 c0', b: 'k0 s0 h0 b1 c0 d p0', c: 'k1 s1 h1 b0 c1 g0 l0 p0', x: 'd c0 l1 P1 p1', e: 'k1 s1 h1 b1 c1 g1 l1 P1 p0' }, form: 'iabccxecabcc' }),
+      st({ name: 'DUNE 145', fq: '145', vol: 1.2, genre: 'PSYTRANCE', bpm: 145, gamme: 'mineur', hors: [1], key: 64, kit: 'k909', eq: [-6, 2600, 4, 8], rev: 0.3, echo: [3, 0.4], pump: 0.3, // grosse caisse à tous les temps, basse au galop sur une note, séquence qui frotte la seconde mineure : la fête dans la carrière
+        prog: ['Em Em Em Em Em Em C D', 'C D Em Em'], k: [F4, 'x...x...x...x.x.'], s: [CP, '....c.......c.cc'], h: [OFF, 'xxoxxxoxxxoxxxox'], p: ['..1...2...3.....'],
+        b: ['bOff', '. 0 0 0 . 0 0 0 . 0 0 0 . 0 0 0', '. 0 0 12 . 0 0 12 . 0 0 12 . 0 12 0'], d: ['choir', 0], a: ['seqArp', '0.0.2.0.3.0.2.0.', '0120012001200120'],
+        l: ['ldSync', '12 - 13 - 12 - 15 - 12 - 13 - 12 - 10 - | 12 - 13 - 12 - 15 - 17 - 15 - 13 - 12 - | 19 - 20 - 19 - 22 - 19 - 20 - 19 - 17 - | 15 - 17 - 19 - 22 - 24 - - - . - - -',
+          '24 - - - 25 - - - 24 - - - 22 - - - | 24 - - - 27 - - - 25 - - - 24 - - - | 31 - - - 29 - - - 27 - - - 25 - - - | 24 - - - - - - - . - - - - - - -'],
+        sec: { i: 'k0 b0 lo', a: 'k0 h0 b0 a0', b: 'k0 s0 h1 b0 a0', c: 'k1 s0 h1 b1 a1 l0', x: 'd a0 l1 P1 lo', u: 'k0 h1 b0 a1 roll P1', e: 'k1 s1 h1 b1 a0 l1 P1 p0' }, form: 'iabcxucceabc' }),
+    ],
   };
 
   G.CARTES = [
@@ -292,6 +312,19 @@
         astre: { dir: [0.2, 0.95, 0.25], col: '#05050a', ombre: '#05050a', taille: 1 }, hemi: [0xdfe6ff, 0x6a5038, 0.9], sun: [0xfff6e0, 0.55], phares: 1.2, bloom: 0.1, scan: 0.08,
         murH: 1.2, paroi: 'paroiArene', route: ['#7a5a3c', '#86643f', '#f4f0e0', '#ffc21a', '#e8362a', '#f4f0e0', false], mur: ['#f4f0e0', '#e8362a', '#1c3fa8', '#c8c4b8'], depart: [0xe8362a, 0x20242c, '#f4f0e0'],
         hud: { y: '#ffffff', c: '#ffc21a', r: '#e8362a', fond: 'rgba(16,14,28,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'ARENE COUVERTE · COMPLET'], titre: ['GRAND', 'VACARME'] } } },
+    // Spéciale des Ocres : une spéciale de rallye sur terre battue, en fin de journée, entre les pins et les falaises d'ocre. Route étroite et bosselée, tout en courbes à prendre en travers :
+    // la crête de la ligne de départ, l'enfilade du vallon, le gué au creux du parcours, l'épingle du belvédère, la grande crête du plateau, puis la traversée du hameau sur son bout de bitume et la descente vers la ligne.
+    { id: 'terre', nom: 'SPECIALE DES OCRES', rivaux: ['LOLA', 'SACHA', 'YANN'], med: [1.08, 1, 0.94], W: 6, grip: 18, sc: 1, tun: null, chaud: [33, 54], sect: [31, 51], anticipe: 1,
+      surf: { fond: 'terre', zones: [[31, 33, 'mouille'], [64, 67, 'sec']] }, sauts: [[5, 60, 0.7], [30, 36, 0.45], [51, 60, 0.8]],
+      pts: [[0, 0, 29.5], [43, 0, 29.7], [85, 0, 29.8], [128, 0, 30.1], [170, 0, 32.2], [220, 0, 33.1], [255, 0, 31.2], [298, 0, 30.1], [340, 0, 30.9], [361, 5, 31.1], [378, 18, 30.8], [407, 52, 29.6], [429, 67, 29.7], [455, 67, 30.4], [476, 52, 31.2], [505, 18, 30.8], [528, 3, 30.1], [555, 4, 30], [576, 21, 30.8], [585, 47, 31.7], [585, 94, 31.8], [585, 141, 31.1], [593, 167, 31.8], [614, 183, 33], [652, 197, 33.9], [666, 207, 33.8], [673, 224, 33.6], [670, 241, 33.4], [658, 254, 33.6], [641, 259, 34.2], [591, 259, 36.1], [536, 259, 35], [513, 259, 34.5], [481, 259, 35.7], [471, 259, 36.4], [448, 265, 38.2], [432, 281, 39.5], [426, 304, 39.9], [426, 344, 39.5], [426, 384, 40.1], [420, 406, 41.1], [403, 423, 41.9], [369, 443, 41.9], [350, 461, 41.3], [344, 486, 41.1], [344, 526, 42], [338, 547, 42.6], [323, 563, 42.7], [302, 568, 42.2], [258, 568, 41.2], [214, 568, 42.4], [152, 568, 43.1], [126, 568, 41.3], [82, 568, 38.6], [57, 568, 38.3], [30, 559, 38.3], [14, 535, 37.8], [3, 496, 35.8], [-8, 476, 34.8], [-28, 464, 34.5], [-67, 454, 34.7], [-90, 439, 34.4], [-98, 413, 33.3], [-98, 367, 31.4], [-98, 313, 31.6], [-98, 273, 31.4], [-98, 227, 29.6], [-98, 193, 29.1], [-98, 133, 30.2], [-109, 105, 29.7], [-134, 74, 28.6], [-145, 51, 28.5], [-141, 26, 29], [-124, 7, 29.5], [-100, 0, 29.6], [-50, 0, 29.2]],
+      // voiture inventée : une berlinette de rallye à moteur central arrière, 4 cylindres atmosphérique de 2 L, 260 ch, 780 kg, propulsion (le poids sur les roues motrices : elle passe sa puissance même sur la terre)
+      car: car({ nom: 'GARRIGUE 2000 GR.4', ratios: [3, 2.05, 1.5, 1.18, 0.98], final: 4.6, wheel: 0.3, mass: 855, idle: 1000, red: 7800, cd: 0.36, area: 1.7,
+        tq: [0, 140, 200, 240, 262, 270, 268, 250, 215], trac: 10.5, son: 1.3, look: { col: 0x2a62c8, l: 0.84, w: 0.98, h: 0.98, nez: 0.5, cab: [-0.3, 2, 0.55], aileron: 0, bandes: 0xf4c020 } }),
+      radio: RADIO.terre,
+      th: { decor: 'terre', fog: 0xe8c898, fogD: [150, 1500], sky: [[0, '#3f6fb0'], [0.3, '#3f6fb0'], [0.31, '#7fa8cc'], [0.42, '#7fa8cc'], [0.43, '#e8d0a0'], [0.49, '#e8d0a0'], [0.5, '#e8c898'], [1, '#e8c898']], stars: 0,
+        astre: { dir: [-0.6, 0.35, 0.5], col: '#fff2c0', ombre: '#fff2c0', taille: 220 }, hemi: [0xc8d8f0, 0xb07848, 0.9], sun: [0xffd8a0, 0.9], phares: 0.3, bloom: 0.03, scan: 0.05,
+        murH: 0.9, poussiere: [0.3, 0.2, 0.11], route: ['#a86a3a', '#8a5228', '#96602f', '#b87a48', '#7a6a3a', '#8a7444', false], mur: ['#8a5a30', '#6a7a3a', '#7a4c28', '#6e4424'], depart: [0xe8482a, 0x3a2a1c, '#f4f0e0'],
+        hud: { y: '#ffffff', c: '#ffb03a', r: '#e8482a', fond: 'rgba(70,36,16,.9)', style: 'trait', split: 0, jp: null, sur: [null, 'SPECIALE 7 · FIN DE JOURNEE'], titre: ['SPECIALE', 'DES OCRES'] } } },
   ];
   let id = 'ville';
   if (typeof location !== 'undefined') try { id = new URLSearchParams(location.search).get('carte') || localStorage.getItem('vpr.carte') || id; } catch (e) { }
