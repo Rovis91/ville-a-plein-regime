@@ -254,8 +254,37 @@
       const craie = lambert(h, 0xf4f0e8), yb = g.hAt(935, -598);
       h.box(40, 24, 30, craie, 935, yb + 12, -598); h.box(9, 46, 9, craie, 935, yb + 23, -620);
       const dome = new THREE.Mesh(new THREE.SphereGeometry(13, 8, 5, 0, 6.283, 0, 1.6), craie); dome.position.set(935, yb + 24, -596); dome.scale.y = 1.5; h.scene.add(dome);
-      for (const sx of [-15, 15]) { const d2 = new THREE.Mesh(new THREE.SphereGeometry(5, 6, 4, 0, 6.283, 0, 1.6), craie); d2.position.set(935 + sx, yb + 24, -588); d2.scale.y = 1.5; h.scene.add(d2); }
-      return null;
+      for (const sx of [-15, 15]) { const d2 = new THREE.Mesh(new THREE.SphereGeometry(5, 6, 4, 0, 6.283, 0, 1.6), craie); d2.position.set(935 + sx, yb + 24, -588); d2.scale.y = 1.5; h.scene.add(d2); }
+      // --- la ville se réveille : passants sur les trottoirs, vitrines allumées (cafés, boulangeries), et le premier métro sur son viaduc le long du fleuve ---
+      // tirage à part (r2) : rien de ce qui précède ne change de place
+      let g2 = 99; const r2 = () => (g2 = g2 * 1664525 + 1013904223 >>> 0) / 4294967296;
+      const corps = [[], [], []], tetes = [], vitr = [], stores = [[], []];
+      for (let i = 0; i < N; i += 2) {
+        const s = S[i], t = TYPES[type[i]], ry = h.across(s);
+        if (h.zone(i, 14) > 0 || type[i] === 'ruelle') continue; // ni dans la trémie, ni dans la ruelle (pas de trottoir)
+        const lo = t.gare ? 4.6 : 0.8; // les façades sont à recul - 1 m du bord : passants et vitrines restent devant
+        for (const sd of [-1, 1]) {
+          if (i % 6 === 0 && r2() < 0.3) { // un passant, parfois deux côte à côte
+            for (let k = r2() < 0.3 ? 2 : 1; k--;) { const [x, z] = bord(s, sd, W + lo + r2() * Math.max(0, Math.min(2.5, t.recul - 1.6 - lo)) + k * 0.7); if (g.dAt(x, z) > W + 1.2) { corps[r2() * 3 | 0].push([x, s.y + 0.9, z, ry + r2() * 0.6]); tetes.push([x, s.y + 1.72, z, ry]); } }
+          }
+          const [qx, qz] = bord(s, sd, W + 12);
+          if (i % 8 === 0 && type[i] !== 'place' && !quai(qx, qz) && !quai(qx, qz + 14) && r2() < 0.22) { // une vitrine éclairée au pied de l'immeuble, son store au-dessus
+            const [x, z] = bord(s, sd, W + t.recul - 1.15), [ax, az] = bord(s, sd, W + t.recul - 1.9);
+            if (g.dAt(x, z) > W + t.recul - 2) { vitr.push([x, s.y + 1.7, z, ry, 0.3, 2.6, 7]); stores[r2() * 2 | 0].push([ax, s.y + 3.3, az, ry, 1.7, 0.2, 7.6]); if (vitr.length < 40) h.lum(i, ax, s.y + 2, az, 0xffd9a0, 11, 1.3); }
+          }
+        }
+      }
+      [0x2a3040, 0x6a2a2a, 0xc8c0b0].forEach((c, i) => inst(h, new THREE.BoxGeometry(0.34, 1.36, 0.5), lambert(h, c), corps[i])); inst(h, new THREE.BoxGeometry(0.26, 0.28, 0.26), lambert(h, 0xd8a888), tetes);
+      inst(h, cube, basic(h, 0xffe2a0), vitr); [0xc8102e, 0x1d4a3a].forEach((c, i) => inst(h, cube, lambert(h, c), stores[i]));
+      // le métro aérien : viaduc de fer sur piles de pierre, au bord de l'eau ; une rame de cinq voitures fait la navette (visible depuis les quais et à la sortie du tunnel)
+      const fer = lambert(h, 0x2e4a40), MZ = 286, MY = 7, X0 = -200, X1 = 1080, piles = [];
+      h.box(X1 - X0, 1.2, 5, fer, (X0 + X1) / 2, MY - 0.6, MZ); for (const dz of [-2.4, 2.4]) h.box(X1 - X0, 1, 0.2, fer, (X0 + X1) / 2, MY + 0.5, MZ + dz);
+      for (let x = X0 + 20; x < X1; x += 40) piles.push([x, MY - 9.5, MZ, 0, 3, 17, 4]); inst(h, cube, pierre, piles);
+      const rame = new THREE.Group(), caisse = lambert(h, 0x2f6b4f), vitre = basic(h, 0xffe9a0);
+      for (let k = 0; k < 5; k++) { h.box(14.4, 2.6, 2.6, caisse, k * 15, 1.7, 0, rame); h.box(13, 0.9, 2.7, vitre, k * 15, 2.2, 0, rame); h.box(14.4, 0.3, 2.4, lambert(h, 0xd8d4c8), k * 15, 3.1, 0, rame); }
+      rame.position.set(X0, MY, MZ); h.scene.add(rame);
+      let mt = 0;
+      return dt => { mt += dt; const L = X1 - X0 - 60, u = (mt * 13) % (2 * L); rame.position.x = X0 + (u < L ? u : 2 * L - u); }; // 47 km/h, un aller-retour en trois minutes
     },
 
     // ---------- Canal 6 : le lit bétonné d'une rivière de Los Angeles. Pour lire la piste de loin : à l'extérieur de chaque courbe, une fresque
