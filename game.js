@@ -555,6 +555,9 @@
     g.traverse(o => { if (o.material === carMat) o.material = m; else if (o.material === brakeMat) o.material = b; });
     g.visible = false; g.userData.y = 0; scene.add(g); return g;
   });
+  // feux arrière des adversaires et des camions : deux points rouges de taille fixe à l'écran, hors brouillard (au-delà de 60 m la caisse ne fait plus que quelques pixels et rien ne l'éclaire)
+  const feuxGeo = new THREE.BufferGeometry(), feuxP = new Float32Array(6 * Math.max(3, M.trafic || 0)); feuxGeo.setAttribute('position', new THREE.BufferAttribute(feuxP, 3));
+  const feux = new THREE.Points(feuxGeo, new THREE.PointsMaterial({ color: 0xff2030, size: 4, sizeAttenuation: false, fog: false })); feux.frustumCulled = false; scene.add(feux);
 
   // ---------- fusion du décor fixe : une passe de dessin par matière, au lieu d'une par objet ----------
   // Tout maillage simple, opaque et immobile est fondu avec ceux de la même matière (mêmes ombres) en une seule géométrie, en coordonnées du monde : l'image est la même,
@@ -875,7 +878,7 @@
       if (race) race.cars.forEach((c, i) => i && !partie(c) && dot(c.x, c.z, OPP[i - 1][1]));
       R(hg, '#08080c', mx + MM.px(car.x) - 3, my + MM.pz(car.z) - 3, 7, 7); R(hg, blink ? Y : '#ffffff', mx + MM.px(car.x) - 2, my + MM.pz(car.z) - 2, 5, 5); // le joueur : plus gros, cerné de noir, clignotant
     }
-    if (race && !raceEnd && state === 'race') { const pris = []; // repère au-dessus de chaque adversaire : à 270 lignes, une voiture lointaine ne fait que quelques pixels
+    if (race && !raceEnd && state === 'race') { const pris = [...(warn ? [[cx, 62, 170]] : []), ...(car.boost > 0 || car.asp > 0.15 ? [[cx, 82, 100]] : [])]; // les bandeaux du centre sont déjà pris ; repère au-dessus de chaque adversaire : à 270 lignes, une voiture lointaine ne fait que quelques pixels
       cam.updateMatrixWorld();
       race.cars.forEach((c, i) => {
         const dx = c.x - cam.position.x, dz = c.z - cam.position.z, f = dx * Math.cos(cth) + dz * Math.sin(cth);
@@ -1019,7 +1022,11 @@
     if (L.neon) put(car.x, carY + 0.3, car.z, NEONC, 5.5, NUIT * (0.8 + 0.4 * pulse)); // néon de bas de caisse
     // les deux véhicules les plus proches (adversaires, ou camions du trafic) : phares devant, feux rouges derrière
     const d2 = c => (c.x - car.x) ** 2 + (c.z - car.z) ** 2;
-    for (const c of (race ? race.cars.slice(1).filter(c => !partie(c)) : M.trafic && state === 'race' ? trafic(T, tTraf).slice() : []).sort((a, b) => d2(a) - d2(b)).slice(0, 2)) {
+    const veh = race ? race.cars.slice(1).filter(c => !partie(c)) : M.trafic && state !== 'title' ? trafic(T, tTraf).slice() : [];
+    veh.forEach((c, i) => { const ax = Math.cos(c.th), az = Math.sin(c.th), k = c.lane === undefined, ar = k ? ENCt.x / 2 + 0.05 : 6.5, l = k ? ENCt.z / 2 - 0.3 : 1; // sur l'arrière de la caisse, ou de la remorque
+      for (const s of [-1, 1]) feuxP.set(tmp.set(c.x - ax * ar - az * l * s, c.y + (k ? 0.7 : 1.3), c.z - az * ar + ax * l * s).lerp(cam.position, 0.01).toArray(), i * 6 + (s + 1) * 1.5); }); // 1 % vers la caméra : de loin, la profondeur ne distingue plus le feu de la caisse
+    feuxGeo.setDrawRange(0, veh.length * 2); feuxGeo.attributes.position.needsUpdate = true;
+    for (const c of veh.sort((a, b) => d2(a) - d2(b)).slice(0, 2)) {
       const ax = Math.cos(c.th), az = Math.sin(c.th), y = c.y, av = c.lane === undefined ? 6.5 : 10, ar = c.lane === undefined ? 3.4 : 7; // un camion est plus long
       put(c.x + ax * av, y + 0.8, c.z + az * av, PHARE, 14, 3 * NUIT); put(c.x - ax * ar, y + 0.7, c.z - az * ar, ROUGE, 9, 1.4 * NUIT);
     }
