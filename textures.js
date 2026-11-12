@@ -286,5 +286,22 @@
     g.fillStyle = lettres; g.font = 'bold 38px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 256, 34, 470);
     voile(g, 0.35, () => { for (let y = 5; y < 60; y += 3) R(g, '#000', 0, y, 512, 1); });
   }],
+  // eau vive : turquoise des lacs de glacier, rides claires (à teinter par l'option c)
+  eauVive: () => [64, 64, (g, o) => {
+    const { R, alea } = o; R(g, '#1f8f9a', 0, 0, 64, 64);
+    for (let i = 0; i < 120; i++) R(g, alea() < 0.5 ? '#2aa7ae' : '#177a88', alea() * 64 | 0, alea() * 64 | 0, 3 + (alea() * 6 | 0), 1);
+    for (let i = 0; i < 26; i++) R(g, '#bfeee8', alea() * 64 | 0, alea() * 64 | 0, 2 + (alea() * 4 | 0), 1);
+  }, 12],
+  // sommets : roche grise striée en bas, neige au-dessus d'une limite déchiquetée (le haut de la texture est le haut du pic)
+  rocNeige: () => [64, 64, (g, o) => {
+    const { R, alea } = o; R(g, '#6f7480', 0, 0, 64, 64);
+    for (let i = 0; i < 200; i++) R(g, alea() < 0.5 ? '#5c606c' : '#868b96', alea() * 64 | 0, alea() * 64 | 0, 1, 2 + (alea() * 6 | 0));
+    for (let x = 0; x < 64; x += 2) { const h = 22 + (alea() * 14 | 0); R(g, '#f4f6fa', x, 0, 2, h); if (alea() < 0.4) R(g, '#c8d4e8', x, h - 4, 2, 3); }
+  }],
+  // banderole des tremplins : chevrons rouges sur fond jaune, pointés vers le haut
+  banderoleSaut: () => [64, 16, (g, o) => {
+    const { R } = o; R(g, '#f4c020', 0, 0, 64, 16);
+    for (let x = 0; x < 64; x += 16) for (let k = 0; k < 6; k++) { R(g, '#e8482a', x + 2 + k, 11 - k * 2, 2, 3); R(g, '#e8482a', x + 12 - k, 11 - k * 2, 2, 3); }
+  }],
 };
 })();

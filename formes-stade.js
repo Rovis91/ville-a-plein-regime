@@ -16,5 +16,11 @@
     // cube d'affichage suspendu au centre de l'arène, origine en son centre : quatre écrans, deux ceintures, quatre suspentes
     cubeScore: () => [['ecran', 24, 13, 0.6, 0, 0, 12], ['ecran', 24, 13, 0.6, 0, 0, -12], ['ecran', 0.6, 13, 24, 12, 0, 0], ['ecran', 0.6, 13, 24, -12, 0, 0],
       ['acier', 25.4, 1.2, 25.4, 0, 7.1, 0], ['bande', 25.4, 1.2, 25.4, 0, -7.1, 0], ...[-1, 1].flatMap(a => [-1, 1].map(b => ['acier', 0.5, 22, 0.5, a * 9, 18.7, b * 9]))],
+    // la scène, le mur de la butte et l'arche de feu de l'aire centrale, origine au centre de l'aire (M.place.c) : mêmes emprises que ses piles dans cartes.js.
+    // Scène de 49 × 6 m à l'est, bandeau lumineux sur ses deux faces ; mur à chevrons de 25 m à l'ouest ; entre les deux, un portique de 37 m de portée, enseigne suspendue, 8 m de passage dessous
+    sceneArene: () => [['beton', 49, 4, 6, 34.5, 2, 0], ['ecran', 46, 3, 0.3, 34.5, 2.2, 3.1], ['ecran', 46, 3, 0.3, 34.5, 2.2, -3.1], ['bande', 49.4, 0.5, 6.4, 34.5, 4.25, 0],
+      ['chevrons', 25, 2.6, 2, -35.5, 1.3, 0], ['acier', 1.6, 11, 1.6, -24, 5.5, 0], ['acier', 1.6, 7, 1.6, 11, 7.5, 0], ['acier', 37, 1.4, 1.8, -6.5, 11.3, 0], ['enseigne', 26, 2.2, 0.4, -6.5, 9.4, 0]],
+    // éventail de n rayons laser de L m partant de l'origine vers le bas, écartés de e rad
+    eventailLaser: (n = 5, L = 130, e = 0.3) => Array.from({ length: n }, (_, k) => { const a = (k - (n - 1) / 2) * e; return ['rayon', 0.3, L, 0.3, Math.sin(a) * L / 2, -Math.cos(a) * L / 2, 0, [0, 0, a]]; }),
   });
 })();

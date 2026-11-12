@@ -119,5 +119,9 @@
     pompeSocle: () => [['fer', 7, 0.8, 2.4, 0, 0.4, 0], ...[-0.3, 0.3].map(a => ['fer', 0.5, 7.4, 0.5, a * 4, 4, 0, [0, 0, a]])],
     pompeBalancier: () => [['minium', 9, 0.7, 0.7, 0.6, 0, 0], ['minium', 1.4, 2.4, 1, 5.2, -0.6, 0], ['fer', 1.6, 1.6, 1.6, -4, -0.4, 0]], // tourne autour de son origine
     chateauEau: () => [...[[-4, -4], [4, -4], [-4, 4], [4, 4]].map(([x, z]) => ['fer', 0.8, 26, 0.8, x, 13, z]), ['cuve', 13, 9, 13, 0, 30, 0], ['fer', 14, 1, 14, 0, 35, 0]],
+    // sommet lointain : pyramide à quatre pans, de 1 m de base et de haut, à mettre à l'échelle ; origine à la base
+    pic: () => { const g = new THREE.ConeGeometry(0.7, 1, 4); g.translate(0, 0.5, 0); return g; },
+    // portique qui annonce un tremplin, en travers de la route de demi-largeur W : deux mâts, une banderole à chevrons
+    portiqueSaut: (W = 8) => [...[-1, 1].map(sd => ['acier', 0.5, 8, 0.5, sd * (W + 0.8), 4, 0, null, 1]), ['banderole', 2 * W + 2.1, 1.8, 0.2, 0, 7.1, 0, null, 1]],
   };
 })();

@@ -248,7 +248,7 @@ let elimTxt;
 
 // --- fantôme des médailles : la trace du tour de référence (pilote automatique, jauge pleine), ralentie au ratio de la médaille ---
 // une trace = [x, y, z, cap, …] à 20 Hz. Ralentie de 10 %, elle passe aux mêmes endroits 10 % plus tard, et finit au même point
-// ---------- relief : sauts, réceptions, murs roulables (sur la carte du barrage, qui les déclare) ----------
+// ---------- relief : sauts, réceptions, murs roulables (sur Grand Vacarme, la carte qui les déclare) ----------
 {
   const ref = tourRef(T), tr = ref.trace, pts = tr.length / 4, d = (a, i, b, j) => Math.hypot(a[i * 4] - b[j * 4], a[i * 4 + 2] - b[j * 4 + 2]);
   assert(ref.t > 30 && ref.t < 40 && Math.abs((pts - 1) / 20 - ref.t) < 0.06, `tour de référence : ${ref.t} s pour ${pts} points à 20 Hz`);
@@ -284,10 +284,10 @@ let elimTxt;
 }
 
 {
-  globalThis.CARTE = CARTES.find(m => m.id === 'barrage'); delete require.cache[require.resolve('./sim.js')]; require('./sim.js');
+  globalThis.CARTE = CARTES.find(m => m.id === 'stade'); delete require.cache[require.resolve('./sim.js')]; require('./sim.js');
   const T = buildTrack(THREE), { S, n } = T, G = 9.81, v = c => Math.hypot(c.vx, c.vz), near = p => S.reduce((b, s, i) => Math.hypot(s.x - p[0], s.z - p[1]) < Math.hypot(S[b].x - p[0], S[b].z - p[1]) ? i : b, 0);
   const pose = (i, d, sp) => { const c = newCar(T), s = S[i]; Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, idx: i, dist: i, d, th: Math.atan2(s.tz, s.tx), vx: s.tx * sp, vz: s.tz * sp }); c.y = sol(T, c); return c; };
-  assert(T.vert, 'le barrage doit activer le relief');
+  assert(T.vert, 'Grand Vacarme doit activer le relief');
   // un saut : lancée sur le tremplin, la voiture décolle au bout, suit une parabole (chute libre), ne répond ni au volant ni aux gaz, et se repose sans jamais passer sous le sol
   const [p1, , , ] = CARTE.sauts[0], lip = near(CARTE.pts[p1]);
   const saut = sp => { const c = pose(lip - 40, 0, sp); let t = 0, dec = null, vol = null, hmax = 0;
@@ -309,7 +309,7 @@ let elimTxt;
     assert(enVol > 30 && c.nitro === 1, "vol trop court pour juger la nitro en l'air");
     const j = c.nitro; for (let i = 0; i < 30; i++) step(c, { ...I(0, 1), nitro: true }, T, H); assert(c.nitro < j, 'au sol, la nitro doit repartir'); }
   // le tremplin du déversoir : lancée, la voiture passe la fosse ; trop lente, elle tombe dedans, perd du temps, mais en ressort seule par la rampe
-  const [p2, , , F] = CARTE.sauts[1], lip2 = near(CARTE.pts[p2]), bout = lip2 + F / 2, fosse = sp => { const c = pose(lip2 - 30, 0, sp); let t = 0, fond = 0, hit = 0, i1 = 0;
+  const [p2, , , F] = CARTE.sauts.find(s => s[3]), lip2 = near(CARTE.pts[p2]), bout = lip2 + F / 2, fosse = sp => { const c = pose(lip2 - 30, 0, sp); let t = 0, fond = 0, hit = 0, i1 = 0;
     while (c.idx < bout + 60 && t < 30) { step(c, I(0, 1), T, H); t += H; hit = Math.max(hit, c.hit); if (c.land) { i1 = i1 || c.idx; if (c.idx < bout) fond++; } }
     return { t, fond, hit, i1, tref: (bout + 60 - lip2 + 30) * 2 / sp }; };
   const ok = fosse(55), rate = fosse(22);
@@ -317,25 +317,25 @@ let elimTxt;
   assert(rate.fond && rate.t < 30 && !rate.hit, `à 80 km/h on doit tomber dans la fosse et en ressortir sans mur (${rate.fond} réceptions au fond, ${rate.t} s)`);
   assert(rate.t > ok.t + 1.5, `le saut raté doit coûter du temps: ${rate.t} s contre ${ok.t} s`);
   // mur roulable : sans toucher au volant dans le grand virage, la voiture monte sur la paroi à haute vitesse et y reste plaquée (pas de vol) ; posée dessus à basse vitesse, elle redescend sur le plat
-  const iC = S.reduce((b, s, i) => s.rc && Math.abs(s.k) > Math.abs(S[b].k) ? i : b, 0), sC = S[iC], ext = -Math.sign(sC.k);
+  const iC = S.reduce((b, s, i) => s.rc && s.w > s.pl + 8 && (!S[b].rc || Math.abs(s.k) > Math.abs(S[b].k)) ? i : b, 0), sC = S[iC], ext = -Math.sign(sC.k);
   assert(sC.rc && sC.w > sC.pl + 6, 'pas de mur roulable dans le virage le plus serré');
   c = pose(iC - 25, 0, 55); let haut = 0, vola = 0; for (let i = 0; i < 1.2 / H; i++) { step(c, I(0, 1), T, H); haut = Math.max(haut, c.y - S[c.idx].y); if (c.air) vola++; }
   assert(haut > 2 && c.d * ext > sC.pl + 3 && !vola, `à 200 km/h la voiture doit monter sur la paroi (hauteur ${haut} m, écart ${c.d} m, ${vola} pas en l'air)`);
   c = pose(iC - 10, ext * (sC.pl + 6), 6); const h0 = c.y - S[c.idx].y; for (let i = 0; i < 4 / H; i++) step(c, I(0, 0), T, H);
   assert(h0 > 2 && Math.abs(c.d) < S[c.idx].pl + 1 && c.y - S[c.idx].y < 0.2, `à 20 km/h la voiture doit redescendre de la paroi (de ${h0} m à ${c.y - S[c.idx].y} m, écart ${c.d} m)`);
-  // le mur est plus rapide que la corde : un pilote qui vise les deux tiers de la paroi, gaz à fond, bat le tour propre du pilote automatique (qui reste sur le plat), sans choc
-  const wrap = a => Math.atan2(Math.sin(a), Math.cos(a)), murP = c => { const a = autopilot(c, T), sp = v(c), la = S[(c.idx + 3 + Math.floor(sp * 0.1)) % n]; if (!la.rc || la.w < la.pl + 4) return a;
+  // le grand mur de l'ouest se roule gaz à fond : un pilote qui vise les deux tiers de la paroi y monte à plus de 3 m, ne touche rien, n'y perd pas de vitesse et boucle le tour à moins de 1,5 s du tour propre du pilote automatique (qui reste sur le plat). À Grand Vacarme le mur est le chemin le plus long : il n'est pas plus rapide que la corde
+  const wrap = a => Math.atan2(Math.sin(a), Math.cos(a)), murP = c => { const a = autopilot(c, T), sp = v(c), la = S[(c.idx + 3 + Math.floor(sp * 0.1)) % n]; if (!la.rc || la.w < la.pl + 11 || !S[(c.idx + 90) % n].rc) return a; // (il en redescend 180 m avant la fin de la paroi : plus tard, il sort trop large et tape le mur de la ligne droite)
     const off = -(la.pl + (la.w - 1.1 - la.pl) * 0.7) * Math.sign(la.k || 1), e = wrap(Math.atan2(la.z + la.tx * off - c.z, la.x - la.tz * off - c.x) - c.th); return I(Math.max(-1, Math.min(1, e * 3)), 1); };
   const tour = drive => { const c = newCar(T); let t = 0, t1 = 0, h = 0, vmin = 1e9, ymax = 0, vols = 0; while (c.dist < 2 * n && t < 300) { const a = c.air; step(c, drive(c), T, H); t += H; if (!t1 && c.dist >= n) t1 = t;
     if (t1) { if (c.hit > 3) h++; if (c.air && !a) vols++; if (S[c.idx].rc && !c.air) { vmin = Math.min(vmin, v(c)); ymax = Math.max(ymax, c.y - S[c.idx].y); } } } return { t: t - t1, h, vmin, ymax, vols }; };
   const propre = tour(c => autopilot(c, T)), parMur = tour(murP);
-  assert(propre.vols === CARTE.sauts.length + 1 && !propre.h && propre.ymax < 0.5, `tour propre : ${propre.vols} vols (2 tremplins et la bosse), ${propre.h} chocs, ${propre.ymax} m sur la paroi`);
-  assert(!parMur.h && parMur.ymax > 3 && parMur.t < propre.t - 0.5 && parMur.vmin > 1.2 * propre.vmin, `le mur doit être plus rapide que la corde: ${parMur.t} s contre ${propre.t} s`);
+  assert(propre.vols === CARTE.sauts.length && !propre.h && propre.ymax < 0.5, `tour propre : ${propre.vols} vols (un par tremplin), ${propre.h} chocs, ${propre.ymax} m sur la paroi`);
+  assert(!parMur.h && parMur.ymax > 3 && parMur.t < propre.t + 1.5 && parMur.vmin > 0.98 * propre.vmin, `le mur doit se rouler à fond sans choc : ${parMur.t} s contre ${propre.t} s, ${parMur.h} chocs, ${parMur.ymax} m de haut, mini ${parMur.vmin} contre ${propre.vmin} m/s`);
   // pas de choc entre deux voitures à des hauteurs différentes : l'une survole l'autre
   const croise = dy => { const R = newRace(T), [a, b] = R.cars; R.cars.length = 2; for (const [c, i, sp] of [[a, 300, 40], [b, 303, 0]]) Object.assign(c, pose(i, 0, sp), { lvl: 1, pos: 1, lap: 1, fin: 0, bump: 0 });
     a.y += dy; a.air = dy > 0; a.airT = dy > 0 ? H : 0; let bump = 0; for (let i = 0; i < 0.25 / H; i++) { stepRace(R, I(0, 0), H); bump = Math.max(bump, a.bump); } return bump; };
   assert(croise(0) > 10 && croise(3) === 0, `choc entre voitures : ${croise(0)} à la même hauteur, ${croise(3)} avec 3 m d'écart`);
-  console.log(`OK  relief (barrage) : sauts à 108 / 162 / 216 km/h = ${s30.d.toFixed(0)} / ${s45.d.toFixed(0)} / ${s60.d.toFixed(0)} m (${s60.t.toFixed(2)} s, ${s60.hmax.toFixed(1)} m de haut, impact ${s60.land.toFixed(1)} m/s), fosse franchie en ${ok.t.toFixed(1)} s, ratée en ${rate.t.toFixed(1)} s ; virage relevé : propre ${propre.t.toFixed(2)} s (mini ${(propre.vmin * 3.6) | 0} km/h), par le mur ${parMur.t.toFixed(2)} s (mini ${(parMur.vmin * 3.6) | 0} km/h, ${parMur.ymax.toFixed(1)} m de haut)`);
+  console.log(`OK  relief (stade) : sauts à 108 / 162 / 216 km/h = ${s30.d.toFixed(0)} / ${s45.d.toFixed(0)} / ${s60.d.toFixed(0)} m (${s60.t.toFixed(2)} s, ${s60.hmax.toFixed(1)} m de haut, impact ${s60.land.toFixed(1)} m/s), fosse franchie en ${ok.t.toFixed(1)} s, ratée en ${rate.t.toFixed(1)} s ; virage relevé : propre ${propre.t.toFixed(2)} s (mini ${(propre.vmin * 3.6) | 0} km/h), par le mur ${parMur.t.toFixed(2)} s (mini ${(parMur.vmin * 3.6) | 0} km/h, ${parMur.ymax.toFixed(1)} m de haut)`);
 }
 console.log(`OK  course : IA seules ${laps.map(l => l.toFixed(2)).join(' / ')} s au tour (niveaux ${AI_LVL.join(' / ')}), dépassement en ${tpass.toFixed(1)} s, 3 tours à 4 IA : ${arr.map(c => R0(c) + ' ' + c.fin.toFixed(2)).join(', ')} (${walls} chocs mur, ${bumps} chocs voiture)`);
 console.log(`OK  élimination : ${elimTxt}`);

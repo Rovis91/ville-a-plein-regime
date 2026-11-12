@@ -176,40 +176,33 @@
   }
 
   window.DECORS = {
-    // ---------- Roche-Sourde : un barrage-voûte en plein midi. Alpage et sapins, sommets enneigés, le parement de la voûte au-dessus du virage relevé, le déversoir sous le second tremplin ----------
-    barrage(h) {
-      const { THREE, S, N, W, rnd } = h, mur = s => paroi(s, s.w);
-      const iD = pt(h, 20), sD = S[iD], xD = sD.x - 19; // le déversoir : un chenal du lac vers la vallée, que la piste franchit par sa fosse
-      const chenal = (x, z) => Math.abs(x - xD) < 21 && z > sD.z - 150 ? 6.5 : 0, lac = (x, z) => z > 520 ? Math.min(30, (z - 520) * 0.5) : 0;
-      const g = terrain(h, { pas: 8, marge: 460, loin: 70, chute: -0.3, creux: (x, z) => Math.max(chenal(x, z), lac(x, z)), mat: h.mat('bruit', {}, '#6c8c4c', ['#5c7c42', '#7c9c5a', '#8c8c82', '#586c44']) });
-      const eau = h.mat('eauVive', { rep: [12, 60] }), eauLac = h.mat('eauVive', { rep: [90, 60] });
-      boite(h, eau, 40, 0.3, 700, xD, sD.y - 7.05, sD.z + 200); boite(h, eauLac, 1500, 0.3, 900, 500, 14, 990);
-      // la voûte : le mur roulable extérieur du grand virage se prolonge en parement, jusqu'à 42 m, couronné d'un chemin de ronde
-      const beton = h.mat('parement', { side: THREE.DoubleSide }), i0 = S.findIndex(s => s.rc), nC = S.filter(s => s.rc).length, f = s => (s.w - W) / 10, ht = s => mur(s) + 1 + 41 * f(s) * f(s);
-      h.ribbon(i0, nC, s => -s.w - 0.3, s => mur(s) - 2, s => -s.w - 0.3, ht, beton, 16).castShadow = true;
-      h.ribbon(i0, nC, s => -s.w - 0.3, ht, s => -s.w - 7, ht, beton, 16); h.ribbon(i0, nC, s => -s.w - 7, ht, s => -s.w - 7, () => -10, beton, 16);
-      h.pose('tourPrise', { beton: h.mat('beton'), vitre: h.mat('peinture', { c: 0x2a4a5a }) }, h.scene, [584, 14, 540]);
-      // portiques des tremplins, 30 m avant le bout
-      const peau = { acier: h.mat('acier'), banderole: h.mat('banderoleSaut', { lum: 1, side: THREE.DoubleSide }) };
-      for (const [p] of h.M.sauts) { const i = pt(h, p); h.pose('portiqueSaut', peau, repere(h, S[(i - 15 + N) % N]), [0, 0, 0], W);
-        h.ribbon((i - 7 + N) % N, 7, -W + 0.6, 0.05, W - 0.6, 0.05, h.mat('banderoleSaut', { lum: 1, rep: [4, 1] }), 3.5); } // et les 14 derniers mètres du tremplin peints de chevrons
-      // ligne à haute tension qui descend de la centrale, le long de la ligne droite
-      for (let x = -200; x <= 760; x += 160) h.pose('pyloneHT', { acier: h.mat('acier') }, h.scene, [x, g.hAt(x, -60), -60]);
-      // sapins : par bouquets sur l'alpage, jamais sur la route ni dans le chenal
-      const arbres = [];
-      for (let k = 0; k < 1500; k++) { const x = g.box[0] + rnd() * (g.box[2] - g.box[0]), z = g.box[1] + rnd() * (g.box[3] - g.box[1]), d = g.dAt(x, z);
-        if (d > 26 && !chenal(x, z) && !lac(x, z) && Math.sin(x * 0.02) + Math.cos(z * 0.027) + rnd() > 0.9) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, 0.7 + rnd() * 0.8]); }
-      const futs = arbres.map(p => { const y0 = p[1] - 6; p[1] = y0 + 10 * p[4]; return [p[0], y0 + 2.4 * p[4], p[2], 0, p[4]]; });
-      inst(h, h.geo('cedre'), h.mat('cedre'), arbres); inst(h, h.geo('tronc'), h.mat('tronc'), futs);
-      // les sommets, en couronne à plus d'un kilomètre
-      const pics = []; for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283 + rnd() * 0.2, r = 1150 + rnd() * 500, l = 520 + rnd() * 420; pics.push([300 + Math.cos(a) * r, 40, 200 + Math.sin(a) * r, rnd() * 1.5, l, 380 + rnd() * 330, l]); }
-      inst(h, h.geo('pic'), h.mat('rocNeige', { fog: false }), pics);
-      return dt => { eau.map.offset.y -= dt * 0.9; eauLac.map.offset.x += dt * 0.01; }; // le déversoir coule
-    },
-    // ---------- Grand Vacarme : une arène couverte, comble. Sol de terre battue, gradins sur tout le pourtour, charpente et rampes de projecteurs, cube d'affichage au centre ----------
+    // ---------- Grand Vacarme : une arène couverte, comble. Sol de terre battue, gradins sur tout le pourtour, charpente et rampes de projecteurs, cube d'affichage au centre.
+    // Au milieu, l'aire ouverte (M.place) : on y roule partout, entre la scène et la butte de sortie d'épingle on coupe sous l'arche de feu. Le jeu ne dessine ici aucun mur (th.murH = 0) :
+    // c'est ce décor qui pose le sol des parties larges et les murs, là où la simulation en met (bord de chaussée hors de l'aire, bord de l'aire hors de la chaussée) ----------
     stade(h) {
-      const { THREE, S, N, W } = h, net = m => { m.map.anisotropy = 8; return m; };
-      const g = terrain(h, { pas: 8, marge: 150, mat: h.mat('terreBattue') }); // le sol suit la piste : les tremplins sont des buttes, la fosse un cratère
+      const { THREE, S, N, W, M } = h, net = m => { m.map.anisotropy = 8; return m; }, PL = M.place, [CX, CZ] = PL.c;
+      const AD = { lum: 1, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false, side: THREE.DoubleSide }; // lumière ajoutée : flammes, lasers, faisceaux
+      const dansAire = (x, z, e = 0) => Math.hypot(x - CX, z - CZ) < PL.r + e, ouvert = s => s.w > W + 0.05 && !s.rc, au = (s, d, y = 0) => [s.x - s.tz * d, s.y + y, s.z + s.tx * d];
+      const haut = s => s.rc ? s.rc - Math.sqrt(s.rc * s.rc - Math.min(s.w - s.pl, 0.98 * s.rc) ** 2) : 0; // hauteur du mur roulable à son sommet (sim.js : paroi)
+      // le terrain suit la piste (tremplins = buttes, fosse = cratère) ; sous les parties larges et l'aire il s'efface : leur sol est posé plus bas
+      const g = terrain(h, { pas: 8, marge: 150, mat: h.mat('terreBattue'), creux: (x, z) => { const s = S[near(h, x, z)]; return (ouvert(s) && Math.hypot(s.x - x, s.z - z) < s.w + 3) || dansAire(x, z, 3) ? 1.5 - Math.min(0, s.y) : 0; } });
+      // une nappe de quadrilatères en une seule passe de dessin. tuile : texture plaquée en plan tous les `tuile` m ; sinon u en travers, v le long
+      const nappe = (mat, tuile) => { const pos = [], uv = [], idx = []; return {
+        quad(a, b, c, d, v0 = 0, v1 = 1) { const k = pos.length / 3; [a, b, c, d].forEach((p, j) => { pos.push(p[0], p[1], p[2]); if (tuile) uv.push(p[0] / tuile, p[2] / tuile); else uv.push(j & 1, j < 2 ? v0 : v1); }); idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); },
+        fin() { const q = new THREE.BufferGeometry(); q.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); q.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); q.setIndex(idx); q.computeVertexNormals(); const m = new THREE.Mesh(q, mat); h.scene.add(m); return m; } }; };
+      // le sol : de part et d'autre de la chaussée dans les parties larges, le disque de l'aire, et la butte de sortie d'épingle qui s'étend de la piste au mur de la scène
+      const sol = nappe(h.mat('terreBattue', { side: THREE.DoubleSide }), 10), iB = pt(h, 16);
+      for (let i = 0; i < N; i++) { const a = S[i], b = S[(i + 1) % N];
+        if (ouvert(a) || ouvert(b)) for (const sd of [-1, 1]) sol.quad(au(a, sd * W), au(a, sd * a.w), au(b, sd * W), au(b, sd * b.w));
+        if (i > iB - 16 && i <= iB) sol.quad(au(a, -W), au(a, CZ - a.z), au(b, -W), au(b, CZ - b.z)); }
+      for (let k = 0; k < 48; k++) { const f = j => [CX + Math.cos(j * Math.PI / 24) * PL.r, -0.03, CZ + Math.sin(j * Math.PI / 24) * PL.r], c = [CX, -0.03, CZ]; sol.quad(c, f(k), c, f(k + 1)); }
+      sol.fin();
+      // les murs : la glissière du thème, au bord de la chaussée (au sommet des murs roulables) sauf dans l'aire, et autour de l'aire là où elle déborde de la chaussée
+      const mur = nappe(h.mat('glissiere', { side: THREE.DoubleSide }, h.TH.mur)), pan = (p, q, v) => mur.quad([p[0], p[1] + 1.2, p[2]], [p[0], p[1] - 0.6, p[2]], [q[0], q[1] + 1.2, q[2]], [q[0], q[1] - 0.6, q[2]], v, v + 0.25);
+      for (let i = 0; i < N; i++) for (const sd of [-1, 1]) { const a = S[i], b = S[(i + 1) % N], p = au(a, sd * a.w, haut(a)), q = au(b, sd * b.w, haut(b)); if (!dansAire(p[0], p[2], -0.4) || !dansAire(q[0], q[2], -0.4)) pan(p, q, i / 4); }
+      for (let k = 0; k < 96; k++) { const f = j => [CX + Math.cos(j * Math.PI / 48) * PL.r, 0, CZ + Math.sin(j * Math.PI / 48) * PL.r], p = f(k), q = f(k + 1), x = (p[0] + q[0]) / 2, z = (p[2] + q[2]) / 2, s = S[near(h, x, z)];
+        if (Math.hypot(s.x - x, s.z - z) > s.w - 0.4) pan(p, q, k / 4); }
+      mur.fin();
       // le pourtour : deux longs côtés, deux angles arrondis à l'est, un demi-cercle à l'ouest qui épouse le grand virage relevé. Pièces [longueur, rayon, u => x, z, normale sortante]
       const X0 = -68, X1 = 308, Z0 = -34, Z1 = 354, RE = 90, RW = (Z1 - Z0) / 2, arc = (cx, cz, R, a0) => u => { const a = a0 + u / R; return [cx + Math.cos(a) * R, cz + Math.sin(a) * R, Math.cos(a), Math.sin(a)]; };
       const tour = [[X1 - X0, 0, u => [X0 + u, Z0, 0, -1]], [RE * Math.PI / 2, RE, arc(X1, Z0 + RE, RE, -Math.PI / 2)], [Z1 - Z0 - 2 * RE, 0, u => [X1 + RE, Z0 + RE + u, 1, 0]],
@@ -226,19 +219,47 @@
       boite(h, h.mat('toitArene', LUM), X1 + RE - X0 + RW + 120, 1, Z1 - Z0 + 120, cx, HT + 0.5, cz);
       const peauF = { acier, lampe, treillis: h.mat('treillisPortique', { alphaTest: 0.5, side: THREE.DoubleSide, rep: [(Z1 - Z0) / 6.2, 1] }, '#3a3e4a') };
       for (let x = -230; x <= 380; x += 70) h.pose('fermeToit', peauF, h.scene, [x, HT - 4.5, cz], Z1 - Z0 + 100);
-      // le cube d'affichage, suspendu au-dessus de l'épingle
-      h.pose('cubeScore', { ecran: h.mat('tableauStade', LUM), acier, bande: h.mat('peinture', { lum: 1, c: 0xffc21a }) }, h.scene, [150, HT - 30, 160]);
-      // portiques des tremplins, 30 m avant le bout, et les 14 derniers mètres peints de chevrons (formes et banderole de Roche-Sourde : même signal sur toutes les cartes à relief)
-      const peau = { acier, banderole: h.mat('banderoleSaut', { lum: 1, side: THREE.DoubleSide }) }, chev = h.mat('banderoleSaut', { lum: 1, rep: [4, 1] });
-      for (const [p] of h.M.sauts) { const i = pt(h, p); h.pose('portiqueSaut', peau, repere(h, S[(i - 15 + N) % N]), [0, 0, 0], W); h.ribbon((i - 7 + N) % N, 7, -W + 0.6, 0.05, W - 0.6, 0.05, chev, 3.5); }
-      // panneaux des annonceurs à la corde extérieure des virages à plat, et les projecteurs qui éclairent la piste
+      // le cube d'affichage au-dessus de l'aire, et un écran géant à chaque bout de la salle (deux images qui alternent)
+      h.pose('cubeScore', { ecran: h.mat('tableauStade', LUM), acier, bande: h.mat('peinture', { lum: 1, c: 0xffc21a }) }, h.scene, [CX, HT - 30, CZ]);
+      const ecranG = h.mat('ecranGeant', LUM); ecranG.map.repeat.set(1, 0.5);
+      for (const x of [X1 + RE + 34, X0 - RW - 34]) boite(h, ecranG, 1, 18, 84, x, 50, cz);
+      // la scène (elle ferme l'est de l'aire), le mur de la butte et l'arche de feu entre les deux : ce sont les piles de M.place
+      const chev = h.mat('banderoleSaut', { lum: 1, rep: [4, 1] });
+      h.pose('sceneArene', { beton, ecran: h.mat('banderoleStade', LUM, 4), bande: h.mat('peinture', { lum: 1, c: 0xffc21a }), chevrons: h.mat('banderoleSaut', { lum: 1, rep: [6, 1] }), acier,
+        enseigne: h.mat('ecrit', LUM, 192, 16, '#16161c', '#ff8a1a', 'ARCHE DE FEU', 12) }, h.scene, [CX, 0, CZ]);
+      // portiques des tremplins, 30 m avant le bout, et les 8 derniers mètres peints de chevrons (même signal sur toutes les cartes à relief)
+      const peau = { acier, banderole: h.mat('banderoleSaut', { lum: 1, side: THREE.DoubleSide }) };
+      for (const [p] of M.sauts) { const i = pt(h, p), sp = S[(i - 15 + N) % N]; h.pose('portiqueSaut', peau, repere(h, sp), [0, 0, 0], sp.w); h.ribbon((i - 4 + N) % N, 4, -W + 0.6, 0.05, W - 0.6, 0.05, chev, 3.5); }
+      // les flammes : deux lance-flammes au bout de chaque tremplin (leur lueur éclaire la butte), une rangée sur l'arche et une sur la scène. [x, y, z, rotation, largeur, hauteur]
+      const feux = [];
+      for (const [p] of M.sauts) { const i = pt(h, p), s = S[i]; h.lum(i, s.x, s.y + 4, s.z, 0xff7a20, 30, 0.45); for (const sd of [-1, 1]) feux.push([...au(s, sd * (s.w - 0.8)), h.across(s), 2.4, 6]); }
+      for (let k = 0; k < 6; k++) feux.push([CX - 20 + k * 5.4, 12, CZ, 0, 2, 4.5]);
+      for (let k = 0; k < 5; k++) feux.push([CX + 14 + k * 10, 4.5, CZ, 0, 2.4, 5]);
+      const gf = new THREE.PlaneGeometry(1, 1); gf.translate(0, 0.5, 0);
+      const mf = new THREE.InstancedMesh(gf, h.mat('flamme', AD), feux.length), o3 = new THREE.Object3D(); mf.frustumCulled = false; h.scene.add(mf);
+      // deux éventails de lasers sous le cube, quatre faisceaux de poursuite qui balaient la piste, et les flashs des appareils photo dans les gradins
+      const lasers = [0x30ff70, 0xff30c0].map(c => h.pose('eventailLaser', { rayon: h.mat('peinture', { ...AD, c }) }, h.scene, [CX, HT - 38, CZ])[0]);
+      const gc = new THREE.ConeGeometry(9, 56, 10, 1, true); gc.translate(0, -28, 0); const mc = h.mat('peinture', { ...AD, c: 0x1c2030 });
+      const cones = [[-60, 60], [80, 250], [220, 70], [330, 240]].map(([x, z]) => { const m = new THREE.Mesh(gc, mc); m.position.set(x, HT - 6, z); h.scene.add(m); return m; });
+      const fl = []; for (let k = 0; k < 900; k++) { const p = grad[(h.rnd() * grad.length) | 0], t = h.rnd(), lx = (h.rnd() - 0.5) * 13 * p[4], lz = 2 + 26 * t, c = Math.cos(p[3]), s = Math.sin(p[3]); fl.push(p[0] + lx * c + lz * s, p[1] + 5.5 + 15 * t, p[2] - lx * s + lz * c); }
+      const gfl = new THREE.BufferGeometry(); gfl.setAttribute('position', new THREE.Float32BufferAttribute(fl, 3));
+      const flashs = new THREE.Points(gfl, new THREE.PointsMaterial({ color: 0xffffff, size: 1.2, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); flashs.frustumCulled = false; h.scene.add(flashs);
+      // panneaux des annonceurs derrière les murs, et les projecteurs qui éclairent la piste : blancs, pour que la terre garde sa couleur
       const pubs = [['VOLT COLA', '#e8362a', '#f4f0e0'], ['KOP 170', '#16161c', '#ffc21a'], ['TONNERRE', '#f4f0e0', '#1c3fa8'], ['BRASERO', '#ffc21a', '#16161c']].map(([t, a, b]) => h.mat('ecrit', LUM, 64, 32, a, b, t, 11));
-      [[9, -1], [13, 1], [16, -1], [22, 1], [24, -1], [1, 1]].forEach(([p, sd], k) => h.pose('panneauPub', { mat: h.mat('fer'), affiche: pubs[k % pubs.length] }, repere(h, S[pt(h, p)]), [sd * (W + 14), 0, 0], sd * 0.5));
-      for (let i = 0; i < N; i += 45) h.lum(i, S[i].x, S[i].y + 20, S[i].z, 0xfff4e0, 55, 0.5);
-      // la foule bouge : chaque anneau passe par moments à sa variante bras levés
+      [[9, -1], [13, 1], [16, 1], [22, 1], [24, -1], [1, 1]].forEach(([p, sd], k) => { const s = S[pt(h, p)]; h.pose('panneauPub', { mat: h.mat('fer'), affiche: pubs[k % pubs.length] }, repere(h, s), [sd * (s.w + 7), 0, 0], sd * 0.5); });
+      for (let i = 0; i < N; i += 45) h.lum(i, S[i].x, S[i].y + 20, S[i].z, 0xeef2ff, 55, 0.3);
       return (dt, now) => {
+        // la foule bouge : chaque anneau passe par moments à sa variante bras levés
         foule.map.offset.y = Math.sin(now * 0.0023) + Math.sin(now * 0.0061) > 0.6 ? 0.5 : 0;
         foule2.map.offset.y = Math.sin(now * 0.0019 + 2) + Math.sin(now * 0.0047) > 0.5 ? 0.5 : 0;
+        ecranG.map.offset.y = Math.floor(now / 700) % 2 * 0.5;
+        // les flammes tremblent, et chaque lance-flammes crache un grand coup toutes les 3 s, à son tour
+        feux.forEach(([x, y, z, r, w, ht], k) => { const coup = (now * 0.001 + k * 0.37) % 3.2 < 0.45 ? 1.9 : 1, f = 0.75 + 0.25 * Math.sin(now * 0.021 + k * 1.7) * Math.sin(now * 0.013 + k);
+          o3.position.set(x, y, z); o3.rotation.set(0, r, 0); o3.scale.set(w * (0.85 + 0.15 * f), ht * f * coup, 1); o3.updateMatrix(); mf.setMatrixAt(k, o3.matrix); });
+        mf.instanceMatrix.needsUpdate = true;
+        lasers.forEach((m, k) => m.rotation.set(Math.sin(now * 0.0007 + k * 2) * 0.5, now * 0.0004 * (k ? -1 : 1) + k * 1.57, 0));
+        cones.forEach((m, k) => m.rotation.set(Math.sin(now * 0.0006 + k) * 0.45, 0, Math.cos(now * 0.0008 + k * 2) * 0.45));
+        gfl.setDrawRange(Math.floor(now / 70) * 7919 % 860, 40);
       };
     },
     // ---------- Nuit Blanche : un col fermé pour l'hiver, à l'aube. Pentes de neige, sapins chargés, falaise givrée, pont sur la gorge, refuge éclairé au col ; la glace vive se voit sur la route ----------

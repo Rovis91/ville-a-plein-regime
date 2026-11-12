@@ -150,30 +150,10 @@
           '36 - - 34 - - 31 - 29 - - 31 - - 34 - | 36 - - - - - - - 39 - 36 - 34 - - - | 31 - - 34 - - 36 - 39 - - 36 - - 34 - | 31 - - - - - - - . - - - - - - -'],
         sec: { i: 'b0', a: 'k0 s0 h0 b0', b: 'k0 s0 h1 b0 c0', c: 'k1 s1 h1 b0 c0 l0', x: 'h2 b1 l1 P1', e: 'k1 s1 h1 b1 c1 l1 P1', q: 'k2 s0 h2 b1' }, form: 'iabcqxecabcc' }),
     ],
-    barrage: [
-      st({ name: 'RADIO SOMMET', fq: '101.5', vol: 1, genre: 'ITALO DISCO', bpm: 122, gamme: 'mineur', key: 57, kit: 'lin', eq: [-6, 2500, 3, 8], rev: 0.3, echo: [3, 0.4], pump: 0.4, // boîte à rythmes sèche, basse à l'octave, arpège, thème en dents de scie : la descente en télécabine
-        prog: ['Am F C G Am F Dm Em', 'F G Am Am'], k: [F4], s: [CP], h: [OFF, 'x.o.x.o.x.o.x.o.'],
-        b: ['bSeq', '0 - 12 - 0 - 12 - 0 - 12 - 0 - 12 -', '0 0 12 0 0 12 0 12 0 0 12 0 7 12 0 12'], d: ['strings', 0], c: ['super', 'x..x..x.x..x..x.'], a: ['pulseArp', '0121201245656456', '0.2.4.2.0.2.4.6.'],
-        l: ['ldSaw', '12 - - 15 - - 19 - 17 - 15 - 12 - - - | 20 - - 17 - - 15 - 17 - - - . - - - | 15 - - 19 - - 22 - 19 - 15 - 19 - - - | 14 - - 17 - - 22 - 19 - - - . - - - | 24 - - 27 - - 31 - 29 - 27 - 24 - - - | 32 - - 29 - - 27 - 29 - - - . - - - | 29 - - 26 - - 29 - 32 - 29 - 26 - - - | 31 - - - 26 - - - 22 - - - 19 - - -',
-          '20 - - - 24 - - - 27 - - - 24 - - - | 22 - - - 26 - - - 29 - - - 26 - - - | 24 - - 27 - - 31 - 29 - 27 - 24 - - - | 24 - - - - - - - . - - - - - - -'],
-        sec: { i: 'h0 a0 d lo', a: 'k0 s0 h0 b0 d', b: 'k0 s0 h1 b0 d a0', c: 'k0 s0 h1 b1 d a0 c0 l0', x: 'd a1 l1 P1', u: 'k0 h1 b0 d roll P1', e: 'k0 s0 h1 b1 c0 l1 P1' }, form: 'iabcxuceabcc' }),
-      st({ name: 'RADIO TORRENT', fq: '96.6', vol: 0.5, genre: 'SURF ROCK', bpm: 164, gamme: 'mineur', key: 52, kit: 'rock', eq: [-4, 1400, 6, 2], rev: 0.4, pump: 1, // guitare à trémolo noyée de réverbération, cocotte en doubles-croches, batterie rock : aucun synthé
-        prog: ['Em D C D Em D Am Bm', 'C D Em Em'], k: ['x.....x.x.....x.', 'x..x..x.x..x..x.'], s: [SN, '....x.......x.xx'], h: ['r.r.r.r.r.r.r.r.', 'X.X.X.X.X.X.X.o.'], p: ['t.t.t.t.t.t.t.t.'],
-        b: ['bPick', '0 - 0 - 7 - 0 - 0 - 0 - 7 - 10 -', '0 0 0 0 0 0 0 0 0 0 0 0 7 7 10 10'], g: ['gtrMute', 'xxxxxxxxxxxxxxxx', 'x.xxx.xxx.xxx.xx'], c: ['pwr', 'x.....x.....x...'], cO: -12,
-        l: ['ldGtr', '12 - 12 - 15 - 14 - 12 - 10 - 12 - - - | 14 - 14 - 17 - 15 - 14 - 10 - 14 - - - | 15 - 15 - 19 - 17 - 15 - 12 - 15 - - - | 14 - - - 17 - - - 22 - - - 19 - - - | 24 - 24 - 27 - 26 - 24 - 22 - 24 - - - | 26 - 26 - 29 - 27 - 26 - 22 - 26 - - - | 24 - 27 - 29 - 27 - 24 - 20 - 24 - - - | 26 - - - 22 - - - 19 - - - 14 - - -',
-          '27 - - 24 - - 20 - 24 - - - 27 - - - | 29 - - 26 - - 22 - 26 - - - 29 - - - | 31 - - 27 - - 24 - 27 - 31 - 34 - - - | 36 - - - - - - - . - - - - - - -'],
-        sec: { i: 'g0 h0', a: 'k0 s0 h0 b0 g0', b: 'k0 s0 h1 b0 g0 c0', c: 'k1 s1 h1 b0 g1 c0 l0', x: 'h0 b1 g0 l1 P1', e: 'k1 s1 h1 b1 c0 l1 P1 p0', q: 'k0 s0 h0 b1 g1 p0' }, form: 'iabcqxecabcc' }),
-      st({ name: 'ALTITUDE 303', fq: '303', vol: 0.9, genre: 'ACID HOUSE', bpm: 124, gamme: 'mineur', sw: 0.08, key: 60, kit: 'k909', eq: [4, 900, 4, 2], rev: 0.2, echo: [3, 0.45], pump: 0.4, sweep: 1, // une ligne de basse acide qui tourne sur elle-même, le filtre fait le reste ; cloche et accords plaqués à écho
-        prog: ['Cm7 Cm7 Fm7 Fm7 Cm7 Cm7 AbM7 Gm7', 'AbM7 Bb Cm7 Cm7'], k: [F4, 'x...x...x...x.x.'], s: [CP, '....c.......c.cc'], h: [OFF, 'x.o.x.oxx.o.x.ox'], p: ['c..c..c..c..c.c.'],
-        b: ['bAcid', '0 - 0 12 - 0 3 - 0 - 12 0 - 10 - 7', '0 0 12 0 0 12 0 3 0 0 12 0 10 12 7 0'], d: ['warm', 0], c: ['stabM7', 'x..x...x..x.....', '..x...x...x...x.'], a: ['seqArp', '0.0.2.0.3.0.2.0.', '0120012001200120'],
-        l: ['ldTri', '24 - - - - - 22 - 19 - - - - - - - | 24 - - - - - 27 - 26 - - - 22 - - - | 20 - - - - - 24 - 27 - - - - - - - | 26 - - - 22 - - - 19 - - - 17 - - -',
-          '27 - - - 24 - - - 31 - - - 27 - - - | 29 - - - 26 - - - 34 - - - 29 - - - | 31 - - - - - 27 - 24 - - - - - - - | 24 - - - - - - - . - - - - - - -'],
-        sec: { i: 'k0 h0 b0 lo', a: 'k0 s0 h0 b0 a0', b: 'k0 s0 h1 b0 a0 c0', c: 'k1 s1 h1 b1 a1 c0 d l0 p0', x: 'd a0 c1 l1 P1', u: 'k0 h1 b1 a1 roll P1', e: 'k1 s1 h1 b1 c1 d l1 P1 p0' }, form: 'iabcbxucecbc' }),
-    ],
     stade: [
-      st({ name: 'ARENA ROCK FM', fq: '105.5', vol: 0.4, genre: 'HARD ROCK', bpm: 140, gamme: 'mineur', bPar: [0, 3, 5, 7, 10, -2], key: 52, kit: 'rock', eq: [-4, 1200, 7, 3], rev: 0.35, pump: 1, // rock de stade : accords de puissance, batterie dans sa salle, solo de guitare qui monte ; aucun synthé
+      st({ name: 'ARENA ROCK FM', fq: '105.5', vol: 0.4, genre: 'HARD ROCK', bpm: 140, gamme: 'mineur', bPar: [0, 3, 5, 7, 10, -2], key: 52, kit: 'rock', eq: [3, 500, 3, -5], lO: -12, rev: 0.35, pump: 1, // rock de stade : accords de puissance, batterie dans sa salle, solo de guitare qui monte ; aucun synthé. Registre grave : thème une octave plus bas, médium-aigu rentré (elle criait)
         prog: ['E5 E5 G5 A5 E5 E5 C5 D5', 'C5 D5 E5 E5'], k: ['x.....x.x.....x.', 'x..x..x.x..x..x.', 'x...x...x...x...'], s: [SN, '....x.......x.xx'], h: ['X.x.X.x.X.x.X.x.', 'o.o.o.o.o.o.o.o.', 'r.r.r.r.r.r.r.r.'],
-        b: ['bPick', '0 - 0 - 0 - 0 - 0 - 0 - 0 - 3 5', '0 0 0 0 0 0 0 0 0 0 0 0 7 7 10 10'], c: ['pwr', 'x..x..x...x.x...', 'x.......x.......'], cO: -12, g: ['gtrMute', 'xxxxxxxxxxxxxxxx'],
+        b: ['bPick', '0 - 0 - 0 - 0 - 0 - 0 - 0 - 3 5', '0 0 0 0 0 0 0 0 0 0 0 0 7 7 10 10'], c: ['pwr', 'x..x..x...x.x...', 'x.......x.......'], cO: -12, g: ['gtrMute', 'x.x.x.x.x.x.x.x.'],
         l: ['ldGtr', '24 - - - 27 - 24 - 22 - 24 - - - . - | 24 - - - 27 - 29 - 31 - - - 27 - - - | 22 - - - 26 - 22 - 19 - 22 - - - . - | 22 - - - 24 - 29 - 34 - - - 31 - - - | 36 - - - 34 - 31 - 34 - 36 - - - . - | 36 - - - 39 - 36 - 34 - - - 31 - - - | 31 - - - 36 - 31 - 27 - 31 - - - . - | 34 - - - 31 - - - 26 - - - - - - -',
           '31 - 27 - 24 - 27 - 31 - 36 - 31 - - - | 34 - 29 - 26 - 29 - 34 - 38 - 34 - - - | 36 - - 31 - - 27 - 31 - - - 36 - - - | 36 - - - - - - - . - - - - - - -'],
         sec: { i: 'g0 h0', a: 'k0 s0 h0 b0 g0', b: 'k0 s0 h1 b0 c0', c: 'k1 s1 h1 b0 c0 l0', x: 'h2 b1 g0 l1 P1', e: 'k1 s1 h1 b1 c0 l1 P1', q: 'k2 s0 h2 b1 c1' }, form: 'iabcqxecabcc' }),
@@ -302,33 +282,22 @@
         murH: 1.3, route: ['#4c4a50', '#58565c', '#f4f0e0', '#2aa39a', '#e83f8c', '#f4f0e0', false], mur: ['#f4f0e0', '#e83f8c', '#1848c8', '#e4ddd0'], depart: [0xff7a3d, 0x3d2a5c, '#f4f0e0'],
         hud: { y: '#ffc04a', c: '#ff7a3d', r: '#e83f8c', fond: 'rgba(40,24,56,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'SPEEDWAY · HEURE DOREE'], titre: ['CANAL', 'SIX'] } } },
 
-    // Roche-Sourde : la route de service d'un barrage-voûte, en plein midi. Carte du relief : tremplin de la ligne droite (réception en descente), bosse de la montée,
-    // grand virage relevé sur le parement de la voûte (le mur est plus rapide que la corde), tremplin par-dessus le déversoir (trop lent, on tombe dedans et on en ressort par sa rampe), épingle et chicane du retour.
-    { id: 'barrage', nom: 'ROCHE-SOURDE', rivaux: ['MAEL', 'ZOE', 'TIAGO'], med: [1.08, 1, 0.94], W: 8, grip: 20, sc: 1, tun: null, chaud: [11, 21], amb: [[10, 16]], sect: [11, 23], anticipe: 1,
-      sauts: [[2, 40, 0.8], [20, 30, 1, 36, 6]], cuv: [[10, 16, 10, 9]],
-      pts: [[0, 0, 10], [120, 0, 10], [220, 0, 10], [300, 0, 3], [400, 0, -4], [500, 15, -4], [585, 75, 0], [620, 170, 11], [620, 262, 19.6], [620, 285, 20.8], [620, 308, 19.8], [620, 430, 17], [609.5, 455.5, 17], [584, 466, 17], [558.5, 455.5, 17], [548, 430, 17], [548, 385, 17], [533, 345, 17], [498, 330, 17], [400, 330, 16.5], [300, 330, 16], [200, 330, 15.5], [100, 330, 15], [-80, 330, 14.5], [-115, 320, 14.5], [-130, 290, 14], [-130, 200, 12.5], [-150, 130, 11.5], [-130, 60, 11], [-115, 15, 10.2], [-80, 0, 10]],
-      // voiture inventée : une petite quatre roues motrices de rallye, 4 cylindres turbo de 2 L, 340 ch, 1150 kg
-      car: car({ nom: 'CORBIER R4 TURBO', ratios: [3.31, 2.13, 1.52, 1.16, 0.92], final: 4.1, wheel: 0.31, mass: 1225, idle: 1000, red: 7800, cd: 0.38, area: 2.0,
-        tq: [0, 160, 260, 360, 410, 420, 400, 360, 280], trac: 10.5, rwd: 0, son: 1.2, look: { col: 0xe8482a, l: 0.86, w: 1, h: 1.08, nez: 0.4, cab: [-0.2, 2.2, 0.6], aileron: 1, bandes: 0xf4f0e0 } }),
-      radio: RADIO.barrage,
-      th: { decor: 'barrage', fog: 0xbfd8e8, fogD: [200, 1900], sky: [[0, '#1c4f9c'], [0.3, '#1c4f9c'], [0.31, '#3f7fc4'], [0.42, '#3f7fc4'], [0.43, '#8fbfe0'], [0.49, '#8fbfe0'], [0.5, '#bfd8e8'], [1, '#bfd8e8']], stars: 0,
-        astre: { dir: [0.35, 0.8, -0.45], col: '#fffbe8', ombre: '#fffbe8', taille: 150 }, hemi: [0xbcd8ff, 0x9aa89a, 0.95], sun: [0xfff4d8, 1], phares: 0.3, bloom: 0.03, scan: 0.05,
-        murH: 1.1, paroi: 'parement', route: ['#54565a', '#606266', '#f4f0e0', '#f4c020', '#e8482a', '#f4f0e0', false], mur: ['#d8d4c8', '#e8482a', '#f4c020', '#b8b4a8'], depart: [0xe8482a, 0x2a3a4a, '#f4f0e0'],
-        hud: { y: '#ffffff', c: '#f4c020', r: '#e8482a', fond: 'rgba(20,40,64,.9)', style: 'trait', split: 0, jp: null, sur: [null, 'BARRAGE · PLEIN MIDI'], titre: ['ROCHE', 'SOURDE'] } } },
-
     // Grand Vacarme : une arène couverte, pleine à craquer. Trois lignes droites en épi sous la charpente, chacune avec son tremplin : la table de la ligne de départ,
     // le saut par-dessus la fosse (trop lent, on tombe dedans et on en ressort par sa rampe), la grande bosse du fond. Deux demi-tours relevés côté est, une épingle à plat au milieu,
     // et le grand virage relevé de la tribune ouest qui ramène à la ligne (le mur y est plus rapide que la corde).
     { id: 'stade', nom: 'GRAND VACARME', rivaux: ['NOUR', 'ENZO', 'JADE'], med: [1.08, 1, 0.94], W: 9, grip: 20, sc: 1, tun: null, chaud: [23, 29], amb: [[0, 4], [23, 29]], sect: [9, 23], anticipe: 1,
-      sauts: [[2, 40, 1.5], [9, 36, 1.5, 40, 5], [16, 30, 1.2], [22, 60, 2]], cuv: [[4, 8, 10, 9], [17, 21, 10, 9], [25, 29, 10, 9]],
-      pts: [[0, 0, 0], [80, 0, 0], [150, 0, 0], [230, 0, 0], [300, 0, 0], [339, 16, 0], [355, 55, 0], [339, 94, 0], [300, 110, 0], [220, 110, 0], [150, 110, 0], [80, 110, 0], [45, 125, 0], [30, 160, 0], [45, 195, 0], [80, 210, 0], [190, 210, 0], [300, 210, 0], [339, 226, 0], [355, 265, 0], [339, 304, 0], [300, 320, 0], [190, 320, 0], [100, 320, 0], [0, 320, 0], [-60, 320, 0], [-173, 273, 0], [-220, 160, 0], [-173, 47, 0], [-60, 0, 0]],
+      // lignes droites du départ et du fond élargies ; au centre, l'aire ouverte : on y roule partout, on coupe l'épingle par l'arche de feu (et l'on saute alors la butte de sortie)
+      large: [[0, 3, 18], [22, 24, 16]], place: { c: [150, 160], r: 59, a: 0, piles: [[34.5, 0, 24.5, 3], [-35.5, 0, 12.5, 1]] },
+      // cinq tremplins (le quatrième par-dessus la fosse), trois hauteurs de mur roulable : 5, 7 et 10 m
+      sauts: [[2, 40, 1.5], [9, 30, 1.7], [16, 24, 1.4], [22, 60, 2, 40, 5], [24, 30, 1.5]], cuv: [[4, 8, 6, 6], [17, 21, 10, 9], [25, 29, 13, 12]],
+      pts: [[0, 0, 0], [80, 0, 0], [150, 0, 0], [230, 0, 0], [300, 0, 0], [339, 16, 0], [355, 55, 0], [339, 94, 0], [300, 110, 0], [255, 110, 0], [150, 110, 0], [80, 110, 0], [45, 125, 0], [30, 160, 0], [45, 195, 0], [80, 210, 0], [126, 210, 0], [300, 210, 0], [339, 226, 0], [355, 265, 0], [339, 304, 0], [300, 320, 0], [190, 320, 0], [100, 320, 0], [0, 320, 0], [-60, 320, 0], [-173, 273, 0], [-220, 160, 0], [-173, 47, 0], [-60, 0, 0]],
       // voiture inventée : un pick-up de stade à châssis tubulaire, V8 atmosphérique de 6 L, 600 ch, 1300 kg, propulsion, grands débattements
       car: car({ nom: 'MASTIFF V8 ARENA', ratios: [2.9, 1.95, 1.45, 1.15, 0.95], final: 5.2, wheel: 0.36, mass: 1375, idle: 900, red: 7200, cd: 0.45, area: 2.3,
         tq: [0, 380, 500, 580, 640, 660, 640, 590, 480], son: 0.85, look: { col: 0xffc21a, l: 0.9, w: 1.04, h: 1.2, nez: 0.45, cab: [-0.1, 1.9, 0.62], aileron: 2, bandes: 0x16161c } }),
       radio: RADIO.stade,
       th: { decor: 'stade', fog: 0x0e0c18, fogD: [120, 900], sky: [[0, '#05050a'], [1, '#05050a']], stars: 0,
-        astre: { dir: [0.2, 0.95, 0.25], col: '#05050a', ombre: '#05050a', taille: 1 }, hemi: [0xdfe6ff, 0x6a5038, 0.9], sun: [0xfff6e0, 0.55], phares: 1.2, bloom: 0.1, scan: 0.08,
-        murH: 1.2, paroi: 'paroiArene', route: ['#7a5a3c', '#86643f', '#f4f0e0', '#ffc21a', '#e8362a', '#f4f0e0', false], mur: ['#f4f0e0', '#e8362a', '#1c3fa8', '#c8c4b8'], depart: [0xe8362a, 0x20242c, '#f4f0e0'],
+        astre: { dir: [0.2, 0.95, 0.25], col: '#05050a', ombre: '#05050a', taille: 1 }, hemi: [0xe6ecff, 0x3c3c48, 0.85], sun: [0xffffff, 0.5], phares: 0.5, bloom: 0.1, scan: 0.08, ciel: 'SOUS LE TOIT',
+        murH: 0, paroi: 'paroiArene', route: ['#3e3a40', '#4c464c', '#f4f0e0', '#ff8a1a', '#e8362a', '#f4f0e0', false], mur: ['#f4f0e0', '#e8362a', '#1c3fa8', '#c8c4b8'], depart: [0xe8362a, 0x20242c, '#f4f0e0'],
         hud: { y: '#ffffff', c: '#ffc21a', r: '#e8362a', fond: 'rgba(16,14,28,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'ARENE COUVERTE · COMPLET'], titre: ['GRAND', 'VACARME'] } } },
     // Nuit Blanche : la route d'un col fermé pour l'hiver, à l'aube. Neige tassée partout, glace vive là où le soleil ne vient jamais (elle luit, sombre, sur la route claire) :
     // le pied de la falaise après le départ, le replat entre les deux lacets, la crête du col balayée par le vent, le pont sur la gorge, le bois de mélèzes du retour.

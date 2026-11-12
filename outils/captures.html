@@ -6,7 +6,7 @@
 <script>
 // Fait un tour en pilote auto et enregistre une capture 960 × 540 à intervalles réguliers, sans que personne regarde l'écran.
 // À servir par outils/capture.py. Paramètres :
-//   carte=ville|touge|wangan|paris|canal|barrage|stade|givre|terre   pas=10 (secondes de course entre deux captures)   tours=1   style=net (vide = rendu par défaut)
+//   carte=ville|touge|wangan|paris|canal|stade|givre|terre   pas=10 (secondes de course entre deux captures)   tours=1   style=net (vide = rendu par défaut)
 //   idx=700,1351   à la place de pas : une capture au passage de ces échantillons de piste (pour revoir un endroit précis)
 //   vue=angle,distance,hauteur   caméra d'inspection autour de la voiture (window.__g.vue), sinon la caméra de course
 // Résultat : captures/<carte>-NN.jpg et captures/<carte>.json = { vues: [{ n, t, idx, kmh, tunnel }], erreurs, msParImage, tour }.

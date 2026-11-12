@@ -4,16 +4,16 @@
   Object.assign(TEXTURES, {
     // sol de l'arène : terre battue rapportée, mottes claires et sombres, traces de pneus qui se croisent
     terreBattue: () => [64, 64, (g, o) => {
-      const { R, alea, voile } = o; R(g, '#6e5236', 0, 0, 64, 64);
-      for (let i = 0; i < 420; i++) R(g, alea() < 0.5 ? '#5e452c' : '#806040', alea() * 64 | 0, alea() * 64 | 0, 1 + (alea() * 3 | 0), 1);
+      const { R, alea, voile } = o; R(g, '#5a3d2e', 0, 0, 64, 64);
+      for (let i = 0; i < 420; i++) R(g, alea() < 0.5 ? '#4c3226' : '#684838', alea() * 64 | 0, alea() * 64 | 0, 1 + (alea() * 3 | 0), 1);
       voile(g, 0.22, () => { for (let i = 0; i < 7; i++) { const x = alea() * 60 | 0; R(g, '#000', x, 0, 2, 64); R(g, '#000', x + 5, 0, 2, 64); } for (let i = 0; i < 4; i++) R(g, '#000', 0, alea() * 60 | 0, 64, 2); });
-      for (let i = 0; i < 24; i++) R(g, '#94744e', alea() * 64 | 0, alea() * 64 | 0, 2, 2);
+      for (let i = 0; i < 24; i++) R(g, '#7a5846', alea() * 64 | 0, alea() * 64 | 0, 2, 2);
     }, 8],
-    // murs roulables : planches peintes en blanc cassé, joints, et les traces noires des pneus qui y sont montés
+    // murs roulables : planches peintes en gris-bleu (du blanc saturait sous les projecteurs), joints, et les traces noires des pneus qui y sont montés
     paroiArene: () => [64, 64, (g, o) => {
-      const { R, alea, voile } = o; R(g, '#d8d2c2', 0, 0, 64, 64);
-      for (let i = 0; i < 260; i++) R(g, alea() < 0.5 ? '#cac4b4' : '#e4dece', alea() * 64 | 0, alea() * 64 | 0, 1, 2 + (alea() * 5 | 0));
-      for (let x = 0; x < 64; x += 16) R(g, '#9a9484', x, 0, 1, 64);
+      const { R, alea, voile } = o; R(g, '#6c7284', 0, 0, 64, 64);
+      for (let i = 0; i < 260; i++) R(g, alea() < 0.5 ? '#606678' : '#787e90', alea() * 64 | 0, alea() * 64 | 0, 1, 2 + (alea() * 5 | 0));
+      for (let x = 0; x < 64; x += 16) R(g, '#4a5060', x, 0, 1, 64);
       voile(g, 0.5, () => { for (let i = 0; i < 14; i++) R(g, '#101014', alea() * 56 | 0, alea() * 64 | 0, 2 + (alea() * 3 | 0), 8 + (alea() * 30 | 0)); });
     }, 8],
     // banderoles des gradins : deux annonceurs inventés par texture, k = le premier
@@ -33,6 +33,19 @@
       [['1', 'NOUR', '—', '#ffc21a'], ['2', 'VOUS', '+0.33', '#5ad0ff'], ['3', 'ENZO', '+0.92', '#f4f0e0'], ['4', 'JADE', '+2.10', '#f4f0e0']].forEach(([p, n, e, c], k) => {
         const y = 46 + k * 30; R(g, k & 1 ? '#14121a' : '#1c1a24', 4, y - 13, 248, 27); texte(g, p, 14, y, 22, '#e8362a'); texte(g, n, 46, y, 22, c); texte(g, e, 246, y, 18, '#c8c0b4', 'right');
       });
+    }],
+    // flamme d'un lance-flammes, en lumière ajoutée (le noir ne se voit pas) : langue large en bas, effilée en haut, du blanc-jaune au rouge
+    flamme: () => [32, 64, (g, o) => {
+      o.R(g, '#000', 0, 0, 32, 64);
+      for (let y = 0; y < 64; y++) { const t = y / 63, l = 3 + 13 * Math.sin(Math.PI * Math.min(1, 0.15 + t * 0.85)) * (0.35 + 0.65 * t), c = (dl, col) => { if (l - dl > 0) o.R(g, col, Math.round(16 - l + dl), y, Math.round(2 * (l - dl)), 1); };
+        c(0, t < 0.35 ? '#a01808' : '#e8401a'); c(3, t < 0.3 ? '#e8401a' : '#ff8a1a'); c(6, t < 0.45 ? '#ff8a1a' : '#ffd24a'); if (t > 0.6) c(9, '#fff4c8'); }
+    }],
+    // écran géant : deux images l'une sur l'autre, le décor en montre une puis l'autre
+    ecranGeant: () => [256, 128, (g, o) => {
+      const { R } = o; R(g, '#08080c', 0, 0, 256, 128);
+      R(g, '#e8362a', 0, 0, 256, 64); texte(g, 'GRAND VACARME', 128, 24, 26, '#f4f0e0', 'center'); texte(g, 'CE SOIR · COMPLET', 128, 49, 14, '#16161c', 'center');
+      for (let x = -32; x < 256; x += 32) { g.fillStyle = '#ffc21a'; g.beginPath(); g.moveTo(x, 64); g.lineTo(x + 16, 64); g.lineTo(x + 48, 128); g.lineTo(x + 32, 128); g.fill(); }
+      R(g, '#08080c', 40, 76, 176, 40); texte(g, 'QUEL SAUT !', 128, 97, 26, '#ffc21a', 'center');
     }],
   });
 })();
