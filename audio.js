@@ -238,7 +238,7 @@
     if (menu) return schedMenu(s, t);
     const st = ST[station], K = KIT[st.kit] || KIT.k909; t += (s & 1) * (st.sw || 0) * S16; // swing : les doubles-croches impaires traînent
     const bar = s >> 4, q = s % 16, d = drums, fi = (bar >> 2) % st.form.length, nxt = st.form[(fi + 1) % st.form.length];
-    if ((q === 0 && ((bar & 3) === 0 || mix > 0.5 || fin || boostL)) || (boostL && !bigS && q % 4 === 0)) { const b = mix > 0.5 || fin || boostL; if (bigS && !b) sortie = bar >> 2; bigS = b; } // le boost de sortie de glisse est une action : il ouvre le refrain dès le temps suivant // le refrain du secteur chaud entre à la mesure suivante et ne repart qu'en fin de section : jamais au milieu d'une mesure
+    if ((q === 0 && ((bar & 3) === 0 || mix > 0.5 || fin || boostL)) || (boostL && !bigS && q % 4 === 0)) { const b = mix > 0.5 || fin || boostL; if (bigS && !b) sortie = bar >> 2; bigS = b; } // la nitro est une action : elle ouvre le refrain dès le temps suivant // le refrain du secteur chaud entre à la mesure suivante et ne repart qu'en fin de section : jamais au milieu d'une mesure
     const big = bigS;
     let key = st.form[fi]; if (big && key !== 'e') key = st.hot;
     else if (sortie === bar >> 2 && !st.sec[key].k) key = st.form[1]; // en sortant du secteur chaud on retombe sur un couplet, jamais sur un break : pas de trou // secteur chaud : le refrain, et sa variation quand la forme y arrive
@@ -294,9 +294,9 @@
     if (d && glisse) { // la glisse tend la musique avec sa durée : roulement qui se resserre et souffle qui monte, calés sur le tempo (le grave s'amincit dans audioFrame)
       if (q % (acquis ? 1 : 2) === 0) dSnare(t, 0.06 + 0.22 * tens, K);
       nz(t, S16 * 0.9, 0.025 + 0.05 * tens, drumG, 'bandpass', 800 * 8 ** tens, 2);
-      if (acquis && !acqDit) { acqDit = true; dHat(t, 1, K, 'o'); tone('bell', hz(ch[0] + 24), t, 0.3, 0.09, strip.a.in); tone('bell', hz(ch[0] + 31), t + S16, 0.4, 0.09, strip.a.in); } // palier : le boost est acquis
+      if (acquis && !acqDit) { acqDit = true; dHat(t, 1, K, 'o'); tone('bell', hz(ch[0] + 24), t, 0.3, 0.09, strip.a.in); tone('bell', hz(ch[0] + 31), t + S16, 0.4, 0.09, strip.a.in); } // palier : la glisse remplit la jauge de nitro à plein débit
     }
-    if (boostPend && q % 4 === 0) { boostPend = false; if (d) crash(t, 0.8); } // relâchement : la cymbale tombe sur le temps qui suit la sortie de glisse
+    if (boostPend && q % 4 === 0) { boostPend = false; if (d) crash(t, 0.8); } // la cymbale tombe sur le temps qui suit le départ de la nitro
     if (st.sweep) swF.frequency.setTargetAtTime(big ? 16000 : 350 * 2 ** (3.6 * (0.5 - 0.5 * Math.cos(Math.PI * (s % 128) / 64))), t, big ? 0.6 : 0.15); // filtre balayé sur 8 mesures, grand ouvert dans le secteur chaud
     else swF.frequency.setTargetAtTime(sec.lo && !big ? 400 * 30 ** pos : 20000, t, 0.25); // section filtrée : le passe-bas s'ouvre au fil de la section
   }
@@ -448,7 +448,7 @@
     const o = osc('sawtooth', 90, t, 0.25, v * 0.7, sat); o && o.frequency.exponentialRampToValueAtTime(40, t + 0.2);
     for (let i = 0; i < 9; i++) nz(t + 0.15 + Math.random() * 0.65, 0.012, v * (0.1 + Math.random() * 0.2), V.choc, 'highpass', 3000);
   }
-  function boostFx(t = AC.currentTime) { const o = osc('sawtooth', 220, t, 0.5, 0.1, filt('lowpass', 3000, 0.5, V.choc)); o.frequency.exponentialRampToValueAtTime(880, t + 0.4); const w = nz(t, 0.6, 0.08, V.choc, 'bandpass', 500, 1.5); w.frequency.exponentialRampToValueAtTime(4000, t + 0.5); } // boost de sortie de glisse : sifflement + souffle
+  function boostFx(t = AC.currentTime) { const o = osc('sawtooth', 220, t, 0.5, 0.1, filt('lowpass', 3000, 0.5, V.choc)); o.frequency.exponentialRampToValueAtTime(880, t + 0.4); const w = nz(t, 0.6, 0.08, V.choc, 'bandpass', 500, 1.5); w.frequency.exponentialRampToValueAtTime(4000, t + 0.5); } // départ de la nitro : sifflement + souffle
   function petarade(spool = 1, t = AC.currentTime) { nz(t, 0.25, 0.04 * spool, V.mot, 'bandpass', 1400, 1.5); for (let i = 0; i < 3; i++) nz(t + 0.08 + Math.random() * 0.4, 0.035, 0.12, V.mot, 'lowpass', 900); } // lever de pied à haut régime
   // e : état de la course pour cette image — { state, car, T, hot (0..1 dans le secteur chaud), tour / tours (tour en cours à partir de 0, nombre de tours ; 0 hors mode course), tun (0..1 dans le tunnel), amb (0..1 dans une zone d'ambiance), r (vitesse 0..1), sp, gas, hit, bump (choc entre voitures, m/s), up / down (rapport monté / descendu), rpm, load, spool, stun }
   // Pluie : rideau étouffé à travers la carrosserie, plus fort et plus clair avec la vitesse. pl = force 0..3 (T.pluie), déjà coupée en tunnel ; r = vitesse 0..1 ; aq = aquaplaning (sim.js)
@@ -480,7 +480,7 @@
     k(scrapeG.gain, car.rub || rubT > 0 ? 0.1 + 0.2 * r : 0, 0.05);
     if ((hit > 3 || e.bump > 0.3) && t - lastHit > 0.15) { lastHit = t; const v = Math.max(hit, e.bump > 0.3 ? 5 + e.bump * 2 : 0); choc(v, t);
       if (racing) { coupMusique(v, t); satT = 0.5; if (hit > 8) platine = 1; } } // la musique encaisse : coup de basse, demi-seconde de saturation, et sur un gros choc elle ralentit comme une platine qu'on freine
-    // glisse (car.dd, car.driftT) : la tension monte en 1,5 s, palier quand le boost est acquis à 0,6 s ; sortie avec boost : tout s'ouvre d'un coup et le refrain joue tant que le boost dure ; glisse ratée : retour doux, sans effet
+    // glisse (car.dd, car.driftT) : la tension monte en 1,5 s, palier à 0,6 s (la jauge de nitro se remplit alors à plein débit) ; nitro déclenchée (car.boost) : tout s'ouvre d'un coup et le refrain joue tant qu'elle pousse
     const gl = racing && car.dd ? car.driftT || 0 : 0, vise = car.boost > 0 ? 0 : clamp(gl / 1.5, 0, 1);
     glisse = gl > 0.15; acquis = gl > 0.6; if (!glisse) acqDit = false; boostL = racing && car.boost > 0;
     if (car.boost > 0 && !wasBoost) { boostFx(t); boostPend = true; tens = 0; }

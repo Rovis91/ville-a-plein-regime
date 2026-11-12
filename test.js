@@ -7,7 +7,7 @@ const run = (c, inp, sec) => { for (let i = 0; i < sec / H; i++) step(c, typeof 
 const I = (steer, gas, brake = 0, hand = false) => ({ steer, gas, brake, hand });
 
 const rmin = 1 / Math.max(...S.map(s => Math.abs(s.k)));
-assert(!T.eau.some(Boolean), "la bruine de la ville ne doit pas mouiller la route (records)");
+assert(T.surf.every(q => q === SURF.sec), "la bruine de la ville ne doit pas mouiller la route (records)");
 assert(rmin > 25, 'rayon mini trop serré: ' + rmin);
 for (let i = 0; i < n; i++) for (let j = i + 40; j < n; j++) {
   if (n - j + i < 40) continue;
@@ -45,6 +45,7 @@ for (const [deg, keep, steer] of [[6, 0.82, 0], [12, 0.72, 0], [6, 0.7, 1]]) { /
   c.x += -s.tz * o; c.z += s.tx * o; c.th = th; c.vx = Math.cos(th) * v0; c.vz = Math.sin(th) * v0;
   let stun = 0, rub = 0; for (let i = 0; i < 120; i++) { step(c, I(steer, 1), T, H); stun = Math.max(stun, c.stun || 0); rub += c.rub; }
   assert(rub > 0, 'frôlement : mur non atteint');
+  assert(c.nitro > 0.02, 'frôler le mur doit remplir la jauge de nitro: ' + c.nitro);
   assert(v() > v0 * keep && stun <= 0, `frôlement à ${deg}° trop pénalisé: ${v0.toFixed(1)} -> ${v().toFixed(1)} m/s, coupure ${stun}`);
 }
 
@@ -59,7 +60,23 @@ c = newCar(T); run(c, I(0, 1), 4); run(c, I(1, 1, 0, true), 0.1); run(c, I(-1, 1
 const beta = Math.atan2(Math.abs(c.vl), Math.abs(c.vf)) * 180 / Math.PI;
 assert(c.drift && beta > 8 && beta < 60, 'angle de dérive hors plage: ' + beta);
 assert(c.yaw > 0, 'le volant ne doit pas inverser la glisse');
-run(c, I(0, 1), H); assert(!c.drift && c.boost > 0, 'pas de boost en sortie de glisse');
+assert(c.nitro > 0.02 && c.nitro < 0.5, 'la glisse tenue doit remplir la jauge de nitro, peu à peu: ' + c.nitro);
+{ const j = c.nitro, v = c.vf; run(c, I(0, 1), H); assert(!c.drift && !c.boost && c.nitro === j && c.vf < v + 0.2, 'la sortie de glisse ne doit plus pousser toute seule'); }
+
+// ---------- nitro : une jauge (c.nitro, 0 à 1) que le joueur dépense avec la commande nitro ----------
+{
+  const droit = (nitro, jauge, sec = 5) => { const c = newCar(T); c.nitro = jauge; run(c, { ...I(0, 1), nitro }, sec); return c; }, ecart = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+  const sans = droit(false, 1), avec = droit(true, 1), vide = droit(true, 0), temoin = droit(false, 0), mi = droit(true, 1, 1);
+  assert(sans.nitro === 1 && ecart(sans, temoin) === 0, "une jauge pleine ne fait rien tant qu'on ne la déclenche pas");
+  assert(ecart(vide, temoin) === 0 && !vide.boost, 'nitro sans jauge : aucun effet');
+  assert(mi.boost && mi.nitro > 0.3 && mi.nitro < 0.9, 'la jauge doit se vider peu à peu pendant la poussée: ' + mi.nitro);
+  assert(avec.nitro === 0 && !avec.boost && avec.dist > sans.dist + 15 && avec.vf > sans.vf + 5, `la nitro doit faire gagner du terrain en ligne droite: ${avec.dist * 2} m contre ${sans.dist * 2} m, ${avec.vf} contre ${sans.vf} m/s`);
+  // un choc franc contre le mur vide la jauge
+  const c = newCar(T); c.nitro = 1; run(c, I(0, 1), 4);
+  const s = S[c.idx], th = Math.atan2(s.tz, s.tx) + 0.9, v0 = c.vf, o = W - 1.3 - c.d; c.x += -s.tz * o; c.z += s.tx * o; c.th = th; c.vx = Math.cos(th) * v0; c.vz = Math.sin(th) * v0;
+  let stun = 0; for (let i = 0; i < 60; i++) { step(c, I(0, 1), T, H); stun = Math.max(stun, c.stun); }
+  assert(stun > 0 && c.nitro < 0.2, 'un choc franc doit vider la jauge: ' + c.nitro);
+}
 
 // boîte manuelle : en 1re la vitesse plafonne au rupteur (8000 tr/min = 72 km/h), et un rétrogradage abusif met en surrégime sans dépasser la zone rouge affichée
 c = newCar(T); c.manual = true; run(c, I(0, 1), 6);
@@ -98,6 +115,15 @@ at(a, 60, -1.3, 40); at(b, 60, 1.3, 40); a.vx -= S[60].tz * 3; a.vz += S[60].tx 
 for (let i = 0; i < 1 / H; i++) { stepRace(R, I(0.15, 1), H); bump = Math.max(bump, b.bump); assert(sep(a, b) > 1.6, 'contact latéral : voitures imbriquées'); }
 assert(bump > 0.5 && b.d > 2.5, 'le contact latéral doit pousser: ' + b.d);
 assert(a.vf > 36 && Math.hypot(b.vx, b.vz) > 36, 'le contact latéral ne doit pas arrêter: ' + a.vf);
+
+// aspiration : à vitesse égale, la voiture qui roule dans le sillage d'une autre va plus vite que seule, la rattrape et remplit sa jauge ; à côté, rien ne change. Elle vaut aussi pour les IA
+{
+  const duo = (lat, avant, inp = I(0, 1)) => { const R = newRace(T, 3, [1]), [a, b] = R.cars; at(a, 40, lat, 60); at(b, 40 + avant, 0, 60); let jmax = 0; for (let i = 0; i < 1.5 / H; i++) { stepRace(R, inp, H); jmax = Math.max(jmax, a.nitro); } a.jmax = jmax; return [a, b]; }; // b roule sur la trajectoire, a à `lat` mètres d'elle
+  const [seul] = duo(0, 400), [der, devant] = duo(0, 6), [seulC] = duo(6, 400), [cote] = duo(6, 6), [ia] = duo(0, 6, null);
+  assert(der.vf > seul.vf + 0.3 && sep(der, devant) < 11.8 && der.nitro > 0.02, `l'aspiration doit faire rattraper: ${der.vf} m/s contre ${seul.vf} seule, écart ${sep(der, devant)} m, jauge ${der.nitro}`);
+  assert(cote.vf === seulC.vf && cote.nitro === 0, `pas d'aspiration à côté: ${cote.vf} m/s contre ${seulC.vf}, jauge ${cote.nitro}`);
+  assert(ia.jmax > 0.01, "l'aspiration doit valoir aussi pour une IA");
+}
 
 // le tour d'une voiture seule ne doit pas bouger quand on touche à la course (records comparables)
 assert(Math.abs(t - 42.58) < 0.01, `le tour solo a changé: ${t} / ${tf}`);
@@ -156,6 +182,11 @@ assert(R.cars[0].pos === 4 && !R.cars[0].fin && !R.done && R.t < 60, 'course à 
     return { ...vol, hmax }; };
   const s30 = saut(30), s45 = saut(45), s60 = saut(60);
   assert(s30.d > 8 && s45.d > 1.3 * s30.d && s60.d > 1.2 * s45.d && s60.d < 140, `la portée doit croître avec la vitesse: ${s30.d} / ${s45.d} / ${s60.d} m`);
+  // pas de nitro en l'air : déclenchée en vol, elle ne pousse pas et la jauge ne bouge pas ; elle repart une fois les roues au sol
+  { const c = pose(lip - 40, 0, 45); c.nitro = 1; let t = 0, enVol = 0;
+    while (t < 6 && !(enVol && !c.air)) { const sp0 = v(c), j = c.nitro, av = c.air; step(c, { ...I(0, 1), nitro: av }, T, H); t += H; if (av) { enVol++; assert(c.nitro === j && v(c) <= sp0 && !c.boost, "la nitro agit en l'air"); } }
+    assert(enVol > 30 && c.nitro === 1, "vol trop court pour juger la nitro en l'air");
+    const j = c.nitro; for (let i = 0; i < 30; i++) step(c, { ...I(0, 1), nitro: true }, T, H); assert(c.nitro < j, 'au sol, la nitro doit repartir'); }
   // le tremplin du déversoir : lancée, la voiture passe la fosse ; trop lente, elle tombe dedans, perd du temps, mais en ressort seule par la rampe
   const [p2, , , F] = CARTE.sauts[1], lip2 = near(CARTE.pts[p2]), bout = lip2 + F / 2, fosse = sp => { const c = pose(lip2 - 30, 0, sp); let t = 0, fond = 0, hit = 0, i1 = 0;
     while (c.idx < bout + 60 && t < 30) { step(c, I(0, 1), T, H); t += H; hit = Math.max(hit, c.hit); if (c.land) { i1 = i1 || c.idx; if (c.idx < bout) fond++; } }

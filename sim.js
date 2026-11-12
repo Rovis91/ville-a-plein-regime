@@ -19,12 +19,28 @@
   const vturn = (a, k) => { const c = a / k; return KT.w1 * c >= KT.vref ? KT.w1 * c : KT.w0 * c / (1 + (KT.w0 - KT.w1) * c / KT.vref); }; // vitesse à laquelle la part a du braquage suffit pour une courbure k
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
-  // Pluie sur la route : m = (force − 1) / 2 (T.eau, 0 à force 1 ou en tunnel, 1 à force 3). La bruine (force 1, la ville) ne change rien : records intacts.
+  // Surfaces : la route de chaque échantillon a un jeu de coefficients (T.surf[i]), pris dans SURF ou fondu entre deux de ses entrées. Un seul mécanisme pour la pluie, la glace, la neige et la terre.
   //   vir = lacet perdu en courbe ; frein, trac = freinage et motricité perdus ; colle = rattrapage de la vitesse par le nez perdu (la voiture chasse)
-  //   aquaplaning : au-dessus de vaq − dvaq·m (m/s), sur 4 m/s : jusqu'à aq de lacet en moins, et le rattrapage perd encore aqc
-  const PL = { vir: 0.15, frein: 0.3, trac: 0.25, colle: 0.5, vaq: 230 / 3.6, dvaq: 40 / 3.6, aq: 0.25, aqc: 0.3 };
-  const aqua = (m, v) => m * clamp((v - PL.vaq + PL.dvaq * m) / 4, 0, 1);
-  const eau = (T, i) => T.eau ? T.eau[i] : 0;
+  //   aquaplaning : au-dessus de vaq (m/s), sur 4 m/s : jusqu'à aq de lacet en moins, et le rattrapage perd encore aqc
+  //   roul = frein de roulement en plus (m/s²) ; gl = la glisse part plus tôt : seuils de vitesse et de volant abaissés d'autant
+  // Une carte déclare surf : { fond: 'neige', zones: [[point a, point b, 'glace', force = 1], …] } (fond partout, zones fondues sur 20 m à leurs bords). Sans rien : sec.
+  // La pluie (th.pluie) passe par la même table : force 3 = SURF.mouille, force 1 (la bruine de la ville) ou tunnel = sec.
+  const SURF = {
+    sec: { vir: 0, frein: 0, trac: 0, colle: 0, vaq: 230 / 3.6, aq: 0, aqc: 0, roul: 0, gl: 0 },
+    mouille: { vir: 0.15, frein: 0.3, trac: 0.25, colle: 0.5, vaq: 190 / 3.6, aq: 0.25, aqc: 0.3, roul: 0, gl: 0 },
+    glace: { vir: 0.6, frein: 0.7, trac: 0.7, colle: 0.8, vaq: 230 / 3.6, aq: 0, aqc: 0, roul: 0, gl: 0 }, // très peu de lacet et de freinage, nez très en retard
+    neige: { vir: 0.3, frein: 0.4, trac: 0.4, colle: 0.7, vaq: 230 / 3.6, aq: 0, aqc: 0, roul: 0.2, gl: 0.2 }, // tassée : entre le sec et la glace
+    terre: { vir: 0.05, frein: 0.2, trac: 0.3, colle: 0.6, vaq: 230 / 3.6, aq: 0, aqc: 0, roul: 0.5, gl: 0.5 }, // motricité réduite, glisse facile, la voiture tourne encore bien
+  };
+  const mele = (a, b, f) => f <= 0 ? a : f >= 1 ? b : Object.fromEntries(Object.keys(a).map(k => [k, lerp(a[k], b[k], f)]));
+  const surf = (T, i) => T.surf ? T.surf[i] : SURF.sec;
+  // Nitro : une jauge par voiture (c.nitro, 0 à 1) que la commande inp.nitro dépense, gaz ouverts et roues au sol. c.boost = 1 pendant qu'elle pousse.
+  //   dur = secondes de poussée d'une jauge pleine ; acc = poussée (m/s²)
+  //   remplissage, en jauge par seconde : gl = glisse tenue (à TOP, plein débit après 0,6 s de glisse) ; mur = frotter un mur sans le taper ; cam = doubler un camion au ras ; asp = dans l'aspiration d'un rival
+  //   un choc franc (mur ou camion) la vide
+  // Aspiration (course) : derrière une voiture, de 3 à ad m, dans un cône qui s'ouvre de ac par mètre : jusqu'à acx de traînée en moins, tout près
+  const NI = { dur: 3, acc: 6, gl: 0.3, mur: 0.5, cam: 0.6, asp: 0.12, ad: 30, ac: 0.08, acx: 0.5 };
+  const gagne = (c, x) => { c.nitro = Math.min(1, c.nitro + x); };
   // Relief (cartes qui déclarent des sauts ou des murs roulables, sinon rien de tout cela ne joue) : la voiture a une hauteur c.y et une vitesse verticale c.vy.
   //   Elle tombe à GRAV ; le sol la rattrape et lui donne sa propre vitesse verticale. À plus de DROOP du sol (débattement des suspensions) elle vole : ni volant, ni moteur, ni frein.
   //   Réception : au-delà de LAND0 m/s d'impact contre le sol, LANDK de vitesse perdue par m/s, jusqu'à LANDX (se recevoir dans une descente ne coûte rien)
@@ -83,19 +99,20 @@
         s.kl = 2 * (ux * vz - uz * vx) / (Math.hypot(ux, uz) * Math.hypot(vx, vz) * Math.hypot(c[0] - a[0], c[1] - a[1])); });
     }
     const t0 = at(TUN[0]), t1 = at(TUN[1]);
-    // pluie (th.pluie) : 1 = partout, ou des zones [point a, point b, force] fondues sur 60 échantillons (120 m). T.pluie = force par échantillon (l'image), T.eau = m ci-dessus, nul en tunnel (la route)
+    // pluie (th.pluie) : 1 = partout, ou des zones [point a, point b, force] fondues sur 60 échantillons (120 m). T.pluie = force par échantillon (l'image) ; T.surf = la route (voir SURF)
     const span = (a0, a1, r) => i => { const a = (i - a0 + n) % n, L = (a1 - a0 + n) % n; return a < L ? 1 : Math.max(0, 1 - (a - L) / r, 1 - (n - a) / r); };
     const pz = Array.isArray(M.th.pluie) ? M.th.pluie.map(([a, b, f]) => [span(at(a), at(b), 60), f]) : null, tz = span(t0, t1, 20);
     const pluie = Float32Array.from(S, (_, i) => pz ? Math.max(0, ...pz.map(([z, f]) => z(i) * f)) : M.th.pluie ? 1 : 0);
-    const eau = pluie.map((p, i) => clamp((p - 1) / 2, 0, 1) * (M.tun ? 1 - tz(i) : 1));
+    const sf = M.surf || {}, sz = (sf.zones || []).map(([a, b, t, f = 1]) => [span(at(a), at(b), 10), SURF[t], f]);
+    const surf = S.map((_, i) => { let q = mele(SURF[sf.fond || 'sec'], SURF.mouille, clamp((pluie[i] - 1) / 2, 0, 1) * (M.tun ? 1 - tz(i) : 1)); for (const [z, t, f] of sz) q = mele(q, t, z(i) * f); return q; });
     // tun : la carte a un tunnel, de t0 à t1 ; h0-h1 : secteur « chaud » pour la musique ; sp : les deux temps intermédiaires (indices d'échantillons)
-    return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, eau, vert };
+    return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, surf, vert };
   }
 
   function newCar(T) {
     const i = T.n - 8, s = T.S[i]; // 16 m avant la ligne
     return { x: s.x, z: s.z, th: Math.atan2(s.tz, s.tx), vx: 0, vz: 0, steer: 0, yaw: 0, idx: i, dist: -8, d: 0, hit: 0, vf: 0, vl: 0,
-      drift: false, slide: 0, driftT: 0, dd: 0, sa: 0, boost: 0, stun: 0, nDrift: 0, nBoost: 0, nWall: 0, combo: 0, comboMax: 0, // n… : bilan de glisse (glisses, boosts, chocs mur, boosts enchaînés sans choc)
+      drift: false, slide: 0, driftT: 0, dd: 0, sa: 0, nitro: 0, boost: 0, asp: 0, stun: 0, nDrift: 0, nBoost: 0, nWall: 0, // nitro : la jauge ; boost : elle pousse ; asp : aspiration reçue (0 à 1, course) ; n… : bilan (glisses, coups de nitro, chocs mur)
       manual: false, gear: 0, lastGear: 0, shiftT: 0, rpm: CARD.idle,
       y: s.y, vy: 0, air: false, airT: 0, land: 0 }; // relief : hauteur, vitesse verticale, en l'air, durée du vol en cours, vitesse d'impact à la réception (un seul pas)
   }
@@ -105,6 +122,7 @@
   function mur(c, Nx, Nz, o, Tx, Tz, sgT, kw, dt) {
     const vn = c.vx * Nx + c.vz * Nz;
     c.x -= Nx * o; c.z -= Nz * o; c.rub = 1;
+    if (Math.hypot(c.vx, c.vz) > 15) gagne(c, NI.mur * dt); // frôler le mur remplit la jauge (un choc franc, plus bas, la vide)
     // frotter le mur freine en continu ; et le mur extérieur d'un virage ne remplace pas les pneus : s'y appuyer pour tourner se paie en vitesse, en proportion de ce qu'il fait tourner (rien le long d'un mur droit)
     const v = Math.hypot(c.vx, c.vz), sc = Math.exp(-(WALL_RUB + WALL_MU * Math.max(0, kw * v - 0.1)) * dt); c.vx *= sc; c.vz *= sc;
     const rel = wrap(c.th - Math.atan2(Tz, Tx)), into = rel * sgT > 0 && Math.abs(rel) < 1.5; // nez tourné vers le mur
@@ -112,9 +130,9 @@
     if (vn > 0) {
       // la perte sèche ne tombe qu'à l'arrivée sur le mur : rester appuyé dessus, volant braqué, ne fait que frotter
       const fresh = !(c.wallT > 0), sa = vn / Math.max(Math.hypot(c.vx, c.vz), 1), k = fresh ? 1 - clamp((sa - WALL_SOFT) * WALL_LOSS, 0, 0.7) : 1;
-      c.vx = (c.vx - Nx * vn) * k; c.vz = (c.vz - Nz * vn) * k; c.hit = fresh ? vn : 0; if (fresh && vn > 2) { c.nWall++; c.combo = 0; } // pas de rebond : on glisse le long du mur
+      c.vx = (c.vx - Nx * vn) * k; c.vz = (c.vz - Nz * vn) * k; c.hit = fresh ? vn : 0; if (fresh && vn > 2) c.nWall++; // pas de rebond : on glisse le long du mur
       c.th += wrap(Math.atan2(Tz, Tx) - c.th) * Math.min(0.5, vn * 0.03);
-      if (fresh && sa > WALL_HARD && vn > 5) { c.dd = 0; c.driftT = 0; c.boost = 0; c.stun = 0.8; } // un vrai choc annule le boost et coupe le moteur 0,8 s
+      if (fresh && sa > WALL_HARD && vn > 5) { c.dd = 0; c.driftT = 0; c.nitro = 0; c.stun = 0.8; } // un vrai choc vide la jauge et coupe le moteur 0,8 s
     }
     c.wallT = 0.4;
   }
@@ -130,10 +148,12 @@
     const sp = Math.abs(vf);
     // Glisse (frein à main tenu + volant, au-dessus de 45 km/h) : elle verrouille son sens (c.dd) tant que le frein à main est tenu ; le volant ne fait plus qu'ouvrir ou fermer le rayon.
     // La voiture se met en travers de c.sa (angle de dérive) mais sa trajectoire tourne au lacet commandé : on serre plus qu'en adhérence, sans perdre de vitesse.
-    if (!c.dd && inp.hand && sp > 12 && Math.abs(inp.steer) > 0.3) { c.dd = Math.sign(inp.steer); c.nDrift++; }
-    if (c.dd && (!inp.hand || sp < 10)) { if (c.driftT > 0.6 && sp >= 10) { c.boost = Math.min(1.5, c.driftT * 0.8); c.nBoost++; c.comboMax = Math.max(c.comboMax, ++c.combo); } c.dd = 0; c.driftT = 0; } // glisse tenue plus de 0,6 s : boost à la sortie
-    const m = eau(T, c.idx); c.aq = aqua(m, sp); // route mouillée : moins de lacet, encore moins en aquaplaning
-    const om = omega(sp) * Math.min(1, sp / 10) * (1 - PL.vir * m) * (1 - PL.aq * c.aq), sd = c.steer * (c.dd || 0);
+    const Q = surf(T, c.idx);
+    if (!c.dd && inp.hand && sp > 12 * (1 - Q.gl) && Math.abs(inp.steer) > 0.3 * (1 - Q.gl)) { c.dd = Math.sign(inp.steer); c.nDrift++; }
+    if (c.dd && (!inp.hand || sp < 10 * (1 - Q.gl))) { c.dd = 0; c.driftT = 0; }
+    if (c.dd) gagne(c, NI.gl * Math.min(1, c.driftT / 0.6) * Math.min(1, sp / TOP) * dt); // la glisse tenue remplit la jauge, d'autant plus qu'elle dure et qu'elle va vite
+    c.aq = Q.aq ? clamp((sp - Q.vaq) / 4, 0, 1) : 0; // route glissante : moins de lacet, encore moins en aquaplaning
+    const om = omega(sp) * Math.min(1, sp / 10) * (1 - Q.vir) * (1 - Q.aq * c.aq), sd = c.steer * (c.dd || 0);
     const w = c.dd ? c.dd * om * lerp(KT.dn, sd > 0 ? KT.din : KT.dout, Math.abs(sd)) : c.steer * om * (inp.gas && !inp.brake ? 1 : KT.lift);
     c.yaw += (w - c.yaw) * Math.min(1, dt * 18); // un rien d'inertie : la réponse est quasi immédiate
     const dsa = ((c.dd || 0) * KT.ang * (1 + 0.2 * sd) - c.sa) * Math.min(1, dt * 6); c.sa += dsa;
@@ -151,24 +171,27 @@
     if (c.gear !== c.lastGear) { c.shiftT = 0.25; c.lastGear = c.gear; }
     const ratio = CARD.ratios[c.gear], wr = av * K * ratio, er = Math.max(wr, c.gear === 0 && inp.gas ? 3500 : CARD.idle); // en 1re, l'embrayage patine vers 3500 tr/min au démarrage
     c.rpm += (Math.min(er, CARD.red + 150) - c.rpm) * Math.min(1, dt * 18);
+    const pousse = inp.nitro && inp.gas && c.nitro > 0 ? 1 : 0; if (pousse && !c.boost) c.nBoost++;
     let acc = 0;
     if (c.shiftT > 0) c.shiftT -= dt;
-    else if (wr > CARD.red) acc = -6 * Math.sign(vf); // surrégime : rupteur et gros frein moteur
+    else if (wr > CARD.red && !pousse) acc = -6 * Math.sign(vf); // surrégime : rupteur et gros frein moteur
     else {
       const tqe = inp.gas * torque(er) - (1 - inp.gas) * (20 + 0.01 * er) * Math.sign(vf); // couple moteur, ou frein moteur pied levé
-      acc = Math.min(CARD.trac * (1 - PL.trac * m), tqe * ratio * CARD.final * CARD.eff / CARD.wheel / CARD.mass); // plafonné par la motricité (~1,1 g en 4 roues motrices, moins en propulsion)
+      acc = Math.min(CARD.trac * (1 - Q.trac), tqe * ratio * CARD.final * CARD.eff / CARD.wheel / CARD.mass); // plafonné par la motricité (~1,1 g en 4 roues motrices, moins en propulsion)
     }
-    if (c.boost > 0) { c.boost -= dt; if (inp.gas) acc += 6; }
+    c.boost = pousse; // (la nitro passe le rupteur : elle pousse aussi une voiture au bout de son dernier rapport)
+    if (pousse) { c.nitro = Math.max(0, c.nitro - dt / NI.dur); acc += NI.acc; }
     if (c.stun > 0) { c.stun -= dt; if (acc > 0) acc *= 0.2; }
     vf += acc * dt;
     const s0 = S[c.idx]; if (Math.abs(vf) > 1) vf -= 9.81 * s0.sl * (fx * s0.tx + fz * s0.tz) * dt; // la pente pousse ou retient
-    if (inp.brake) vf -= (vf > 0.5 ? 18 : 12) * (1 - PL.frein * m) * inp.brake * dt;
+    if (inp.brake) vf -= (vf > 0.5 ? 18 : 12) * (1 - Q.frein) * inp.brake * dt;
     if (vf < -12) vf = -12;
     // traînée aérodynamique (½·ρ·Cd·A·v²), résistance au roulement, et un peu de vitesse perdue en tournant
-    vf -= (0.6 * CARD.cd * CARD.area * vf * Math.abs(vf) / CARD.mass + ((Math.abs(vf) > 0.3 ? 0.15 : 0) + KT.tv * Math.abs(c.yaw) * Math.min(1, sp / 10)) * Math.sign(vf)) * dt;
+    if (c.asp) gagne(c, NI.asp * c.asp * dt); // dans l'aspiration : moins de traînée, et la jauge monte
+    vf -= (0.6 * CARD.cd * CARD.area * (1 - NI.acx * c.asp) * vf * Math.abs(vf) / CARD.mass +((Math.abs(vf) > 0.3 ? 0.15 + Q.roul : 0) + KT.tv * Math.abs(c.yaw) * Math.min(1, sp / 10)) * Math.sign(vf)) * dt;
     // pas de pneus qui décrochent : la vitesse suit le nez de la voiture (décalé de l'angle de dérive en glisse), sans rien perdre ; un choc de côté est rattrapé en un dixième de seconde
     const v0 = Math.hypot(vf, vl);
-    vl += (-Math.sin(c.sa) * v0 - vl) * Math.min(1, 25 * (1 - PL.colle * m) * (1 - PL.aqc * c.aq) * dt); // sur le mouillé, la vitesse suit le nez avec retard : la voiture chasse
+    vl += (-Math.sin(c.sa) * v0 - vl) * Math.min(1, 25 * (1 - Q.colle) * (1 - Q.aqc * c.aq) * dt); // sur une route glissante, la vitesse suit le nez avec retard : la voiture chasse
     if (v0 > 1) { const k = v0 / Math.max(Math.hypot(vf, vl), 1e-3); vf *= k; vl *= k; }
     c.slide = Math.min(1, Math.abs(c.sa) / KT.ang); c.drift = !!c.dd;
     if (c.dd) c.driftT += dt;
@@ -178,7 +201,7 @@
   // un pas en l'air : la voiture garde son cap et sa vitesse, moins la traînée ; gaz tenus, le moteur prend ses tours à vide
   function vole(c, inp, dt) {
     const k = 1 - 0.6 * CARD.cd * CARD.area * Math.hypot(c.vx, c.vz) / CARD.mass * dt;
-    c.vx *= k; c.vz *= k; c.x += c.vx * dt; c.z += c.vz * dt; c.yaw = 0; c.airT += dt;
+    c.vx *= k; c.vz *= k; c.x += c.vx * dt; c.z += c.vz * dt; c.yaw = 0; c.airT += dt; c.boost = 0; // pas de nitro en l'air
     if (inp.gas) c.rpm += (CARD.red - c.rpm) * Math.min(1, dt * 6);
   }
 
@@ -242,23 +265,23 @@
     const la = S[(c.idx + look) % n];
     const e = wrap(Math.atan2(la.z + la.tx * (off || la.dl) - c.z, la.x - la.tz * (off || la.dl) - c.x) - c.th);
     // vitesse permise = celle de chaque virage de la trajectoire à venir, plus ce qu'on peut perdre en freinant d'ici là (10 m/s², 2 m par échantillon)
-    // sous la pluie : virages au lacet mouillé, sans dépasser le seuil d'aquaplaning là où il ne passerait plus, et freinage plus long
+    // sur une surface glissante (SURF) : virages au lacet qu'elle laisse (avec une marge là où le nez tarde plus que sous la pluie : la voiture élargit), sans dépasser le seuil d'aquaplaning là où il ne passerait plus, et freinage plus long
     // Elle ne dépend que de l'échantillon : calculée une fois par échantillon et gardée dans T.va (200 virages regardés, 8 fois par image en course sinon)
-    if (T.vaEau !== T.eau) { T.va = new Float64Array(n).fill(-1); T.vaEau = T.eau; } // (elle dépend aussi de la pluie : si T.eau change, on repart de zéro)
+    if (T.vaSurf !== T.surf) { T.va = new Float64Array(n).fill(-1); T.vaSurf = T.surf; } // (elle dépend aussi de la surface : si T.surf change, on repart de zéro)
     const VA = T.va;
     let va = VA[c.idx];
     if (va < 0) {
-      va = 1e9; const fr = 40 * (1 - PL.frein * eau(T, c.idx));
+      va = 1e9; let fr = 0; // fr : ce que le freinage peut reprendre d'ici là, surface par surface (une plaque de glace devant se freine avant)
       for (let j = 0; j < 200; j++) {
-        const i = (c.idx + j) % n, m = eau(T, i), k = Math.abs(S[i].kl) + 1e-4, g = 1.3 * (1 - PL.vir * m), vq = PL.vaq - PL.dvaq * m;
-        let v = vturn(g, k); if (m && v > vq) v = Math.max(vq, vturn(g * (1 - PL.aq * m) * 0.7, k)); // au-delà du seuil d'aquaplaning, avec de la marge : la voiture y chasse
-        va = Math.min(va, Math.sqrt(v ** 2 + fr * j));
+        const i = (c.idx + j) % n, Q = surf(T, i), k = Math.abs(S[i].kl) + 1e-4, g = 1.3 * (1 - Q.vir) * (1 - 0.8 * Math.max(0, Q.colle - 0.5)), vq = Q.vaq;
+        let v = vturn(g, k); if (Q.aq && v > vq) v = Math.max(vq, vturn(g * (1 - Q.aq) * 0.7, k)); // au-delà du seuil d'aquaplaning, avec de la marge : la voiture y chasse
+        va = Math.min(va, Math.sqrt(v ** 2 + fr)); fr += 40 * (1 - Q.frein);
       }
       VA[c.idx] = va;
     }
     const vt = Math.min(vcap, va * lvl * (off ? 0.9 : 1)); // hors trajectoire, on passe moins vite
     const st = clamp(e * 3, -1, 1);
-    return { steer: st, gas: sp < vt ? lvl : 0, brake: sp > vt + 3 ? 1 : 0, hand: false };
+    return { steer: st, gas: sp < vt ? lvl : 0, brake: sp > vt + 3 ? 1 : 0, hand: false, nitro: sp < vt - 8 && Math.abs(st) < 0.25 && (c.boost > 0 || c.nitro > 0.3) }; // la nitro : en ligne droite, loin du prochain freinage, par coups francs (il attend d'avoir un tiers de jauge)
   }
 
   // ---------- Course contre des adversaires IA ----------
@@ -311,6 +334,10 @@
     for (const c of cars) c.bump = 0; ins.forEach((p, i) => { const c = cars[i]; if (c.fin && (i || !inp) && Math.hypot(c.vx, c.vz) > 28) { p.gas = 0; p.brake = Math.max(p.brake, 0.3); } }); // tour d'honneur à 100 km/h
     // les chocs entre voitures d'abord, puis step() : les murs ont le dernier mot, aucune voiture ne peut être poussée hors piste
     for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) collide(cars[i], cars[j]);
+    // aspiration : c.asp = 1 collé derrière une voiture lancée, 0 à NI.ad mètres ou hors du cône (la plus forte l'emporte)
+    for (const c of cars) { c.asp = 0; const fx = Math.cos(c.th), fz = Math.sin(c.th);
+      for (const o of cars) { const dx = o.x - c.x, dz = o.z - c.z, lon = dx * fx + dz * fz;
+        if (o !== c && lon > 3 && lon < NI.ad && Math.abs(dz * fx - dx * fz) < 1 + NI.ac * lon && o.vx * fx + o.vz * fz > 20 && Math.abs(o.y - c.y) < 1.5) c.asp = Math.max(c.asp, 1 - lon / NI.ad); } }
     cars.forEach((c, i) => {
       step(c, ins[i], T, dt);
       c.lap = clamp(Math.floor(c.dist / T.n) + 1, 1, R.laps);
@@ -334,19 +361,21 @@
     });
     return TRUCKS;
   }
-  function hitTrafic(c, T, t) {
+  function hitTrafic(c, T, t, dt = 1 / 120) {
     for (const k of trafic(T, t)) {
       if (Math.abs(((k.idx - c.idx + T.n + T.n / 2) % T.n) - T.n / 2) > 12) continue;
-      const kx = Math.cos(k.th), kz = Math.sin(k.th), cx = Math.cos(c.th), cz = Math.sin(c.th);
+      const kx = Math.cos(k.th), kz = Math.sin(k.th), cx = Math.cos(c.th), cz = Math.sin(c.th); let touche = 0;
       for (const i of [-4, 0, 4]) for (const j of [-1.2, 1.2]) { // camion = 3 cercles de 1,4 m, voiture = 2 cercles de 1,1 m
         const dx = c.x + cx * j - k.x - kx * i, dz = c.z + cz * j - k.z - kz * i, d = Math.hypot(dx, dz);
-        if (d >= 2.5 || d < 1e-6) continue;
+        if (d >= 2.5 || d < 1e-6) continue; touche = 1;
         const nx = dx / d, nz = dz / d, vn = -((c.vx - k.vx) * nx + (c.vz - k.vz) * nz);
         c.x += nx * (2.5 - d); c.z += nz * (2.5 - d);
-        if (vn > 0) { c.vx += nx * vn * 1.2; c.vz += nz * vn * 1.2; c.hit = Math.max(c.hit, vn); if (vn > 3) { c.driftT = 0; c.boost = 0; c.stun = 0.8; } }
+        if (vn > 0) { c.vx += nx * vn * 1.2; c.vz += nz * vn * 1.2; c.hit = Math.max(c.hit, vn); if (vn > 3) { c.driftT = 0; c.nitro = 0; c.stun = 0.8; } }
       }
+      // doublé au ras (moins de 1,2 m entre les flancs), sans contact, avec au moins 8 m/s de mieux que lui : la jauge monte
+      const dx = c.x - k.x, dz = c.z - k.z; if (!touche && Math.abs(dx * kx + dz * kz) < 7 && Math.abs(dz * kx - dx * kz) < 3.7 && c.vx * kx + c.vz * kz > k.v + 8) gagne(c, NI.cam * dt);
     }
   }
 
-  Object.assign(G, { sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, PL });
+  Object.assign(G, { sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, trafic, hitTrafic, AI_LVL, DIFF, TOP, CARD, vturn, omega, SURF });
 })(typeof window !== 'undefined' ? window : globalThis);

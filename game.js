@@ -521,8 +521,8 @@
     if (car.slide > 0.3 && sp > 10 && !car.air) for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.2, car.z - fz * 1.4 + rz * sd, car.vx * 0.25 + jit(4), 1 + Math.random() * 2.5, car.vz * 0.25 + jit(4), 0.9, lerp(0.16, 0.28, lm), lerp(0.18, 0.06, lm), lerp(0.28, 0.06, lm), -1);
     if (hit > 3) { const s = S[car.idx], sg = Math.sign(car.d); for (let i = 0; i < 16; i++) emit(car.x - s.tz * sg, carY + 0.5, car.z + s.tx * sg, car.vx * 0.5 + jit(14), 2 + Math.random() * 7, car.vz * 0.5 + jit(14), 0.5, 1, 0.75, 0.25, 22); }
     else if (car.rub && sp > 8) { const s = S[car.idx], sg = Math.sign(car.d); for (let i = 0; i < 3; i++) emit(car.x - s.tz * sg, carY + 0.4, car.z + s.tx * sg, car.vx * 0.6 + jit(5), 1 + Math.random() * 4, car.vz * 0.6 + jit(5), 0.35, 1, 0.75, 0.25, 22); } // frottement continu : gerbe plus fine que le choc
-    for (const fl of flames) { fl.visible = car.boost > 0; fl.scale.y = (0.5 + Math.random() * 0.7) * Math.min(1, car.boost * 2); } // boost : deux flammes d'échappement qui vacillent, les traînées virent au bleu
-    if (car.dd && sp > 10 && !car.air) { const ok = car.driftT > 0.6; for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.15, car.z - fz * 1.4 + rz * sd, car.vx * 0.5 + rx * sd * 3 + jit(3), 1 + Math.random() * 3, car.vz * 0.5 + rz * sd * 3 + jit(3), 0.3, ok ? 1 : 0.3, ok ? 0.55 : 0.6, ok ? 0.1 : 1, 14); } // glisse : étincelles aux roues arrière, bleues puis orange quand le boost est acquis
+    for (const fl of flames) { fl.visible = car.boost > 0; fl.scale.y = (0.5 + Math.random() * 0.7) * Math.min(1, car.boost * 2); } // nitro : deux flammes d'échappement qui vacillent, les traînées virent au bleu
+    if (car.dd && sp > 10 && !car.air) { const ok = car.driftT > 0.6; for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.15, car.z - fz * 1.4 + rz * sd, car.vx * 0.5 + rx * sd * 3 + jit(3), 1 + Math.random() * 3, car.vz * 0.5 + rz * sd * 3 + jit(3), 0.3, ok ? 1 : 0.3, ok ? 0.55 : 0.6, ok ? 0.1 : 1, 14); } // glisse : étincelles aux roues arrière, bleues puis orange quand la jauge se remplit à plein débit
     for (let i = 0; i < PN; i++) {
       if (pL[i] <= 0) continue;
       pL[i] -= dt; const j = i * 3, f = Math.max(0, pL[i] / pM[i]);
@@ -616,11 +616,13 @@
   }
 
   // ---------- état de jeu ----------
-  // clés « vpr6. » : la conduite a changé de principe (braquage direct, glisse au frein à main tenu), les anciens records ne sont plus comparables
+  // clés « vpr7. » : la V2 change la physique (jauge de nitro à la place du boost de sortie de glisse, aspiration, surfaces), les records « vpr6. » ne sont plus comparables.
+  // Le joueur qui en avait est prévenu au menu (anciens), jusqu'à son premier départ
   // une série de records par carte ; la ville garde ses clés d'origine
-  const PRE = 'vpr6.' + (M.id === 'ville' ? '' : M.id + '.');
+  const PRE = 'vpr7.' + (M.id === 'ville' ? '' : M.id + '.');
   const store = { get: k => { try { return JSON.parse(localStorage.getItem(PRE + k)); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(PRE + k, JSON.stringify(v)); } catch (e) { } } };
   const pref = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }, setPref = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
+  let anciens = (() => { try { return !localStorage.getItem('vpr7.vu') && Object.keys(localStorage).some(k => /^vpr6\..*best$/.test(k)); } catch (e) { return false; } })();
   let msel = 3; // ligne du menu principal
   // écran d'accueil : le navigateur n'autorise le son qu'après un geste ; on le demande d'abord, pour que la musique soit là quand le menu s'affiche
   let accueil = true;
@@ -633,19 +635,19 @@
   let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, cth = car.th, lm = 0, carY = S[car.idx].y, pitch = 0, roll = 0, result = null, manual = pref('vpr.boite', 'a') === 'm';
   // secteurs (entrée et sortie de l'échangeur) et fantôme du record : [x, y, z, cap] à 20 Hz
   // mode : 'solo' (contre-la-montre à tours enchaînés) ou 'course' (3 tours contre les IA de sim.js) ; race = la course en cours, sinon null
-  let mode = pref('vpr6.mode', '') === '"course"' ? 'course' : 'solo', race = null, raceEnd = false; // le mode est mémorisé une fois pour toutes les cartes
+  let mode = pref('vpr7.mode', '') === '"course"' ? 'course' : 'solo', race = null, raceEnd = false; // le mode est mémorisé une fois pour toutes les cartes
   let si = 0, cur = [], bestSpl = store.get('splits'), ghost = store.get('ghost'), recG = [], splitMsg = null, lapN = 1, rLap = 0, rLapT = 0, prev = 'race', psel = 0, ghostOn = !!store.get('ghostOn');
   const keys = {}, H = 1 / 120;
-  let diff = clamp(+pref('vpr6.diff', 1) | 0, 0, DIFF.length - 1); // difficulté du mode course (DIFF de sim.js)
+  let diff = clamp(+pref('vpr7.diff', 1) | 0, 0, DIFF.length - 1); // difficulté du mode course (DIFF de sim.js)
   // médailles du contre-la-montre : le tour lancé du pilote automatique sert de référence ; M.med = [bronze, argent, or] en multiples de ce temps
-  const REF = (() => { const c = newCar(T); let t = 0, t1 = 0; while (c.dist < 2 * N && t < 900) { step(c, autopilot(c, T), T, H); t += H; if (!t1 && c.dist >= N) t1 = t; } return t - t1; })();
+  const REF = (() => { const c = newCar(T); let t = 0, t1 = 0; while (c.dist < 2 * N && t < 900) { step(c, autopilot(c, T), T, H); t += H; if (!t1 && c.dist >= N) { t1 = t; c.nitro = 1; } } return t - t1; })(); // (il part avec une jauge de nitro pleine, qu'il dépense en ligne droite : ce qu'un bon tour en gagne)
   const MED = M.med || [1.1, 1.03, 0.97], MEDN = ['BRONZE', 'ARGENT', 'OR'], MEDC = ['#c87a3a', '#c8ccd4', '#ffd23a'];
   const medal = t => t ? MED.filter(k => t <= REF * k).length : 0; // 0 aucune, 1 bronze, 2 argent, 3 or
-  let lap0 = [0, 0, 0], bestLap = 0; // compteurs de glisse au début du tour (glisses, boosts, murs) ; meilleur tour du joueur en course
-  const bilan = () => { const b = [car.nDrift - lap0[0], car.nBoost - lap0[1], car.nWall - lap0[2], car.comboMax]; lap0 = [car.nDrift, car.nBoost, car.nWall]; car.comboMax = car.combo; return b; };
+  let lap0 = [0, 0, 0], bestLap = 0; // compteurs au début du tour (glisses, coups de nitro, murs) ; meilleur tour du joueur en course
+  const bilan = () => { const b = [car.nDrift - lap0[0], car.nBoost - lap0[1], car.nWall - lap0[2]]; lap0 = [car.nDrift, car.nBoost, car.nWall]; return b; };
 
   function start() {
-    SON.init(); accueil = false;
+    SON.init(); accueil = false; if (anciens) { anciens = false; setPref('vpr7.vu', 1); }
     race = mode === 'course' ? newRace(T, 3, AI_LVL.map(l => l * DIFF[diff].k), DIFF[diff].el) : null; raceEnd = false; lap0 = [0, 0, 0]; bestLap = 0;
     car = race ? race.cars[0] : newCar(T); car.manual = manual; gear = 0; hist.length = 0; si = 0; cur = []; recG = []; splitMsg = null; cth = car.th; carY = S[car.idx].y; state = 'count'; count = 3; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1; rLap = 0; rLapT = 0; result = null;
   }
@@ -684,7 +686,7 @@
       clearTimeout(cibleT); cibleT = setTimeout(changeCarte, 150);
     } else if (msel === 1) { // contre-la-montre, puis la course à chaque difficulté
       const k = ((mode === 'solo' ? 0 : diff + 1) + d + DIFF.length + 1) % (DIFF.length + 1);
-      mode = k ? 'course' : 'solo'; if (k) diff = k - 1; setPref('vpr6.mode', JSON.stringify(mode)); setPref('vpr6.diff', diff); }
+      mode = k ? 'course' : 'solo'; if (k) diff = k - 1; setPref('vpr7.mode', JSON.stringify(mode)); setPref('vpr7.diff', diff); }
     else if (msel === 2) { manual = !manual; car.manual = manual; setPref('vpr.boite', manual ? 'm' : 'a'); }
     else start();
   }
@@ -723,8 +725,8 @@
   addEventListener('blur', () => { for (const k in keys) keys[k] = 0; }); // sinon une touche reste enfoncée après Alt-Tab
   // e.code = position physique : KeyW/KeyA sont Z/Q sur un clavier AZERTY
   // manette (disposition « standard » du navigateur, noms des boutons d'une manette de Switch) : stick ou croix = volant et menus, ZR ou B = gaz, ZL ou Y = frein,
-  // A = glisse, X = radio, L / R = rapports, + = pause, B = valider. Les boutons rejouent les touches du clavier, pour ne pas dédoubler les menus.
-  const PADK = { 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight', 0: 'Enter', 9: 'Escape', 8: 'g', 3: 'c', 4: 'KeyQ', 5: 'KeyE' }, padWas = {}; let pad = null;
+  // A = glisse, X = nitro, clic du stick = radio, L / R = rapports, + = pause, B = valider. Les boutons rejouent les touches du clavier, pour ne pas dédoubler les menus.
+  const PADK = { 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight', 0: 'Enter', 9: 'Escape', 8: 'g', 10: 'c', 11: 'c', 4: 'KeyQ', 5: 'KeyE' }, padWas = {}; let pad = null;
   let padIdx = -1; const padRepos = {}; // manette retenue = la dernière qui a eu une entrée : la première de la liste peut être un autre périphérique (volant, casque, second Joy-Con)
   const padNote = document.body.appendChild(document.createElement('div')); padNote.setAttribute('role', 'status');
   padNote.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);padding:8px 12px;background:#0c0c10;color:#ffd23a;font:12px "Press Start 2P",monospace;border:2px solid #ffd23a;pointer-events:none;display:none;z-index:9';
@@ -736,13 +738,13 @@
   let hidPad = null;
   const hidLire = e => {
     if (e.reportId !== 0x3f || !hidPad) return; const d = new Uint8Array(e.data.buffer, e.data.byteOffset), h = d[2], set = (i, v) => { hidPad.buttons[i].pressed = !!v; hidPad.buttons[i].value = v ? 1 : 0; };
-    [8, 5, 4, 0, 3, 1].forEach((b, i) => set(b, d[0] & 1 << i)); set(9, d[1] & 3); // Joy-Con (R) couché, SL / SR vers le haut : bits gauche et haut (constatés par l'auteur), bas et droite (déduits), SL, SR -> boîte manuelle / automatique, rapport +, rapport -, gaz et valider, radio, glisse (choix de l'auteur, qui ne freine pas à la manette)
+    [8, 5, 4, 0, 3, 1].forEach((b, i) => set(b, d[0] & 1 << i)); set(9, d[1] & 3); set(10, d[1] & 12); // (clic du stick = radio : bits 4 et 8, d'après le format du rapport, non essayé sur le Joy-Con) · Joy-Con (R) couché, SL / SR vers le haut : bits gauche et haut (constatés par l'auteur), bas et droite (déduits), SL, SR -> boîte manuelle / automatique, rapport +, rapport -, gaz et valider, nitro, glisse (choix de l'auteur, qui ne freine pas à la manette)
     hidPad.axes = [h > 0 && h < 4 ? 1 : h > 4 && h < 8 ? -1 : 0, h === 7 || h < 2 ? -1 : h > 2 && h < 6 ? 1 : 0];
   };
   const hidOuvre = async d => {
     if (!d || hidPad || (d.productId !== 0x2006 && d.productId !== 0x2007)) return; // Joy-Con gauche / droit
     try { if (!d.opened) await d.open(); } catch (e) { return; }
-    hidPad = { index: 'hid', dev: d, connected: true, axes: [0, 0], buttons: Array.from({ length: 10 }, () => ({ pressed: false, value: 0 })) }; d.oninputreport = hidLire;
+    hidPad = { index: 'hid', dev: d, connected: true, axes: [0, 0], buttons: Array.from({ length: 11 }, () => ({ pressed: false, value: 0 })) }; d.oninputreport = hidLire;
   };
   const hidDemande = () => navigator.hid && navigator.hid.requestDevice({ filters: [{ vendorId: 0x057e }] }).then(l => l.forEach(hidOuvre)).catch(() => { }); // touche J : fenêtre du navigateur pour autoriser le Joy-Con (une fois)
   if (navigator.hid) {
@@ -770,7 +772,7 @@
     const b = i => pad && pad.buttons[i] ? pad.buttons[i].value : 0, sx = pad && Math.abs(pad.axes[0]) > 0.15 ? pad.axes[0] : 0;
     return {
       steer: clamp((keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0) + sx, -1, 1),
-      gas: keys.ArrowUp || keys.KeyW || b(7) > 0.1 || b(0) ? 1 : 0, brake: keys.ArrowDown || keys.KeyS || b(6) > 0.1 || b(2) ? 1 : 0, hand: !!(keys.Space || b(1)),
+      gas: keys.ArrowUp || keys.KeyW || b(7) > 0.1 || b(0) ? 1 : 0, brake: keys.ArrowDown || keys.KeyS || b(6) > 0.1 || b(2) ? 1 : 0, hand: !!(keys.Space || b(1)), nitro: !!(keys.KeyX || keys.KeyN || b(3)),
     };
   };
 
@@ -829,7 +831,8 @@
       hg.drawImage(MM.c, cx - 152, 170); // le tracé, puis la fiche de la carte
       [CARD.nom, (T.len / 1000).toFixed(1).replace('.', ',') + ' KM   ' + (M.trafic ? 'TRAFIC' : T.tun ? 'TUNNEL' : 'CIEL OUVERT'), mode === 'course' ? '3 TOURS CONTRE 3 IA' : 'RECORD ' + (best ? fmt(best) : '--'), SON.nom.includes(parseInt(SON.fq)) ? SON.nom : SON.nom + ' ' + SON.fq].forEach((l, i) => txt(l, cx - 58, 174 + i * 13, 8, i ? '#e8e8e4' : C));
       if (mode !== 'course') { const m = medal(best); if (m) txt(MEDN[m - 1], cx + 152, 200, 8, MEDC[m - 1], 'right'); if (m < 3) txt('VISE ' + MEDN[m] + ' ' + fmt(REF * MED[m]), cx - 58, 226, 8, MEDC[m]); } // médaille acquise, et la prochaine à aller chercher
-      txt('HAUT/BAS : CHOISIR  GAUCHE/DROITE : CHANGER', cx, 245, 8, '#e8e8e4', 'center'); txt('FLECHES / ZQSD : PILOTER   ESPACE : GLISSE', cx, 257, 8, '#e8e8e4', 'center');
+      txt('HAUT/BAS : CHOISIR  GAUCHE/DROITE : CHANGER', cx, 245, 8, '#e8e8e4', 'center'); txt('FLECHES / ZQSD   ESPACE : GLISSE   X : NITRO', cx, 257, 8, '#e8e8e4', 'center');
+      if (anciens) tag('NITRO : RECORDS REMIS A ZERO', cx, 88, Y);
       hudT.needsUpdate = true; return;
     }
     // chrono
@@ -867,10 +870,10 @@
         R(hg, 'rgba(8,8,12,.75)', x - w / 2, ly, w, 11); txt(name, x, ly + 2, 8, col, 'center'); R(hg, col, x - 2, y - 2, 5, 3); R(hg, col, x - 1, y + 1, 3, 2);
       });
     }
-    if (car.boost > 0) tag('BOOST' + (car.combo > 1 ? ' x' + car.combo : ''), cx, 82, C);
-    if (car.dd || car.boost > 0) { // jauge de boost : elle se charge en glisse (rien avant le repère : 0,6 s), puis se vide pendant le boost
-      const bx = HW - 126, by = HH - 74, f = car.dd ? Math.min(1, car.driftT / 1.875) : car.boost / 1.5;
-      R(hg, HU.fond, bx, by, 120, 8); R(hg, car.dd && car.driftT < 0.6 ? '#6a6a78' : car.dd ? C : Y, bx + 2, by + 2, Math.round(116 * f), 4); R(hg, '#ffffff', bx + 2 + Math.round(116 * 0.32), by + 1, 1, 6);
+    if (car.boost > 0) tag('NITRO', cx, 82, C); else if (car.asp > 0.15) tag('ASPIRATION', cx, 82, Y);
+    if (state !== 'title') { // jauge de nitro : elle monte en glisse, au ras d'un mur ou d'un camion, dans l'aspiration ; pleine, elle clignote ; elle se vide tant qu'on la déclenche
+      const bx = HW - 126, by = HH - 74, f = car.nitro, plein = f >= 1 && blink;
+      R(hg, HU.fond, bx - 50, by - 2, 172, 12); txt('NITRO', bx - 46, by, 8, f > 0 ? Y : '#6a6a78'); R(hg, '#30303c', bx + 2, by + 2, 116, 4); R(hg, car.boost > 0 ? C : plein ? '#ffffff' : Y, bx + 2, by + 2, Math.round(116 * f), 4);
     }
     if (splitMsg && (splitMsg.T -= dt) > 0) tag('S' + (splitMsg.i + 1) + ' ' + (splitMsg.d == null ? fmt(splitMsg.t) : (splitMsg.d <= 0 ? '-' : '+') + Math.abs(splitMsg.d).toFixed(2)), cx, 102, splitMsg.d == null ? Y : splitMsg.d <= 0 ? C : RD); // écart au record à chaque secteur
     if (warn && blink) tag(warn > 0 ? '! VIRAGE DROITE >>' : '<< VIRAGE GAUCHE !', cx, 62, Y);
@@ -880,13 +883,13 @@
       tag('TOUR ' + result.n + '  ' + fmt(result.t), cx, 28, Y); if (result.pos) tag('PLACE ' + result.pos + '/' + result.of, cx, 44, C); else tag(result.first ? 'PREMIER TEMPS' : result.rec ? 'NOUVEAU RECORD' : '+' + result.diff.toFixed(2) + ' S', cx, 44, result.rec ? C : RD);
       const b = result.b, m = medal(result.t), L = [];
       if (!race) L.push(m < 3 ? [MEDN[m] + ' A -' + (result.t - REF * MED[m]).toFixed(2), MEDC[m]] : ['TOUR EN OR', MEDC[2]]); // ce qui manquait à ce tour pour la médaille suivante
-      if (b) L.push(['GLISSES ' + b[0], '#e8e8e4'], ['BOOSTS ' + b[1] + (b[3] > 1 ? '  SERIE ' + b[3] : ''), C], ['MURS ' + b[2], b[2] ? RD : '#e8e8e4']);
+      if (b) L.push(['GLISSES ' + b[0], '#e8e8e4'], ['NITRO ' + b[1], C], ['MURS ' + b[2], b[2] ? RD : '#e8e8e4']);
       panel(6, 60, 132, 8 + L.length * 11); L.forEach(([s, c], i) => txt(s, 12, 65 + i * 11, 8, c));
     }
     if (raceEnd && state === 'race') { // arrivée : classement, complété à mesure que les autres passent la ligne
       panel(cx - 150, 52, 300, 166); txt('ARRIVEE : ' + car.pos + (car.pos === 1 ? 'ER' : 'E'), cx, 60, 16, Y, 'center', 1); const t1 = raceOrder(race)[0].fin;
       raceOrder(race).forEach((c, i) => { const j = race.cars.indexOf(c); txt((i + 1) + '. ' + (j ? OPP[j - 1][0] : 'VOUS'), cx - 138, 86 + i * 15, 8, j ? OPP[j - 1][1] : Y); txt(c.fin ? fmt(c.fin) : 'EN PISTE', cx + 50, 86 + i * 15, 8, j ? '#e8e8e4' : Y, 'right'); if (i && c.fin) txt('+' + (c.fin - t1).toFixed(2), cx + 138, 86 + i * 15, 8, j ? '#e8e8e4' : Y, 'right'); });
-      txt('MEILLEUR TOUR ' + fmt(bestLap), cx, 152, 8, C, 'center'); txt('GLISSES ' + car.nDrift + '  BOOSTS ' + car.nBoost + '  MURS ' + car.nWall, cx, 166, 8, '#e8e8e4', 'center'); txt('NIVEAU ' + DIFF[diff].nom, cx, 180, 8, '#e8e8e4', 'center');
+      txt('MEILLEUR TOUR ' + fmt(bestLap), cx, 152, 8, C, 'center'); txt('GLISSES ' + car.nDrift + '  NITRO ' + car.nBoost + '  MURS ' + car.nWall, cx, 166, 8, '#e8e8e4', 'center'); txt('NIVEAU ' + DIFF[diff].nom, cx, 180, 8, '#e8e8e4', 'center');
       txt('ENTREE : REJOUER   ECHAP : MENU', cx, 200, 8, C, 'center');
     }
     if (state === 'pause') {
@@ -1031,7 +1034,7 @@
     let wk = 0;
     for (let j = 15; j < 35 + sp * 0.6; j++) { const k = S[(car.idx + j) % N].k; if (Math.abs(k) > Math.abs(wk)) wk = k; }
     drawHUD(dt, sp, r, state === 'race' && sp > 30 && Math.abs(wk) > 0.011 ? Math.sign(wk) : 0);
-    // flou de vitesse : rien sous 55 % de la vitesse de pointe, léger au-delà, franc seulement pendant le boost
+    // flou de vitesse : rien sous 55 % de la vitesse de pointe, léger au-delà, franc seulement pendant la nitro
     post.uniforms.amt.value = 0.35 * Math.max(0, (r - 0.55) / 0.45) ** 2; post.uniforms.ab.value = 0.002 + 0.004 * r + (stun > 0 ? stun * 0.06 : 0);
     if (!chaud) { // première image : tout est dessiné une fois sans tri de visibilité, pour que shaders, géométries et textures partent au GPU maintenant et non au premier passage en course (à-coups de 40 ms)
       chaud = true; const caches = [], tri = [];
