@@ -95,8 +95,8 @@
         astre: { dir: [0.8, 0.14, 0.3], col: '#fff0c0', ombre: '#fff0c0', taille: 260 }, hemi: [0xa8b8e8, 0xd9c9a8, 0.95], sun: [0xffc890, 0.75], phares: 0.5, bloom: 0.03, scan: 0.05,
         rues: [[0, 'boulevard'], [3, 'place'], [8, 'avenue'], [11, 'rue'], [13, 'ruelle'], [19, 'rue'], [24, 'avenue'], [26, 'quai'], [31, 'avenue'], [33, 'boulevard']],
         murH: 0.5, route: ['#4a4a52', '#56565e', '#e8e4d8', '#e8e4d8', '#8a8478', '#8a8478', false], mur: ['#8a8478', '#b0a898', '#8a8478', '#6a665e'], depart: [0x1d2f6f, 0x2a7a4a, '#f4f0e0'],
-        tun: { sol: ['#3a3a40', '#46464c', '#e8e4d8', '#e8e4d8', '#3a3a40', '#3a3a40'], murs: ['#ffd05a', '#ffd05a'], paroi: ['#b8b4a8', '#d8d4c8', '#8a867a', '#5a564e'], plafond: ['#3a3830', '#ffe9a0', '#ffe9a0', '#5a564e'],
-          fog: 0x40382a, portail: 0x5d6b82, neons: [0xffd05a, 0xffd05a], coque: 14 },
+        tun: { sol: ['#3a3a40', '#46464c', '#e8e4d8', '#e8e4d8', '#3a3a40', '#3a3a40'], murs: ['#dfeeff', '#dfeeff'], paroi: ['#b8b4a8', '#d8d4c8', '#8a867a', '#5a564e'], plafond: ['#3a3830', '#ffe9a0', '#ffe9a0', '#5a564e'], carreaux: 1,
+          fog: 0x40382a, portail: 0x5d6b82, neons: [0xdfeeff, 0xdfeeff], coque: 14 }, // néon blanc froid, parois carrelées
         hud: { y: '#ffffff', c: '#ffd05a', r: '#ff6a5a', fond: 'rgba(24,44,110,.92)', style: 'plaque', split: 0, jp: null, sur: [null, 'PARIS · 5 H 30'], titre: ['PREMIER', 'METRO'] } } },
 
     // Canal de Los Angeles à l'heure dorée : béton mouillé, large, la carte de la glisse. Fresques fléchées et balises à l'extérieur des courbes.
@@ -110,7 +110,7 @@
         lead: [L1, L2, [[0, 87, 6], [6, 86, 2], [8, 82, 4], [12, 79, 4]], [[0, 77, 4], [4, 79, 12]], L1, L2, [[0, 87, 6], [6, 84, 2], [8, 82, 4], [12, 84, 4]], [[0, 86, 4], [4, 81, 4], [8, 78, 8]]] }], // g-funk
       th: { decor: 'canal', fog: 0xe89060, fogD: [160, 1700], sky: [[0, '#3d2a5c'], [0.24, '#3d2a5c'], [0.25, '#7a4078'], [0.36, '#7a4078'], [0.37, '#d85a50'], [0.44, '#d85a50'], [0.45, '#ff9a4a'], [0.49, '#ff9a4a'], [0.5, '#e89060'], [1, '#e89060']], stars: 0,
         astre: { dir: [-0.85, 0.11, 0.35], col: '#fff4c0', ombre: '#fff4c0', taille: 340 }, hemi: [0xb898c8, 0xb8ad9a, 0.85], sun: [0xffa860, 0.9], phares: 0.4, bloom: 0.03, scan: 0.05,
-        murH: 1.3, route: ['#7a7066', '#867c70', '#f4f0e0', '#2aa39a', '#e83f8c', '#f4f0e0', true], mur: ['#2a2030', '#f4f0e0', '#e83f8c', '#1a1420'], depart: [0xff7a3d, 0x3d2a5c, '#f4f0e0'],
+        murH: 1.3, route: ['#7a7066', '#867c70', '#f4f0e0', '#2aa39a', '#e83f8c', '#f4f0e0', 2], mur: ['#2a2030', '#f4f0e0', '#e83f8c', '#1a1420'], depart: [0xff7a3d, 0x3d2a5c, '#f4f0e0'],
         hud: { y: '#ffc04a', c: '#ff7a3d', r: '#e83f8c', fond: 'rgba(40,24,56,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'LOS ANGELES · HEURE DOREE'], titre: ['CANAL', 'SIX'] } } },
   ];
   let id = 'ville';

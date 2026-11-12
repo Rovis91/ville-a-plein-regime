@@ -99,6 +99,10 @@ Dans `game.js` :
 |---|---|
 | `function sched(` (dans `audio.js`) | le séquenceur musical et ses couches adaptatives |
 | `function audioFrame(` (dans `audio.js`) | son du moteur, des pneus, du vent, et pilotage de la musique par la course |
+| `NL`, `LUM_GAIN`, `LUM_PAS`, `TUN_AMB` (en tête de fichier) | lumière dynamique : nombre de luminaires calculés, force de tous les luminaires et des phares, espacement des luminaires de tunnel, lumière ambiante des tunnels |
+| `QUANT`, `TRAME`, `TREMBLE` (en tête de fichier) | rendu rétro : niveaux de couleur par canal, force du tramage de Bayer, tremblement des sommets (0 = éteint) |
+| `lum(` | chaque luminaire du décor : échantillon de piste, position, couleur, portée, force (aussi dans `decors.js` : `h.lum(`) |
+| `const LU_F` | le calcul de lumière ajouté à tous les matériaux : luminaires, phares, ombre de la voiture, reflets |
 | `post.uniforms.amt.value` | intensité du flou de vitesse |
 | `c += bl *` | intensité du halo des néons |
 | `cam.fov =` | grand-angle de la caméra selon la vitesse |
@@ -121,6 +125,7 @@ Dette connue, à traiter avant d'ajouter beaucoup de contenu :
 - La ville compte plusieurs centaines d'objets dessinés séparément. Sans souci sur une machine récente, à fusionner si le jeu doit tourner sur du matériel modeste.
 - L'interface est entièrement redessinée à chaque image.
 - Aucun test automatique ne couvre le rendu ni le son.
+- La lumière dynamique demande WebGL 2 (dérivées dans le shader) ; l'ombre portée sous les luminaires n'existe que pour la voiture du joueur.
 
 ## Déployer
 
