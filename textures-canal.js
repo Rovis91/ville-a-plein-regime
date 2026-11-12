@@ -35,10 +35,10 @@
       const { R, voile } = o; R(g, '#c8c0b4', 0, 0, 64, 64); for (let y = 0; y < 64; y += 4) R(g, '#6a6258', 0, y, 64, 1);
       R(g, '#ffc04a', 0, 0, 2, 64); R(g, '#ffc04a', 62, 0, 2, 64); voile(g, 0.2, () => { for (let i = 0; i < 200; i++) R(g, '#000', o.alea() * 64 | 0, o.alea() * 64 | 0, 1, 1); });
     }, 8],
-    // banderole de sponsors (inventés) sur le parapet d'une tribune de 42 m : étirée sur la face, pas de répétition
-    banderole: () => [512, 20, (g, o) => {
+    // banderole de deux sponsors (inventés) sur le parapet d'un module de tribune de 14 m, à partir du k-ième : étirée sur la face, pas de répétition
+    banderole: k => [192, 20, (g, o) => {
       const l = [['SOLAR COLA', '#c8102e', '#f4f0e0'], ['DUSK RADIO 94', '#1a1420', '#ffc04a'], ['PALM TIRES', '#f4f0e0', '#1848c8'], ['RANCHO PARTS', '#ffc04a', '#1a1420'], ['CANAL 6', '#e83f8c', '#f4f0e0'], ['NITRO TACO', '#2aa39a', '#f4f0e0']];
-      let x = 0; for (const [t, f, c] of l) { const w = 512 / l.length; o.R(g, f, x, 0, w, 20); o.R(g, '#08080c', x, 0, 1, 20); texte(g, t, x + w / 2, 10.5, 13, c, 'center'); x += w; }
+      for (let j = 0; j < 2; j++) { const [t, f, c] = l[(k + j) % l.length], x = j * 96; o.R(g, f, x, 0, 96, 20); o.R(g, '#08080c', x, 0, 1, 20); texte(g, t, x + 48, 10.5, 13, c, 'center'); }
     }],
     // grillage de protection : mailles en losange de 0,5 m, câbles et lisses ; fond transparent (matière en alphaTest)
     grillage: () => [32, 32, (g, o) => {
