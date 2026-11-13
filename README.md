@@ -91,8 +91,10 @@ Tout tourne dans le navigateur, sans étape de build ni dépendance à installer
 - **Avec un serveur local** (recommandé pour développer) :
 
 ```bash
-python -m http.server 8123
+python outils/capture.py 8123
 ```
+
+(depuis la racine du dépôt ; ce serveur interdit le cache au navigateur. Avec `python -m http.server`, le navigateur peut garder un ancien `sim.js` à côté d'un `game.js` neuf, et la course plante à la fin du 3, 2, 1.)
 
 puis ouvrir l'une de ces pages (le même serveur les sert toutes) :
 
@@ -128,7 +130,7 @@ Autres pages d'outils : `manette.html` (diagnostic de la manette) et `styles.htm
 | À deux, manettes et Joy-Con | les mêmes boutons qu'en solo, chacun pour sa voiture ; l'un ou l'autre met en pause, navigue dans les menus et change de station |
 | À deux, écran d'inscription | une touche de son côté du clavier ou un bouton de sa manette : prendre une place · Échap ou + : la libérer (sans place : refermer) · Entrée ou B : partir, les deux places prises |
 | I | à deux, au menu principal : rouvrir l'écran d'inscription pour changer de périphérique |
-| Joy-Con seul, à l'horizontale | touche J une fois pour l'autoriser (Chrome ou Edge ; deux Joy-Con au plus, un par joueur) · stick : volant et menus · bouton de droite : gaz et valider · gauche : boîte manuelle / automatique · haut / bas : rapport supérieur / inférieur · SR : glisse · SL : nitro · clic du stick : radio · + ou − : pause |
+| Joy-Con seul, à l'horizontale | touche J une fois pour l'autoriser (Chrome ou Edge ; deux Joy-Con au plus, un par joueur) · stick : volant et menus · bouton de droite : gaz et valider · gauche : boîte manuelle / automatique · haut / bas : rapport supérieur / inférieur · SR : glisse · SL : nitro · Home ou Capture : radio · + ou − : pause |
 
 ### Nitro et aspiration
 
