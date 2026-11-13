@@ -686,40 +686,9 @@
   const PRE = 'vpr7.' + (M.id === 'ville' ? '' : M.id + '.');
   const store = { get: k => { try { return JSON.parse(localStorage.getItem(PRE + k)); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(PRE + k, JSON.stringify(v)); } catch (e) { } } };
   const pref = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }, setPref = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
-  // Langue de l'interface : 'fr' ou 'en', choisie à l'écran d'accueil et gardée (vpr.langue). Les textes restent écrits en français dans le code ; tr() les traduit au moment de les afficher
-  // (txt, tag, padDit) : ordinaux, puis expressions de EN, la plus longue d'abord et jamais au milieu d'un mot. Un texte affiché nouveau doit avoir sa ligne dans EN, sinon il reste en français.
+  // Langue de l'interface : 'fr' ou 'en', choisie à l'écran d'accueil et gardée (vpr.langue). Traduction et titres anglais : langue.js
   let langue = pref('vpr.langue', 'fr') === 'en' ? 'en' : 'fr';
-  const EN = {
-    // menu, modes, réglages
-    'CARTES': 'TRACKS', 'CARTE': 'TRACK', 'JOUEURS': 'PLAYERS', 'JOUEUR': 'PLAYER', 'ECRAN PARTAGE': 'SPLIT SCREEN', 'BOITE J1': 'GEARBOX P1', 'BOITE': 'GEARBOX', 'MANUELLE': 'MANUAL', 'MANU': 'MAN',
-    'CONTRE-LA-MONTRE NOCTURNE': 'NIGHT TIME ATTACK', 'CONTRE-LA-MONTRE': 'TIME ATTACK', 'COURSE': 'RACE', 'TOURNEE TERMINEE': 'CHAMPIONSHIP OVER', 'TOURNEE': 'CHAMPIONSHIP', 'GLISSE EN DUEL': 'DRIFT DUEL', 'GLISSES': 'DRIFTS', 'GLISSE': 'DRIFT',
-    'TOURS': 'LAPS', 'TOUR EN OR': 'GOLD LAP', 'TOUR': 'LAP', 'MANCHES DE 3 TOURS': 'ROUNDS OF 3 LAPS', 'MANCHE': 'ROUND', 'APRES LA MANCHE': 'AFTER ROUND', 'DEMARRER': 'START', 'REPRENDRE': 'RESUME', 'RECOMMENCER': 'RESTART', 'QUITTER': 'QUIT',
-    'TRAFIC': 'TRAFFIC', 'CIEL OUVERT': 'OPEN SKY', 'SOUS LE TOIT': 'INDOOR', '2 JOUEURS ET 2 RIVAUX': '2 PLAYERS AND 2 RIVALS', '3 TOURS CONTRE 3 IA': '3 LAPS VS 3 CPU', 'LE DERNIER SORT': 'LAST PLACE IS OUT', 'LE MEILLEUR SCORE GAGNE': 'BEST SCORE WINS',
-    'PAS ENCORE DE TROPHEE': 'NO TROPHY YET', 'PAS DE TROPHEE': 'NO TROPHY', 'TROPHEE': 'TROPHY', "RIEN N'EST ENREGISTRE": 'NOTHING IS SAVED', 'VISE': 'GO FOR', 'ARGENT': 'SILVER', 'OR': 'GOLD', 'MEDAILLE': 'MEDAL', 'FANTOME': 'GHOST', 'NON': 'OFF', 'OUI': 'ON', 'MUSIQUE': 'MUSIC',
-    'DETENTE': 'EASY', 'CHAUD': 'HARD', 'NIVEAU': 'LEVEL',
-    // commandes
-    'HAUT/BAS': 'UP/DOWN', 'GAUCHE/DROITE': 'LEFT/RIGHT', 'HAUT / BAS': 'UP / DOWN', 'GAUCHE / DROITE': 'LEFT / RIGHT', 'CHOISIR': 'SELECT', 'CHANGER': 'CHANGE', 'ENTREE': 'ENTER', 'VALIDER': 'CONFIRM', 'ECHAP': 'ESC', 'REJOUER': 'RETRY', 'SUITE': 'NEXT', 'CONTINUER': 'CONTINUE', 'PARTIR': 'GO',
-    'FLECHES / ZQSD': 'ARROWS / WASD', 'ESPACE': 'SPACE', 'I : INSCRIPTION (MANETTES, JOY-CON, CLAVIER)': 'I : PLAYER SETUP (GAMEPADS, JOY-CON, KEYBOARD)', 'INSCRIPTION': 'PLAYER SETUP',
-    'PERIPHERIQUE DECONNECTE : COURSE EN PAUSE': 'CONTROLLER DISCONNECTED : RACE PAUSED', 'PERIPHERIQUE DECONNECTE': 'CONTROLLER DISCONNECTED', 'CHACUN APPUIE SUR SON PERIPHERIQUE': 'EACH PLAYER PRESSES THEIR CONTROLLER', 'VUE DU BAS': 'BOTTOM VIEW', 'VUE DU HAUT': 'TOP VIEW', 'APPUIE': 'PRESS',
-    'ZQSD OU FLECHES : UNE TOUCHE DE SON COTE': 'WASD OR ARROWS : ANY KEY ON YOUR SIDE', 'MANETTE : UN BOUTON': 'GAMEPAD : ANY BUTTON', 'LIBERER SA PLACE': 'LEAVE YOUR SLOT', 'IL FAUT LES DEUX PLACES POUR PARTIR': 'BOTH SLOTS ARE NEEDED TO START',
-    'MANETTE CONNECTEE': 'GAMEPAD CONNECTED', 'MANETTE DECONNECTEE': 'GAMEPAD DISCONNECTED', 'MANETTE': 'GAMEPAD', 'CLAVIER FLECHES': 'ARROW KEYS', 'CLAVIER ZQSD': 'WASD KEYS', 'CLAVIER': 'KEYBOARD',
-    // défi par lien
-    'DEFI BATTU': 'CHALLENGE BEATEN', 'DEFI': 'CHALLENGE', 'A BATTRE': 'TO BEAT', 'A -': '-', 'LIEN DE DEFI : CARTE INCONNUE': 'CHALLENGE LINK : UNKNOWN TRACK', 'LIEN DE DEFI ILLISIBLE': 'UNREADABLE CHALLENGE LINK', "LIEN D'UNE AUTRE VERSION DU JEU": 'LINK FROM ANOTHER GAME VERSION',
-    'LIEN DE DEFI ABIME OU TRONQUE': 'CHALLENGE LINK DAMAGED OR CUT', 'LIEN DE DEFI COPIE': 'CHALLENGE LINK COPIED', 'LIEN DE DEFI A COPIER': 'CHALLENGE LINK TO COPY', 'LIEN DEFI': 'CHALLENGE LINK', "BOUCLE D'ABORD UN TOUR EN CONTRE-LA-MONTRE": 'FINISH A TIME ATTACK LAP FIRST', 'NITRO : RECORDS REMIS A ZERO': 'NITRO : RECORDS RESET',
-    // course et HUD
-    'ARRIVEE': 'FINISH', 'TEMPS': 'TIME', 'ECART': 'GAP', 'MEIL. TOUR': 'BEST LAP', 'MEILLEUR TOUR': 'BEST LAP', 'SORT A': 'OUT AT', 'SORT': 'OUT', 'EN PISTE': 'ON TRACK', 'REVANCHE': 'REMATCH', 'GAGNE': 'WINS', 'EGALITE': 'DRAW',
-    'HORS DELAI : SCORE NON COMPTE': 'TIME OUT : SCORE NOT COUNTED', 'HORS DELAI : SCORE NUL': 'TIME OUT : NO SCORE', 'HORS DELAI': 'TIME OUT', 'DELAI': 'TIME LIMIT', 'MURS': 'WALLS', 'PLACE': 'POS', 'ASPIRATION': 'SLIPSTREAM',
-    '! VIRAGE DROITE >>': '! RIGHT TURN >>', '<< VIRAGE GAUCHE !': '<< LEFT TURN !', 'DUEL FINAL': 'FINAL DUEL', 'DERNIER : DOUBLE AVANT LA LIGNE': 'LAST : OVERTAKE BEFORE THE LINE', 'ELIMINE · CAMERA SUR': 'ELIMINATED · WATCHING', 'ELIMINE': 'ELIMINATED', 'ELIMINATION': 'ELIMINATION',
-    'SUR LA GRILLE': 'ON THE GRID', 'SUR': 'OF', 'DEPART': 'START', 'PREMIER TEMPS': 'FIRST TIME SET', 'NOUVEAU RECORD': 'NEW RECORD', "L'AUTRE JOUEUR ROULE ENCORE": 'THE OTHER PLAYER IS STILL DRIVING', 'VOUS': 'YOU', 'CLASSEMENT GENERAL': 'STANDINGS',
-    // cartes
-    'VILLE A PLEIN REGIME': 'FULL THROTTLE CITY', 'PREMIER METRO': 'FIRST TRAIN', 'GRAND VACARME': 'GRAND ROAR', 'NUIT BLANCHE': 'WHITE NIGHT', 'SPECIALE DES OCRES': 'OCHRE STAGE', 'LIGNE DE BAIE': 'BAYSHORE LINE', 'DESCENTE DE NUIT': 'NIGHT DOWNHILL',
-    'ARENE COUVERTE · COMPLET': 'INDOOR ARENA · SOLD OUT', 'COL FERME': 'PASS CLOSED', 'AUBE': 'DAWN', '5 H 30': '5:30 AM', 'SPECIALE 7 · FIN DE JOURNEE': 'STAGE 7 · LATE AFTERNOON', 'HEURE DOREE': 'GOLDEN HOUR',
-  };
-  const EN_RX = new RegExp('(?<![A-Z0-9])(' + Object.keys(EN).sort((a, b) => b.length - a.length).map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![A-Z])', 'g');
-  const ORD = n => n + (n % 100 > 10 && n % 100 < 14 ? 'TH' : ['TH', 'ST', 'ND', 'RD'][n % 10] || 'TH');
-  const tr = s => langue !== 'en' || typeof s !== 'string' ? s : s.replace(/[À-ÖØ-Ýà-öø-ý]/g, c => c.normalize('NFD')[0]).replace(/(\d+)ER?(?![A-Z])/g, (_, n) => ORD(+n))
-    .replace(EN_RX, k => EN[k]).replace(/ : /g, ': ').replace(/(\d),(\d)/g, '$1.$2'); // « 3E SUR 4 » -> « 3RD OF 4 » ; « 4,2 KM » -> « 4.2 KM »
-  const TITRE_EN = { ville: ['FULL THROTTLE', 'CITY'], paris: ['FIRST', 'TRAIN'], stade: ['GRAND', 'ROAR'], givre: ['WHITE', 'NIGHT'], terre: ['OCHRE', 'STAGE'] }; // titres sur deux lignes : l'ordre des mots change
+  const tr = s => traduit(s, langue);
   const appliqueLangue = () => { document.documentElement.lang = langue; document.title = langue === 'en' ? 'Full Throttle City' : 'Ville à plein régime'; };
   appliqueLangue();
   let anciens = (() => { try { return !localStorage.getItem('vpr7.vu') && Object.keys(localStorage).some(k => /^vpr6\..*best$/.test(k)); } catch (e) { return false; } })();
@@ -1040,16 +1009,16 @@
     hg.restore(); R(hg, '#f4f4f4', x + w / 2 - h * 0.17, y, h * 0.34, h); R(hg, '#f4f4f4', x, y + h * 0.33, w, h * 0.34); R(hg, '#e0283a', x + w / 2 - h * 0.1, y, h * 0.2, h); R(hg, '#e0283a', x, y + h * 0.4, w, h * 0.2);
   };
   function accueilDessin(HW) {
-    const now = performance.now(), t = now / 1000, cx = HW / 2, en = langue === 'en', blink = (now / 400 | 0) % 2 === 0, titre = en ? TITRE_EN.ville : ['VILLE A', 'PLEIN REGIME'];
+    const now = performance.now(), t = now / 1000, cx = HW / 2, blink = (now / 400 | 0) % 2 === 0, titre = titreCarte('ville', ['VILLE A', 'PLEIN REGIME'], langue);
     R(hg, 'rgba(6,6,14,.62)', 0, 0, HW, HH);
     txt(titre[0], cx, 18, 24, Y, 'center', 2); txt(titre[1], cx, 44, 24, Y, 'center', 2);
-    TT(en ? 'CHOOSE YOUR LANGUAGE' : 'CHOISIS TA LANGUE', cx, 84, 8, C);
+    TT(tr('CHOISIS TA LANGUE'), cx, 84, 8, C);
     [['fr', 'FRANÇAIS'], ['en', 'ENGLISH']].forEach(([l, nom], i) => { const on = langue === l, x = cx - 156 + i * 168, y = 102, w = 144, h = 104;
       R(hg, on ? 'rgba(18,18,36,.95)' : 'rgba(8,8,16,.8)', x, y, w, h); if (on) { cadre(Y, x, y, w, h); cadre(Y, x + 1, y + 1, w - 2, h - 2); } else cadre('#3a3a4a', x, y, w, h);
       const fy = y + 12 + (on ? Math.sin(t * 5) * 2 | 0 : 0); drapeau(l, x + 32, fy, 80, 48); if (!on) R(hg, 'rgba(0,0,0,.6)', x + 32, fy, 80, 48);
       TT(nom, x + w / 2, y + 72, 16, on ? Y : '#6a6a78'); if (on && blink) { TT('>', x - 11, y + 44, 16, Y); TT('<', x + w + 11, y + 44, 16, Y); } });
-    if (blink) tag(en ? 'ENTER : PLAY' : 'ENTREE : JOUER', cx, 222, Y);
-    TT(en ? '< >  CHANGE      OR CLICK A FLAG' : '< >  CHANGER     OU CLIQUE UN DRAPEAU', cx, 246, 8, '#c8c8d0');
+    if (blink) tag('ENTREE : JOUER', cx, 222, Y);
+    TT(tr('< >  CHANGER     OU CLIQUE UN DRAPEAU'), cx, 246, 8, '#c8c8d0');
   }
   // Écrans communs à tous les joueurs : accueil, menu principal, pause. Dessinés dans hg sur une grille de HW × 270 : le HUD de la vue en solo, la couche plein écran à deux (voir couche).
   function ecrans(HW) {
@@ -1069,7 +1038,7 @@
     if (state === 'title') { // menu principal : la carte tourne derrière, on choisit carte, mode et boîte
       R(hg, 'rgba(8,8,12,.45)', 0, 0, HW, HH); const d2 = deux(); // à deux, le menu dit ce qui est vrai à deux
       if (HU.sur[0]) txt(HU.sur[0], cx, 6, 16, C, 'center', 0, JP); txt(mode === 'tournee' ? 'TOURNEE · ' + CARTES.length + ' CARTES' : mode === 'course' ? 'COURSE · 3 TOURS' : mode === 'elim' ? 'ELIMINATION · 4 TOURS' : mode === 'glisse' ? (d2 ? 'GLISSE EN DUEL' : 'GLISSE') + ' · 2 TOURS' : HU.sur[1], cx, 27, 8, C, 'center');
-      const ti = langue === 'en' && TITRE_EN[M.id] || HU.titre; txt(ti[0], cx, 44, 24, Y, 'center', 2); txt(ti[1], cx, 70, 24, Y, 'center', 2);
+      const ti = titreCarte(M.id, HU.titre, langue); txt(ti[0], cx, 44, 24, Y, 'center', 2); txt(ti[1], cx, 70, 24, Y, 'center', 2);
       if (tFlash && performance.now() - tFlash < 400) R(hg, 'rgba(255,255,255,' + (1 - (performance.now() - tFlash) / 400).toFixed(2) + ')', 0, 0, HW, HH); // éclair blanc au sortir de l'accueil
       panel(cx - 160, 100, 320, 140);
       [['CARTE', (cible || M).nom + '  ' + (CARTES.indexOf(cible || M) + 1) + '/' + CARTES.length], ['JOUEURS', d2 ? '2 : ECRAN PARTAGE' : '1'], ['MODE', mode === 'tournee' ? 'TOURNEE : ' + DIFF[diff].nom : mode === 'course' ? 'COURSE : ' + DIFF[diff].nom : mode === 'elim' ? 'ELIMINATION : ' + DIFF[diff].nom : mode === 'glisse' ? d2 ? 'GLISSE EN DUEL' : 'GLISSE' : 'CONTRE-LA-MONTRE'], [d2 ? 'BOITE J1' : 'BOITE', manuel1() ? 'MANUELLE' : 'AUTO']].forEach(([l, v], i) => {
