@@ -372,7 +372,7 @@
   }
   function pump() { // avance le séquenceur jusqu'à 0,12 s devant l'horloge audio
     while (nextT < AC.currentTime - 0.2) { nextT += S16; stp++; } // onglet en veille : on saute au lieu de rattraper
-    while (nextT < AC.currentTime + 0.12) { sched(stp++, nextT); nextT += S16 / (1 - 0.3 * platine); }
+    while (nextT < AC.currentTime + 0.12) { sched(stp++, nextT); nextT += S16 / (1 - 0.1 * platine); }
   }
   // Une voix = ce qu'un joueur entend de sa voiture. Moteur : 3 oscillateurs (ordre 1, 1/2, 3/2) → saturation → filtre de charge → formant d'échappement → battement.
   // Pneus : la glisse se tient longtemps, donc un feulement grave et large plutôt qu'un sifflement ; + grondement de ripage.
@@ -469,9 +469,9 @@
   }
   function coupMusique(v, t = AC.currentTime) { // un choc s'entend aussi dans la musique : grosse caisse et coup de basse sur la fondamentale de la mesure, et tout plonge un instant
     if (menu) return; const st = ST[station], P = PATCH[st.b.p];
-    const k = clamp(0.5 + v * 0.04, 0.6, 1), o = osc('sine', hz(curRoot + 12), t, 0.55, 0.7 * k, drumG); o && o.frequency.exponentialRampToValueAtTime(hz(curRoot - 12), t + 0.4); // chute de sub de deux octaves
-    dKick(t, k, KIT[st.kit] || KIT.k909); tone(st.b.p, hz(curRoot), t, 0.4, 0.5 * (P.lv || 1), strip.b.in);
-    duckG.gain.cancelScheduledValues(t); duckG.gain.setValueAtTime(0.5, t); duckG.gain.linearRampToValueAtTime(1, t + 0.3);
+    const k = 0.5 * clamp(0.5 + v * 0.04, 0.6, 1), o = osc('sine', hz(curRoot + 12), t, 0.55, 0.7 * k, drumG); o && o.frequency.exponentialRampToValueAtTime(hz(curRoot - 12), t + 0.4); // chute de sub de deux octaves
+    dKick(t, k, KIT[st.kit] || KIT.k909); tone(st.b.p, hz(curRoot), t, 0.4, 0.25 * (P.lv || 1), strip.b.in);
+    duckG.gain.cancelScheduledValues(t); duckG.gain.setValueAtTime(0.85, t); // effet de choc adouci : demi-gain, plongée légère duckG.gain.linearRampToValueAtTime(1, t + 0.3);
   }
   function choc(hit, t = AC.currentTime) { // choc saturé : il écrête, glisse vers le grave, et des débris retombent
     const v = Math.min(0.6, hit * 0.04), sat = shaper(10, gain(0.5 * clamp(v / 0.6, 0.3, 1), V.choc)), f = nz(t, 0.3, v * 1.2, sat, 'bandpass', 1200, 0.7); f && f.frequency.exponentialRampToValueAtTime(200, t + 0.25); // la saturation nivelle tout : c'est le gain de sortie qui distingue un petit choc d'un gros
@@ -517,7 +517,7 @@
     rubT -= dt; if (bump > 0.3) rubT = 0.35; // deux voitures qui se touchent : un petit choc, puis elles frottent un instant
     k(scrapeG.gain, rub || rubT > 0 ? 0.1 + 0.2 * r : 0, 0.05);
     if ((hit > 3 || bump > 0.3) && t - lastHit > 0.15) { lastHit = t; choc(Math.max(hit, bump > 0.3 ? 5 + bump * 2 : 0), t);
-      if (racing && t - lastMus > 2 && (e.hit > 3 || e.bump > 0.3)) { lastMus = t; coupMusique(Math.max(e.hit, e.bump > 0.3 ? 5 + e.bump * 2 : 0), t); satT = 0.5; if (e.hit > 8) platine = 1; } } // au plus une fois toutes les 2 s : en rebondissant de mur en mur (pluie), la musique restait plongée, ralentie et saturée en continu // la musique encaisse : coup de basse, demi-seconde de saturation, et sur un gros choc elle ralentit comme une platine qu'on freine
+      if (racing && t - lastMus > 4 && e.hit > 6) { lastMus = t; coupMusique(e.hit, t); satT = 0.2; if (e.hit > 14) platine = 1; } } // adouci : seul un vrai choc de mur touche la musique (le contact entre voitures plus du tout), au plus toutes les 4 s, ralenti de platine réservé aux gros chocs // au plus une fois toutes les 2 s : en rebondissant de mur en mur (pluie), la musique restait plongée, ralentie et saturée en continu // la musique encaisse : coup de basse, demi-seconde de saturation, et sur un gros choc elle ralentit comme une platine qu'on freine
     // glisse (car.dd, car.driftT) : la tension monte en 1,5 s, palier à 0,6 s (la jauge de nitro se remplit alors à plein débit) ; nitro déclenchée (car.boost) : tout s'ouvre d'un coup et le refrain joue tant qu'elle pousse
     const gl = racing && car.dd ? car.driftT || 0 : 0, vise = car.boost > 0 ? 0 : clamp(gl / 1.5, 0, 1);
     glisse = gl > 0.15; acquis = gl > 0.6; if (!glisse) acqDit = false; boostL = racing && car.boost > 0;
@@ -536,13 +536,13 @@
     // au fil des tours du mode course (e.tour, e.tours) : premier tour sobre, puis l'arrangement complet, et le dernier tour un demi-ton plus haut ; le passage de ligne est un événement de course, la cymbale le marque
     const nl = !e.tours ? 1 : e.tour <= 0 ? 0 : e.tour >= e.tours - 1 ? 2 : 1;
     if (racing && e.tours && e.tour !== lapN) { if (lapN >= 0 && e.tour > lapN) crash(t, 0.5); lapN = e.tour; } if (!racing) lapN = -1;
-    lap = racing ? nl : 1; platine = Math.max(0, platine - dt / 1.5); TR = (lap === 2 ? 1 : 0) - 3 * platine; // ralenti de platine : trois demi-tons et 30 % de tempo en moins, rattrapés en 1,5 s
+    lap = racing ? nl : 1; platine = Math.max(0, platine - dt); TR = (lap === 2 ? 1 : 0) - platine; // ralenti de platine : un demi-ton et 10 % de tempo en moins, rattrapés en 1 s
     drums = racing ? 1 : 0; fin = racing && !inside && car.idx >= T.h1 && car.dist > 0;
     mix += ((racing ? e.hot : 0) - mix) * Math.min(1, dt * 3);
     inten += (r - inten) * Math.min(1, dt * 2); driftL += ((car.drift ? 1 : 0) - driftL) * Math.min(1, dt * 6);
-    // seul un choc salit la musique, une demi-seconde (la saturation près des murs et en frottant a été retirée : sur une route étroite elle ne s'arrêtait jamais)
+    // seul un vrai choc de mur salit un peu la musique, un cinquième de seconde (la saturation près des murs et en frottant a été retirée : sur une route étroite elle ne s'arrêtait jamais)
     satT -= dt; if (satT > 0) grit = 1;
-    grit -= grit * Math.min(1, dt * 3); k(gritWet.gain, 0.1 * grit, 0.03); k(gritDry.gain, 1 - 0.5 * grit, 0.03); // dosé par mesure : le timbre change, le niveau presque pas
+    grit -= grit * Math.min(1, dt * 3); k(gritWet.gain, 0.05 * grit, 0.03); k(gritDry.gain, 1 - 0.25 * grit, 0.03); // dosé par mesure : le timbre change, le niveau presque pas
     // la musique s'ouvre avec la vitesse ; un gros choc l'étouffe ; dans un tunnel elle est étouffée et réverbérée, et le moteur résonne
     // (la musique n'est plus étouffée par un choc, et à peine quand on ralentit : passe-bas de 5 à 18 kHz selon la vitesse ; elle s'efface derrière le tableau d'arrivée)
     k(musF.frequency, e.fini ? 900 : Math.min(state === 'title' ? 7000 : 5000 * 3.6 ** Math.min(1, inten * 1.4 + mix), lerp(18000, 2500, tun)), 0.08);
