@@ -362,9 +362,12 @@ Dette connue, à traiter avant d'ajouter beaucoup de contenu :
 
 Le jeu est un site statique : il suffit de servir le dossier tel quel. Sur GitHub Pages, activer Pages sur la branche `main`, dossier racine. Sur l'offre gratuite, cela demande un dépôt public : relire d'abord la section suivante.
 
+**En ligne** (choix « EN LIGNE » après l'accueil) : aucun serveur à nous. Les navigateurs se parlent en pair-à-pair (WebRTC, `peerjs.min.js`) ; ils se trouvent par le serveur public gratuit de PeerJS (0.peerjs.com), joint au code du salon. L'hôte crée le salon (code de 4 lettres, lien `?salon=CODE` copié), choisit la carte au menu et lance une Course ; il fait tourner la course pour tous (`reseau.js`). Sans relais TURN, certains réseaux stricts (4G, entreprise) ne se connectent pas. Le site doit être servi en HTTPS (GitHub Pages l'est) ou depuis `localhost`.
+
 ## Crédits et licences
 
 - **three.js** r128, licence MIT.
+- **PeerJS** 1.5.4, licence MIT.
 - **Polices** Press Start 2P et DotGothic16, licence SIL Open Font.
 - **Sons de TR-808** : enregistrés par Michael Fischer (Technopolis, 1994) et distribués gratuitement par leur auteur, sans licence formelle. Voir `samples/TR808.TXT`. À vérifier ou à remplacer avant toute diffusion commerciale.
 - **Données des voitures** : fiche technique de la Nismo Skyline GT-R Z-tune (rapports de boîte, couple, puissance, masse). La forme de la courbe de couple, le Cx et les pertes de transmission sont des estimations. Les fiches des quatre autres voitures (Mazda RX-7 Spirit R, Toyota Supra RZ, Renault 5 Maxi Turbo, Dodge Viper GTS) sont saisies de mémoire, et les rapports de boîte de la Renault 5 sont estimés : à vérifier sur fiche constructeur.

@@ -706,7 +706,10 @@
     'ZQSD OU FLECHES : UNE TOUCHE DE SON COTE': 'WASD OR ARROWS : ANY KEY ON YOUR SIDE', 'MANETTE : UN BOUTON': 'GAMEPAD : ANY BUTTON', 'LIBERER SA PLACE': 'LEAVE YOUR SLOT', 'IL FAUT LES DEUX PLACES POUR PARTIR': 'BOTH SLOTS ARE NEEDED TO START', 'IL FAUT TOUTES LES PLACES POUR PARTIR': 'ALL SLOTS ARE NEEDED TO START',
     'HAUT GAUCHE': 'TOP LEFT', 'HAUT DROITE': 'TOP RIGHT', 'BAS GAUCHE': 'BOTTOM LEFT', 'BAS DROITE': 'BOTTOM RIGHT', "D'AUTRES JOUEURS ROULENT ENCORE": 'OTHERS ARE STILL DRIVING',
     '3 JOUEURS ET 1 RIVAL': '3 PLAYERS AND 1 RIVAL', '4 JOUEURS, SANS IA': '4 PLAYERS, NO CPU', 'COURSES CONTRE IA, GLISSE, CHRONO': 'CPU RACES, DRIFT, TIME ATTACK', '2 A 4 JOUEURS SUR CET ECRAN': '2 TO 4 PLAYERS, ONE SCREEN',
-    'EN LIGNE': 'ONLINE', 'BIENTOT': 'COMING SOON', 'MULTIJOUEUR': 'MULTIPLAYER', 'LANGUE': 'LANGUAGE',
+    'EN LIGNE': 'ONLINE', 'MULTIJOUEUR': 'MULTIPLAYER', 'COURSE A PLUSIEURS, PAR CODE DE SALON': 'RACE TOGETHER WITH A ROOM CODE', 'UN CODE A DONNER AUX AUTRES': 'A CODE TO SHARE',
+    'CREER UN SALON': 'CREATE A ROOM', 'REJOINDRE UN SALON': 'JOIN A ROOM', 'CODE DU SALON': 'ROOM CODE', 'SALON INTROUVABLE': 'ROOM NOT FOUND', 'SALON PLEIN': 'ROOM FULL', 'SALON': 'ROOM', 'CONNEXION': 'CONNECTING',
+    "L'HOTE CHOISIT LA CARTE ET LANCE": 'THE HOST PICKS THE TRACK AND STARTS', 'CHOISIR LA CARTE': 'PICK THE TRACK', 'FERMER LE SALON': 'CLOSE THE ROOM', 'QUITTER LE SALON': 'LEAVE THE ROOM', 'LIEN DU SALON COPIE': 'ROOM LINK COPIED',
+    "EN ATTENTE D'UN AUTRE JOUEUR": 'WAITING FOR ANOTHER PLAYER', 'COURSE EN COURS': 'RACE IN PROGRESS', 'HOTE PARTI': 'HOST LEFT', 'PARTI': 'LEFT', 'TAPE LE CODE, PUIS': 'TYPE THE CODE, THEN', 'VOUS ETES': 'YOU ARE', 'RETOUR': 'BACK', 'LANGUE': 'LANGUAGE',
     'MANETTE CONNECTEE': 'GAMEPAD CONNECTED', 'MANETTE DECONNECTEE': 'GAMEPAD DISCONNECTED', 'MANETTE': 'GAMEPAD', 'CLAVIER FLECHES': 'ARROW KEYS', 'CLAVIER ZQSD': 'WASD KEYS', 'CLAVIER': 'KEYBOARD',
     // défi par lien
     'DEFI BATTU': 'CHALLENGE BEATEN', 'DEFI': 'CHALLENGE', 'A BATTRE': 'TO BEAT', 'A -': '-', 'LIEN DE DEFI : CARTE INCONNUE': 'CHALLENGE LINK : UNKNOWN TRACK', 'LIEN DE DEFI ILLISIBLE': 'UNREADABLE CHALLENGE LINK', "LIEN D'UNE AUTRE VERSION DU JEU": 'LINK FROM ANOTHER GAME VERSION',
@@ -738,17 +741,48 @@
   const accueilAct = a => { // a : 'v' haut / bas, 'h' gauche / droite, 'ok' valider, '' autre touche (elle ne fait qu'ouvrir le son)
     aMenu = true;
     if (a === 'v' || a === 'h') choisitLangue(langue === 'en' ? 'fr' : 'en');
-    else if (a === 'ok') { tFlash = performance.now(); SON.stinger(true); entrer(); choix = true; csel = deux() ? 1 : 0; }
+    else if (a === 'ok') { tFlash = performance.now(); SON.stinger(true); entrer(); choix = true; csel = deux() ? 1 : 0; if (Q.get('salon') && !NET.role) { csel = 2; rejoint(Q.get('salon')); } } // venu par le lien d'un salon : on le rejoint
   };
   // Choix de la partie, entre l'accueil et le menu principal : solo (tous les modes, une vue), écran partagé (2 à 4 joueurs), en ligne (pas encore fait). Échap y revient depuis le menu, et revient de là à la langue.
   let choix = false, csel = 0;
-  const CHOIX = [['SOLO', 'COURSES CONTRE IA, GLISSE, CHRONO'], ['ECRAN PARTAGE', '2 A 4 JOUEURS SUR CET ECRAN'], ['EN LIGNE', 'MULTIJOUEUR : BIENTOT']];
-  const choixAct = code => {
+  const CHOIX = [['SOLO', 'COURSES CONTRE IA, GLISSE, CHRONO'], ['ECRAN PARTAGE', '2 A 4 JOUEURS SUR CET ECRAN'], ['EN LIGNE', 'COURSE A PLUSIEURS, PAR CODE DE SALON']];
+  const choixAct = (code, key) => {
+    if (enl) { salonAct(code, key); return; }
     if (/^(ArrowUp|KeyW)$/.test(code)) csel = (csel + 2) % 3; else if (/^(ArrowDown|KeyS)$/.test(code)) csel = (csel + 1) % 3;
     else if (code === 'Escape') { choix = false; accueil = true; }
     else if (code === 'Enter' || code === 'Space') {
-      if (csel === 2) { padDit('MULTIJOUEUR EN LIGNE : BIENTOT'); return; }
+      if (csel === 2) { enl = { sel: 0, saisie: '' }; SON.beep(660); return; }
       joueurs(csel ? Math.max(2, +pref('vpr7.ecran', '2')) : 1); setPref('vpr7.joueurs', VUES.length); choix = false; msel = 4; SON.beep(660); }
+  };
+  // ---------- En ligne (reseau.js) ----------
+  // Salon par code de 4 lettres, ou par le lien ?salon=CODE. L'hôte choisit la carte au menu principal et lance : tout le monde court en Course (3 tours), chacun sur son écran, sa voiture en J1.
+  // L'hôte fait tourner stepRace (son entrée et celles reçues, NET.ins) et diffuse l'état ; l'invité ne simule rien, il pose l'état reçu (NET.applique). Pas de pause en ligne : Échap quitte.
+  // enl = l'écran du salon : { sel : 0 créer / 1 rejoindre, saisie : code tapé, attente : invité connecté } ; null ailleurs. NET.role dit si l'on est dans un salon (il survit au changement de carte, pas ce fichier).
+  let enl = null;
+  const enLigne = () => !!NET.role, invite = () => NET.role === 'invite';
+  const attente = () => { choix = true; csel = 2; enl = { sel: 1, saisie: NET.code, attente: true }; };
+  const quitteSalon = () => { NET.fermer(); if (state !== 'title') toMenu(); choix = true; csel = 2; enl = { sel: 0, saisie: '' }; };
+  const onNet = m => {
+    if (m.t === 'erreur') { padDit(m.msg); quitteSalon(); }
+    else if (m.t === 'parti') padDit('JOUEUR ' + (m.i + 1) + ' PARTI');
+    else if (m.t === 'stop' && state !== 'title') toMenu(); // l'hôte est revenu au menu : l'invité attend la course suivante
+    else if (m.t === 'go') { if (m.carte === M.id) { enl = null; choix = false; start(true); } else if ((cible = CARTES.find(c => c.id === m.carte))) { try { sessionStorage.setItem('vpr.netgo', 1); } catch (e) { } changeCarte(); } } // autre carte : elle se charge, la course part à l'arrivée (fin du fichier)
+  };
+  const rejoint = code => { joueurs(1); NET.rejoindre(code, onNet); enl = { sel: 1, saisie: NET.code, attente: true }; };
+  const salonAct = (code, key) => {
+    if (code === 'Escape') { quitteSalon(); enl = null; return; }
+    if (NET.role === 'hote') { if (code === 'Enter' || code === 'Space') { enl = null; choix = false; msel = 4; mode = 'course'; SON.beep(660); } return; } // au menu principal : l'hôte choisit la carte, DEMARRER lance
+    if (enl.attente) return;
+    if (enl.sel) { // saisie du code : la lettre tapée (e.key), pas la position de la touche
+      if (code === 'Backspace') enl.saisie = enl.saisie.slice(0, -1);
+      else if (/^[a-z]$/i.test(key || '') && enl.saisie.length < 4) enl.saisie += key.toUpperCase();
+      else if ((code === 'Enter' || code === 'NumpadEnter') && enl.saisie.length === 4) rejoint(enl.saisie);
+      else if (/^Arrow(Up|Down)$/.test(code)) enl.sel = 0;
+      return;
+    }
+    if (/^(ArrowUp|ArrowDown|KeyW|KeyS)$/.test(code)) enl.sel = 1;
+    else if (code === 'Enter' || code === 'Space') { joueurs(1); NET.heberger(onNet); mode = 'course'; SON.beep(660);
+      try { navigator.clipboard.writeText(location.origin + location.pathname + '?salon=' + NET.code).then(() => padDit('LIEN DU SALON COPIE'), () => { }); } catch (e) { } }
   };
   try { const m = sessionStorage.getItem('vpr.menu'); if (m) { msel = 0; sessionStorage.removeItem('vpr.menu'); entrer(); SON.reprendre(JSON.parse(m)); } } catch (e) { } // la musique de menu reprend où elle en était // on vient de changer de carte : on reste sur cette ligne, sans repasser par l'accueil (le navigateur garde en général le droit au son d'une page à l'autre ; sinon il revient à la touche suivante)
   for (const ev of ['mousedown', 'pointerup', 'touchend']) addEventListener(ev, e => { if (accueil) { if (ev === 'mousedown') return; if (e.isTrusted && !aMenu) hidAuto(); SON.init(); const l = e.clientX < innerWidth / 2 ? 'fr' : 'en'; if (l === langue) accueilAct('ok'); else { aMenu = true; choisitLangue(l); } } else SON.init(); }); // à l'accueil : un clic à gauche choisit le français, à droite l'anglais ; un second clic du même côté part
@@ -816,15 +850,17 @@
   }
   const bilan = vu => { const c = vu.car, l = vu.lap0, b = [c.nDrift - l[0], c.nBoost - l[1], c.nWall - l[2]]; vu.lap0 = [c.nDrift, c.nBoost, c.nWall]; return b; }; // glisses, coups de nitro et murs du tour bouclé par le joueur de cette vue
 
-  function start() {
+  function start(go) { // go : départ demandé par l'hôte (invité en ligne)
     SON.init(); accueil = false; if (anciens && !deux()) { anciens = false; setPref('vpr7.vu', 1); }
+    if (enLigne()) { if (invite() && !go) return; mode = 'course'; if (!invite()) { if (NET.n < 2) { padDit("EN ATTENTE D'UN AUTRE JOUEUR"); return; } NET.go(M.id); } } // en ligne : Course seulement ; l'hôte lance pour tous
     if (deux() && !AUTO && !PLACES.every(p => p && branche(p))) { inscrit(); return; } // à deux, on ne part que les deux places prises ; elles sont gardées : une revanche ne redemande rien
     clos();
     if (mode === 'tournee' && CARTES[tnOu().manche] !== M) { // la manche se court sur une autre carte : on y va sans recharger, et la course part à l'arrivée (vpr.go)
       if (!cible) { cible = CARTES[tnOu().manche]; try { sessionStorage.setItem('vpr.go', 1); } catch (e) { } changeCarte(); } return; } // (tnFin reste en place le temps que la carte arrive : un second appui sur Entrée ne recompte pas la manche)
-    const nj = VUES.length; // à deux joueurs : deux humains en tête de liste et les deux rivaux les plus rapides, toujours quatre voitures
+    const nj = enLigne() ? NET.n : VUES.length; // à deux joueurs : deux humains en tête de liste et les deux rivaux les plus rapides, toujours quatre voitures
     tnFin = null; race = duel() ? newRace(T, 2, [], 0, { humains: nj, delai: GLT }) // Glisse en duel : les deux joueurs seuls en piste, le délai du solo pour chacun
       : enCourse() ? newRace(T, 3, AI_LVL.slice(0, 4 - nj).map(l => l * DIFF[diff].k), DIFF[diff].el, { elim: mode === 'elim', grille: mode === 'tournee' && tournee(tnOu().pts).grille, humains: nj }) : null; raceEnd = false; glFin = null; fsel = 0;
+    if (race && invite()) { const g = race.glob = race.cars.slice(), h = [NET.moi, ...g.slice(0, nj).map((_, i) => i).filter(i => i !== NET.moi)]; race.cars = [...h.map(i => g[i]), ...g.slice(nj)]; } // invité : sa voiture en tête de liste, comme un joueur 1 (R.glob garde l'ordre de l'hôte, celui des états reçus)
     if (race) race.cars.forEach((c, i) => { c.k = i < nj ? (i ? 2 + i : -1) : i - nj; c.rl = c.rlT = c.bl = 0; }); // et ses tours : dernier tour compté, son heure, meilleur tour (voir frame) // rang de chaque voiture dans OPP et opps : le joueur 2 prend le dernier modèle, les rivaux les premiers
     car = race ? race.cars[0] : newCar(T); car.manual = manuel1(); VUES.forEach((vu, i) => { suit(vu, race ? race.cars[i] : car); vu.gear = 0; vu.splitMsg = null; }); for (const hu of HUM) hu.hist.length = 0; // (hors course, un mode sans rivaux lancé à deux : les deux vues suivent la seule voiture)
     si = 0; cur = []; recG = []; state = 'count'; count = 3; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1;
@@ -840,7 +876,7 @@
   // menu de pause : [ligne, action]. À deux, ni boîte (chacun a la sienne, sur son périphérique), ni fantôme ; le fantôme seulement en contre-la-montre
   const pauseItems = () => [['REPRENDRE', () => { state = prev; }], ['RECOMMENCER', start], ...(deux() ? [] : [['BOITE : ' + (manual ? 'MANUELLE' : 'AUTO'), () => { manual = !manual; car.manual = manual; }]]),
     ['RADIO : ' + SON.nom, zap], ['MUSIQUE : ' + (SON.musicOn ? 'OUI' : 'NON'), () => SON.toggleMusic()], ...(deux() || mode !== 'solo' ? [] : [['FANTOME : ' + nomF(), () => choixF((fant + 1) % FANT.length)]]), ['QUITTER', toMenu]];
-  function toMenu() { clos(); tnFin = null; state = 'title'; ins = false; race = null; raceEnd = false; glFin = null; car = newCar(T); for (const vu of VUES) suit(vu, car); tRace = 0; lapN = 1; for (const hu of HUM) hu.hist.length = 0; msel = 4; }
+  function toMenu() { if (NET.role === 'hote') NET.stop(); if (invite()) attente(); clos(); tnFin = null; state = 'title'; ins = false; race = null; raceEnd = false; glFin = null; car = newCar(T); for (const vu of VUES) suit(vu, car); tRace = 0; lapN = 1; for (const hu of HUM) hu.hist.length = 0; msel = 4; }
   // menu principal : 0 carte, 1 joueurs, 2 mode, 3 boîte, 4 démarrer ; d = -1 / +1 (gauche / droite ; Entrée vaut +1)
   let cible = null, cibleT = 0; // carte demandée au menu, pas encore construite
   function changeCarte() {
@@ -890,7 +926,7 @@
     if (e.isTrusted && e.code === 'KeyJ') hidDemande(); // avant tout le reste : marche aussi depuis l'accueil
     else if (e.isTrusted && accueil && !aMenu) hidAuto();
     if (accueil) { accueilAct(/^(ArrowUp|ArrowDown|KeyW|KeyS)$/.test(e.code) ? 'v' : /^(ArrowLeft|ArrowRight|KeyA|KeyD)$/.test(e.code) ? 'h' : e.code === 'Enter' || e.code === 'Space' ? 'ok' : ''); return; }
-    if (choix) { choixAct(e.code); return; }
+    if (choix) { choixAct(e.code, e.key); return; }
     const key = (e.key || '').toLowerCase(); // lettre réellement tapée, pour les commandes nommées par une lettre (le pilotage, lui, reste en positions physiques)
     if (ins) { // inscription : les places se prennent par les appuis (voir inscription) ; ici le clavier seul : Échap libère la dernière place tenue par un clavier, ou referme l'écran, Entrée part quand les deux places sont prises
       if (e.periph) return; const n = Math.max(PLACES.indexOf('clavierG'), PLACES.indexOf('clavierD'));
@@ -905,6 +941,7 @@
       else if (e.code === 'Enter' || e.code === 'Space') pauseItems()[psel][1]();
       return;
     }
+    if (e.code === 'Escape' && enLigne() && state !== 'title') { if (invite()) quitteSalon(); else toMenu(); return; } // en ligne, pas de pause : l'invité quitte le salon, l'hôte revient au menu (les invités attendent)
     if (e.code === 'Escape' && raceEnd) { toMenu(); return; } // course finie : retour direct au menu
     if ((e.code === 'Escape' || key === 'p') && (state === 'race' || state === 'count')) { prev = state; state = 'pause'; psel = 0; return; }
     if (state === 'title') {
@@ -915,7 +952,7 @@
       else if (e.code === 'Enter' || e.code === 'Space') menuAct(1);
       else if (dx && msel < 4) menuAct(dx);
       else if (key === 'f' && mode === 'solo') choixF((fant + 1) % FANT.length);
-      else if (e.code === 'Escape') { choix = true; csel = deux() ? 1 : 0; }
+      else if (e.code === 'Escape') { choix = true; csel = deux() ? 1 : 0; if (enLigne()) { csel = 2; enl = { sel: 0, saisie: '' }; } }
       else if (key === 'i' && deux()) inscrit(); // à deux : rouvrir l'inscription pour changer de périphérique (les places prises ne sont plus redemandées au départ)
       return;
     }
@@ -1070,12 +1107,28 @@
     if (blink) tag(en ? 'ENTER : PLAY' : 'ENTREE : JOUER', cx, 222, Y);
     TT(en ? '< >  CHANGE      OR CLICK A FLAG' : '< >  CHANGER     OU CLIQUE UN DRAPEAU', cx, 246, 8, '#c8c8d0');
   }
+  function salonDessin(HW) {
+    const cx = HW / 2, blink = (performance.now() / 400 | 0) % 2 === 0, h = NET.role === 'hote';
+    R(hg, 'rgba(6,6,14,.8)', 0, 0, HW, HH); txt('EN LIGNE', cx, 20, 24, Y, 'center', 2);
+    if (h || enl.attente) {
+      txt(h ? 'CODE DU SALON' : 'SALON', cx, 66, 8, C, 'center'); txt(NET.code, cx, 80, 32, Y, 'center', 2);
+      txt(h || NET.moi ? NET.n + ' / ' + NET.MAXJ + ' JOUEURS' + (h ? '' : '   VOUS ETES J' + (NET.moi + 1)) : 'CONNEXION...', cx, 128, 8, '#e8e8e4', 'center');
+      if (h) { if (blink) tag('ENTREE : CHOISIR LA CARTE', cx, 160, Y); } else txt("L'HOTE CHOISIT LA CARTE ET LANCE", cx, 160, 8, C, 'center');
+      txt('ECHAP : ' + (h ? 'FERMER LE SALON' : 'QUITTER LE SALON'), cx, 246, 8, '#c8c8d0', 'center'); return;
+    }
+    [['CREER UN SALON', 'UN CODE A DONNER AUX AUTRES'], ['REJOINDRE UN SALON', enl.saisie.padEnd(4, '_').split('').join(' ')]].forEach(([l, s], i) => { const on = enl.sel === i, x = cx - 150, y = 78 + i * 44;
+      R(hg, on ? 'rgba(18,18,36,.95)' : 'rgba(8,8,16,.8)', x, y, 300, 38); cadre(on ? Y : '#3a3a4a', x, y, 300, 38); if (on) cadre(Y, x + 1, y + 1, 298, 36);
+      txt(l, cx, y + 6, 16, on ? Y : '#e8e8e4', 'center'); txt(s, cx, y + 26, 8, C, 'center'); });
+    if (blink) tag(enl.sel ? 'TAPE LE CODE, PUIS ENTREE' : 'ENTREE : CHOISIR', cx, 182, Y);
+    txt('HAUT/BAS : CHOISIR   ECHAP : RETOUR', cx, 246, 8, '#c8c8d0', 'center');
+  }
   function choixDessin(HW) {
+    if (enl) { salonDessin(HW); return; }
     const cx = HW / 2, blink = (performance.now() / 400 | 0) % 2 === 0, ti = langue === 'en' && TITRE_EN[M.id] || HU.titre;
     R(hg, 'rgba(6,6,14,.62)', 0, 0, HW, HH);
     txt(ti[0], cx, 14, 24, Y, 'center', 2); txt(ti[1], cx, 40, 24, Y, 'center', 2);
     if (tFlash && performance.now() - tFlash < 400) R(hg, 'rgba(255,255,255,' + (1 - (performance.now() - tFlash) / 400).toFixed(2) + ')', 0, 0, HW, HH); // éclair blanc au sortir de l'accueil
-    CHOIX.forEach(([l, s], i) => { const on = csel === i, off = i === 2, x = cx - 150, y = 78 + i * 44;
+    CHOIX.forEach(([l, s], i) => { const on = csel === i, off = false, x = cx - 150, y = 78 + i * 44;
       R(hg, on ? 'rgba(18,18,36,.95)' : 'rgba(8,8,16,.8)', x, y, 300, 38); cadre(on ? Y : '#3a3a4a', x, y, 300, 38); if (on) cadre(Y, x + 1, y + 1, 298, 36);
       txt(l, cx, y + 6, 16, on ? Y : off ? '#6a6a78' : '#e8e8e4', 'center'); txt(s, cx, y + 26, 8, off ? '#6a6a78' : C, 'center'); });
     if (blink) tag('ENTREE : CHOISIR', cx, 222, Y);
@@ -1117,7 +1170,7 @@
       else if (!enCourse()) { const gl = mode === 'glisse', m = gl ? medG(bestG) : medal(best); if (m) txt(MEDN[m - 1], cx + 152, 196, 8, MEDC[m - 1], 'right'); if (m < 3) txt('VISE ' + MEDN[m] + ' ' + (gl ? GLM[m] + ' PTS' : fmt(REF * MED[m])), cx - 58, 218, 8, MEDC[m]);
         if (!gl) txt('F : FANTOME ' + nomF(), cx - 58, 229, 8, fant ? FANTC[fant] : '#e8e8e4'); } // médaille acquise, et la prochaine à aller chercher
       txt('HAUT/BAS : CHOISIR  GAUCHE/DROITE : CHANGER', cx, 245, 8, '#e8e8e4', 'center'); txt(d2 ? 'I : INSCRIPTION (MANETTES, JOY-CON, CLAVIER)' : 'FLECHES / ZQSD   ESPACE : GLISSE   X : NITRO', cx, 257, 8, '#e8e8e4', 'center');
-      if (defiErr) tag(defiErr, cx, 25, RD); else if (d2) { } else if (DEFI) tag('DEFI : ' + fmt(DEFI.t) + ' A BATTRE', cx, 25, FANTC[5]); else if (anciens) tag('NITRO : RECORDS REMIS A ZERO', cx, 25, Y); // à la place du sous-titre : plus bas, le bandeau mordait sur le titre
+      if (enLigne()) tag('SALON ' + NET.code + ' · ' + NET.n + ' JOUEURS', cx, 25, Y); else if (defiErr) tag(defiErr, cx, 25, RD); else if (d2) { } else if (DEFI) tag('DEFI : ' + fmt(DEFI.t) + ' A BATTRE', cx, 25, FANTC[5]); else if (anciens) tag('NITRO : RECORDS REMIS A ZERO', cx, 25, Y); // à la place du sous-titre : plus bas, le bandeau mordait sur le titre
       return;
     }
     if (state === 'pause') {
@@ -1274,7 +1327,7 @@
     else if (n < 2 && COM) { COM.c.remove(); COM = null; }
     resize();
   };
-  { const n = +(Q.get('joueurs') || pref('vpr7.joueurs', '1')); if (n > 1 && !DEFI) joueurs(n); } // la préférence du menu ; ?joueurs=1 ou 2 dans l'adresse passe devant, sans y toucher (captures en ?auto). Un lien de défi s'ouvre en solo
+  { const n = +(Q.get('joueurs') || pref('vpr7.joueurs', '1')); if (n > 1 && !DEFI && !NET.role) joueurs(n); } // la préférence du menu ; ?joueurs=1 ou 2 dans l'adresse passe devant, sans y toucher (captures en ?auto). Un lien de défi s'ouvre en solo
   // La couche commune, dessinée une fois par image par-dessus les deux vues : ce qui s'adresse aux deux joueurs à la fois (accueil, menu, inscription, pause, tableau d'arrivée ou fin du duel de Glisse). Cachée quand elle n'a rien à montrer.
   function couche() {
     const plein = state === 'title' || state === 'pause' || raceEnd && state === 'race'; COM.c.hidden = !plein; if (!plein) return;
@@ -1297,7 +1350,7 @@
     const inp = VUES[0].inp;
     for (acc += dt; acc >= H; acc -= H) {
       // en course, sim.js fait avancer tout le monde, avec une entrée par humain ; entrée nulle : l'IA conduit la voiture de ce joueur (?auto, ou une fois arrivé)
-      if (race && state === 'race') { for (let i = 0; i < race.h; i++) INS[i] = AUTO || VUES[i].fini ? null : VUES[i].inp; stepRace(race, INS, H); } else { step(car, inp, T, H); if (M.trafic && state === 'race') hitTrafic(car, T, tTraf); }
+      if (race && state === 'race') { if (invite()) NET.applique(race); else { for (let i = 0; i < race.h; i++) INS[i] = enLigne() && i ? NET.ins[i] : AUTO || VUES[i].fini ? null : VUES[i].inp; stepRace(race, INS, H); } } // en ligne : les humains 1.. sont les invités else { step(car, inp, T, H); if (M.trafic && state === 'race') hitTrafic(car, T, tTraf); }
       for (const vu of VUES) { const c = vu.car; vu.land = Math.max(vu.land, c.land); vu.bump = Math.max(vu.bump, c.bump || 0); vu.hit = Math.max(vu.hit, c.hit, vu.bump); } // chocs de l'image, par vue (sa secousse) ; shortcut: un choc entre voitures réutilise les effets du choc mur (étincelles côté mur), à séparer si ça se voit
       if (state === 'race' && !raceEnd) {
         tRace += H; tTraf += H;
@@ -1308,6 +1361,7 @@
         else if (car.dist >= N) finish();
       }
     }
+    if (race && state === 'race' && enLigne()) { if (invite()) NET.entree(VUES[0].inp); else NET.diffuse(race); }
     if (COM && race && race.elim && state === 'race') for (const vu of VUES) { const moi = race.cars[vu.n]; // à deux, joueur éliminé depuis 3 s : sa vue passe sur le meneur, et le suit s'il change
       if (moi.out && race.t - moi.out > 3) { const m = race.cars.find(c => c.pos === 1); if (vu.car !== m) { vu.car = m; vu.cth = m.th; vu.carY = m.y; vu.spec = true; } } }
     const J = VUES[0]; // la voiture du joueur est celle de la première vue : sa hauteur et sa lumière lissées servent aux effets de la scène
@@ -1456,6 +1510,8 @@
     VUES.forEach(rendVue); post.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
   };
   try { if (sessionStorage.getItem('vpr.go')) { sessionStorage.removeItem('vpr.go'); if (mode === 'tournee') start(); } } catch (e) { } // arrivée sur la carte d'une manche de Tournée : la course part tout de suite
-  window.__g = { frame, start, fin, libere, joueurs, places: PLACES, get ins() { return ins; }, get com() { return COM; }, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return tnFin; }, get defi() { return { DEFI, defiErr, dernier }; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam: VUES[0].cam, vues: VUES, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
+  if (NET.role) { NET.ev = onNet; let g = null; try { g = sessionStorage.getItem('vpr.netgo'); sessionStorage.removeItem('vpr.netgo'); } catch (e) { } // carte changée en ligne : ce fichier vient d'être rejoué, le salon (reseau.js) est resté
+    if (g) { choix = false; start(true); } else if (invite()) attente(); }
+  window.__g = { get enl() { return enl; }, frame, start, fin, libere, joueurs, places: PLACES, get ins() { return ins; }, get com() { return COM; }, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return tnFin; }, get defi() { return { DEFI, defiErr, dernier }; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam: VUES[0].cam, vues: VUES, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
 })();
 if (/[?&]perf\b/.test(location.search)) import('./outils/perf.js').then(m => m.suite()); // banc de performance : voir outils/perf.js

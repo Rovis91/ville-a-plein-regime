@@ -2,12 +2,14 @@
 // Un hôte fait tourner stepRace pour tout le monde ; chaque invité lui envoie son entrée et reçoit l'état des voitures, qu'il affiche avec 100 ms de retard en interpolant.
 // API pour game.js (aucun rendu ici) :
 //   NET.heberger(ev) -> code du salon (4 lettres) ; NET.rejoindre(code, ev). ev(m) reçoit les messages : { t: 'salon', n } (nombre de joueurs, hôte compris),
-//     { t: 'moi', i } (invité : sa place, 1..3 ; l'hôte est 0), { t: 'go', carte, n } (l'hôte lance), { t: 'erreur', msg }, { t: 'parti', i } (un joueur a quitté).
+//     { t: 'moi', i } (invité : sa place, 1..3 ; l'hôte est 0), { t: 'go', carte, n } (l'hôte lance), { t: 'erreur', msg }, { t: 'parti', i } (un joueur a quitté), { t: 'stop' } (l'hôte est revenu au menu).
 //   NET.go(carte)          hôte : lance la course chez tous (puis chacun : newRace(T, 3, lvls, el, { humains: n }), la même pour tous).
 //   NET.entree(inp)        invité : à chaque image, son entrée de conduite. Côté hôte, NET.ins[i] = dernière entrée de l'invité i (nulle tant que rien n'est arrivé : le pilote automatique le conduit).
 //   NET.diffuse(R)         hôte : l'état de la course (appelé à chaque image, envoyé 20 fois par seconde).
 //   NET.applique(R)        invité : à chaque image, à la place de stepRace ; pose sur R l'état interpolé.
+//   NET.stop()             hôte : arrête la course chez tous (retour au menu).
 //   NET.fermer()           quitte le salon.
+//   Invité : R.glob = les voitures dans l'ordre de l'hôte, si game.js a réordonné R.cars (sa voiture en tête).
 // Le lien ?salon=ABCD ouvre directement le salon (voir game.js).
 (function (G) {
   const PRE = 'vpr-salon-', MAXJ = 4, DT_ENVOI = 0.05, RETARD = 0.1;
@@ -46,7 +48,7 @@
       c.on('data', m => {
         if (!m || typeof m !== 'object') return;
         if (m.t === 'etat') { NET.snaps.push(m); if (NET.snaps.length > 30) NET.snaps.shift(); return; }
-        if (m.t === 'moi') NET.moi = m.i; if (m.t === 'salon') NET.n = m.n; if (m.t === 'go') NET.snaps.length = 0;
+        if (m.t === 'moi') NET.moi = m.i; if (m.t === 'salon' || m.t === 'go') NET.n = m.n; if (m.t === 'go') NET.snaps.length = 0;
         dit(m);
       });
       c.on('close', () => { if (NET.role === 'invite') dit({ t: 'erreur', msg: 'HOTE PARTI' }); });
@@ -55,6 +57,7 @@
 
   function fermer() { NET.role = null; NET.cx.forEach(c => c && c.close()); NET.cx = []; NET.ins = []; NET.snaps = []; NET.n = 1; NET.enCourse = false; if (NET.peer) NET.peer.destroy(); NET.peer = null; }
   function go(carte) { NET.enCourse = true; NET.ins = []; tous({ t: 'go', carte, n: NET.n }); }
+  function stop() { NET.enCourse = false; tous({ t: 'stop' }); } // l'hôte revient au menu : la course s'arrête chez tous, le salon reste (et se rouvre aux arrivants)
   let tIn = 0;
   function entree(inp) { const c = NET.cx[0], t = performance.now(); if (c && c.open && t - tIn > 15) { tIn = t; c.send({ t: 'in', i: inp }); } } // ~60 par seconde au plus
 
@@ -69,7 +72,7 @@
     let b = snaps.findIndex(s => s.rt >= t); if (b < 0) b = snaps.length - 1;
     const B = snaps[b], A = snaps[Math.max(0, b - 1)], u = B.rt > A.rt ? Math.min(1, Math.max(0, (t - A.rt) / (B.rt - A.rt))) : 1;
     R.t = A.rt + (B.rt - A.rt) * u; R.done = B.done;
-    B.cars.forEach((s, i) => { const c = R.cars[i], a = A.cars[i] || s; if (!c) return; Object.assign(c, s);
+    B.cars.forEach((s, i) => { const c = (R.glob || R.cars)[i], a = A.cars[i] || s; if (!c) return; Object.assign(c, s);
       for (const k of ['x', 'y', 'z', 'vx', 'vz', 'dist']) c[k] = a[k] + (s[k] - a[k]) * u; c.th = ang(a.th, s.th, u); });
   }
 
@@ -77,6 +80,6 @@
   // l'horloge de l'invité suit le dernier état reçu, RETARD derrière : il a presque toujours deux états pour interpoler
   function applique(R) { const s = NET.snaps; if (s.length) pose(R, s, s[s.length - 1].rt - RETARD); }
 
-  Object.assign(NET, { heberger, rejoindre, fermer, go, entree, diffuse, applique, emballe, pose, propre, MAXJ });
+  Object.assign(NET, { heberger, rejoindre, fermer, go, stop, entree, diffuse, applique, emballe, pose, propre, MAXJ });
   G.NET = NET;
 })(typeof window !== 'undefined' ? window : globalThis);
