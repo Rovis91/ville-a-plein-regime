@@ -1,6 +1,6 @@
 // Ville à plein régime — audio : tout est synthétisé (bande-son originale et adaptative). Stations de chaque carte : RADIO dans cartes.js.
-// Interface (window.SON) : init() au premier geste · frame(dt, e) à chaque image · setStation(i), toggleMusic(), carte(M), volume(famille, v) ·
-// beep(f), crash(), stinger(rec), tonnerre() · lus par le jeu : station, nom, fq, genre, musicOn, beat, pulse, ana · banc d'écoute et mesure :
+// Interface (window.SON) : init() au premier geste · frame(dt, e) à chaque image · quitter() / reprendre(m) autour d'un changement de carte au menu · setStation(i), toggleMusic(), carte(M), volume(famille, v) ·
+// beep(f), crash(), stinger(rec), tonnerre() · éditeur de musique : ecoute, recale(), note(partie, n), fond, pas, timbres, kits · lus par le jeu : station, nom, fq, genre, musicOn, beat, pulse, ana · banc d'écoute et mesure :
 // init(contexte hors ligne), pump(), pret, live, vol, stations, evenement(), moniteur(gain), vu, et les bruitages ponctuels clac(), levier(), choc(v),
 // boost(), petarade() · prises de test : ac, out, smp.
 // Chaîne : timbres (PATCH) → tranche de la partie → (batterie (KIT) | bus pompé → filtre balayé → saturation de bus) → coupure de station →
@@ -10,6 +10,9 @@
   let TR = 0; // transposition du dernier tour, en demi-tons
   const hz = m => 440 * 2 ** ((m + TR - 69) / 12), R = -99, OUT = 0.56, CLAC = 0.6, LEV = 1; // R : silence dans un thème (voir mel() dans cartes.js)
   let M = CARTE, ST = M.radio, TH = M.th;
+  // prises de l'éditeur de musique (editeur.html) : muet / solo par partie, section jouée en boucle, témoins (jusqu'à quand chaque partie sonne), section en cours
+  const EC = { mute: {}, solo: null, boucle: null, joue: {}, sec: '' }, jo = (p, t, d = 0.12) => { EC.joue[p] = t + d; };
+  const pv = (st, p) => (EC.solo ? EC.solo === p : !EC.mute[p]) ? (st.mx && st.mx[p] != null ? st.mx[p] : 1) : 0; // niveau d'une partie : st.mx, réglé dans l'éditeur
   let AC, live = true, timer, pret = Promise.resolve(), ana, master, musicG, tuneG, drumG, musF, duckG, swF, busDry, busDrv, acid, fuzz, kdrv, bsat, dly, dlyFb, eqL, eqM, eqH, mrevG, drumRv, revIn, echoIn, choIn, mbuf, secG, drumF, gritDry, gritWet, hpF, rev, musSend, motSend, nbuf, outG, vu;
   let t0 = 0, nextT = 0, stp = 0, musicOn = true, lastHit = 0, lastMus = -9, lastN = 0, lastB = 0, menu = true;
   const vol = { mus: 1, mot: 1, pneu: 1, vent: 1, amb: 1, choc: 1, ui: 1, pluie: 1 }, V = {}; // volume par famille (banc d'écoute) et leurs nœuds
@@ -26,14 +29,17 @@
   const RK = () => 'vpr.radio' + (M.id === 'ville' ? '' : '.' + M.id); // dernière station écoutée, par carte
   let station = 0, S16 = 60 / ST[0].bpm / 4;
 
-  // musique de menu : une boucle calme par carte (accords de 4 mesures, nappe, arpège de cloches) ; aucune batterie
-  const MENU = {
-    ville: { bpm: 72, v: 1.55, pad: 'choir', arp: '0...2...1...3...', CH: [[50, 57, 60, 65], [46, 53, 57, 62], [48, 55, 58, 64], [45, 52, 57, 61]] },
-    touge: { bpm: 80, v: 1.05, pad: 'epFM', arp: '0.2...3...1.2...', CH: [[53, 57, 60, 64], [52, 55, 59, 62], [50, 53, 57, 60], [48, 52, 55, 59]] },
-    wangan: { bpm: 84, v: 1.84, pad: 'warm', arp: '0.....2...3.....', CH: [[52, 59, 62, 66], [48, 55, 59, 64], [45, 52, 55, 59], [47, 54, 57, 62]] },
-    paris: { bpm: 90, v: 1.6, pad: 'strings', arp: '..0..2..3..1..2.', CH: [[54, 57, 61, 64], [47, 51, 54, 57], [52, 56, 59, 63], [49, 52, 56, 59]] },
-    canal: { bpm: 76, v: 1.05, pad: 'warm', arp: '0.....2...3.....', CH: [[55, 58, 62, 65], [55, 58, 62, 65], [48, 51, 55, 58], [48, 51, 55, 58]] },
+  // musique de menu : un seul morceau calme pour toutes les cartes — même tempo, mêmes accords (Dm7 BbM7 C7 A), même mélodie de cloches, même basse.
+  // Chaque carte n'en change que la couleur : timbre de la nappe (pad) et de la mélodie (arp), octave de la mélodie (oct), passe-bas (lp), niveau (v, réglé par mesure).
+  // Changer de carte au menu ne recharge plus la page : carte() garde la position du morceau et ouvre la nouvelle couleur en fondu (quitter() / reprendre() servent encore au rechargement).
+  const MENU = { bpm: 80, mel: '0...2...1...3...', CH: [[50, 57, 60, 65], [46, 53, 57, 62], [48, 55, 58, 64], [45, 52, 57, 61]],
+    ville: { v: 1.55, pad: 'choir', arp: 'bell', oct: 0, lp: 3500 },      // chœur sombre, cloches
+    touge: { v: 1.84, pad: 'epFM', arp: 'pluck', oct: 0, lp: 6000 },      // piano électrique, cordes pincées
+    wangan: { v: 1.46, pad: 'warm', arp: 'pulseArp', oct: 12, lp: 1800 }, // nappe ronde et étouffée, impulsions à l'octave
+    paris: { v: 1.37, pad: 'strings', arp: 'bell', oct: 12, lp: 8000 },   // cordes claires, cloches à l'octave
+    canal: { v: 1.35, pad: 'warm', arp: 'epFM', oct: 0, lp: 2600 },       // nappe ronde, piano électrique
   };
+  let reprise = false; // le morceau vient d'être repris en cours de mesure : la nappe et la basse entrent tout de suite, sans attendre la mesure suivante
   // ambiance du lieu : lits de bruit filtré [type, fréquence, Q, niveau, vitesse et profondeur de la houle]
   const AMB = {
     ville: [['highpass', 6000, 0.5, 0.012], ['bandpass', 1400, 0.6, 0.03, 0.13, 0.3], ['lowpass', 110, 0.7, 0.2, 0.07, 0.4]], // pluie, rumeur de ville
@@ -225,9 +231,9 @@
 
   // ---------- séquenceur ----------
   function schedMenu(s, t) {
-    const mn = MENU[M.id] || MENU.ville, bar = s >> 4, q = s % 16, ch = mn.CH[bar % mn.CH.length], a = mn.arp[q];
-    if (q === 0) { for (const n of ch) tone(mn.pad, hz(n), t, S16 * 16.5, 0.05 * (PATCH[mn.pad].lv || 1), strip.d.in); osc('sine', hz(ch[0] - 24), t, S16 * 14, 0.2, duckG); }
-    if (a !== '.') tone('bell', hz(ch[+a] + 12 + (bar & 1 ? 12 : 0)), t, 0.9, 0.06, strip.a.in);
+    const mn = MENU[M.id] || MENU.ville, bar = s >> 4, q = s % 16, ch = MENU.CH[bar % MENU.CH.length], a = MENU.mel[q];
+    if (q === 0 || reprise) { const n = 16.5 - q; reprise = false; for (const x of ch) tone(mn.pad, hz(x), t, S16 * n, 0.05 * (PATCH[mn.pad].lv || 1), strip.d.in); osc('sine', hz(ch[0] - 24), t, S16 * Math.max(1, n - 2.5), 0.2, duckG); }
+    if (a !== '.') tone(mn.arp, hz(ch[+a] + 12 + mn.oct + (bar & 1 ? 12 : 0)), t, 0.9, 0.05 * (PATCH[mn.arp].lv || 1), strip.a.in);
   }
   // Un pas de double-croche. La station donne une forme (suite de sections de 4 mesures : introduction, couplets, refrain, break, montée…) ; chaque
   // section dit quelles parties jouent et avec quelle variante de motif (format : voir RADIO dans cartes.js). La course s'y ajoute : rien que le
@@ -243,6 +249,8 @@
     const big = bigS;
     let key = st.form[fi]; if (big && key !== 'e') key = st.hot;
     else if (sortie === bar >> 2 && !st.sec[key].k) key = st.form[1]; // en sortant du secteur chaud on retombe sur un couplet, jamais sur un break : pas de trou // secteur chaud : le refrain, et sa variation quand la forme y arrive
+    if (EC.boucle && st.sec[EC.boucle]) key = EC.boucle; EC.sec = key;
+    const mxv = p => pv(st, p);
     const sec = st.sec[key], pr = st.prog[sec.P || 0], ch = pr.CH[bar % pr.CH.length], root = pr.ROOT[bar % pr.ROOT.length], pos = ((bar & 3) * 16 + q) / 64; // pos : avancement dans la section
     curRoot = root;
     // premier tour du mode course : ni thème ni percussions hors du secteur chaud
@@ -262,35 +270,35 @@
     }
     let x, c;
     if (d && (x = on('k')) && !fill && (c = pat(st.k, x)[q]) !== '.') {
-      dKick(t, lerp(0.5, 0.8, mix) * (c === 'g' ? 0.5 : 1), K);
+      jo('k', t); dKick(t, mxv('k') * lerp(0.5, 0.8, mix) * (c === 'g' ? 0.5 : 1), K);
       const p = st.pump == null ? 0.35 : st.pump; // pompe : tout plonge sous la grosse caisse, plus ou moins selon le style
       if (p < 1) { duckG.gain.cancelScheduledValues(t); duckG.gain.setValueAtTime(p, t); duckG.gain.linearRampToValueAtTime(1, t + Math.min(st.pumpT || 0.24, S16 * 1.9)); }
     }
-    if (d && (x = on('s')) && !fill && (c = pat(st.s, x)[q]) !== '.') dSnare(hum(), big ? 0.5 : st.sMin || 0.34, K, c);
-    if (fill) dFill(t, q - 16 + fillN, fillN, K);
-    if (d && sec.roll && !((bar & 3) === 3 && q >= 14) && q % ((bar & 3) < 2 ? 4 : (bar & 3) < 3 ? 2 : 1) === 0) dSnare(t, 0.12 + 0.4 * pos, K); // montée : roulement qui se resserre
+    if (d && (x = on('s')) && !fill && (c = pat(st.s, x)[q]) !== '.') jo('s', t), dSnare(hum(), mxv('s') * (big ? 0.5 : st.sMin || 0.34), K, c);
+    if (fill && mxv('s') > 0) dFill(t, q - 16 + fillN, fillN, K);
+    if (d && sec.roll && !((bar & 3) === 3 && q >= 14) && q % ((bar & 3) < 2 ? 4 : (bar & 3) < 3 ? 2 : 1) === 0) dSnare(t, mxv('s') * (0.12 + 0.4 * pos), K); // montée : roulement qui se resserre
     if (d && sec.roll && (bar & 3) === 0 && q === 0) riser(t, S16 * 64, 0.18);
     if (d && sec.roll) lastRoll = bar;
     else if (d && (bar & 3) === 0 && q === 0 && lastRoll === bar - 1) { crash(t, 0.7); const o = osc('sine', hz(root + 24), t, 0.7, 0.6, drumG); o && o.frequency.exponentialRampToValueAtTime(hz(root), t + 0.5); } // le drop : au bout d'une montée, cymbale et chute de sub
     if (d && (bar & 3) === 0 && q === 0 && key === st.hot && lastFill === bar - 1) crash(t, 0.35); // cymbale d'entrée de refrain, seulement au bout d'une relance de batterie
     if (fill) lastFill = bar;
     if (!d) { if (q % 4 === 2) dHat(t, 0.5, K, 'x'); } // seul tic-tac pendant le décompte
-    else if ((x = on('h')) && (c = pat(st.h, x)[q]) !== '.') dHat(hum(), big || lap === 2 ? 1 : 0.8, K, c);
-    if (d && (x = on('p')) && (c = pat(st.p, x)[q]) !== '.') dPerc(hum(), 1, K, c);
+    else if ((x = on('h')) && (c = pat(st.h, x)[q]) !== '.') jo('h', t), dHat(hum(), mxv('h') * (big || lap === 2 ? 1 : 0.8), K, c);
+    if (d && (x = on('p')) && (c = pat(st.p, x)[q]) !== '.') jo('p', t), dPerc(hum(), mxv('p'), K, c);
     if (d && (x = on('b'))) { const rif = pat(st.b.v, x), rf = rif[q];
       if (rf != null && rf !== R) { let n = 1; while (q + n < 16 && rif[q + n] == null) n++; // tenue jusqu'à la note suivante
-        const P = PATCH[st.b.p], f = hz(st.bPar ? root + rf : juste(root + rf, pr.OK[bar % pr.OK.length])); tone(st.b.p, f, t, S16 * n * (P.len || 0.9), lerp(0.27, 0.38, mix) * (P.lv || 1), strip.b.in, lastB); lastB = f; } }
+        const P = PATCH[st.b.p], f = hz(st.bPar ? root + rf : juste(root + rf, pr.OK[bar % pr.OK.length])); jo('b', t, S16 * n); tone(st.b.p, f, t, S16 * n * (P.len || 0.9), mxv('b') * lerp(0.27, 0.38, mix) * (P.lv || 1), strip.b.in, lastB); lastB = f; } }
     else if (!d && q % 8 === 0) tone(st.b.p, hz(root + 12), t, S16 * 6, 0.25, strip.b.in);
     if (st.d && (!d || on('d'))) { const P = PATCH[st.d[0]];
-      if (q === 0) for (const n of ch) tone(st.d[0], hz(n + (st.d[1] || 0)), t, S16 * 16.5, 0.05 * (P.lv || 1), strip.d.in);
+      if (q === 0) { jo('d', t, S16 * 16); for (const n of ch) tone(st.d[0], hz(n + (st.d[1] || 0)), t, S16 * 16.5, mxv('d') * 0.05 * (P.lv || 1), strip.d.in); }
       strip.d.gate.gain.setValueAtTime(d && sec.gate && st.gate[q] === '.' ? 0.06 : 1, t); } // nappe hachée (gate de trance)
     for (const p of ['c', 'g']) if (d && (x = on(p)) && (c = pat(st[p].v, x)[q]) !== '.') { const P = PATCH[st[p].p];
-      for (const n of ch) tone(st[p].p, hz(n + 12 + (st[p + 'O'] || 0)), t, S16 * (P.s ? 1.6 : 3), (c === 'X' ? 0.065 : 0.045) * (P.lv || 1), strip[p].in); }
-    if ((x = on('a')) && (c = pat(st.a.v, x)[q]) !== '.' && (d || q % 2 === 0)) tone(st.a.p, hz(ch[c % 4 % ch.length] + 12 + (c >= 4 ? 12 : 0)), t, 0.2, (q % 4 === 0 ? 0.05 : 0.038) * (PATCH[st.a.p].lv || 1), strip.a.in); // 0-3 : notes de l'accord ; 4-7 : à l'octave
+      jo(p, t); for (const n of ch) tone(st[p].p, hz(n + 12 + (st[p + 'O'] || 0)), t, S16 * (P.s ? 1.6 : 3), mxv(p) * (c === 'X' ? 0.065 : 0.045) * (P.lv || 1), strip[p].in); }
+    if ((x = on('a')) && (c = pat(st.a.v, x)[q]) !== '.' && (d || q % 2 === 0)) jo('a', t), tone(st.a.p, hz(ch[c % 4 % ch.length] + 12 + (c >= 4 ? 12 : 0)), t, 0.2, mxv('a') * (q % 4 === 0 ? 0.05 : 0.038) * (PATCH[st.a.p].lv || 1), strip.a.in); // 0-3 : notes de l'accord ; 4-7 : à l'octave
     if (d && (x = on('l'))) { const L = pat(st.l.v, x), N = L[q];
       if (N != null && N !== R) { let n = 1; while (q + n < 16 && L[q + n] == null) n++;
-        const No = N + (st.lO || 0); tone(st.l.p, hz(No), t, S16 * n * 1.05, PATCH[st.l.p].lv * (st.lV || 1), strip.l.in, lastN && hz(lastN)); lastN = No;
-        if (fin || lap === 2) osc('triangle', hz(N + 12), t, S16 * n, 0.04, strip.l.in); } } // dernier secteur, dernier tour : thème doublé à l'octave
+        const No = N + (st.lO || 0); jo('l', t, S16 * n); tone(st.l.p, hz(No), t, S16 * n * 1.05, mxv('l') * (PATCH[st.l.p].lv || 0.15) * (st.lV == null ? 1 : st.lV), strip.l.in, lastN && hz(lastN)); lastN = No;
+        if (fin || lap === 2) osc('triangle', hz(N + 12), t, S16 * n, 0.04 * mxv('l'), strip.l.in); } } // dernier secteur, dernier tour : thème doublé à l'octave
     if (driftL > 0.3) osc('sawtooth', hz(ch[(q * 2) % 3] + 24), t, 0.1, 0.07 * driftL, acid); // ligne acide tant qu'on glisse
     if (d && glisse) { // la glisse tend la musique avec sa durée : roulement qui se resserre et souffle qui monte, calés sur le tempo (le grave s'amincit dans audioFrame)
       if (q % (acquis ? 1 : 2) === 0) dSnare(t, 0.06 + 0.22 * tens, K);
@@ -302,18 +310,28 @@
     else swF.frequency.setTargetAtTime(sec.lo && !big ? 400 * 30 ** pos : 20000, t, 0.25); // section filtrée : le passe-bas s'ouvre au fil de la section
   }
   const juste = (n, ok) => ok.has(((n % 12) + 12) % 12) ? n : ok.has(((n - 1) % 12 + 12) % 12) ? n - 1 : n + 1; // note recalée sur la gamme et l'accord de la mesure : jamais de fausse note de basse
-  const lvl = () => menu ? (MENU[M.id] || MENU.ville).v : ST[station].vol || 1; // niveau de la station : réglé par mesure pour que toutes sortent au même volume
-  function retune(t) { // (re)cale le séquenceur, le bus et les tranches de mixage sur la station ou sur la boucle de menu
-    const st = ST[station], mn = MENU[M.id] || MENU.ville; S16 = 60 / (menu ? mn.bpm : st.bpm) / 4; t0 = nextT = t; stp = !menu && drums ? 64 : 0; lastN = lastB = 0; // en course, une station prise en route commence au premier couplet, pas à l'introduction
+  const lvl = () => menu ? (MENU[M.id] || MENU.ville).v : ST[station].vol == null ? 1 : ST[station].vol; // niveau de la station : réglé par mesure pour que toutes sortent au même volume
+  function retune(t, garde) { // garde : l'éditeur change un réglage en cours d'écoute, le séquenceur ne repart pas du début // (re)cale le séquenceur, le bus et les tranches de mixage sur la station ou sur la boucle de menu
+    const st = ST[station], mn = MENU[M.id] || MENU.ville; S16 = 60 / (menu ? MENU.bpm : st.bpm) / 4; if (!garde) { t0 = nextT = t; stp = !menu && drums ? 64 : 0; lastN = lastB = 0; } // en course, une station prise en route commence au premier couplet, pas à l'introduction
     if (!AC) return;
     const e = menu ? [3, 0.5] : st.echo || [3, 0.4], q = menu ? [0, 1000, 0, 0] : st.eq || [0, 1000, 0, 0];
     dly.delayTime.value = Math.min(0.95, S16 * e[0]); dlyFb.gain.value = e[1];
     const dv = menu ? 0 : st.drive || 0; busDry.gain.value = 1 - 0.7 * dv; busDrv.gain.value = 0.45 * dv; // saturation de tout le bus (électro saturée, techno industrielle)
-    swF.frequency.cancelScheduledValues(t); swF.frequency.setValueAtTime(!menu && st.sweep ? 500 : 20000, t); swF.Q.value = !menu && st.sweep ? 5 : 0.7;
+    if (!garde) { swF.frequency.cancelScheduledValues(t); swF.frequency.setValueAtTime(menu ? mn.lp : st.sweep ? 500 : 20000, t); } swF.Q.value = !menu && st.sweep ? 5 : 0.7;
     eqL.gain.value = q[0]; eqM.frequency.value = q[1]; eqM.gain.value = q[2]; eqH.gain.value = q[3]; // couleur de la station : grave, médium, aigu
     mrevG.gain.value = menu ? 0.6 : st.rev == null ? 0.2 : st.rev; drumRv.gain.value = menu ? 0 : (KIT[st.kit] || KIT.k909).room;
-    const parts = menu ? { d: mn.pad, a: 'bell' } : { b: st.b && st.b.p, d: st.d && st.d[0], c: st.c && st.c.p, g: st.g && st.g.p, a: st.a && st.a.p, l: st.l && st.l.p };
-    for (const k in strip) { const P = PATCH[parts[k]] || {}, s = strip[k]; s.pan.pan.value = P.pan || 0; s.rv.gain.value = P.rv || 0; s.ec.gain.value = P.ec || 0; s.ch.gain.value = P.ch || 0; s.gate.gain.cancelScheduledValues(t); s.gate.gain.setValueAtTime(1, t); }
+    const parts = menu ? { d: mn.pad, a: mn.arp } : { b: st.b && st.b.p, d: st.d && st.d[0], c: st.c && st.c.p, g: st.g && st.g.p, a: st.a && st.a.p, l: st.l && st.l.p };
+    for (const k in strip) { const P = PATCH[parts[k]] || {}, s = strip[k]; s.pan.pan.value = P.pan || 0; s.rv.gain.value = P.rv || 0; s.ec.gain.value = P.ec || 0; s.ch.gain.value = P.ch || 0; if (!garde) { s.gate.gain.cancelScheduledValues(t); s.gate.gain.setValueAtTime(1, t); } }
+  }
+  function quitter() { // on change de carte au menu : la musique s'efface vite ; renvoie où en est le morceau, pour reprendre()
+    if (!AC || !menu) return null; const t = AC.currentTime; tuneG.gain.cancelScheduledValues(t); tuneG.gain.setTargetAtTime(0, t, 0.03);
+    return { pas: stp - (nextT - t) / S16, t: Date.now() };
+  }
+  function reprendre(m) { // après le rechargement : même endroit du morceau, compte tenu du temps passé ; la couleur de la nouvelle carte s'ouvre en 2 s
+    if (!AC || !menu || !m || !(Date.now() - m.t < 8000)) return; const t = AC.currentTime + 0.05, lp = (MENU[M.id] || MENU.ville).lp;
+    stp = Math.max(0, Math.ceil(m.pas + (Date.now() - m.t) / 1000 / S16)); nextT = t; t0 = t - stp * S16; reprise = true;
+    tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.5);
+    swF.frequency.cancelScheduledValues(t); swF.frequency.setValueAtTime(Math.min(lp, 300), t); swF.frequency.exponentialRampToValueAtTime(lp, t + 2);
   }
   function setStation(i) {
     station = (((i | 0) % ST.length) + ST.length) % ST.length;
@@ -330,7 +348,7 @@
     M = m; ST = M.radio; TH = M.th; station = 0;
     try { station = clamp(+localStorage.getItem(RK()) || 0, 0, ST.length - 1); } catch (e) { }
     S16 = 60 / ST[station].bpm / 4;
-    if (AC) { retune(AC.currentTime + 0.05); buildAmb(); }
+    if (AC) { retune(AC.currentTime + 0.05, menu); if (menu) swF.frequency.setTargetAtTime((MENU[M.id] || MENU.ville).lp, AC.currentTime, 0.5); buildAmb(); } // au menu, le morceau commun continue : seule sa couleur change
   }
   carte(M);
   function buildAmb() {
@@ -533,7 +551,7 @@
 
   document.addEventListener('visibilitychange', () => { if (AC && live) document.hidden ? AC.suspend() : AC.resume(); }); // pas de musique hachée ni de moteur figé en arrière-plan
   window.SON = {
-    init: initAudio, frame: audioFrame, setStation, carte, pump, beep, stinger, arrivee,
+    init: initAudio, frame: audioFrame, setStation, carte, pump, beep, stinger, arrivee, quitter, reprendre,
     crash: () => AC && crash(),
     tonnerre: () => { if (!AC) return; const t = AC.currentTime + 0.4; nz(t, 2.4, 0.5, V.amb, 'lowpass', 140); nz(t, 1.2, 0.12, V.amb, 'bandpass', 600, 0.6); }, // grondement + craquement dans le médium
     toggleMusic() { musicOn = !musicOn; if (AC) musicG.gain.value = musicOn ? 1 : 0; },
@@ -546,6 +564,11 @@
     get beat() { return AC ? Math.max(0, (AC.currentTime - t0) / (4 * S16)) : 0; }, // temps écoulés depuis le début de la station, calés sur le kick
     get pulse() { return AC ? Math.exp(-(this.beat % 1) * 5) : 0; },
     get ana() { return ana; }, // analyseur de spectre, pour l'égaliseur du HUD
+    ecoute: EC, recale() { if (AC) { retune(AC.currentTime, 1); tuneG.gain.setTargetAtTime(lvl(), AC.currentTime, 0.05); } }, // éditeur de musique : applique un réglage de station sans relancer le morceau
+    note(p, n) { const st = ST[station]; if (!AC || menu || !st[p]) return; const P = PATCH[st[p].p] || {}; // fait entendre une note de la basse ou du thème (piano-roll de l'éditeur)
+      tone(st[p].p, hz(n), AC.currentTime, 0.25, p === 'l' ? (P.lv || 0.15) * (st.lV == null ? 1 : st.lV) : 0.3 * (P.lv || 1), strip[p].in); },
+    get fond() { return curRoot; }, // fondamentale de la mesure en cours
+    get pas() { return stp; }, get timbres() { return Object.keys(PATCH); }, get kits() { return Object.keys(KIT); },
     get ac() { return AC; }, get out() { return master; }, get smp() { return Object.keys(smp); }, // prises de test
   };
 })();

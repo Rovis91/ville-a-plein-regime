@@ -94,7 +94,17 @@ Tout tourne dans le navigateur, sans étape de build ni dépendance à installer
 python -m http.server 8123
 ```
 
-puis ouvrir http://localhost:8123/.
+puis ouvrir l'une de ces pages (le même serveur les sert toutes) :
+
+| Application | Adresse | À quoi elle sert |
+|---|---|---|
+| **Le jeu** | http://localhost:8123/ | jouer ; `?carte=ville`, `touge`, `wangan`, `paris` ou `canal` pour choisir la carte |
+| **Les sons** (banc d'écoute) | http://localhost:8123/ecoute.html | écouter chaque station, ambiance et bruitage seul, régler le mélange de course par famille, mesurer les niveaux |
+| **La musique** (éditeur) | http://localhost:8123/editeur.html | modifier une station : mixage, timbres, accords, arrangement, motifs, basse et thème en piano-roll |
+
+Les trois partagent le même moteur audio (`audio.js`). Les réglages de l'éditeur de musique sont enregistrés dans le navigateur : pour les entendre en course, ouvrir le jeu **à la même adresse** (même hôte, même port) que l'éditeur, puis recharger la page. « Exporter » dans l'éditeur donne le texte à conserver ou à inscrire dans `cartes.js`.
+
+Autres pages d'outils : `manette.html` (diagnostic de la manette) et `styles.html` (planche des styles visuels).
 
 ## Commandes
 
@@ -221,6 +231,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | `sim.js` | **physique**, sans aucun rendu : piste, moteur et boîte, glisse, murs, pilote automatique, course contre IA à un ou deux humains, trafic, traces des fantômes et liens de défi. Partagé entre le jeu et les tests. |
 | `game.js` | rendu three.js, décor de la ville, effets, interface, commandes et périphériques, vues de l'écran partagé, boucle de jeu |
 | `audio.js` | tout le son, synthétisé : trois stations de radio par carte (données `RADIO` dans `cartes.js`), chacune avec ses timbres (`PATCH`), sa batterie (`KIT`), ses effets et sa forme en sections ; musique de menu, ambiance du lieu par zones, tunnels, moteur, boîte, pneus, bruitages. Exposé au jeu par `window.SON`. |
+| `editeur.html` | éditeur de musique : pour chaque station, mixage par partie, batterie et timbres, effets, accords, arrangement des sections, motifs, et basse et thème en piano-roll ; joue le vrai moteur, enregistre dans le navigateur (`vpr.musique`), le jeu reprend les réglages ; « Exporter » pour les inscrire dans `cartes.js` |
 | `ecoute.html` | banc d'écoute : chaque station, ambiance et bruitage joué seul (amplifié pour l'écoute, vumètre, « tout arrêter »), le mélange de course avec un curseur par famille, et trois vérifications : auto-test des boutons, niveaux (RMS et crête) et variété des stations (corrélation des spectres), par rendu hors ligne |
 | `textures.js` | **catalogue des textures** : l'aspect de chaque surface, aplat (`nom: 0xrrggbb`) ou dessin sur canvas. Ni forme, ni emplacement. |
 | `formes.js` | **catalogue des formes** : la géométrie de chaque objet, forme simple ou assemblage de boîtes à zones nommées. Ni texture, ni emplacement. Un assemblage posé est fondu en une géométrie par zone ; `insts()` (decors.js) le pose en nombre, une passe de dessin par zone. |
