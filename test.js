@@ -257,6 +257,11 @@ let duoTxt;
   const G2 = newRace(T, 3, AI_LVL.slice(0, 2), 0, { humains: 2 });
   assert.deepStrictEqual(G2.cars.map(c => c.pos), [4, 3, 1, 2], 'grille à deux humains');
   assert.deepStrictEqual(G2.cars.map(c => c.dist), [-20, -16, -8, -12]);
+  // à quatre humains, sans IA : quatre places distinctes, et chacun conduit sa voiture
+  const G4 = newRace(T, 3, [], 0, { humains: 4 });
+  assert.deepStrictEqual(G4.cars.map(c => c.pos), [4, 3, 2, 1], 'grille à quatre humains');
+  const d4 = G4.cars.map(c => c.dist); for (let i = 0; i < 240; i++) stepRace(G4, [I(0, 1), I(0, 1), I(0, 1), I(0, 1)], H);
+  assert(G4.cars.every((c, i) => c.dist > d4[i] + 5), 'quatre humains : chacun avance');
   for (const x of G2.cars) for (const y of G2.cars) assert(x === y || sep(x, y) > 5, 'grille à deux : voitures trop proches');
   // chaque voiture suit sa propre entrée : celle qui accélère avance, celle qui ne touche à rien ne bouge pas (l'IA ne conduit ni l'une ni l'autre)
   for (const qui of [0, 1]) { const R = newRace(T, 3, AI_LVL.slice(0, 2), 0, { humains: 2 }), g = R.cars[qui], f = R.cars[1 - qui], d0 = g.dist, x0 = f.x, z0 = f.z;
