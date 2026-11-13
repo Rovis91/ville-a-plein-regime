@@ -11,6 +11,8 @@ globalThis.window = globalThis; require('./decors.js'); require('./langue.js');
     const t = EN[M.id] || M.th.hud.titre; assert(t && t.length === 2 && t.every(l => l), M.id + ' : titre anglais absent');
   }
   for (const id in EN) assert(CARTES.some(M => M.id === id), 'TITRE_EN : carte inconnue ' + id);
+  assert.deepStrictEqual(SOIREE.map(M => M.id).sort(), CARTES.map(M => M.id).sort(), 'NUIT : chaque carte une fois dans la Tournée');
+  assert(SOIREE.every((M, i) => /^\d\d:\d\d$/.test(M.heure) && (!i || (M.heure < '12' ? '24' + M.heure : M.heure) > (SOIREE[i - 1].heure < '12' ? '24' + SOIREE[i - 1].heure : SOIREE[i - 1].heure))), 'NUIT : les heures avancent, du soir au matin');
   console.log('OK  inventaire : décor, trace or et titre de ' + CARTES.length + ' cartes'); }
 const H = 1 / 120, deg = r => r * 180 / Math.PI; let surfTxt = '', surfCarte = '', lienMax = [0], orTxt = [];
 for (const M of CARTES) {
@@ -174,12 +176,13 @@ console.log(`OK  fantômes or : ${orTxt.join(' · ')} ; lien de défi le plus lo
   const [tp, hp] = tour(T); assert(!hp && tp > res.sec[0] + 0.3 && tp < res.glace[0], `plaque de glace : tour ${tp} s (${hp} contacts), au sec ${res.sec[0]} s`);
   console.log(`OK  surfaces (touge) : ${txt}, une plaque de glace ${tp.toFixed(1)} s ; freinage de 200 km/h / rayon à 120 km/h : ${surfTxt}`);
 }
-// radio : trois stations par carte ; une forme d'au moins 32 mesures faite de sections différentes ; timbres et batteries connus d'audio.js
+// radio : trois stations par carte (quatre au plus) ; une forme d'au moins 32 mesures faite de sections différentes ; timbres et batteries connus d'audio.js
 // (la variété à l'oreille se mesure dans le navigateur : bouton « Variété des stations » de ecoute.html, il n'y a pas de Web Audio sous node)
 const SRC = require('fs').readFileSync(__dirname + '/audio.js', 'utf8'), seen = new Set();
+new Function(SRC); // audio.js se lit sans erreur de syntaxe (sinon le jeu reste muet : SON n'existe pas)
 const GAMME = { mineur: [0, 2, 3, 5, 7, 8, 10], majeur: [0, 2, 4, 5, 7, 9, 11] }, NOMS = ['do', 'do#', 'ré', 'mib', 'mi', 'fa', 'fa#', 'sol', 'lab', 'la', 'sib', 'si'];
 for (const M of CARTES) {
-  assert(M.radio.length === 3, M.id + ' : il faut trois stations');
+  assert(M.radio.length === 3 || M.radio.length === 4, M.id + ' : il faut trois stations (quatre au plus)');
   for (const s of M.radio) {
     const w = s.name + ' : ';
     assert(!seen.has(s.name) && !seen.has(s.genre), w + 'nom ou genre en double'); seen.add(s.name); seen.add(s.genre);
@@ -198,6 +201,10 @@ for (const M of CARTES) {
     for (const k in s.sec) for (let fi = 0; fi < s.form.length; fi++) if (s.form[fi] === k || (k === s.hot && s.form[fi] !== 'e')) for (let b = fi * 4; b < fi * 4 + 4; b++) {
       const sec = s.sec[k], pr = s.prog[sec.P || 0], ok = pr.OK[b % pr.OK.length], root = pr.ROOT[b % pr.ROOT.length], ou = ' (section ' + k + ', mesure ' + (b + 1) + ', accord ' + s.accords[sec.P || 0][b % pr.CH.length] + ')';
       if (sec.l) for (const n of s.l.v[sec.l.v][b % s.l.v[sec.l.v].length]) assert(n == null || n === -99 || ok.has(pc(n)), w + 'thème, fausse note ' + nom(n) + ou);
+      // une note de thème tenue (2 pas ou plus) ne frotte pas contre l'accord : ni un demi-ton au-dessus d'une de ses notes, ni le triton de sa fondamentale (sauf frottement voulu : hors)
+      if (sec.l && !s.hors) { const L = s.l.v[sec.l.v][b % s.l.v[sec.l.v].length], ch = pr.CH[b % pr.CH.length].map(pc);
+        L.forEach((n, q) => { if (n == null || n === -99 || ch.includes(pc(n)) || !(q + 1 < 16 && L[q + 1] == null)) return;
+          assert(!ch.some(c => pc(n - c) === 1) && pc(n - root) !== 6, w + 'thème, ' + nom(n) + ' tenu frotte contre l\'accord, pas ' + (q + 1) + ou); }); }
       if (sec.b) for (const n of s.b.v[sec.b.v][b % s.b.v[sec.b.v].length]) { if (n == null || n === -99) continue;
         if (s.bPar) assert(s.bPar.includes(n) || s.bPar.includes(n - 12), w + 'basse parallèle, intervalle non prévu ' + n + ou);
         else { const j = ok.has(pc(root + n)) ? root + n : ok.has(pc(root + n - 1)) ? root + n - 1 : root + n + 1; assert(ok.has(pc(j)), w + 'basse impossible à recaler ' + nom(root + n) + ou); } }

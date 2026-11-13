@@ -166,7 +166,7 @@
     let vf = c.vx * fx + c.vz * fz, vl = c.vz * fx - c.vx * fz;
     const sp = Math.abs(vf);
     // Glisse (voir KT0) : bouton de glisse + volant, au-dessus de 45 km/h ; elle verrouille son sens (c.dd) tant que le bouton est tenu ; le volant ne fait plus qu'ouvrir ou fermer le rayon.
-    const Q = surfAt(T, c);
+    const Q = c.sol = surfAt(T, c); // c.sol : le sol sous la voiture, pour le roulement (audio.js)
     const adh = (1 - Q.colle) * (CARD.grip || 1); // adhérence = sol × voiture (pour que la vitesse suive le nez)
     if (!c.dd && inp.hand && sp > 12 * (1 - Q.gl) && Math.abs(inp.steer) > 0.3 * (1 - Q.gl)) { c.dd = Math.sign(inp.steer); c.nDrift++; }
     if (c.dd && (!inp.hand || sp < 10 * (1 - Q.gl))) { c.dd = 0; c.driftT = 0; }

@@ -14,21 +14,23 @@
 
 Prenez le volant d'une bête de 500 chevaux et lâchez-la dans les artères d'une mégalopole cyberpunk qui ne dort jamais. Pluie, gratte-ciel, enseignes en katakana : chaque virage est une carte postale, chaque ligne droite une invitation à passer la sixième.
 
+Et quand la ville ne suffit plus : **HUIT CARTES**, du col de montagne japonais à l'autoroute de la baie, des rues de Paris à l'aube au canal de Los Angeles à l'heure dorée, d'une arène couverte pleine à craquer à un col enneigé, jusqu'à une spéciale de rallye sur la terre ocre. Chacune avec **sa voiture, ses rivaux, ses radios et son tableau de bord**.
+
 <p align="center"><img src="docs/course-1.png" alt="En course, les adversaires dans les rétros"></p>
 
 ### 🏁 CINQ MODES DE JEU EXPLOSIFS !
 
 - **CONTRE-LA-MONTRE** : enchaînez les tours, battez vos records… et rattrapez le **fantôme** de la médaille que vous visez : **bronze**, **argent**, puis **or** ! Un tour dont vous êtes fier ? Envoyez-le à un ami par un simple **lien de défi** : il affrontera votre fantôme.
 - **GLISSE** : 2 tours pour le style. Plus ça glisse vite, de travers et longtemps, plus ça paie… et le **multiplicateur** grimpe tant que vous enchaînez sans toucher un mur !
-- **COURSE** : 3 tours, 3 rivaux sans pitié. **KENJI**, **REI** et **JUN** ne vous feront aucun cadeau.
+- **COURSE** : 3 tours, 3 rivaux sans pitié. **KENJI**, **REI** et **JUN** ne vous feront aucun cadeau… et ils ont des choses à vous dire : **la référence** vous toise, **la tête brûlée** joue des portières, **la recrue** tremble sur la grille !
 - **ÉLIMINATION** : 4 voitures, 4 tours. À chaque passage sur la ligne, **le dernier sort**. Jusqu'au duel final !
-- **TOURNÉE** : toutes les cartes à la suite, des points à chaque manche, grille inversée… et un **trophée** au bout !
+- **TOURNÉE** : **une nuit entière**, de 18 h 40 sur la terre ocre au premier métro de 5 h 30 à Paris. Huit manches, des points à chaque manche, grille inversée… et un **trophée** au bout !
 
 <p align="center"><img src="docs/depart.png" alt="La grille de départ"></p>
 
-### 👥 À DEUX SUR LE MÊME ÉCRAN !
+### 👥 JUSQU'À QUATRE SUR LE MÊME ÉCRAN… OU EN LIGNE !
 
-Un ami sur le canapé ? Passez la ligne **JOUEURS** du menu sur **2** : l'écran se coupe en deux, **joueur 1 en haut, joueur 2 en bas**, chacun sa caméra, son compteur, sa nitro… et son moteur dans les oreilles !
+Des amis sur le canapé ? Choisissez **ÉCRAN PARTAGÉ** (2 à 4 joueurs). Loin les uns des autres ? **EN LIGNE**, un code de salon de 4 lettres suffit, sans serveur ni inscription. À deux : l'écran se coupe en deux, **joueur 1 en haut, joueur 2 en bas**, chacun sa caméra, son compteur, sa nitro… et son moteur dans les oreilles !
 
 - **COURSE** : 3 tours, vous deux et les **deux rivaux les plus rapides** de la carte. L'aspiration de l'autre est à prendre !
 - **ÉLIMINATION** : 4 voitures, 4 tours, le dernier sort. Éliminé ? Votre écran suit le meneur jusqu'au bout.
@@ -46,9 +48,13 @@ Sur l'**écran d'inscription**, chacun appuie sur un bouton de ce qu'il tient : 
 
 <p align="center"><img src="docs/course-2.png" alt="233 km/h dans les rues de la ville"></p>
 
-### 📻 3 STATIONS DE RADIO EN DIRECT
+### 📻 25 STATIONS DE RADIO EN DIRECT
 
-La bande-son est **composée en temps réel** et **réagit à votre conduite**. Plus vous appuyez, plus elle s'emballe ! Branchez-vous sur **NIGHT CITY FM** ou zappez d'une touche.
+La bande-son est **composée en temps réel** et **réagit à votre conduite**. Plus vous appuyez, plus elle s'emballe ! Trois stations ou plus par carte, de la darksynth à l'eurobeat, du g-funk à la rumba gitane : branchez-vous sur **NEON CITY FM** ou zappez d'une touche.
+
+### 🕹️ MODE DÉMO
+
+Posez la manette : au bout de 25 secondes, le jeu court tout seul, carte après carte, dans l'ordre de la nuit. Une touche, et la main est à vous.
 
 <p align="center"><img src="docs/arrivee.png" alt="Classement à l'arrivée"></p>
 
@@ -59,7 +65,7 @@ Pas de disquette, pas de CD, pas de téléchargement de 40 Go. **Un navigateur, 
 | | |
 |---|---|
 | 🎮 Genre | Course arcade |
-| 👤 Joueurs | 1 ou 2, sur le même écran |
+| 👤 Joueurs | 1 à 4 sur le même écran, ou en ligne |
 | 🖥️ Plateforme | Tout navigateur moderne |
 | ⏱️ Chargement | Instantané |
 | 💰 Prix | **GRATUIT** |
@@ -71,17 +77,22 @@ Pas de disquette, pas de CD, pas de téléchargement de 40 Go. **Un navigateur, 
 
 # Pour les développeurs
 
-Jeu de course arcade en 3D pixelisée, seul ou à deux sur le même écran. Six cartes, chacune avec son tracé, sa voiture, sa radio, son décor et son interface ; la musique réagit à la course.
+Jeu de course arcade en 3D pixelisée, seul, jusqu'à quatre sur le même écran, ou en ligne. Huit cartes, chacune avec son tracé, sa voiture, sa radio, son décor et son interface ; la musique réagit à la course.
 
 | Carte | Conduite | Voiture | Radio |
 |---|---|---|---|
-| Ville à plein régime | viaduc et échangeur de nuit, presque tout à fond | Nismo GT-R Z-tune | darksynth, house, breakbeat |
-| Karasu-tōge | col de montagne : montée rapide, quatre épingles en descente | Mazda RX-7 Spirit R | eurobeat |
-| Wan-9 | autoroute de baie à 270 km/h, boucle serrée, camions à doubler | Toyota Supra RZ | trance |
-| Premier métro | rues de Paris à l'aube, relances entre des angles | Renault 5 Maxi Turbo | disco spatiale |
-| Canal 6 | canal de Los Angeles au couchant, large et glissant | Dodge Viper GTS | g-funk |
+| Ville à plein régime | viaduc et échangeur de nuit, presque tout à fond | Raijin GT-Z | darksynth, techno industrielle, big beat |
+| Karasu-tōge | col de montagne : montée rapide, quatre épingles en descente | Tengu R7 Spirit | eurobeat, fusion jazz-rock, city pop, nightcore |
+| Wan-9 | autoroute de baie à 270 km/h, boucle serrée, camions à doubler | Kairyu RZ | trance, drum and bass, techno de Detroit |
+| Premier métro | rues de Paris à l'aube, pavés, relances entre des angles | Lutèce 5 Turbo Maxi | house filtrée, eurodance, disco spatiale |
+| Canal 6 | canal de Los Angeles au couchant, large et glissant | Sidewinder GTS | g-funk, electro-funk, rock du désert |
+| Grand Vacarme | arène couverte, tremplins et murs roulables | Mastiff V8 Arena | hard rock, fanfare funk, happy hardcore |
+| Nuit Blanche | col enneigé à l'aube, neige et plaques de glace | Boréale S1 E2 | cold wave, dub techno, synth-pop |
+| Spéciale des Ocres | spéciale de rallye sur terre, en fin de journée | Garrigue 2000 Gr.4 | punk rock, ska, rumba gitane |
 
-Le menu principal choisit la carte, le nombre de joueurs, le mode et la boîte (haut / bas pour la ligne, gauche / droite pour la valeur, Entrée pour démarrer). Deux modes : **contre-la-montre** (tours lancés, record et fantôme par carte) et **course** (3 tours, départ en grille contre 3 IA, classement à l'arrivée). La ligne MODE du menu fait aussi défiler la difficulté de la course (détente, normal, chaud : `DIFF` dans `sim.js`). En contre-la-montre, chaque carte a ses médailles de temps, calculées sur le tour lancé du pilote automatique (`med` dans `cartes.js`). Changer de carte recharge la page ; on peut aussi la choisir par l'adresse : `?carte=touge`, `wangan`, `paris`, `canal`, `stade`, `givre`, `terre`, `ville`.
+Les voitures portent des noms inventés ; leurs fiches techniques s'inspirent de voitures réelles (voir « Crédits »).
+
+Le menu principal choisit la carte, le nombre de joueurs, le mode et la boîte (haut / bas pour la ligne, gauche / droite pour la valeur, Entrée pour démarrer). Modes : **contre-la-montre** (tours lancés, record et fantôme par carte), **glisse**, **course** (3 tours, départ en grille contre 3 IA, classement à l'arrivée), **élimination** et **Tournée**. La ligne MODE du menu fait aussi défiler la difficulté de la course (détente, normal, chaud : `DIFF` dans `sim.js`). En contre-la-montre, chaque carte a ses médailles de temps, calculées sur le tour lancé du pilote automatique (`med` dans `cartes.js`). Changer de carte reconstruit le décor sans recharger la page ; on peut aussi la choisir par l'adresse : `?carte=touge`, `wangan`, `paris`, `canal`, `stade`, `givre`, `terre`, `ville`.
 
 Tout tourne dans le navigateur, sans étape de build ni dépendance à installer.
 
@@ -188,7 +199,7 @@ Dans `sim.js` : `newRace(T, tours, niveaux, élastique, { elim: true })` ; une v
 
 ### Tournée
 
-Au menu des modes (« TOURNEE », aux trois difficultés) : toutes les cartes du jeu à la suite, dans l'ordre du menu, en courses de 3 tours contre les rivaux de chaque carte.
+Au menu des modes (« TOURNEE », aux trois difficultés) : une nuit, toutes les cartes du jeu à la suite du crépuscule à l'aube, en courses de 3 tours contre les rivaux de chaque carte. L'ordre et l'heure de chaque manche sont `SOIREE` dans `cartes.js` : Spéciale des Ocres 18:40, Canal 6 19:50, Grand Vacarme 22:00, Ville 00:00, Karasu-tōge 02:00, Wan-9 03:30, Nuit Blanche 05:00, Premier métro 05:30. L'heure s'affiche au départ de chaque manche et au classement général (« SUITE : 03:30 · WAN-9 »).
 
 - Barème par manche : 10, 6, 3 et 1 points du premier au dernier.
 - Après chaque manche, le classement général s'affiche, avec ce que la manche a rapporté et la place de départ de la suivante.
@@ -197,7 +208,15 @@ Au menu des modes (« TOURNEE », aux trois difficultés) : toutes les cartes du
 - La Tournée est sauvegardée après chaque manche close (une par difficulté). Quitter en cours de manche ne perd que cette manche : au menu, « REPRENDRE » la relance, depuis n'importe quelle carte. Une manche est close quand on quitte son tableau d'arrivée (Entrée ou Échap) ; fermer l'onglet avant, c'est la rejouer.
 - Au bout de la dernière carte, finir sur le podium donne le trophée de la difficulté (or, argent, bronze), affiché au menu. Ni échelle ni rétrogradation.
 
-La liste des manches est `CARTES` (`cartes.js`), lue telle quelle : une carte ajoutée entre dans la Tournée sans rien changer. Le calcul est une fonction pure de `sim.js`, `tournee(points, arrivée)`, qui rend les points, le classement et la grille ; `newRace` prend la grille par `{ grille }`. Dans `game.js`, voir « Tournée » : état dans `localStorage` sous `vpr7.tournee` (par difficulté : prochaine manche et points) et `vpr7.trophee`. On passe d'une carte à l'autre sans recharger la page ; la mémoire tenue d'une carte à l'autre se mesure avec `chaine()` de `outils/perf.js` (voir « Performances »).
+La liste des manches est `SOIREE` (`cartes.js`) : une carte ajoutée doit y prendre sa place et son heure (`test-cartes.js` vérifie que chaque carte y est une fois et que les heures avancent). Le calcul est une fonction pure de `sim.js`, `tournee(points, arrivée)`, qui rend les points, le classement et la grille ; `newRace` prend la grille par `{ grille }`. Dans `game.js`, voir « Tournée » : état dans `localStorage` sous `vpr8.tournee` (nouvelle clé depuis l'ordre de la nuit : une Tournée commencée dans l'ancien ordre repart de zéro) (par difficulté : prochaine manche et points) et `vpr7.trophee`. On passe d'une carte à l'autre sans recharger la page ; la mémoire tenue d'une carte à l'autre se mesure avec `chaine()` de `outils/perf.js` (voir « Performances »).
+
+### Rivaux
+
+Les trois rivaux d'une carte (`rivaux` dans `cartes.js`, sinon KENJI, REI, JUN) ont un caractère, tenu par leur rang du plus rapide au moins rapide : **la référence**, **la tête brûlée**, **la recrue**. Chacun a sa couleur (`OPP` dans `game.js`) et ses répliques (`PIQUES`) : une sur la grille, une quand on le double, une quand il nous double. Elles s'affichent 3 s à la couleur du rival, une toutes les 7 s au plus, en solo seulement (ni à plusieurs, ni en ligne, ni en démo). Un dépassement compte à 3 m d'écart, pour qu'une voiture côte à côte ne parle pas à chaque image. L'anglais de chaque réplique est dans `langue.js`.
+
+### Mode démo
+
+À l'écran titre (accueil ou menu principal, en solo), 25 s sans rien toucher (`DEMO_ATTENTE` dans `game.js`) lancent une Course conduite par le pilote automatique, sous un bandeau « DEMO · heure · carte ». Au bout de 50 s (`DEMO_DUREE`), la démo passe à la carte suivante dans l'ordre de la nuit (`SOIREE`). Une touche, un bouton, un clic, ou le volant et les pédales d'une manette rendent la main : on revient sur l'écran (accueil ou menu) et sur la carte d'où l'on venait. Rien n'est enregistré, le mode choisi au menu ne change pas. Entre deux cartes, l'état passe par `sessionStorage` (`vpr.demo`, retour par `vpr.demoFin`). `__g.demo` et `__g.inactif` le montrent dans la console.
 
 ### Écran partagé
 
@@ -311,9 +330,10 @@ Dans `cartes.js`, pour chaque carte :
 | `grip` | adhérence en virage (m/s²). 44 sur la ville (arcade), 15 à 24 ailleurs (proche d'une vraie voiture en pneus de course). Plus haut : on tourne plus serré, on freine moins. |
 | `W`, `sc`, `pts` | demi-largeur de route, échelle et points de contrôle `[x, z, altitude]` du tracé |
 | `tun`, `chaud`, `sect` | tunnel, secteur où la musique se déchaîne, temps intermédiaires (indices de points) |
-| `car` | la voiture : rapports de boîte, courbe de couple, masse, aérodynamique, motricité, silhouette |
+| `car` | la voiture : rapports de boîte, courbe de couple, masse, aérodynamique, motricité, silhouette (`look.type` : le modèle de `formes-voitures.js`) |
 | `radio` | les stations (`RADIO`, en tête de `cartes.js`) : tempo, batterie, timbres, couleur, progressions, motifs, thèmes, sections et forme · `amb` : les zones où l'on entend l'ambiance du lieu |
 | `th` | le thème : ciel, brume, lumières, couleurs de route, style et couleurs de l'interface |
+| `th.hud` | l'interface de la carte : `style` des panneaux (`cyber`, `trait`, `panneau` et `plaque` aux coins arrondis, `bloc`, `tableau` de stade, `rallye` à bande de chantier, `givre`), `jauge` du compte-tours (égaliseur par défaut, `aiguille` à cadran, `led` en barre de diodes), `mph: 1` pour un compteur en miles (Canal 6), `jp` étiquettes japonaises |
 | `th.pluie` | `1` = pluie partout ; ou des zones `[point a, point b, force]` (1 = pluie normale ; au-delà, averse : plus de gouttes, traînées plus longues ; Wan-9 : averse de force 3 sur le port, rien avant la sortie du pont), coupée en tunnel. Calculée une fois par `buildTrack` (`T.pluie`, lue par le dessin et le son) |
 | Surfaces | `SURF` en tête de `sim.js` : un jeu de coefficients par surface (`sec`, `mouille`, `glace`, `neige`, `terre`) : `vir` lacet perdu en courbe, `frein` et `trac` freinage et motricité, `colle` retard de la vitesse sur le nez (la voiture chasse), `vaq`/`aq`/`aqc` aquaplaning, `roul` frein de roulement, `gl` glisse qui part plus tôt. `buildTrack` en tire `T.surf[i]`, le jeu de coefficients de chaque échantillon (fondu aux bords des zones). Le pilote auto et les IA lisent la même table (virages, freinage) |
 | `surf` | surface de la route : `{ fond: 'neige', zones: [[point a, point b, 'glace', force], …] }` (`fond` partout, zones par-dessus, fondues sur 20 m ; `force` de 0 à 1, 1 par défaut). Aucune des six cartes n'en déclare ; `test-cartes.js` l'essaie sur une copie du touge |
@@ -370,8 +390,8 @@ Le jeu est un site statique : il suffit de servir le dossier tel quel. Sur GitHu
 - **PeerJS** 1.5.4, licence MIT.
 - **Polices** Press Start 2P et DotGothic16, licence SIL Open Font.
 - **Sons de TR-808** : enregistrés par Michael Fischer (Technopolis, 1994) et distribués gratuitement par leur auteur, sans licence formelle. Voir `samples/TR808.TXT`. À vérifier ou à remplacer avant toute diffusion commerciale.
-- **Données des voitures** : fiche technique de la Nismo Skyline GT-R Z-tune (rapports de boîte, couple, puissance, masse). La forme de la courbe de couple, le Cx et les pertes de transmission sont des estimations. Les fiches des quatre autres voitures (Mazda RX-7 Spirit R, Toyota Supra RZ, Renault 5 Maxi Turbo, Dodge Viper GTS) sont saisies de mémoire, et les rapports de boîte de la Renault 5 sont estimés : à vérifier sur fiche constructeur.
-- **Cartes** : tracés, décors et noms originaux, inspirés de lieux réels et de l'ambiance de films et de mangas, sans en reprendre les circuits, personnages ni visuels.
+- **Données des voitures** : les voitures du jeu portent des noms inventés. Leurs fiches s'inspirent de voitures réelles : celle de la ville, de la fiche technique d'une GT japonaise de 500 ch (rapports de boîte, couple, puissance, masse ; courbe de couple, Cx et pertes de transmission estimés) ; les autres, de fiches saisies de mémoire, avec des rapports de boîte parfois estimés.
+- **Cartes** : tracés, décors et noms originaux, inspirés de lieux réels et de l'ambiance de films et de mangas, sans en reprendre les circuits, personnages ni visuels. Noms des voitures et des stations de radio inventés.
 - **Musique** : compositions originales, synthétisées en direct.
 
 Le code du jeu n'a pas encore de licence : à choisir avant de rendre le dépôt public.

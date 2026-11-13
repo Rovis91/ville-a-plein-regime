@@ -115,7 +115,7 @@
   const dents = (x, p) => (x % p) / p; // rampe 0→1 qui se répète
   const SC = {
     menu: ['mus', 'Musique de menu', 'boucle calme, couleur de la carte', ['mus'], 0, () => ({ state: 'title' })],
-    st0: ['mus', '', '', ['mus'], 0, () => musique()], st1: ['mus', '', '', ['mus'], 0, () => musique()], st2: ['mus', '', '', ['mus'], 0, () => musique()],
+    st0: ['mus', '', '', ['mus'], 0, () => musique()], st1: ['mus', '', '', ['mus'], 0, () => musique()], st2: ['mus', '', '', ['mus'], 0, () => musique()], st3: ['mus', '', '', ['mus'], 0, () => musique()],
     ralenti: ['mot', 'Ralenti', 'à l\'arrêt, sans charge', ['mot'], 24, () => course({ r: 0, sp: 0, rpm: 0.12, load: 0, gas: 0 })],
     mi: ['mot', 'Mi-régime en charge', '4 500 tr/min, plein gaz', ['mot'], 11, () => course({ rpm: 0.55 })],
     haut: ['mot', 'Haut régime en charge', '7 500 tr/min, plein gaz', ['mot'], 10, () => course({ rpm: 0.94 })],
@@ -129,6 +129,14 @@
     levier: ['mot', 'Manuelle : montée seule', 'levier, sans le moteur', ['mot'], 3, null, () => SON.levier(false)],
     levierD: ['mot', 'Manuelle : rétrogradage seul', 'levier, sans le moteur', ['mot'], 3, null, () => SON.levier(true)],
     petarade: ['mot', 'Pétarade', 'lever de pied à haut régime, sans le moteur', ['mot'], 16, null, () => SON.petarade()],
+    rupteur: ['mot', 'Rupteur', 'plein gaz contre la zone rouge', ['mot'], 10, () => course({ rpm: 1.01, spool: 1 })],
+    pschitt: ['mot', 'Soupape du turbo', 'lever de pied, sans le moteur', ['mot'], 12, null, () => SON.pschitt()],
+    roulB: ['pneu', 'Roulement : bitume', 'pleine vitesse, sans glisse', ['pneu'], 16, () => course({ r: 1, sp: 80 })],
+    roulT: ['pneu', 'Roulement : terre', '', ['pneu'], 16, () => course({ r: 0.7, sp: 55, sol: { colle: 0.6, roul: 0.5, vir: 0.05, aq: 0 } })],
+    roulN: ['pneu', 'Roulement : neige', '', ['pneu'], 16, () => course({ r: 0.7, sp: 55, sol: { colle: 0.7, roul: 0.2, vir: 0.3, aq: 0 } })],
+    roulP: ['pneu', 'Roulement : pavés', '', ['pneu'], 16, () => course({ r: 0.6, sp: 45, sol: { colle: 0.3, roul: 0.15, vir: 0.1, aq: 0 } })],
+    roulM: ['pneu', 'Roulement : mouillé', '', ['pneu'], 16, () => course({ r: 0.9, sp: 70, sol: { colle: 0.35, roul: 0, vir: 0.15, aq: 0.1 } })],
+    derapT: ['pneu', 'Dérapage sur la terre', 'grand angle', ['pneu'], 12, () => course({ slide: 1, r: 0.6, sp: 48, sol: { colle: 0.6, roul: 0.5, vir: 0.05, aq: 0 } })],
     derapL: ['pneu', 'Dérapage léger', 'petit angle', ['pneu'], 16, () => course({ slide: 0.3 })],
     derapF: ['pneu', 'Dérapage à fond', 'grand angle', ['pneu'], 12, () => course({ slide: 1 })],
     derapR: ['pneu', 'Dérapage réglable', 'curseur d\'angle ci-dessous', ['pneu'], 12, () => course({ slide: u.slide })],
@@ -170,7 +178,7 @@
   function etat(sc, x) {
     const o = sc && sc[5] ? sc[5](x) : { state: 'pause' }, r = o.r || 0;
     return { state: o.state, tour: Math.max(0, u.tour), tours: u.tour < 0 ? 0 : 3, T: { h0: 500, h1: 700, n: 1000 }, hot: o.plein ? 1 : 0, tun: o.tun || 0, amb: o.amb || 0, pluie: o.pluie || 0,
-      car: { manual: !!o.manuel, dd: o.dd || 0, driftT: o.driftT || 0, vl: o.slide ? 4 + 14 * o.slide : 0, boost: o.boost || 0, idx: o.plein ? 600 : 0, dist: 1, drift: !!o.drift, rub: o.rub || 0 },
+      car: { manual: !!o.manuel, dd: o.dd || 0, driftT: o.driftT || 0, vl: o.slide ? 4 + 14 * o.slide : 0, boost: o.boost || 0, sol: o.sol, idx: o.plein ? 600 : 0, dist: 1, drift: !!o.drift, rub: o.rub || 0 },
       r, sp: o.sp || 0, gas: o.gas || 0, hit: o.hitV || (pulse.hit ? 9 : 0), bump: o.bump || 0, up: !!pulse.up, down: !!pulse.down, rpm: o.rpm || 0.2, load: o.load || 0, spool: o.spool || 0, stun: o.stun || 0 };
   }
   const son = () => SON.ac && SON.live;
@@ -191,7 +199,7 @@
   const sous = id => /^st\d$/.test(id) ? M.radio[+id[2]].genre.toLowerCase() + ' · ' + M.radio[+id[2]].bpm + ' bpm' : SC[id][2];
   function boutons() {
     $('cartes').innerHTML = CARTES.map(c => `<button data-c="${c.id}" class="${c === M ? 'on' : ''}">${c.nom}</button>`).join('');
-    for (const g of ['mus', 'mot', 'pneu', 'choc', 'amb', 'pluie', 'ui', 'mix']) $('g-' + g).innerHTML = Object.keys(SC).filter(id => SC[id][0] === g).map(id => `<button data-sc="${id}" class="${scene === SC[id] ? 'on' : ''}">${titre(id)}<small>${sous(id)}</small></button>`).join('');
+    for (const g of ['mus', 'mot', 'pneu', 'choc', 'amb', 'pluie', 'ui', 'mix']) $('g-' + g).innerHTML = Object.keys(SC).filter(id => SC[id][0] === g && !(/^st\d$/.test(id) && +id[2] >= M.radio.length)).map(id => `<button data-sc="${id}" class="${scene === SC[id] ? 'on' : ''}">${titre(id)}<small>${sous(id)}</small></button>`).join('');
   }
   // validation : avis par musique, gardés dans le navigateur
   let AV = {}; try { AV = JSON.parse(localStorage.getItem('vpr.avis') || '{}'); } catch (e) { }
@@ -245,7 +253,7 @@
   const attendre = ms => new Promise(ok => setTimeout(ok, ms));
   async function autotest() {
     const L = [];
-    for (const id of Object.keys(SC)) { jouer(id); let max = -120; for (let i = 0; i < (id === 'evt' || id === 'tonnerre' ? 60 : 24); i++) { await attendre(50); max = Math.max(max, crete); } L.push({ son: titre(id), crete: fmt(max), ok: max >= -30 }); }
+    for (const id of Object.keys(SC)) { if (/^st\d$/.test(id) && +id[2] >= M.radio.length) continue; jouer(id); let max = -120; for (let i = 0; i < (id === 'evt' || id === 'tonnerre' ? 60 : 24); i++) { await attendre(50); max = Math.max(max, crete); } L.push({ son: titre(id), crete: fmt(max), ok: max >= -30 }); }
     stop(); window.__autotest = L;
     $('mesures').innerHTML = '<table><tr><th>bouton</th><th>crête sortie (dB)</th><th></th></tr>' + L.map(l => `<tr><td>${l.son}</td><td>${l.crete}</td><td class="${l.ok ? 'ok' : 'ko'}">${l.ok ? 'OK' : 'KO'}</td></tr>`).join('') + '</table>';
     return L;
@@ -266,7 +274,7 @@
   const titreDe = (c, id) => /^st\d$/.test(id) ? c.radio[+id[2]].genre.toLowerCase() : SC[id][1];
   async function mesurer(carte) {
     const L = [];
-    for (const id of Object.keys(SC)) { if (id === 'radio' || id === 'reglable' || id === 'derapR') continue;
+    for (const id of Object.keys(SC)) { if (id === 'radio' || id === 'reglable' || id === 'derapR' || (/^st\d$/.test(id) && +id[2] >= carte.radio.length)) continue; // st3 : seulement pour une carte à quatre stations
       if (/^st\d$/.test(id) || id === 'tout') for (const plein of [false, true]) { u.plein = plein; u.glisse = id === 'tout' && plein; const l = await rendre(carte, id); l.source += plein ? ', plein' : ', léger'; L.push(l); }
       else L.push(await rendre(carte, id)); }
     u.plein = $('plein').checked; u.glisse = $('glisse').checked; return L;
