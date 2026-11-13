@@ -392,6 +392,42 @@
       // les sommets, en couronne à plus d'un kilomètre, bleus dans le petit jour
       const pics = []; for (let k = 0; k < 16; k++) { const a = k / 16 * 6.283 + rnd() * 0.2, r = 1150 + rnd() * 500, l = 520 + rnd() * 420; pics.push([250 + Math.cos(a) * r, 40, 250 + Math.sin(a) * r, rnd() * 1.5, l, 420 + rnd() * 330, l]); }
       inst(h, h.geo('pic'), h.mat('rocNeige', { fog: false, c: 0xa8b8e8 }), pics);
+      // ---------- Laponie, en secret : rennes, cerfs, kotas, sapin de Noël, aurores boréales, et le Père Noël ----------
+      const P = c => h.mat('peinture', { c }), bete = c => ({ poil: P(c), patte: P(0x3a2a20), nez: P(0x1a1410), ventre: P(0xe8e0d0), bois: P(0xd8c8a8) });
+      const prets = (n, p, sd, o0, o1) => Array.from({ length: n }, () => { const s = S[(pt(h, p) + (rnd() * 30 | 0)) % N], [x, z] = bord(s, sd, W + o0 + rnd() * (o1 - o0)); return [x, g.hAt(x, z), z, rnd() * 6.3, 0.9 + rnd() * 0.25]; });
+      insts(h, 'renne', bete(0x8a7660), [...prets(9, 29, 1, 25, 60), ...prets(5, 0, 1, 20, 45)]); // le troupeau du hameau
+      insts(h, 'renne', bete(0x6a4428), prets(5, 25, 1, 14, 30), { a: [1.8] }); // les cerfs, à l'orée du bois
+      const kotas = prets(4, 29, -1, 60, 80).map(p => [p[0], p[1] - 0.3, p[2], p[3]]); inst(h, h.geo('kota'), h.mat('planches', { c: 0xb09070 }), kotas);
+      kotas.forEach(p => h.lum(pt(h, 29), p[0], p[1] + 1, p[2], 0xff9040, 14, 1.2));
+      // le sapin de Noël du hameau, ses boules allumées
+      { const s = S[pt(h, 29)], [x, z] = bord(s, -1, W + 40), y = g.hAt(x, z), cols = [0xff3030, 0xffd040, 0x40a0ff, 0xff60e0];
+        inst(h, h.geo('cedre'), h.mat('sapinNeige'), [[x, y + 18, z, 0, 1.8]]); inst(h, h.geo('tronc'), h.mat('tronc'), [[x, y + 4.3, z, 0, 1.8]]);
+        cols.forEach((c, k) => inst(h, h.geo('boite', 0.5, 0.5, 0.5), h.mat('peinture', { lum: 1, c }), Array.from({ length: 14 }, (_, j) => { const t = (j * 4 + k) / 56, a = t * 40, r = 4.6 * (1 - t) + 0.3; return [x + Math.cos(a) * r, y + 5 + t * 15, z + Math.sin(a) * r]; })));
+        h.pose('boite', h.mat('peinture', { lum: 1, c: 0xffe070 }), h.scene, [x, y + 21, z], 1, 1, 1); }
+      // le Père Noël : son traîneau et deux rennes garés près du refuge…
+      const peauN = { patin: P(0xd8a838), caisse: P(0xb01020), sac: P(0x6a4a2a), costume: P(0xc8102e), ceinture: P(0x1a1a1a), peau: P(0xf0c0a0), barbe: P(0xf8f8f8) };
+      const attelage = (parent, n) => { const t = new THREE.Group(); parent.add(t); h.pose('traineau', peauN, t);
+        for (let k = 0; k < n; k++) for (const sd of [-1, 1]) h.pose('renne', k === n - 1 && sd < 0 ? { ...bete(0x8a7660), nez: h.mat('feuRouge', LUM) } : bete(0x8a7660), t, [3.4 + k * 2.6, 0, sd * 0.6]);
+        for (const sd of [-1, 1]) h.pose('boite', peauN.ceinture, t, [1.6 + n * 1.3, 1.55, sd * 0.45], n * 2.6 + 0.6, 0.04, 0.04); return t; };
+      { const t = attelage(gR, 1); t.position.set(-(W + 10), 0, -4); t.rotation.y = Math.PI / 2; }
+      // … et le même, en vol, quatre paires de rennes, qui tourne au-dessus du col
+      let cx = 0, cz = 0, rx = 0, ym = -1e9; for (const s of S) { cx += s.x / N; cz += s.z / N; ym = Math.max(ym, s.y); } for (const s of S) rx = Math.max(rx, Math.hypot(s.x - cx, s.z - cz));
+      const vol = new THREE.Group(); vol.userData.dyn = 1; h.scene.add(vol); attelage(vol, 4).position.x = -6;
+      // aurores boréales : deux rideaux de lumière qui ondulent haut dans le ciel, au nord, derrière les sommets
+      const rideaux = [['#40ffa0', 1350, 2.2, 3.9, 560, 520], ['#b060ff', 1550, 2.7, 4.4, 640, 380]].map(([c, r0, a0, a1, y0, ht]) => {
+        const n = 90, pos = new Float32Array((n + 1) * 6), uv = [], idx = [];
+        for (let k = 0; k <= n; k++) { uv.push(k / 6, 0, k / 6, 1); if (k < n) idx.push(2 * k, 2 * k + 2, 2 * k + 1, 2 * k + 1, 2 * k + 2, 2 * k + 3); }
+        const ge = new THREE.BufferGeometry(); ge.setAttribute('position', new THREE.BufferAttribute(pos, 3)); ge.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); ge.setIndex(idx);
+        const m = new THREE.Mesh(ge, h.mat('degrade', { lum: 1, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide }, c, true));
+        m.userData.dyn = 1; m.frustumCulled = false; h.scene.add(m); return { m, pos, n, r0, a0, a1, y0, ht };
+      });
+      return (dt, now) => {
+        const a = now * 0.00012, R = rx * 0.75, [x, z] = [cx + Math.cos(a) * R, cz + Math.sin(a) * R];
+        vol.position.set(x, ym + 45 + Math.sin(now * 0.002) * 3, z); vol.rotation.y = -a - Math.PI / 2; // X local sur la tangente du cercle, sens de la marche
+        for (const q of rideaux) { for (let k = 0; k <= q.n; k++) { const t = q.a0 + (q.a1 - q.a0) * k / q.n, r = q.r0 + 90 * Math.sin(k * 0.21 + now * 0.0005) + 40 * Math.sin(k * 0.07 - now * 0.0003), px = cx + Math.cos(t) * r, pz = cz + Math.sin(t) * r;
+          q.pos.set([px, q.y0, pz, px, q.y0 + q.ht * (0.8 + 0.2 * Math.sin(k * 0.3 + now * 0.001)), pz], k * 6); }
+          q.m.geometry.attributes.position.needsUpdate = true; q.m.material.opacity = 0.55 + 0.2 * Math.sin(now * 0.0007 + q.r0); }
+      };
     },
     // ---------- Spéciale des Ocres : une spéciale de rallye en fin de journée. Garrigue, pins parasols, oliviers et cyprès, talus des bas-côtés, vignes et lavandes, buttes d'ocre ;
     // parc d'assistance au départ, public sur des talus tout le long, banderoles, voitures garées, le gué, le hameau et son bout de bitume, des mas isolés, un village perché et sa chapelle ----------
