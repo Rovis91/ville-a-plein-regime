@@ -1,12 +1,12 @@
 // Ville à plein régime — rendu, effets, HUD, commandes et boucle de jeu. La piste et la physique sont dans sim.js.
 // Plan du fichier (chercher « // ---------- ») : rendu et passe finale · les trois entités du décor (textures.js, formes.js, placement) · piste · ville · horizon · voiture et effets ·
 // état de jeu et commandes · HUD · boucle. Voir README.md pour savoir où régler quoi.
-(() => {
-  // Changer de carte ne recharge pas la page : sim.js et ce fichier sont rejoués (voir menuAct). La carte précédente s'arrête ici ; son décor n'est libéré
+(window.lanceJeu = () => {
+  // Changer de carte ne recharge pas la page : lanceJeu est rejoué sur la nouvelle carte (voir changeCarte). La carte précédente s'arrête ici ; son décor n'est libéré
   // qu'après la première image de la nouvelle, pour que les shaders compilés resservent (les compiler était l'essentiel de l'attente).
   let avant = window.__g; if (avant && avant.fin) avant.fin();
   const arret = new AbortController(), addEventListener = (ev, f) => window.addEventListener(ev, f, { signal: arret.signal }); // tous les écouteurs de ce fichier tombent d'un coup à l'arrêt
-  const T = buildTrack(THREE), S = T.S, N = T.n, W = T.W, V3 = THREE.Vector3, M = CARTE, TH = M.th; // carte active et son thème : voir cartes.js
+  const T = buildTrack(THREE, CARTE), CARD = T.car, S = T.S, N = T.n, W = T.W, V3 = THREE.Vector3, M = CARTE, TH = M.th; // carte active et son thème : voir cartes.js
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
   const AUTO = location.search.includes('auto'); // debug : le pilote auto conduit
@@ -832,9 +832,9 @@
     if (cible === M) { cible = null; return; }
     setPref('vpr.carte', cible.id); try { sessionStorage.setItem('vpr.menu', 1); history.replaceState(null, '', location.pathname + '?carte=' + cible.id + (Q.has('joueurs') ? '&joueurs=' + VUES.length : '')); } catch (e) { } // le nombre de joueurs suit la préférence ; forcé par l'adresse (?joueurs=), il y reste d'une carte à l'autre
     window.CARTE = cible; SON.carte(cible);
-    // sim.js (tracé et physique de la carte), ce fichier (décor, jeu) et rythme.js s'il est là sont rejoués dans l'ordre ; le renderer, ses shaders et le son restent
-    const suite = [...new Set([...document.scripts].filter(sc => /(^|\/)(sim|game|rythme)\.js(\?|$)/.test(sc.src)).map(sc => sc.src))];
-    (function joue() { const src = suite.shift(); if (!src) return; const sc = document.createElement('script'); sc.src = src; sc.onload = () => { sc.remove(); joue(); }; document.body.appendChild(sc); })(); // la balise rejouée est retirée : il n'en reste jamais qu'une par fichier
+    // ce fichier (décor, jeu) puis rythme.js s'il est là sont rejoués sur la nouvelle carte, sans recharger de script ; le renderer, ses shaders et le son restent.
+    // Après la pile en cours (comme l'ancien rechargement de balises) : l'instance qui appelle finit son image avant d'être arrêtée.
+    setTimeout(() => { lanceJeu(); if (window.lanceRythme) lanceRythme(); });
   }
   function menuAct(d) {
     if (cible && msel === 4) return; // une carte est en route : on ne démarre pas sur l'ancienne
@@ -1331,7 +1331,7 @@
     const cx = Math.cos(cth + lookA), cz = Math.sin(cth + lookA), back = 6.4 - 1 * r; // caméra basse et proche : le sol défile en proportion inverse de sa hauteur, c'est ce qui donne la sensation de vitesse
     let px = car.x - cx * back, pz = car.z - cz * back;
     const s = S[(car.idx - 4 + N) % N], nx = -s.tz, nz = s.tx, d = (px - s.x) * nx + (pz - s.z) * nz, o = Math.abs(d) - (s.w - 0.8);
-    if (o > 0 && !dansPlace(px, pz)) { px -= nx * Math.sign(d) * o; pz -= nz * Math.sign(d) * o; } // la caméra reste entre les murs (sur une place où l'on roule partout, elle suit)
+    if (o > 0 && !dansPlace(T, px, pz)) { px -= nx * Math.sign(d) * o; pz -= nz * Math.sign(d) * o; } // la caméra reste entre les murs (sur une place où l'on roule partout, elle suit)
     const shake = 0.04 * r * r + (stun > 0 ? stun * 0.5 : 0);
     // la caméra suit le sol sous elle, sans tomber dans une fosse que la voiture survole (±2,5 m autour du sol de la voiture), monte avec la voiture en vol et penche avec elle sur une paroi
     const y0 = yAt(car), ySol = k => clamp(yAt(car, k), y0 - 2.5, y0 + 2.5) + air;

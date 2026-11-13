@@ -4,16 +4,15 @@
 // dont on balaie les réglages. On garde, parmi les tours lancés sans réception dure : sous le seuil or, celui qui touche le moins les murs, puis le plus rapide ; à défaut, le plus rapide sans choc.
 // Pour la remplacer par un vrai tour : coller dans traces-or.js ce qui suit « #defi= » dans un lien de défi (même format).
 const fs = require('fs'), THREE = require('../three.min.js'), F = __dirname + '/../traces-or.js';
-require('../cartes.js');
+require('../cartes.js'); require('../sim.js');
 const H = 1 / 120, wrap = a => Math.atan2(Math.sin(a), Math.cos(a)), qui = process.argv.slice(2);
 try { require(F); } catch (e) { globalThis.TRACES_OR = {}; }
 for (const M of CARTES) {
   if (qui.length && !qui.includes(M.id)) continue;
-  globalThis.CARTE = M; delete require.cache[require.resolve('../sim.js')]; require('../sim.js');
-  const T = buildTrack(THREE), { S, n } = T, or = tourRef(T).t * (M.med || [1.1, 1.03, 0.97])[2];
+  const T = buildTrack(THREE, M), { S, n } = T, or = tourRef(T).t * (M.med || [1.1, 1.03, 0.97])[2];
   // lv : niveau du pilote hors glisse (1 = tour propre), lg : en glisse, ent : part du braquage demandée qui déclenche la glisse (Infinity : jamais), ten : part en dessous de laquelle il la lâche
   const pilote = (lv, lg, ent, ten) => c => {
-    const a = autopilot(c, T, c.dd ? lg : lv), sp = Math.hypot(c.vx, c.vz), la = S[(c.idx + 3 + Math.floor(sp * 0.1)) % n], dem = s => s.kl * sp / omega(sp) / (M.surf ? 1 - T.surf[c.idx].vir : 1);
+    const a = autopilot(c, T, c.dd ? lg : lv), sp = Math.hypot(c.vx, c.vz), la = S[(c.idx + 3 + Math.floor(sp * 0.1)) % n], dem = s => s.kl * sp / omega(sp, T.kt) / (M.surf ? 1 - T.surf[c.idx].vir : 1);
     const m = wrap(Math.atan2(la.z + la.tx * la.dl - c.z, la.x - la.tz * la.dl - c.x) - (c.dd ? Math.atan2(c.vz, c.vx) : c.th)) * 3;
     if (c.dd ? m * c.dd > 0 && Math.max(dem(S[c.idx]) * c.dd, dem(la) * c.dd) > ten : Math.abs(dem(la)) > ent && dem(la) * m > 0 && sp > 15) { const d = c.dd || Math.sign(m), f = Math.max(m * d, 0.35); return { steer: d * Math.max(-1, Math.min(1, f < 1.1 ? (f - 1.1) / 0.75 : f - 1.1)), gas: a.gas ? 1 : 0, brake: a.brake, hand: true }; }
     return { ...a, gas: a.gas ? 1 : 0, nitro: !!a.gas };

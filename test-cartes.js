@@ -1,11 +1,11 @@
 // node test-cartes.js — chaque carte de cartes.js passe dans la vraie physique : tracé valide, tour bouclé au pilote automatique, voiture plausible.
 // La ville a ses propres tests, plus complets, dans test.js (ses chiffres ne doivent pas bouger : records de la ville).
 const assert = require('assert'), THREE = require('./three.min.js');
-require('./cartes.js'); require('./traces-or.js');
+require('./cartes.js'); require('./traces-or.js'); require('./sim.js');
 const H = 1 / 120, deg = r => r * 180 / Math.PI; let surfTxt = '', surfCarte = '', lienMax = [0], orTxt = [];
 for (const M of CARTES) {
-  globalThis.CARTE = M; surfCarte = ''; delete require.cache[require.resolve('./sim.js')]; require('./sim.js'); // sim.js lit la carte active à son chargement
-  const T = buildTrack(THREE), { S, n, W } = T;
+  surfCarte = '';
+  const T = buildTrack(THREE, M), { S, n, W } = T, CARD = T.car;
   const rmin = 1 / Math.max(...S.map(s => Math.abs(s.k)));
   assert(rmin > 15, `${M.id} : rayon mini trop serré (${rmin})`);
   let cross = 1e9;
@@ -17,7 +17,7 @@ for (const M of CARTES) {
   let c = newCar(T), t = 0, t1 = 0, hits = 0, vmax = 0, vmin = 1e9, vols = 0, dur = 0;
   assert(T.vert === !!(M.sauts || M.cuv), M.id + ' : relief actif à tort');
   while (c.dist < 2 * n && t < 900) {
-    const av = c.air; step(c, autopilot(c, T), T, H); t += H; assert((Math.abs(c.d) <= S[c.idx].w || dansPlace(c.x, c.z)) && Number.isFinite(c.x));
+    const av = c.air; step(c, autopilot(c, T), T, H); t += H; assert((Math.abs(c.d) <= S[c.idx].w || dansPlace(T, c.x, c.z)) && Number.isFinite(c.x));
     assert(T.vert ? c.y >= sol(T, c) - 1e-9 : !c.air && c.y === sol(T, c), M.id + ' : la voiture quitte le sol ou passe dessous');
     if (c.dist >= n) { if (c.air && !av) vols++; if (c.land > 9) dur++; }
     if (c.dist >= n) { if (!t1) t1 = t; const v = Math.hypot(c.vx, c.vz); vmax = Math.max(vmax, v); vmin = Math.min(vmin, v); if (c.hit > 3) hits++; }
@@ -30,7 +30,7 @@ for (const M of CARTES) {
   for (let i = 0; i < 8 / H && !t100; i++) { step(c, { steer: 0, gas: 1, brake: 0, hand: false }, T, H); if (c.vf >= 100 / 3.6) t100 = (i + 1) * H; assert(c.rpm <= CARD.red + 200); }
   assert(t100 > 2.5 && t100 < 6.5, `${M.id} : 0 à 100 km/h en ${t100} s`);
   // --- conduite, en plan ouvert (sans murs : un seul échantillon de piste, recollé sous la voiture à chaque pas) ---
-  const O = { x: 0, y: 0, z: 0, tx: 1, tz: 0, k: 0, sl: 0 }, TO = { S: [O], n: 1 }, I = (steer, gas, brake = 0, hand = false) => ({ steer, gas, brake, hand });
+  const O = { x: 0, y: 0, z: 0, tx: 1, tz: 0, k: 0, sl: 0 }, TO = { S: [O], n: 1, carte: T.carte, car: T.car, kt: T.kt }, I = (steer, gas, brake = 0, hand = false) => ({ steer, gas, brake, hand });
   const go = (c, inp, sec) => { for (let i = 0; i < sec / H; i++) { O.x = c.x; O.z = c.z; const v = Math.hypot(c.vx, c.vz) || 1; O.tx = c.vx / v; O.tz = c.vz / v; step(c, inp, TO, H); } return c; };
   const lance = v => { const c = Object.assign(newCar(T), { idx: 0 }); let i = 0; while (Math.hypot(c.vx, c.vz) < v && i++ < 60 / H) go(c, I(0, 1), H); return c; };
   const cap = c => Math.atan2(c.vz, c.vx), der = c => deg(Math.atan2(Math.abs(c.vl), Math.abs(c.vf))), wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
@@ -65,7 +65,7 @@ for (const M of CARTES) {
   const [tni, bni, hni, dni, reste] = tour(c => autopilot(c, T), 1);
   assert(bni && reste <= 0.3 && tni < lap - 0.3 && hni <= hits && !dni, `${M.id} : tour du pilote automatique avec une jauge de nitro ${tni} s (${bni} coups, reste ${reste}, ${hni} chocs, ${dni} réceptions dures) contre ${lap} s sans`);
   const [tfond, , hfond] = tour(c => ({ ...autopilot(c, T), gas: 1, brake: 0 })), [tgl, boosts, hgl] = tour(c => {
-    const a = autopilot(c, T, c.dd ? 1.2 : 1), sp = Math.hypot(c.vx, c.vz), la = S[(c.idx + 3 + Math.floor(sp * 0.1)) % n], dem = s => s.kl * sp / omega(sp) / (M.surf ? 1 - T.surf[c.idx].vir : 1); // dem = part du braquage que demande la trajectoire (sur une carte à surface déclarée : du braquage que la surface laisse)
+    const a = autopilot(c, T, c.dd ? 1.2 : 1), sp = Math.hypot(c.vx, c.vz), la = S[(c.idx + 3 + Math.floor(sp * 0.1)) % n], dem = s => s.kl * sp / omega(sp, T.kt) / (M.surf ? 1 - T.surf[c.idx].vir : 1); // dem = part du braquage que demande la trajectoire (sur une carte à surface déclarée : du braquage que la surface laisse)
     const m = wrap(Math.atan2(la.z + la.tx * la.dl - c.z, la.x - la.tz * la.dl - c.x) - (c.dd ? cap(c) : c.th)) * 3; // en glisse le nez est en travers : on vise avec la direction de la vitesse
     if (c.dd ? m * c.dd > 0 && Math.max(dem(S[c.idx]) * c.dd, dem(la) * c.dd) > 0.3 : Math.abs(dem(la)) > 0.9 && dem(la) * m > 0 && sp > 15) { const d = c.dd || Math.sign(m), f = Math.max(m * d, 0.35); return I(d * Math.max(-1, Math.min(1, f < 1.1 ? (f - 1.1) / 0.75 : f - 1.1)), a.gas ? 1 : 0, a.brake, true); }
     return { ...a, gas: a.gas ? 1 : 0, nitro: !!a.gas }; });
@@ -136,14 +136,14 @@ for (const M of CARTES) {
   }
   // course : 3 tours à 4 pilotes automatiques sur le tracé de la carte ; tout le monde arrive, personne ne sort ni ne reste bloqué
   const R = newRace(T); let wall = 0, bump = 0;
-  while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && (Math.abs(x.d) <= S[x.idx].w || dansPlace(x.x, x.z)), M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }
+  while (!R.done && R.t < 900) { stepRace(R, null, H); for (const x of R.cars) { assert(Number.isFinite(x.x) && (Math.abs(x.d) <= S[x.idx].w || dansPlace(T, x.x, x.z)), M.id + ' : course, voiture hors piste'); if (x.hit > 3) wall++; if (x.bump > 3) bump++; } }
   assert(R.done, M.id + ' : la course ne se termine pas');
   // fantômes des médailles : le tour de référence est celui des médailles (tni) ; la trace or de la carte (traces-or.js) se relit, reste sur la route d'un bout à l'autre, part de la ligne, dure son temps, et ce temps est sous le seuil or
   // lien de défi le plus long plausible : un tour au temps de bronze
   { const ref = tourRef(T), med = M.med || [1.1, 1.03, 0.97], or = defiLit(TRACES_OR[M.id]), seuil = ref.t * med[2];
     assert(ref.t === tni, `${M.id} : tourRef (${ref.t} s) n'est pas le tour de référence des médailles (${tni} s)`);
     assert(!or.err && or.carte === M.id, `${M.id} : trace or illisible (${or.err}) : relancer node outils/traces-or.js`);
-    let hors = 0; for (let i = 0; i < or.trace.length; i += 4) { const x = or.trace[i], z = or.trace[i + 2]; let b = 0, bd = 1e9; for (let j = 0; j < n; j++) { const d = Math.hypot(S[j].x - x, S[j].z - z); if (d < bd) { bd = d; b = j; } } if (bd > S[b].w + 0.5 && !dansPlace(x, z)) hors++; }
+    let hors = 0; for (let i = 0; i < or.trace.length; i += 4) { const x = or.trace[i], z = or.trace[i + 2]; let b = 0, bd = 1e9; for (let j = 0; j < n; j++) { const d = Math.hypot(S[j].x - x, S[j].z - z); if (d < bd) { bd = d; b = j; } } if (bd > S[b].w + 0.5 && !dansPlace(T, x, z)) hors++; }
     assert(!hors && Math.hypot(or.trace[0] - S[0].x, or.trace[2] - S[0].z) < S[0].w + 3 && Math.abs((or.trace.length / 4 - 1) / 20 - or.t) < 0.25, `${M.id} : trace or hors de la route (${hors} points), loin de la ligne ou de mauvaise durée : relancer node outils/traces-or.js`);
     assert(or.t <= seuil, `${M.id} : la trace or (${or.t} s) n'est pas sous le seuil or (${seuil} s)`);
     const lien = defiCode(M.id, ref.t * med[0], etire(ref.trace, med[0])).length; if (lien > lienMax[0]) lienMax = [lien, M.id, ref.t * med[0]];
@@ -155,7 +155,7 @@ console.log(`OK  fantômes or : ${orTxt.join(' · ')} ; lien de défi le plus lo
 // surfaces déclarées par une carte (champ surf : { fond, zones }) : cartes d'essai, le touge recouvert de chaque surface, puis avec une seule plaque de glace.
 // Le pilote automatique lit la même table : il boucle son tour lancé sans taper, plus lentement qu'au sec ; et la plaque n'existe que là où elle est déclarée, fondue sur ses bords.
 {
-  const touge = CARTES.find(m => m.id === 'touge'), charge = surf => { globalThis.CARTE = { ...touge, id: 'essai', surf }; delete require.cache[require.resolve('./sim.js')]; require('./sim.js'); return buildTrack(THREE); };
+  const touge = CARTES.find(m => m.id === 'touge'), charge = surf => buildTrack(THREE, { ...touge, id: 'essai', surf });
   const tour = T => { const c = newCar(T), n = T.n; let t = 0, t1 = 0, h = 0; while (c.dist < 2 * n && t < 900) { step(c, autopilot(c, T), T, H); t += H; if (!t1 && c.dist >= n) t1 = t; if (t1 && c.hit > 0) h++; } assert(c.dist >= 2 * n, 'surface : tour non bouclé'); return [t - t1, h]; };
   const res = {}; for (const k in SURF) { const T = charge(k === 'sec' ? undefined : { fond: k }); assert(T.surf.every(q => q === SURF[k]), k + ' : le fond ne couvre pas toute la carte'); res[k] = tour(T); }
   const txt = Object.keys(res).map(k => `${k} ${res[k][0].toFixed(1)} s`).join(', ');
