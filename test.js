@@ -417,3 +417,18 @@ console.log(`OK  fantôme des médailles : ${fantTxt}`);
     assert.strictEqual(tr(fr), en, 'traduction de « ' + fr + ' »');
   console.log('OK  traduction anglaise');
 }
+
+// ---------- en ligne (reseau.js) : l'état d'une course passe d'un poste à l'autre, interpolé ; l'entrée d'un invité est bornée ----------
+{
+  require('./reseau.js');
+  const A = newRace(T, 3, AI_LVL.slice(0, 2), 0, { humains: 2 }), B = newRace(T, 3, AI_LVL.slice(0, 2), 0, { humains: 2 }), snaps = [];
+  for (let i = 0; i < 240; i++) { stepRace(A, [I(0, 1), null], H); if (i % 6 === 5) snaps.push(JSON.parse(JSON.stringify(NET.emballe(A)))); } // 20 états par seconde, comme sur le réseau
+  A.cars[0].k = 3; NET.pose(B, snaps, snaps[snaps.length - 1].rt); // au dernier état : la copie exacte (hors champs locaux)
+  B.cars.forEach((c, i) => { for (const k of ['x', 'z', 'th', 'vf', 'rpm', 'gear', 'dist', 'pos']) assert(Math.abs(c[k] - A.cars[i][k]) < 1e-9, 'état réseau : ' + k); });
+  assert(B.cars[0].k === undefined, 'la livrée reste locale');
+  const [s0, s1] = snaps.slice(-2); NET.pose(B, snaps, (s0.rt + s1.rt) / 2); // à mi-chemin : la moyenne des deux positions
+  assert(Math.abs(B.cars[1].x - (s0.cars[1].x + s1.cars[1].x) / 2) < 1e-9 && Math.abs(B.t - (s0.rt + s1.rt) / 2) < 1e-9, 'interpolation');
+  assert.deepStrictEqual(NET.propre({ steer: 9, gas: -1, brake: 'x', hand: 1, nitro: 0, triche: 1 }), { steer: 1, gas: 0, brake: 0, hand: true, nitro: false });
+  assert(NET.propre('x') === null && NET.propre(null) === null, 'entrée invalide : le pilote automatique');
+  console.log('OK  en ligne : état emballé, posé, interpolé ; entrée bornée');
+}
