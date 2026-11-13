@@ -2,6 +2,16 @@
 // La ville a ses propres tests, plus complets, dans test.js (ses chiffres ne doivent pas bouger : records de la ville).
 const assert = require('assert'), THREE = require('./three.min.js');
 require('./cartes.js'); require('./traces-or.js');
+// inventaire : une carte se monte de son entrée de cartes.js, de son décor (decors.js), de sa trace or (traces-or.js) et de son titre anglais (TITRE_EN de game.js, sinon le titre du HUD)
+globalThis.window = globalThis; require('./decors.js');
+{ const GAME = require('fs').readFileSync(__dirname + '/game.js', 'utf8').match(/const TITRE_EN = ({.*?});/), EN = GAME && new Function('return ' + GAME[1])();
+  for (const M of CARTES) {
+    assert(typeof DECORS[M.th.decor] === 'function', M.id + ' : pas de décor ' + M.th.decor + ' dans decors.js');
+    assert(typeof TRACES_OR[M.id] === 'string' && TRACES_OR[M.id].startsWith('7.' + M.id + '.'), M.id + ' : pas de trace or dans traces-or.js');
+    const t = EN && EN[M.id] || M.th.hud.titre; assert(t && t.length === 2 && t.every(l => l), M.id + ' : titre anglais absent');
+  }
+  if (EN) for (const id in EN) assert(CARTES.some(M => M.id === id), 'TITRE_EN : carte inconnue ' + id);
+  console.log('OK  inventaire : décor, trace or et titre de ' + CARTES.length + ' cartes' + (EN ? '' : ' (TITRE_EN introuvable dans game.js : titres anglais non vérifiés)')); }
 const H = 1 / 120, deg = r => r * 180 / Math.PI; let surfTxt = '', surfCarte = '', lienMax = [0], orTxt = [];
 for (const M of CARTES) {
   globalThis.CARTE = M; surfCarte = ''; delete require.cache[require.resolve('./sim.js')]; require('./sim.js'); // sim.js lit la carte active à son chargement
