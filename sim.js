@@ -27,7 +27,7 @@
   // La pluie (th.pluie) passe par la même table : force 3 = SURF.mouille, force 1 (la bruine de la ville) ou tunnel = sec.
   const SURF = {
     sec: { vir: 0, frein: 0, trac: 0, colle: 0, vaq: 230 / 3.6, aq: 0, aqc: 0, roul: 0, gl: 0 },
-    mouille: { vir: 0.15, frein: 0.3, trac: 0.25, colle: 0.5, vaq: 190 / 3.6, aq: 0.25, aqc: 0.3, roul: 0, gl: 0 },
+    mouille: { vir: 0.15, frein: 0.3, trac: 0.25, colle: 0.35, vaq: 190 / 3.6, aq: 0.1, aqc: 0.2, roul: 0, gl: 0 },
     glace: { vir: 0.6, frein: 0.7, trac: 0.7, colle: 0.8, vaq: 230 / 3.6, aq: 0, aqc: 0, roul: 0, gl: 0 }, // très peu de lacet et de freinage, nez très en retard
     neige: { vir: 0.3, frein: 0.4, trac: 0.4, colle: 0.7, vaq: 230 / 3.6, aq: 0, aqc: 0, roul: 0.2, gl: 0.2 }, // tassée : entre le sec et la glace
     terre: { vir: 0.05, frein: 0.2, trac: 0.3, colle: 0.6, vaq: 230 / 3.6, aq: 0, aqc: 0, roul: 0.5, gl: 0.5 }, // motricité réduite, glisse facile, la voiture tourne encore bien
