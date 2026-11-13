@@ -820,6 +820,13 @@
           const L = r < PL.r || e < 0.3 ? roule : pied; P.forEach(([x, z]) => { L[0].push(x, 0, z); L[1].push(x / 4, z / 4); }); const v = L[0].length / 3 - 4; L[2].push(v, v + 2, v + 1, v, v + 3, v + 2); } }
         roule[0].forEach((v, i) => { if (i % 3 === 1) roule[0][i] = 0.02; }); pied[0].forEach((v, i) => { if (i % 3 === 1) pied[0][i] = 0.22; });
         nappe(...roule, paves); nappe(...pied, dalle); }
+      // ---- la sortie de la place vers l'avenue (point 7 vers 8) : on la voyait mal et l'on tapait le coin du trottoir à gauche. Des chevrons blancs peints sur les pavés le long de la trajectoire,
+      // puis deux lignes de rive qui dessinent l'entonnoir jusque dans l'avenue (M.large l'élargit aussi : 22 m au lieu de 14 au débouché)
+      { const peinture = h.mat('bruit', { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, '#f2eee2', ['#ffffff', '#dcd8cc']);
+        const iS = pt(h, 7), rang = new Map(S.map((s, i) => [s, i])), K = 4, L = 4.5, e = 1.8; // un chevron : deux bras qui partent à 4,5 m de la trajectoire et se rejoignent 8 m plus loin, la pointe vers la sortie
+        for (let c = -7; c <= 0; c++) { const i0 = (iS + c * 10 + N) % N, dl = S[(i0 + K) % N].dl, f = s => 1 - ((rang.get(s) - i0 + N) % N) / K;
+          ruban(i0, K, s => dl + L * f(s), 0.05, s => dl + L * f(s) - e, 0.05, peinture); ruban(i0, K, s => dl - L * f(s) + e, 0.05, s => dl - L * f(s), 0.05, peinture); }
+        for (const sd of [-1, 1]) ruban(iS, 70, s => sd * (s.w - 0.4), 0.05, s => sd * (s.w - 1.2), 0.05, peinture); }
       h.pose('arc', { pierre: h.mat('pierre'), relief: h.mat('basRelief') }, h.scene, [C[0], 0.02, C[1]]).forEach(m => m.rotation.y = PL.a); // l'arc au milieu, grande arche dans l'axe de la traversée ; ses piles sont des obstacles (sim.js)
       // ---- le terre-plein de l'arc (sim.js : place.ile) : dallage de granit clair, étoile à douze branches en pavés roses, cent bornes de granit reliées par des chaînes,
       // ouvertes dans l'axe de la grande arche ; sous l'arche, la dalle et la flamme ; dix candélabres. L'anneau de chaussée autour reste nu : c'est là qu'on glisse.

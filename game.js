@@ -1022,13 +1022,15 @@
       R(hg, '#08080c', mx + MM.px(car.x) - 3, my + MM.pz(car.z) - 3, 7, 7); R(hg, blink ? pil(car)[1] : '#ffffff', mx + MM.px(car.x) - 2, my + MM.pz(car.z) - 2, 5, 5); // le joueur : plus gros, cerné de noir, clignotant
     }
     if (race && !fini && state === 'race') { const pris = [...(warn ? [[cx, 62, 170]] : []), ...(car.boost > 0 || car.asp > 0.15 ? [[cx, 82, 100]] : [])]; // les bandeaux du centre sont déjà pris ; repère au-dessus de chaque adversaire : à 270 lignes, une voiture lointaine ne fait que quelques pixels
-      cam.updateMatrixWorld();
+      cam.updateMatrixWorld(); const lab = vu.lab || (vu.lab = new WeakMap()), now = performance.now(); // lab : cran de chaque étiquette dans cette vue, par voiture
       race.cars.forEach(c => {
         const dx = c.x - cam.position.x, dz = c.z - cam.position.z, f = dx * Math.cos(cth) + dz * Math.sin(cth);
         if (c === car || f < 3 || f > 400 || c.out) return; // sa propre voiture, derrière la caméra, trop loin, ou sortie de la course
         tmp.set(c.x, modele(c).position.y + 2.4, c.z).project(cam);
         const [name, col] = pil(c), x = Math.round((tmp.x + 1) / 2 * HW), y = Math.round((1 - tmp.y) / 2 * HH), w = name.length * 8 + 4;
-        let ly = y - 14; while (pris.some(p => Math.abs(p[0] - x) < (p[2] + w) / 2 + 2 && Math.abs(p[1] - ly) < 12)) ly -= 12; pris.push([x, ly, w]); // deux étiquettes au même endroit : la seconde monte d'un cran
+        let ly = y - 14; while (pris.some(p => Math.abs(p[0] - x) < (p[2] + w) / 2 + 2 && Math.abs(p[1] - ly) < 12)) ly -= 12; // deux étiquettes au même endroit : la seconde monte d'un cran
+        const L = lab.get(c) || { off: 0, t: 0 }, off = y - 14 - ly; if (off >= L.off) { L.off = off; L.t = now; } else if (now - L.t > 600) L.off = off; // elle monte tout de suite, mais ne redescend qu'après 0,6 s sans conflit : à la limite du chevauchement, elle sautait d'un cran à chaque image
+        lab.set(c, L); ly = y - 14 - L.off; pris.push([x, ly, w]);
         R(hg, 'rgba(8,8,12,.75)', x - w / 2, ly, w, 11); txt(name, x, ly + 2, 8, col, 'center'); R(hg, col, x - 2, y - 2, 5, 3); R(hg, col, x - 1, y + 1, 3, 2);
       });
     }
@@ -1268,10 +1270,8 @@
     splGeo.attributes.position.array = splP; // les impacts de cette vue : même tampon GPU, renvoyé avant chaque dessin
     splGeo.attributes.position.needsUpdate = splGeo.attributes.color.needsUpdate = true;
 
-    // alerte de virage serré, lue sur la courbure à venir
-    let wk = 0;
-    for (let j = 15; j < 35 + sp * 0.6; j++) { const k = S[(car.idx + j) % N].k; if (Math.abs(k) > Math.abs(wk)) wk = k; }
-    drawHUD(vu, dt, sp, state === 'race' && sp > 30 && Math.abs(wk) > 0.011 ? Math.sign(wk) : 0);
+    // alerte de virage : seulement un virage serré pour la vitesse du moment (alerteVirage, sim.js)
+    drawHUD(vu, dt, sp, state === 'race' ? alerteVirage(T, car.idx, sp) : 0);
     const U = post.uniforms; U.t.value = vu.rt.texture; U.h.value = vu.hudT; if (U.dz) U.dz.value = vu.rt.depthTexture; U.px.value.set(AA / vu.rw, AA / RH); post.uniforms.vig.value = nitE; // la passe finale est commune : ses entrées sont celles de la vue
     // flou de vitesse : rien sous 55 % de la vitesse de pointe, léger au-delà, franc seulement pendant la nitro
     post.uniforms.amt.value = 0.35 * Math.max(0, (r - 0.55) / 0.45) ** 2; post.uniforms.ab.value = 0.002 + 0.004 * r + (stun > 0 ? stun * 0.06 : 0);

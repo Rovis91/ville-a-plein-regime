@@ -410,6 +410,15 @@ console.log(`OK  glisse : ${glisseTxt}`);
 console.log(`OK  deux humains : ${duoTxt}`);
 console.log(`OK  fantôme des médailles : ${fantTxt}`);
 
+// ---------- alerte de virage (alerteVirage) : rare sur un tour du pilote automatique, muette à l'arrêt, du bon côté ----------
+{ let n = 0, w = 0, t = 0; const c = newCar(T);
+  while (c.dist < T.n && t < 180) { step(c, autopilot(c, T), T, H); t += H; const a = alerteVirage(T, c.idx, Math.hypot(c.vx, c.vz)); if (a && !w) n++; w = a; }
+  assert(n >= 1 && n <= 3, `alerte de virage : ${n} alertes sur un tour de la ville (attendu 1 à 3)`);
+  assert(alerteVirage(T, 0, 0) === 0, "alerte de virage à l'arrêt");
+  const i = T.S.reduce((b, s, j) => Math.abs(s.k) > Math.abs(T.S[b].k) ? j : b, 0), a = alerteVirage(T, (i - 80 + T.n) % T.n, 80); // à 288 km/h, 160 m avant le virage le plus serré (43 m/s)
+  assert(a === Math.sign(T.S[i].k), "alerte de virage : du côté du virage le plus serré");
+  console.log(`OK  alerte de virage : ${n} sur un tour de la ville`); }
+
 // ---------- traduction anglaise de l'interface (langue.js) : ordinaux, expressions entières, jamais au milieu d'un mot ----------
 {
   require('./langue.js'); const tr = s => traduit(s, 'en');

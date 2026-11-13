@@ -266,6 +266,33 @@
   // Pilote automatique : sert au test node, au mode ?auto, à ramener la voiture après l'arrivée, et aux adversaires en course.
   // lvl = niveau du pilote (1 = tour propre de référence ; plus bas = moins de gaz et virages plus lents).
   // others = voitures à éviter : il se décale pour doubler une voiture plus lente, ne se rabat pas tant qu'elle est à sa hauteur, et freine s'il est bloqué derrière.
+  // vitesse permise à l'échantillon idx = celle de chaque virage de la trajectoire à venir, plus ce qu'on peut perdre en freinant d'ici là (10 m/s², 2 m par échantillon)
+  // sur une surface glissante (SURF) : virages au lacet qu'elle laisse (avec une marge là où le nez tarde plus que sous la pluie : la voiture élargit), sans dépasser le seuil d'aquaplaning là où il ne passerait plus, et freinage plus long
+  // Elle ne dépend que de l'échantillon : calculée une fois par échantillon et gardée dans T.va (200 virages regardés, 8 fois par image en course sinon). Sert au pilote automatique et à l'alerte de virage du HUD.
+  function vAdmise(T, idx) {
+    const S = T.S, n = T.n;
+    if (T.vaSurf !== T.surf) { T.va = new Float64Array(n).fill(-1); T.vaSurf = T.surf; } // (elle dépend aussi de la surface : si T.surf change, on repart de zéro)
+    const VA = T.va;
+    let va = VA[idx];
+    if (va < 0) {
+      va = 1e9; let fr = 0; // fr : ce que le freinage peut reprendre d'ici là, surface par surface (une plaque de glace devant se freine avant)
+      for (let j = 0; j < 200; j++) {
+        const i = (idx + j) % n, Q = surf(T, i), k = Math.abs(S[i].kl) + 1e-4, g = 1.3 * (1 - Q.vir) * (1 - 0.8 * Math.max(0, Q.colle - 0.5)), vq = Q.vaq;
+        let v = vturn(g, k, T.kt); if (Q.aq && v > vq) v = Math.max(vq, vturn(g * (1 - Q.aq) * 0.7, k, T.kt)); // au-delà du seuil d'aquaplaning, avec de la marge : la voiture y chasse
+        va = Math.min(va, Math.sqrt(v ** 2 + fr)); fr += 40 * (1 - Q.frein);
+      }
+      VA[idx] = va;
+    }
+    return va;
+  }
+  // alerte de virage du HUD, à la vitesse sp (m/s) depuis l'échantillon idx : seulement un virage qui, entre 1,2 s et 3,6 s devant, oblige à perdre plus d'un tiers de cette vitesse (surface comprise).
+  // Rend +1 (droite), -1 (gauche) ou 0. (L'ancienne règle, toute courbe de moins de 90 m de rayon au-dessus de 108 km/h, sonnait jusqu'à dix fois par tour.)
+  function alerteVirage(T, idx, sp, f = 0.65) {
+    if (sp < 15) return 0;
+    const S = T.S, n = T.n, D = Math.round(sp * 0.6); let vmin = 1e9, sg = 0;
+    for (let j = D; j < 3 * D; j++) { const i = (idx + j) % n, Q = surf(T, i), g = 1.3 * (1 - Q.vir) * (1 - 0.8 * Math.max(0, Q.colle - 0.5)), v = vturn(g, Math.abs(S[i].kl) + 1e-4, T.kt); if (v < vmin) { vmin = v; sg = Math.sign(S[i].k); } }
+    return vmin < sp * f ? sg : 0;
+  }
   function autopilot(c, T, lvl = 1, others = []) {
     const S = T.S, n = T.n, sp = Math.hypot(c.vx, c.vz), look = 3 + Math.floor(sp * 0.1);
     let off = 0, vcap = 1e9, best = 1e9;
@@ -283,22 +310,7 @@
     }
     const la = S[(c.idx + look) % n];
     const e = wrap(Math.atan2(la.z + la.tx * (off || la.dl) - c.z, la.x - la.tz * (off || la.dl) - c.x) - c.th);
-    // vitesse permise = celle de chaque virage de la trajectoire à venir, plus ce qu'on peut perdre en freinant d'ici là (10 m/s², 2 m par échantillon)
-    // sur une surface glissante (SURF) : virages au lacet qu'elle laisse (avec une marge là où le nez tarde plus que sous la pluie : la voiture élargit), sans dépasser le seuil d'aquaplaning là où il ne passerait plus, et freinage plus long
-    // Elle ne dépend que de l'échantillon : calculée une fois par échantillon et gardée dans T.va (200 virages regardés, 8 fois par image en course sinon)
-    if (T.vaSurf !== T.surf) { T.va = new Float64Array(n).fill(-1); T.vaSurf = T.surf; } // (elle dépend aussi de la surface : si T.surf change, on repart de zéro)
-    const VA = T.va;
-    let va = VA[c.idx];
-    if (va < 0) {
-      va = 1e9; let fr = 0; // fr : ce que le freinage peut reprendre d'ici là, surface par surface (une plaque de glace devant se freine avant)
-      for (let j = 0; j < 200; j++) {
-        const i = (c.idx + j) % n, Q = surf(T, i), k = Math.abs(S[i].kl) + 1e-4, g = 1.3 * (1 - Q.vir) * (1 - 0.8 * Math.max(0, Q.colle - 0.5)), vq = Q.vaq;
-        let v = vturn(g, k, T.kt); if (Q.aq && v > vq) v = Math.max(vq, vturn(g * (1 - Q.aq) * 0.7, k, T.kt)); // au-delà du seuil d'aquaplaning, avec de la marge : la voiture y chasse
-        va = Math.min(va, Math.sqrt(v ** 2 + fr)); fr += 40 * (1 - Q.frein);
-      }
-      VA[c.idx] = va;
-    }
-    const vt = Math.min(vcap, va * lvl * (off ? 0.9 : 1)); // hors trajectoire, on passe moins vite
+    const va = vAdmise(T, c.idx), vt = Math.min(vcap, va * lvl * (off ? 0.9 : 1)); // hors trajectoire, on passe moins vite
     const st = clamp(e * 3, -1, 1);
     return { steer: st, gas: sp < vt ? lvl : 0, brake: sp > vt + 3 ? 1 : 0, hand: false, nitro: sp < vt - 8 && Math.abs(st) < 0.25 && (c.boost > 0 || c.nitro > 0.3) }; // la nitro : en ligne droite, loin du prochain freinage, par coups francs (il attend d'avoir un tiers de jauge)
   }
@@ -473,5 +485,5 @@
     return ok && tr.length >= 8 && t > 0 && Math.abs((tr.length / 4 - 1) / 5 - t) < 1.5 ? { carte: m[2], t, trace: etire(tr, 4) } : { err: DEFI_ERR[2] };
   }
 
-  Object.assign(G, { DEFI_V, DEFI_ERR, defiCode, defiLit, etire, tourRef,sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, tournee, BAREME, trafic, hitTrafic, AI_LVL, DIFF, TOP, vturn, omega, SURF, GL });
+  Object.assign(G, { DEFI_V, DEFI_ERR, defiCode, defiLit, etire, tourRef, vAdmise, alerteVirage, sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, newRace, stepRace, raceOrder, tournee, BAREME, trafic, hitTrafic, AI_LVL, DIFF, TOP, vturn, omega, SURF, GL });
 })(typeof window !== 'undefined' ? window : globalThis);
