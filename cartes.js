@@ -297,7 +297,7 @@
         tq: [0, 380, 500, 580, 640, 660, 640, 590, 480], son: 0.85, look: { col: 0xffc21a, l: 0.9, w: 1.04, h: 1.2, nez: 0.45, cab: [-0.1, 1.9, 0.62], aileron: 2, bandes: 0x16161c } }),
       radio: RADIO.stade,
       th: { decor: 'stade', fog: 0x0e0c18, fogD: [120, 900], sky: [[0, '#05050a'], [1, '#05050a']], stars: 0,
-        astre: { dir: [0.2, 0.95, 0.25], col: '#05050a', ombre: '#05050a', taille: 1 }, hemi: [0xe6ecff, 0x3c3c48, 0.85], sun: [0xffffff, 0.5], phares: 0.5, bloom: 0.1, scan: 0.08, ciel: 'SOUS LE TOIT',
+        astre: { dir: [0.2, 0.95, 0.25], col: '#05050a', ombre: '#05050a', taille: 1 }, hemi: [0xe6ecff, 0x3c3c48, 0.85], sun: [0xffffff, 0.5], phares: 0.3, bloom: 0.1, scan: 0.08, ciel: 'SOUS LE TOIT',
         murH: 0, paroi: 'paroiArene', route: ['#3e3a40', '#4c464c', '#f4f0e0', '#ff8a1a', '#e8362a', '#f4f0e0', false], mur: ['#f4f0e0', '#e8362a', '#1c3fa8', '#c8c4b8'], depart: [0xe8362a, 0x20242c, '#f4f0e0'],
         hud: { y: '#ffffff', c: '#ffc21a', r: '#e8362a', fond: 'rgba(16,14,28,.9)', style: 'bloc', split: 0, jp: null, sur: [null, 'ARENE COUVERTE · COMPLET'], titre: ['GRAND', 'VACARME'] } } },
     // Nuit Blanche : la route d'un col fermé pour l'hiver, à l'aube. Neige tassée partout, glace vive là où le soleil ne vient jamais (elle luit, sombre, sur la route claire) :
@@ -311,8 +311,8 @@
         tq: [0, 180, 300, 430, 540, 590, 580, 520, 400], trac: 11, rwd: 0, son: 1.1, look: { col: 0xf4f0e0, l: 0.9, w: 1.03, h: 1.06, nez: 0.5, cab: [-0.2, 2.1, 0.58], aileron: 2, bandes: 0xf4c020 } }),
       radio: RADIO.givre,
       th: { decor: 'givre', neige: 1.6, fog: 0x8a9cc0, fogD: [70, 1100], sky: [[0, '#070c24'], [0.3, '#16224a'], [0.4, '#3a4a80'], [0.46, '#b07a98'], [0.49, '#f0b890'], [0.5, '#8a9cc0'], [1, '#8a9cc0']], stars: 90,
-        astre: { dir: [-0.55, 0.3, 0.5], col: '#f4f8ff', ombre: '#aab8d8', taille: 150 }, hemi: [0x8aa4e0, 0xc8d4f0, 0.8], sun: [0xc0d0ff, 0.45], phares: 0.8, bloom: 0.08, scan: 0.06, // phares faibles et neige tassée grise : sur une route blanche, un faisceau plein noie la piste et les plaques de glace
-        chev: 1, murH: 1.4, route: ['#7e8ca6', '#93a1b9', '#f4f8ff', '#7e8ca6', '#f4f8ff', '#dfe8f6', false], mur: ['#dfe8f6', '#f8fbff', '#c4d0e4', '#b4c2da'], depart: [0xe8482a, 0x1c2a4a, '#f4f8ff'],
+        astre: { dir: [-0.55, 0.3, 0.5], col: '#f4f8ff', ombre: '#aab8d8', taille: 150 }, hemi: [0x8aa4e0, 0xc8d4f0, 0.8], sun: [0xc0d0ff, 0.45], phares: 0.35, bloom: 0.08, scan: 0.06, // phares faibles (comme les autres cartes à l'aube) et neige tassée grise : sur une route blanche, un faisceau plein noie la piste et les plaques de glace
+        chev: 0, murH: 1.4, route: ['#7e8ca6', '#93a1b9', '#f4f8ff', '#7e8ca6', '#f4f8ff', '#dfe8f6', false], mur: ['#dfe8f6', '#f8fbff', '#c4d0e4', '#b4c2da'], depart: [0xe8482a, 0x1c2a4a, '#f4f8ff'],
         hud: { y: '#ffffff', c: '#8fd0ff', r: '#ff5a4a', fond: 'rgba(14,24,52,.9)', style: 'trait', split: 0, jp: null, sur: [null, 'COL FERME · -14 °C · AUBE'], titre: ['NUIT', 'BLANCHE'] } } },
     // Spéciale des Ocres : une spéciale de rallye sur terre battue, en fin de journée, entre les pins et les falaises d'ocre. Route large (18 m) et bosselée, tout en courbes à prendre en travers :
     // la crête de la ligne de départ, l'enfilade du vallon, le gué au creux du parcours, l'épingle du belvédère, la grande crête du plateau, puis la traversée du hameau sur son bout de bitume et la descente vers la ligne.
@@ -324,8 +324,8 @@
         tq: [0, 140, 200, 240, 262, 270, 268, 250, 215], trac: 10.5, son: 1.3, look: { col: 0x2a62c8, l: 0.84, w: 0.98, h: 0.98, nez: 0.5, cab: [-0.3, 2, 0.55], aileron: 0, bandes: 0xf4c020 } }),
       radio: RADIO.terre,
       th: { decor: 'terre', fog: 0xe8c898, fogD: [150, 1500], sky: [[0, '#3f6fb0'], [0.3, '#3f6fb0'], [0.31, '#7fa8cc'], [0.42, '#7fa8cc'], [0.43, '#e8d0a0'], [0.49, '#e8d0a0'], [0.5, '#e8c898'], [1, '#e8c898']], stars: 0,
-        astre: { dir: [-0.6, 0.35, 0.5], col: '#fff2c0', ombre: '#fff2c0', taille: 220 }, hemi: [0xc8d8f0, 0xb07848, 0.9], sun: [0xffd8a0, 0.9], phares: 0.3, bloom: 0.03, scan: 0.05,
-        murH: 0.9, poussiere: [0.82, 0.62, 0.42], route: ['#a86a3a', '#8a5228', '#96602f', '#b87a48', '#7a6a3a', '#8a7444', false], mur: ['#8a5a30', '#6a7a3a', '#7a4c28', '#6e4424'], depart: [0xe8482a, 0x3a2a1c, '#f4f0e0'],
+        astre: { dir: [-0.6, 0.35, 0.5], col: '#fff2c0', ombre: '#fff2c0', taille: 220 }, hemi: [0xc8d8f0, 0xb07848, 0.9], sun: [0xffd8a0, 0.9], phares: 0.15, bloom: 0.03, scan: 0.05,
+        murH: 0.9, poussiere: [0.82, 0.62, 0.42], route: ['#a86a3a', '#8a5228', '#96602f', '#b87a48', '#7a6a3a', '#8a7444', false, 'terre'], mur: ['#8a5a30', '#6a7a3a', '#7a4c28', '#6e4424'], depart: [0xe8482a, 0x3a2a1c, '#f4f0e0'],
         hud: { y: '#ffffff', c: '#ffb03a', r: '#e8482a', fond: 'rgba(70,36,16,.9)', style: 'trait', split: 0, jp: null, sur: [null, 'SPECIALE 7 · FIN DE JOURNEE'], titre: ['SPECIALE', 'DES OCRES'] } } },
   ];
   let id = 'ville';

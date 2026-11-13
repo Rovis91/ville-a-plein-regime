@@ -47,4 +47,21 @@
       for (let j = 0; j < 2; j++) { const [t, f, c] = l[(k + j) % l.length], x = j * 96; o.R(g, f, x, 0, 96, 20); o.R(g, '#08080c', x, 0, 1, 20); texte(g, t, x + 48, 10.5, 10, c); }
     }],
   });
+  // la piste en terre : th.route[7] = 'terre' repeint la chaussée commune en terre battue (ni rapiéçages, ni joints, ni bordures en damier).
+  // Le dessin commun passe d'abord : il tire rnd autant de fois qu'avant, le décor ne bouge pas ; la terre est peinte avec alea, par-dessus
+  const chaussee = TEXTURES.chaussee;
+  TEXTURES.chaussee = (...a) => {
+    const t = chaussee(...a); if (a[7] !== 'terre') return t;
+    const [asph, spk, edge, dash, k1, k2] = a, d = t[2];
+    t[2] = (g, o) => {
+      d(g, o); const { R, alea, voile } = o, px = n => alea() * n | 0;
+      R(g, asph, 0, 0, 64, 256);
+      for (let i = 0; i < 1400; i++) R(g, spk, px(64), px(256), 1, 1);
+      voile(g, 0.25, () => { for (let i = 0; i < 700; i++) R(g, alea() < 0.6 ? '#000' : '#fff', px(64), px(256), 1, 1); });
+      voile(g, 0.16, () => { for (const x of [17, 26, 36, 45]) for (let y = 0; y < 256; y += 2) R(g, '#000', x - 2 + px(3), y, 4, 2); }); // ornières
+      for (let i = 0; i < 600; i++) R(g, [edge, k1, k2][px(3)], alea() < 0.5 ? px(9) : 55 + px(9), px(256), 1 + px(2), 1 + px(3)); // bas-côtés fondus dans la terre
+      for (let i = 0; i < 220; i++) R(g, dash, 27 + px(10), px(256), 1, 1); // gravier chassé sur le bombé
+    };
+    return t;
+  };
 })();

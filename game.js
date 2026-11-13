@@ -139,7 +139,7 @@
 
   const tex = (w, h, draw) => {
     const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'));
-    const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestMipmapNearestFilter; // jamais de filtrage linéaire, sauf ?lisse=1
+    const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestMipmapNearestFilter; t.anisotropy = 8; // anisotropie : sans elle, les paliers de mipmap du sol vu en rasant avancent avec la voiture, à 10-100 m (on croit voir les textures se charger) ; jamais de filtrage linéaire, sauf ?lisse=1
     if (P('lisse')) { t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; }
     t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
   };
@@ -201,7 +201,7 @@
   const hemi = new THREE.HemisphereLight(...TH.hemi); scene.add(hemi); // bleu d'en haut, rebond magenta de la ville
   const sun = new THREE.DirectionalLight(...TH.sun); sun.castShadow = true; // clair de lune
   sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0015; sun.shadow.normalBias = 0.5;
-  Object.assign(sun.shadow.camera, { left: -180, right: 180, top: 180, bottom: -180, near: 10, far: 800 });
+  Object.assign(sun.shadow.camera, { left: -300, right: 300, top: 300, bottom: -300, near: 10, far: 800 });
   scene.add(sun, sun.target);
 
   // ---------- lumière dynamique : un seul calcul, ajouté dans le shader de tous les matériaux de la scène (onBeforeCompile) ----------
@@ -517,7 +517,7 @@
     brakeMat.color.setHex(inp.brake ? 0xff7080 : 0x8a1020);
     // traînées
     hist.unshift([car.x + fx * ENC.min.x, carY + 0.72, car.z + fz * ENC.min.x, rx, rz]); if (hist.length > TN) hist.length = TN;
-    const bst = car.boost > 0, glow = Math.min(1, sp / 15) * (inp.brake || bst ? 1 : 0.4);
+    const bst = car.boost > 0, glow = Math.min(1, sp / 15) * (inp.brake || bst ? 1 : 0.4) * Math.min(1, TH.phares / 0.4);
     for (let l = 0; l < 2; l++) for (let k = 0; k < TN; k++) {
       const h = hist[Math.min(k, hist.length - 1)], sd = l ? 0.78 : -0.78, a = (l * TN + k) * 6, f = (1 - k / TN) ** 2 * glow;
       trailP.set([h[0] + h[3] * sd, h[1] + 0.1, h[2] + h[4] * sd, h[0] + h[3] * sd, h[1] - 0.1, h[2] + h[4] * sd], a);
@@ -1001,7 +1001,7 @@
   }
 
   // la lune suit la voiture, calée sur la grille de texels de l'ombre pour qu'elle ne fourmille pas
-  const LR = new V3().crossVectors(new V3(0, 1, 0), SD).normalize(), LU = new V3().crossVectors(SD, LR), TX = 360 / 2048, tmp = new V3();
+  const LR = new V3().crossVectors(new V3(0, 1, 0), SD).normalize(), LU = new V3().crossVectors(SD, LR), TX = 600 / 2048, tmp = new V3();
   function sunFollow() {
     tmp.set(car.x, 0, car.z);
     const a = Math.round(tmp.dot(LR) / TX) * TX, b = Math.round(tmp.dot(LU) / TX) * TX, c = tmp.dot(SD);

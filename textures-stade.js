@@ -9,12 +9,14 @@
       voile(g, 0.22, () => { for (let i = 0; i < 7; i++) { const x = alea() * 60 | 0; R(g, '#000', x, 0, 2, 64); R(g, '#000', x + 5, 0, 2, 64); } for (let i = 0; i < 4; i++) R(g, '#000', 0, alea() * 60 | 0, 64, 2); });
       for (let i = 0; i < 24; i++) R(g, '#7a5846', alea() * 64 | 0, alea() * 64 | 0, 2, 2);
     }, 8],
-    // murs roulables : planches peintes en gris-bleu (du blanc saturait sous les projecteurs), joints, et les traces noires des pneus qui y sont montés
-    paroiArene: () => [64, 64, (g, o) => {
-      const { R, alea, voile } = o; R(g, '#6c7284', 0, 0, 64, 64);
-      for (let i = 0; i < 260; i++) R(g, alea() < 0.5 ? '#606678' : '#787e90', alea() * 64 | 0, alea() * 64 | 0, 1, 2 + (alea() * 5 | 0));
-      for (let x = 0; x < 64; x += 16) R(g, '#4a5060', x, 0, 1, 64);
-      voile(g, 0.5, () => { for (let i = 0; i < 14; i++) R(g, '#101014', alea() * 56 | 0, alea() * 64 | 0, 2 + (alea() * 3 | 0), 8 + (alea() * 30 | 0)); });
+    // murs roulables : planches peintes en gris-bleu sombre (plus clair, la paroi tournée vers le toit saturait), joints, et les traces noires des pneus qui y sont montés.
+    // game.js plaque une tuile sur une facette d'environ 1,5 m de large et 16 m de long (x en travers, y le long) : le grain est dessiné large et court pour ne pas s'étirer en traînées
+    // game.js la plaque en u sur une facette (~2 m de large) et en v sur 16 m de long : 16 x 128 px garde des pixels à peu près carrés (~0,13 m) au lieu de rayures étirées
+    paroiArene: () => [16, 128, (g, o) => {
+      const { R, alea, voile } = o; R(g, '#3c404c', 0, 0, 16, 128);
+      for (let i = 0; i < 140; i++) R(g, alea() < 0.5 ? '#343844' : '#444956', alea() * 16 | 0, alea() * 128 | 0, 1 + (alea() * 2 | 0), 1 + (alea() * 2 | 0));
+      R(g, '#2a2e38', 0, 0, 1, 128); for (let y = 0; y < 128; y += 32) R(g, '#2a2e38', 0, y, 16, 1); // joint entre facettes, joint de dalle tous les 4 m
+      voile(g, 0.5, () => { for (let i = 0; i < 5; i++) R(g, '#101014', alea() * 15 | 0, alea() * 128 | 0, 1, 16 + (alea() * 48 | 0)); }); // traces de gomme dans le sens de la course
     }, 8],
     // banderoles des gradins : deux annonceurs inventés par texture, k = le premier
     banderoleStade: k => [192, 20, (g, o) => {
@@ -40,6 +42,8 @@
       for (let y = 0; y < 64; y++) { const t = y / 63, l = 3 + 13 * Math.sin(Math.PI * Math.min(1, 0.15 + t * 0.85)) * (0.35 + 0.65 * t), c = (dl, col) => { if (l - dl > 0) o.R(g, col, Math.round(16 - l + dl), y, Math.round(2 * (l - dl)), 1); };
         c(0, t < 0.35 ? '#a01808' : '#e8401a'); c(3, t < 0.3 ? '#e8401a' : '#ff8a1a'); c(6, t < 0.45 ? '#ff8a1a' : '#ffd24a'); if (t > 0.6) c(9, '#fff4c8'); }
     }],
+    // faisceau d'un projecteur de poursuite, en lumière ajoutée : vif sous la lampe (haut du cône), éteint en arrivant au sol
+    faisceau: () => [4, 32, (g, o) => { for (let y = 0; y < 32; y++) { const v = Math.round(40 * (1 - y / 31) ** 2); o.R(g, `rgb(${v * 0.8 | 0},${v * 0.85 | 0},${v})`, 0, y, 4, 1); } }],
     // écran géant : deux images l'une sur l'autre, le décor en montre une puis l'autre
     ecranGeant: () => [256, 128, (g, o) => {
       const { R } = o; R(g, '#08080c', 0, 0, 256, 128);
