@@ -686,13 +686,57 @@
   const PRE = 'vpr7.' + (M.id === 'ville' ? '' : M.id + '.');
   const store = { get: k => { try { return JSON.parse(localStorage.getItem(PRE + k)); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(PRE + k, JSON.stringify(v)); } catch (e) { } } };
   const pref = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }, setPref = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
+  // Langue de l'interface : 'fr' ou 'en', choisie à l'écran d'accueil et gardée (vpr.langue). Les textes restent écrits en français dans le code ; tr() les traduit au moment de les afficher
+  // (txt, tag, padDit) : ordinaux, puis expressions de EN, la plus longue d'abord et jamais au milieu d'un mot. Un texte affiché nouveau doit avoir sa ligne dans EN, sinon il reste en français.
+  let langue = pref('vpr.langue', 'fr') === 'en' ? 'en' : 'fr';
+  const EN = {
+    // menu, modes, réglages
+    'CARTES': 'TRACKS', 'CARTE': 'TRACK', 'JOUEURS': 'PLAYERS', 'JOUEUR': 'PLAYER', 'ECRAN PARTAGE': 'SPLIT SCREEN', 'BOITE J1': 'GEARBOX P1', 'BOITE': 'GEARBOX', 'MANUELLE': 'MANUAL', 'MANU': 'MAN',
+    'CONTRE-LA-MONTRE NOCTURNE': 'NIGHT TIME ATTACK', 'CONTRE-LA-MONTRE': 'TIME ATTACK', 'COURSE': 'RACE', 'TOURNEE TERMINEE': 'CHAMPIONSHIP OVER', 'TOURNEE': 'CHAMPIONSHIP', 'GLISSE EN DUEL': 'DRIFT DUEL', 'GLISSES': 'DRIFTS', 'GLISSE': 'DRIFT',
+    'TOURS': 'LAPS', 'TOUR EN OR': 'GOLD LAP', 'TOUR': 'LAP', 'MANCHES DE 3 TOURS': 'ROUNDS OF 3 LAPS', 'MANCHE': 'ROUND', 'APRES LA MANCHE': 'AFTER ROUND', 'DEMARRER': 'START', 'REPRENDRE': 'RESUME', 'RECOMMENCER': 'RESTART', 'QUITTER': 'QUIT',
+    'TRAFIC': 'TRAFFIC', 'CIEL OUVERT': 'OPEN SKY', 'SOUS LE TOIT': 'INDOOR', '2 JOUEURS ET 2 RIVAUX': '2 PLAYERS AND 2 RIVALS', '3 TOURS CONTRE 3 IA': '3 LAPS VS 3 CPU', 'LE DERNIER SORT': 'LAST PLACE IS OUT', 'LE MEILLEUR SCORE GAGNE': 'BEST SCORE WINS',
+    'PAS ENCORE DE TROPHEE': 'NO TROPHY YET', 'PAS DE TROPHEE': 'NO TROPHY', 'TROPHEE': 'TROPHY', "RIEN N'EST ENREGISTRE": 'NOTHING IS SAVED', 'VISE': 'GO FOR', 'ARGENT': 'SILVER', 'OR': 'GOLD', 'MEDAILLE': 'MEDAL', 'FANTOME': 'GHOST', 'NON': 'OFF', 'OUI': 'ON', 'MUSIQUE': 'MUSIC',
+    'DETENTE': 'EASY', 'CHAUD': 'HARD', 'NIVEAU': 'LEVEL',
+    // commandes
+    'HAUT/BAS': 'UP/DOWN', 'GAUCHE/DROITE': 'LEFT/RIGHT', 'HAUT / BAS': 'UP / DOWN', 'GAUCHE / DROITE': 'LEFT / RIGHT', 'CHOISIR': 'SELECT', 'CHANGER': 'CHANGE', 'ENTREE': 'ENTER', 'VALIDER': 'CONFIRM', 'ECHAP': 'ESC', 'REJOUER': 'RETRY', 'SUITE': 'NEXT', 'CONTINUER': 'CONTINUE', 'PARTIR': 'GO',
+    'FLECHES / ZQSD': 'ARROWS / WASD', 'ESPACE': 'SPACE', 'I : INSCRIPTION (MANETTES, JOY-CON, CLAVIER)': 'I : PLAYER SETUP (GAMEPADS, JOY-CON, KEYBOARD)', 'INSCRIPTION': 'PLAYER SETUP',
+    'PERIPHERIQUE DECONNECTE : COURSE EN PAUSE': 'CONTROLLER DISCONNECTED : RACE PAUSED', 'PERIPHERIQUE DECONNECTE': 'CONTROLLER DISCONNECTED', 'CHACUN APPUIE SUR SON PERIPHERIQUE': 'EACH PLAYER PRESSES THEIR CONTROLLER', 'VUE DU BAS': 'BOTTOM VIEW', 'VUE DU HAUT': 'TOP VIEW', 'APPUIE': 'PRESS',
+    'ZQSD OU FLECHES : UNE TOUCHE DE SON COTE': 'WASD OR ARROWS : ANY KEY ON YOUR SIDE', 'MANETTE : UN BOUTON': 'GAMEPAD : ANY BUTTON', 'LIBERER SA PLACE': 'LEAVE YOUR SLOT', 'IL FAUT LES DEUX PLACES POUR PARTIR': 'BOTH SLOTS ARE NEEDED TO START',
+    'MANETTE CONNECTEE': 'GAMEPAD CONNECTED', 'MANETTE DECONNECTEE': 'GAMEPAD DISCONNECTED', 'MANETTE': 'GAMEPAD', 'CLAVIER FLECHES': 'ARROW KEYS', 'CLAVIER ZQSD': 'WASD KEYS', 'CLAVIER': 'KEYBOARD',
+    // défi par lien
+    'DEFI BATTU': 'CHALLENGE BEATEN', 'DEFI': 'CHALLENGE', 'A BATTRE': 'TO BEAT', 'A -': '-', 'LIEN DE DEFI : CARTE INCONNUE': 'CHALLENGE LINK : UNKNOWN TRACK', 'LIEN DE DEFI ILLISIBLE': 'UNREADABLE CHALLENGE LINK', "LIEN D'UNE AUTRE VERSION DU JEU": 'LINK FROM ANOTHER GAME VERSION',
+    'LIEN DE DEFI ABIME OU TRONQUE': 'CHALLENGE LINK DAMAGED OR CUT', 'LIEN DE DEFI COPIE': 'CHALLENGE LINK COPIED', 'LIEN DE DEFI A COPIER': 'CHALLENGE LINK TO COPY', 'LIEN DEFI': 'CHALLENGE LINK', "BOUCLE D'ABORD UN TOUR EN CONTRE-LA-MONTRE": 'FINISH A TIME ATTACK LAP FIRST', 'NITRO : RECORDS REMIS A ZERO': 'NITRO : RECORDS RESET',
+    // course et HUD
+    'ARRIVEE': 'FINISH', 'TEMPS': 'TIME', 'ECART': 'GAP', 'MEIL. TOUR': 'BEST LAP', 'MEILLEUR TOUR': 'BEST LAP', 'SORT A': 'OUT AT', 'SORT': 'OUT', 'EN PISTE': 'ON TRACK', 'REVANCHE': 'REMATCH', 'GAGNE': 'WINS', 'EGALITE': 'DRAW',
+    'HORS DELAI : SCORE NON COMPTE': 'TIME OUT : SCORE NOT COUNTED', 'HORS DELAI : SCORE NUL': 'TIME OUT : NO SCORE', 'HORS DELAI': 'TIME OUT', 'DELAI': 'TIME LIMIT', 'MURS': 'WALLS', 'PLACE': 'POS', 'ASPIRATION': 'SLIPSTREAM',
+    '! VIRAGE DROITE >>': '! RIGHT TURN >>', '<< VIRAGE GAUCHE !': '<< LEFT TURN !', 'DUEL FINAL': 'FINAL DUEL', 'DERNIER : DOUBLE AVANT LA LIGNE': 'LAST : OVERTAKE BEFORE THE LINE', 'ELIMINE · CAMERA SUR': 'ELIMINATED · WATCHING', 'ELIMINE': 'ELIMINATED', 'ELIMINATION': 'ELIMINATION',
+    'SUR LA GRILLE': 'ON THE GRID', 'SUR': 'OF', 'DEPART': 'START', 'PREMIER TEMPS': 'FIRST TIME SET', 'NOUVEAU RECORD': 'NEW RECORD', "L'AUTRE JOUEUR ROULE ENCORE": 'THE OTHER PLAYER IS STILL DRIVING', 'VOUS': 'YOU', 'CLASSEMENT GENERAL': 'STANDINGS',
+    // cartes
+    'VILLE A PLEIN REGIME': 'FULL THROTTLE CITY', 'PREMIER METRO': 'FIRST TRAIN', 'GRAND VACARME': 'GRAND ROAR', 'NUIT BLANCHE': 'WHITE NIGHT', 'SPECIALE DES OCRES': 'OCHRE STAGE', 'LIGNE DE BAIE': 'BAYSHORE LINE', 'DESCENTE DE NUIT': 'NIGHT DOWNHILL',
+    'ARENE COUVERTE · COMPLET': 'INDOOR ARENA · SOLD OUT', 'COL FERME': 'PASS CLOSED', 'AUBE': 'DAWN', '5 H 30': '5:30 AM', 'SPECIALE 7 · FIN DE JOURNEE': 'STAGE 7 · LATE AFTERNOON', 'HEURE DOREE': 'GOLDEN HOUR',
+  };
+  const EN_RX = new RegExp('(?<![A-Z0-9])(' + Object.keys(EN).sort((a, b) => b.length - a.length).map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?![A-Z])', 'g');
+  const ORD = n => n + (n % 100 > 10 && n % 100 < 14 ? 'TH' : ['TH', 'ST', 'ND', 'RD'][n % 10] || 'TH');
+  const tr = s => langue !== 'en' || typeof s !== 'string' ? s : s.replace(/[À-ÖØ-Ýà-öø-ý]/g, c => c.normalize('NFD')[0]).replace(/(\d+)ER?(?![A-Z])/g, (_, n) => ORD(+n))
+    .replace(EN_RX, k => EN[k]).replace(/ : /g, ': ').replace(/(\d),(\d)/g, '$1.$2'); // « 3E SUR 4 » -> « 3RD OF 4 » ; « 4,2 KM » -> « 4.2 KM »
+  const TITRE_EN = { ville: ['FULL THROTTLE', 'CITY'], paris: ['FIRST', 'TRAIN'], stade: ['GRAND', 'ROAR'], givre: ['WHITE', 'NIGHT'], terre: ['OCHRE', 'STAGE'] }; // titres sur deux lignes : l'ordre des mots change
+  const appliqueLangue = () => { document.documentElement.lang = langue; document.title = langue === 'en' ? 'Full Throttle City' : 'Ville à plein régime'; };
+  appliqueLangue();
   let anciens = (() => { try { return !localStorage.getItem('vpr7.vu') && Object.keys(localStorage).some(k => /^vpr6\..*best$/.test(k)); } catch (e) { return false; } })();
   let msel = 4; // ligne du menu principal
   // écran d'accueil : le navigateur n'autorise le son qu'après un geste ; on le demande d'abord, pour que la musique soit là quand le menu s'affiche
-  let accueil = true;
+  // Écran d'accueil : il sert d'abord à choisir la langue. Gauche / droite (ou haut / bas) change la langue tout de suite, Entrée part vers le menu principal.
+  // (variantes essayées et écartées : branche prototype/accueil)
+  let accueil = true, aMenu = false, tFlash = 0;
   const entrer = () => { SON.init(); accueil = false; };
+  const choisitLangue = l => { if (l === langue) return; langue = l; setPref('vpr.langue', langue); appliqueLangue(); SON.beep(550); };
+  const accueilAct = a => { // a : 'v' haut / bas, 'h' gauche / droite, 'ok' valider, '' autre touche (elle ne fait qu'ouvrir le son)
+    aMenu = true;
+    if (a === 'v' || a === 'h') choisitLangue(langue === 'en' ? 'fr' : 'en');
+    else if (a === 'ok') { tFlash = performance.now(); SON.stinger(true); entrer(); }
+  };
   try { const m = sessionStorage.getItem('vpr.menu'); if (m) { msel = 0; sessionStorage.removeItem('vpr.menu'); entrer(); SON.reprendre(JSON.parse(m)); } } catch (e) { } // la musique de menu reprend où elle en était // on vient de changer de carte : on reste sur cette ligne, sans repasser par l'accueil (le navigateur garde en général le droit au son d'une page à l'autre ; sinon il revient à la touche suivante)
-  for (const ev of ['mousedown', 'pointerup', 'touchend']) addEventListener(ev, e => { if (accueil) { entrer(); if (e.isTrusted) hidAuto(); } else SON.init(); }); // un clic ou un appui valent une touche
+  for (const ev of ['mousedown', 'pointerup', 'touchend']) addEventListener(ev, e => { if (accueil) { if (ev === 'mousedown') return; if (e.isTrusted && !aMenu) hidAuto(); SON.init(); const l = e.clientX < innerWidth / 2 ? 'fr' : 'en'; if (l === langue) accueilAct('ok'); else { aMenu = true; choisitLangue(l); } } else SON.init(); }); // à l'accueil : un clic à gauche choisit le français, à droite l'anglais ; un second clic du même côté part
   const fmt = t => `${t / 60 | 0}'${String(t % 60 | 0).padStart(2, '0')}"${String(t * 100 % 100 | 0).padStart(2, '0')}`;
   addEventListener('mousemove', e => { if (state !== 'race' && state !== 'count') return; const vu = VUES[0]; vu.lookA = clamp(vu.lookA + e.movementX * 0.006, -Math.PI, Math.PI); vu.lookP = clamp(vu.lookP + e.movementY * 0.03, -1, 5); vu.lookT = 2.5; }); // caméra libre à la souris : celle de la première vue (il n'y a qu'une souris)
   let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, manual = pref('vpr.boite', 'a') === 'm';
@@ -728,7 +772,7 @@
   let dernier = null;
   function lienDefi() {
     if (!dernier) { padDit("BOUCLE D'ABORD UN TOUR EN CONTRE-LA-MONTRE"); return; }
-    const url = location.origin + location.pathname + '#defi=' + defiCode(M.id, dernier.t, dernier.trace), dit = () => padDit('LIEN DE DÉFI COPIÉ : ' + fmt(dernier.t)), montre = () => prompt('Lien de défi à copier :', url);
+    const url = location.origin + location.pathname + '#defi=' + defiCode(M.id, dernier.t, dernier.trace), dit = () => padDit('LIEN DE DÉFI COPIÉ : ' + fmt(dernier.t)), montre = () => prompt(tr('LIEN DE DEFI A COPIER :'), url);
     try { navigator.clipboard.writeText(url).then(dit, montre); } catch (e) { montre(); }
   }
   // mode Glisse : le score ne compte que si les deux tours sont bouclés en moins de GLT (deux tours au temps de bronze, plus 30 %) ; record et médailles par carte
@@ -778,9 +822,9 @@
     SON.stinger(rec);
     lapN++; car.dist -= N; tRace = 0; si = 0; cur = []; recG = [];
   }
-  // menu de pause : [ligne, action]. À deux, ni boîte (chacun a la sienne, sur son périphérique), ni fantôme, ni lien de défi
+  // menu de pause : [ligne, action]. À deux, ni boîte (chacun a la sienne, sur son périphérique), ni fantôme ; le fantôme seulement en contre-la-montre
   const pauseItems = () => [['REPRENDRE', () => { state = prev; }], ['RECOMMENCER', start], ...(deux() ? [] : [['BOITE : ' + (manual ? 'MANUELLE' : 'AUTO'), () => { manual = !manual; car.manual = manual; }]]),
-    ['RADIO : ' + SON.nom, zap], ['MUSIQUE : ' + (SON.musicOn ? 'OUI' : 'NON'), () => SON.toggleMusic()], ...(deux() ? [] : [['FANTOME : ' + nomF(), () => choixF((fant + 1) % FANT.length)], ['COPIER LE LIEN DE DEFI', lienDefi]]), ['QUITTER', toMenu]];
+    ['RADIO : ' + SON.nom, zap], ['MUSIQUE : ' + (SON.musicOn ? 'OUI' : 'NON'), () => SON.toggleMusic()], ...(deux() || mode !== 'solo' ? [] : [['FANTOME : ' + nomF(), () => choixF((fant + 1) % FANT.length)]]), ['QUITTER', toMenu]];
   function toMenu() { clos(); tnFin = null; state = 'title'; ins = false; race = null; raceEnd = false; glFin = null; car = newCar(T); for (const vu of VUES) suit(vu, car); tRace = 0; lapN = 1; for (const hu of HUM) hu.hist.length = 0; msel = 4; }
   // menu principal : 0 carte, 1 joueurs, 2 mode, 3 boîte, 4 démarrer ; d = -1 / +1 (gauche / droite ; Entrée vaut +1)
   let cible = null, cibleT = 0; // carte demandée au menu, pas encore construite
@@ -828,8 +872,8 @@
     if (/^Arrow|Space|Slash/.test(e.code)) e.preventDefault(); // Slash : recherche rapide de Firefox
     if (e.repeat) return;
     if (e.isTrusted && e.code === 'KeyJ') hidDemande(); // avant tout le reste : marche aussi depuis l'accueil
-    else if (e.isTrusted && accueil) hidAuto();
-    if (accueil) { entrer(); return; } // la première touche ne fait qu'ouvrir le menu
+    else if (e.isTrusted && accueil && !aMenu) hidAuto();
+    if (accueil) { accueilAct(/^(ArrowUp|ArrowDown|KeyW|KeyS)$/.test(e.code) ? 'v' : /^(ArrowLeft|ArrowRight|KeyA|KeyD)$/.test(e.code) ? 'h' : e.code === 'Enter' || e.code === 'Space' ? 'ok' : ''); return; }
     const key = (e.key || '').toLowerCase(); // lettre réellement tapée, pour les commandes nommées par une lettre (le pilotage, lui, reste en positions physiques)
     if (ins) { // inscription : les places se prennent par les appuis (voir inscription) ; ici le clavier seul : Échap libère la dernière place tenue par un clavier, ou referme l'écran, Entrée part quand les deux places sont prises
       if (e.periph) return; const n = Math.max(PLACES.indexOf('clavierG'), PLACES.indexOf('clavierD'));
@@ -879,7 +923,7 @@
   const padId = p => p.hid || 'manette' + p.index, branche = id => id in CLAV || pads.some(p => padId(p) === id); // branche : à interroger après padFrame, pour savoir qu'un périphérique inscrit est parti
   const padNote = document.body.appendChild(document.createElement('div')); padNote.setAttribute('role', 'status');
   padNote.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);padding:8px 12px;background:#0c0c10;color:#ffd23a;font:12px "Press Start 2P",monospace;border:2px solid #ffd23a;pointer-events:none;display:none;z-index:9';
-  let padNoteT = 0; const padDit = s => { padNote.textContent = s; padNote.style.display = ''; clearTimeout(padNoteT); padNoteT = setTimeout(() => { padNote.style.display = 'none'; }, 3000); };
+  let padNoteT = 0; const padDit = s => { padNote.textContent = tr(s); padNote.style.display = ''; clearTimeout(padNoteT); padNoteT = setTimeout(() => { padNote.style.display = 'none'; }, 3000); };
   const parti = id => { delete padRepos[id]; delete padAvant[id]; if (id === retenu) { retenu = ''; padDit('MANETTE DÉCONNECTÉE'); } };
   addEventListener('gamepaddisconnected', e => parti(padId(e.gamepad)));
   // Joy-Con lus en direct (WebHID), deux au plus : sous Windows, Chrome reçoit leurs rapports mais ne les montre pas à l'API Gamepad (constaté sur Chrome 156, Joy-Con (R) en Bluetooth).
@@ -961,7 +1005,7 @@
   document.fonts.load('8px ' + PS); document.fonts.load('16px ' + JP, 'スピード');
   // texte pixel ; split = décalage rouge/cyan façon glitch
   function txt(s, x, y, size, col, align = 'left', split = 0, font = PS) {
-    hg.font = size + 'px ' + font; hg.textAlign = align; hg.textBaseline = 'top'; x = Math.round(x);
+    s = tr(s); hg.font = size + 'px ' + font; hg.textAlign = align; hg.textBaseline = 'top'; x = Math.round(x);
     if (split && HU.split) { hg.fillStyle = RD; hg.fillText(s, x - split, y); hg.fillStyle = C; hg.fillText(s, x + split, y); }
     hg.fillStyle = col; hg.fillText(s, x, y);
   }
@@ -974,7 +1018,7 @@
     else if (HU.style === 'bloc') R(hg, C, x, y + h - 2, w, 2); // bloc souligné
     else { R(hg, C, x, y, w, 1); R(hg, C, x, y + h - 1, w, 1); } // deux traits
   };
-  const tag = (s, cx, y, bg) => { hg.font = '8px ' + PS; const w = hg.measureText(s).width + 12; R(hg, bg, Math.round(cx - w / 2), y, w, 14); txt(s, cx, y + 3, 8, '#08080c', 'center'); };
+  const tag = (s, cx, y, bg) => { hg.font = '8px ' + PS; const w = hg.measureText(tr(s)).width + 12; R(hg, bg, Math.round(cx - w / 2), y, w, 14); txt(s, cx, y + 3, 8, '#08080c', 'center'); };
   const EQN = 20, EQR = 10, fft = new Uint8Array(32);
   // minicarte : tracé dessiné une seule fois dans un canvas hors écran (x monde vers la droite, z vers le bas = vue de dessus non inversée)
   const MM = (() => {
@@ -987,17 +1031,30 @@
     R(g, RD, px(S[0].x) - 2, pz(S[0].z) - 2, 5, 5); // ligne de départ
     return { c, px, pz };
   })();
+  // Écran d'accueil : la carte tourne derrière, assombrie ; le titre, puis un drapeau par langue, la langue choisie encadrée et son drapeau qui flotte
+  const TT = (s, x, y, size, col) => { hg.font = size + 'px ' + PS; hg.textAlign = 'center'; hg.textBaseline = 'top'; hg.fillStyle = col; hg.fillText(s, Math.round(x), Math.round(y)); }; // texte tel quel, sans tr()
+  const drapeau = (l, x, y, w, h) => {
+    if (l === 'fr') { R(hg, '#1f3fbf', x, y, w / 3 | 0, h); R(hg, '#f4f4f4', x + (w / 3 | 0), y, w / 3 | 0, h); R(hg, '#e0283a', x + (2 * w / 3 | 0), y, w - (2 * w / 3 | 0), h); return; }
+    R(hg, '#1a2a7a', x, y, w, h); hg.save(); hg.beginPath(); hg.rect(x, y, w, h); hg.clip(); hg.lineCap = 'butt';
+    for (const [lw, c] of [[h * 0.2, '#f4f4f4'], [h * 0.07, '#e0283a']]) { hg.strokeStyle = c; hg.lineWidth = lw; hg.beginPath(); hg.moveTo(x, y); hg.lineTo(x + w, y + h); hg.moveTo(x + w, y); hg.lineTo(x, y + h); hg.stroke(); }
+    hg.restore(); R(hg, '#f4f4f4', x + w / 2 - h * 0.17, y, h * 0.34, h); R(hg, '#f4f4f4', x, y + h * 0.33, w, h * 0.34); R(hg, '#e0283a', x + w / 2 - h * 0.1, y, h * 0.2, h); R(hg, '#e0283a', x, y + h * 0.4, w, h * 0.2);
+  };
+  function accueilDessin(HW) {
+    const now = performance.now(), t = now / 1000, cx = HW / 2, en = langue === 'en', blink = (now / 400 | 0) % 2 === 0, titre = en ? TITRE_EN.ville : ['VILLE A', 'PLEIN REGIME'];
+    R(hg, 'rgba(6,6,14,.62)', 0, 0, HW, HH);
+    txt(titre[0], cx, 18, 24, Y, 'center', 2); txt(titre[1], cx, 44, 24, Y, 'center', 2);
+    TT(en ? 'CHOOSE YOUR LANGUAGE' : 'CHOISIS TA LANGUE', cx, 84, 8, C);
+    [['fr', 'FRANÇAIS'], ['en', 'ENGLISH']].forEach(([l, nom], i) => { const on = langue === l, x = cx - 156 + i * 168, y = 102, w = 144, h = 104;
+      R(hg, on ? 'rgba(18,18,36,.95)' : 'rgba(8,8,16,.8)', x, y, w, h); if (on) { cadre(Y, x, y, w, h); cadre(Y, x + 1, y + 1, w - 2, h - 2); } else cadre('#3a3a4a', x, y, w, h);
+      const fy = y + 12 + (on ? Math.sin(t * 5) * 2 | 0 : 0); drapeau(l, x + 32, fy, 80, 48); if (!on) R(hg, 'rgba(0,0,0,.6)', x + 32, fy, 80, 48);
+      TT(nom, x + w / 2, y + 72, 16, on ? Y : '#6a6a78'); if (on && blink) { TT('>', x - 11, y + 44, 16, Y); TT('<', x + w + 11, y + 44, 16, Y); } });
+    if (blink) tag(en ? 'ENTER : PLAY' : 'ENTREE : JOUER', cx, 222, Y);
+    TT(en ? '< >  CHANGE      OR CLICK A FLAG' : '< >  CHANGER     OU CLIQUE UN DRAPEAU', cx, 246, 8, '#c8c8d0');
+  }
   // Écrans communs à tous les joueurs : accueil, menu principal, pause. Dessinés dans hg sur une grille de HW × 270 : le HUD de la vue en solo, la couche plein écran à deux (voir couche).
   function ecrans(HW) {
     const cx = HW / 2, blink = (performance.now() / 160 | 0) % 3 > 0;
-    if (state === 'title' && accueil) { // écran d'accueil : la carte tourne derrière, on attend un geste
-      R(hg, 'rgba(8,8,12,.55)', 0, 0, HW, HH);
-      if (HU.sur[0]) txt(HU.sur[0], cx, HH / 2 - 76, 16, C, 'center', 0, JP);
-      txt(HU.titre[0], cx, HH / 2 - 50, 24, Y, 'center', 2); txt(HU.titre[1], cx, HH / 2 - 24, 24, Y, 'center', 2);
-      if (blink) tag('APPUIE SUR UNE TOUCHE', cx, HH / 2 + 22, Y);
-      txt('OU CLIQUE', cx, HH / 2 + 44, 8, '#e8e8e4', 'center');
-      return;
-    }
+    if (state === 'title' && accueil) { accueilDessin(HW); return; }
     if (ins) { // inscription : qui tient quoi, et ce qu'il reste à faire
       const ok = PLACES.every(p => p), pa = state === 'pause';
       R(hg, 'rgba(8,8,12,.9)', 0, 0, HW, HH); txt('INSCRIPTION', cx, 22, 24, Y, 'center', 2);
@@ -1012,7 +1069,8 @@
     if (state === 'title') { // menu principal : la carte tourne derrière, on choisit carte, mode et boîte
       R(hg, 'rgba(8,8,12,.45)', 0, 0, HW, HH); const d2 = deux(); // à deux, le menu dit ce qui est vrai à deux
       if (HU.sur[0]) txt(HU.sur[0], cx, 6, 16, C, 'center', 0, JP); txt(mode === 'tournee' ? 'TOURNEE · ' + CARTES.length + ' CARTES' : mode === 'course' ? 'COURSE · 3 TOURS' : mode === 'elim' ? 'ELIMINATION · 4 TOURS' : mode === 'glisse' ? (d2 ? 'GLISSE EN DUEL' : 'GLISSE') + ' · 2 TOURS' : HU.sur[1], cx, 27, 8, C, 'center');
-      txt(HU.titre[0], cx, 44, 24, Y, 'center', 2); txt(HU.titre[1], cx, 70, 24, Y, 'center', 2);
+      const ti = langue === 'en' && TITRE_EN[M.id] || HU.titre; txt(ti[0], cx, 44, 24, Y, 'center', 2); txt(ti[1], cx, 70, 24, Y, 'center', 2);
+      if (tFlash && performance.now() - tFlash < 400) R(hg, 'rgba(255,255,255,' + (1 - (performance.now() - tFlash) / 400).toFixed(2) + ')', 0, 0, HW, HH); // éclair blanc au sortir de l'accueil
       panel(cx - 160, 100, 320, 140);
       [['CARTE', (cible || M).nom + '  ' + (CARTES.indexOf(cible || M) + 1) + '/' + CARTES.length], ['JOUEURS', d2 ? '2 : ECRAN PARTAGE' : '1'], ['MODE', mode === 'tournee' ? 'TOURNEE : ' + DIFF[diff].nom : mode === 'course' ? 'COURSE : ' + DIFF[diff].nom : mode === 'elim' ? 'ELIMINATION : ' + DIFF[diff].nom : mode === 'glisse' ? d2 ? 'GLISSE EN DUEL' : 'GLISSE' : 'CONTRE-LA-MONTRE'], [d2 ? 'BOITE J1' : 'BOITE', manuel1() ? 'MANUELLE' : 'AUTO']].forEach(([l, v], i) => {
         const on = msel === i, y = 105 + i * 12;

@@ -404,3 +404,11 @@ console.log(`OK  élimination : ${elimTxt}`);
 console.log(`OK  glisse : ${glisseTxt}`);
 console.log(`OK  deux humains : ${duoTxt}`);
 console.log(`OK  fantôme des médailles : ${fantTxt}`);
+
+// ---------- traduction anglaise de l'interface (tr de game.js, isolée de son fichier) : ordinaux, expressions entières, jamais au milieu d'un mot ----------
+{
+  const src = require('fs').readFileSync(__dirname + '/game.js', 'utf8'), tr = new Function('pref', src.slice(src.indexOf('  let langue'), src.indexOf('  const TITRE_EN')) + '; return tr;')(() => 'en');
+  for (const [fr, en] of [['3E SUR 4', '3RD OF 4'], ['ARRIVEE : 1ER', 'FINISH: 1ST'], ['FANTÔME : OR', 'GHOST: GOLD'], ['RECORD 1\'00"00', 'RECORD 1\'00"00'], ['GRAND PRIX FM', 'GRAND PRIX FM'], ['4,2 KM   TRAFIC', '4.2 KM   TRAFFIC']])
+    assert.strictEqual(tr(fr), en, 'traduction de « ' + fr + ' »');
+  console.log('OK  traduction anglaise');
+}
