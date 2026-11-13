@@ -85,9 +85,10 @@
   // Chaque image, la simulation avance une fois ; puis, pour chaque vue, vueFrame() pose la caméra, règle lumière, brouillard et pluie, dessine son HUD, la scène dans sa cible, et joue sa passe finale.
   // Une vue de plus = un appel à nouvelleVue() (après la construction du décor : elle copie la liste des luminaires et le semis de pluie) ; libere() rend au GPU la cible et la texture de chacune.
   // Le nombre de vues est le nombre de joueurs : il se règle par joueurs(n), plus bas (retireVue() ôte la dernière). À deux, les vues sont superposées, joueur 1 en haut, chacune sur sa grille de 270 lignes : le canvas en fait 540.
-  // La vue porte aussi ce que le jeu tient par joueur : son périphérique, son entrée de l'image, son compte de tours, son « arrivé ».
+  // Une vue est un joueur : sa place (rang n, périphérique, entrée de l'image, compte de tours, « arrivé »), sa voiture (moi) et son modèle animé (hu), plus ce que sa caméra regarde (car : moi, sauf éliminé à deux).
+  // VUES[0] est le joueur 1 : VUES[0].moi est la voiture du jeu hors course (il n'y a pas d'autre variable « la voiture du joueur »).
   const VUES = [], AA = ST ? ST.aa : 1, deux = () => VUES.length > 1;
-  const suit = (vu, c) => { vu.car = c; vu.cth = c.th; vu.carY = S[c.idx].y; vu.result = null; vu.fini = vu.spec = false; vu.lap0 = [0, 0, 0]; }; // la vue se cale derrière la voiture c, compteurs de course à zéro : au départ, au retour au menu
+  const suit = (vu, c) => { vu.moi = vu.car = c; vu.hu.hist.length = 0; vu.cth = c.th; vu.carY = S[c.idx].y; vu.result = null; vu.fini = vu.spec = false; vu.lap0 = [0, 0, 0]; }; // la vue se cale derrière la voiture c, compteurs de course à zéro : au départ, au retour au menu
   const nouvelleVue = () => {
     const rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
     if (ST && ST.aa > 1) rt.texture.minFilter = rt.texture.magFilter = THREE.LinearFilter; // suréchantillonnage : la cible est aa fois plus fine, la passe finale en fait la moyenne
@@ -96,19 +97,19 @@
     const hudC = document.createElement('canvas'), hudT = new THREE.CanvasTexture(hudC);
     hudT.minFilter = hudT.magFilter = THREE.NearestFilter;
     const vu = { cam: new THREE.PerspectiveCamera(70, 1, 0.5, 3000), rt, hudC, hg: hudC.getContext('2d'), hudT, w: 480, rw: 480, // w : largeur de la grille du HUD ; rw : celle de la cible (la même sans style)
-      car: null, cth: 0, carY: 0, pitch: 0, roll: 0, // voiture suivie ; cap de la caméra, hauteur, tangage et roulis lissés
+      moi: null, hu: HUM[VUES.length], car: null, cth: 0, carY: 0, pitch: 0, roll: 0, // voiture suivie ; cap de la caméra, hauteur, tangage et roulis lissés
       lookA: 0, lookP: 0, lookT: 0, // caméra libre à la souris : angle autour de la voiture, hauteur en plus, délai avant retour
       hit: 0, bump: 0, land: 0, stun: 0, nit: 0, lm: 0, // chocs de la voiture suivie pendant l'image ; secousse, fondu de nitro, fondu de tunnel
       gear: 0, rpm: 0.3, load: 0, spool: 0, up: 0, peak: new Float32Array(EQN), // rapport et régime affichés (drivetrain), crêtes de la jauge
       result: null, splitMsg: null, // bandeaux du HUD : tour bouclé, écart au secteur
       n: VUES.length, periph: '', inp: null, gas: 0, // rang du joueur (0 = en haut) ; son périphérique ('' = le solo : tout le clavier et la manette retenue), son entrée de conduite de l'image
-      fini: false, spec: false, lap0: null, // course : arrivé ou sorti ; spec : éliminé, la vue regarde le meneur (vu.car n'est plus la voiture du joueur, qui reste race.cars[vu.n]) ; compteurs au début du tour (glisses, coups de nitro, murs) — remis à zéro par suit()
+      fini: false, spec: false, lap0: null, // course : arrivé ou sorti ; spec : éliminé, la vue regarde le meneur (vu.car n'est plus la voiture du joueur, qui reste vu.moi) ; compteurs au début du tour (glisses, coups de nitro, murs) — remis à zéro par suit()
       lumIdx: -1, lums: LUMS.map(l => ({ l, d: 0 })), // luminaires triés par distance à la voiture suivie
       rainP: rainP.slice(), splP: new Float32Array(SN * 3), splA: splA.slice(), splD: new Float32Array(SN) }; // gouttes (autour de la voiture) et impacts : mêmes tirages de départ pour toutes les vues, rnd n'est pas tiré
-    suit(vu, car); VUES.push(vu); resize(); return vu;
+    suit(vu, VUES.length ? VUES[0].moi : newCar(T)); VUES.push(vu); resize(); return vu; // une vue ajoutée (au menu) suit la voiture du joueur 1, comme toutes les vues hors course
   };
   const rendVue = vu => { vu.rt.dispose(); if (vu.rt.depthTexture) vu.rt.depthTexture.dispose(); vu.hudT.dispose(); }; // ce qu'une vue tient au GPU (son canvas de HUD n'est pas dans la page)
-  const retireVue = () => { rendVue(VUES.pop()); resize(); };
+  const retireVue = () => { const vu = VUES.pop(); vu.hu.tr.visible = false; rendVue(vu); resize(); }; // ses traînées ne sont plus tenues par aucune vue
   let COM = null; // couche plein écran commune aux deux vues : un canvas 2D posé sur celui du jeu, { c, g }. Elle n'existe qu'à deux joueurs (voir joueurs et couche, près de la boucle)
   let hg = null; // contexte 2D du HUD en cours de dessin (celui de la vue, ou de la couche commune), pour txt, panel, tag
   const post = new THREE.ShaderMaterial({
@@ -521,10 +522,10 @@
   const flames = [-0.5, 0.5].map(z => { const g = new THREE.ConeGeometry(0.17, 1.6, 5); g.translate(0, 0.8, 0); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x60d0ff, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false })); m.rotation.z = Math.PI / 2; m.position.set(ENC.min.x, 0.42, z); m.visible = false; carG.add(m); return m; }); // pointe vers l'arrière
   const TN = 18, trailI = [], trailMat = addMat(null, { vertexColors: true, polygonOffset: false });
   for (let l = 0; l < 2; l++) for (let k = 0; k < TN - 1; k++) { const a = (l * TN + k) * 2; trailI.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
-  const trainee = () => { // un jeu de traînées par voiture humaine (voir HUM) : ses dernières positions et son ruban
+  const trainee = () => { // un jeu de traînées par voiture humaine (voir HUM) ; caché tant qu'aucune vue ne le tient : ses dernières positions et son ruban
     const P = new Float32Array(TN * 12), C = new Float32Array(TN * 12), geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(P, 3)); geo.setAttribute('color', new THREE.BufferAttribute(C, 3)); geo.setIndex(trailI);
-    const tr = new THREE.Mesh(geo, trailMat); tr.frustumCulled = false; scene.add(tr); return { hist: [], P, C, geo, tr };
+    const tr = new THREE.Mesh(geo, trailMat); tr.frustumCulled = tr.visible = false; scene.add(tr); return { hist: [], P, C, geo, tr };
   };
 
   // particules additives : fumée de pneus, étincelles contre les murs, flammes d'échappement
@@ -543,10 +544,10 @@
 
   let flashT = 0, nextFlash = 6;
   const FLASH = new THREE.Color(0x8fa0ff), jit = a => (Math.random() - 0.5) * a;
-  // effets attachés à une voiture humaine hu (voir HUM), celle que suit la vue vu, avec l'état lissé de cette vue : pose du modèle, roues, feu stop, traînées, poussière de réception, fumée, étincelles, flammes.
+  // effets attachés à la voiture humaine du joueur vu (son modèle vu.hu), celle que suit sa vue, avec l'état lissé de cette vue : pose du modèle, roues, feu stop, traînées, poussière de réception, fumée, étincelles, flammes.
   // Tout est dans la scène, donc visible de toutes les vues
-  function fxVoiture(hu, vu, dt) {
-    const { car, carY, lm, inp, hit, land } = vu, { hist, P, C, geo } = hu, sp = Math.hypot(car.vx, car.vz), fx = Math.cos(car.th), fz = Math.sin(car.th), rx = -fz, rz = fx;
+  function fxVoiture(vu, dt) {
+    const { car, carY, lm, inp, hit, land, hu } = vu, { hist, P, C, geo } = hu, sp = Math.hypot(car.vx, car.vz), fx = Math.cos(car.th), fz = Math.sin(car.th), rx = -fz, rz = fx;
     hu.g.rotation.order = 'YZX'; // cap, puis tangage, puis roulis autour de l'axe de la voiture
     hu.g.position.set(car.x, carY, car.z); hu.g.rotation.set(vu.roll, -car.th, vu.pitch); hu.body.rotation.x = car.steer * Math.min(1, sp / TOP) * 0.07;
     for (let i = 0; i < 4; i++) { const st = hu.roues[i]; st.children[0].rotation.z -= car.vf * dt / rr; if (i > 1) st.rotation.y = -car.steer * 0.45; }
@@ -571,9 +572,9 @@
   }
   // effets de la scène entière, une fois par image : poussière, particules, éclairs, vie du décor
   function fxFrame(dt, now) {
-    const { lm } = VUES[0], car2 = VUES[1] && VUES[1].car; // le tonnerre est celui du joueur 1 (un seul son, comme SON.frame) ; car2 : la voiture du joueur 2
+    const { lm, moi: car } = VUES[0]; // le tonnerre est celui du joueur 1 (un seul son, comme SON.frame)
     if (TH.poussiere) { for (const c of race ? race.cars : [car]) { const q = T.surf[c.idx], v = Math.hypot(c.vx, c.vz), sd = Math.random() < 0.5 ? -0.8 : 0.8, x = c.x - Math.cos(c.th) * 1.6 - Math.sin(c.th) * sd, z = c.z - Math.sin(c.th) * 1.6 + Math.cos(c.th) * sd; // chaque voiture lève un panache derrière elle ; dans le gué, une gerbe d'eau. La poussière part à la vitesse de la voiture puis freine : le panache reste dans le champ de la caméra de poursuite
-        if (v < 8 || c.air || c.out || !(c === car || c === car2 || c.drift || Math.random() < 0.5)) continue;
+        if (v < 8 || c.air || c.out || !(c === car || VUES.some(v => v.car === c) || c.drift || Math.random() < 0.5)) continue;
         if (q.aq) for (let k = 0; k < 3; k++) poussiere(x + jit(1), c.y + 0.15, z + jit(1), c.vx * 0.8 + jit(5), 1.5 + Math.random() * 4, c.vz * 0.8 + jit(5)); // l'eau du gué est trouble : une gerbe de la même teinte, plus haute
         else if (q.roul > 0.25) for (let k = 0; k < 2; k++) poussiere(x + jit(0.6), c.y + 0.15, z + jit(0.6), c.vx * 0.7 + jit(2), 0.3 + Math.random() * 1.2, c.vz * 0.7 + jit(2)); }
       const fr = Math.exp(-3 * dt); for (let i = 0; i < DN; i++) if (dA[i] < 1) { const j = i * 3; dA[i] += dt / 1.4; dV[j] *= fr; dV[j + 2] *= fr; dP[j] += dV[j] * dt; dP[j + 1] += dV[j + 1] * dt; dP[j + 2] += dV[j + 2] * dt; }
@@ -611,7 +612,7 @@
     g.visible = false; g.userData.y = 0; g.userData.feu = b; scene.add(g); return g;
   });
   const J1 = ['J1', TH.hud.y], pil = c => c.k >= 0 ? OPP[c.k] : J1, modele = c => c.k >= 0 ? opps[c.k] : carG;
-  // les voitures humaines, une par joueur : modèle, caisse (roulis), roues, feu stop, flammes de nitro et traînées. Une copie de carG a les mêmes enfants dans le même ordre : caisse, quatre roues, deux flammes.
+  // les voitures humaines, une par place de joueur (vu.hu de la vue de rang n : HUM[n]) : modèle, caisse (roulis), roues, feu stop, flammes de nitro et traînées. Une copie de carG a les mêmes enfants dans le même ordre : caisse, quatre roues, deux flammes.
   // Le joueur 2 a donc toute l'animation du joueur 1, alors que les adversaires gardent leurs roues fixes
   const HUM = [[carG, brakeMat], [opps[3], opps[3].userData.feu]].map(([g, feu]) => ({ g, feu, body: g.children[0], roues: g.children.slice(1, 5), fl: g.children.slice(5, 7), ...trainee() }));
   // feux arrière des adversaires et des camions : deux points rouges hors brouillard (au-delà de 60 m la caisse ne fait plus que quelques pixels et rien ne l'éclaire) ;
@@ -739,7 +740,7 @@
   for (const ev of ['mousedown', 'pointerup', 'touchend']) addEventListener(ev, e => { if (accueil) { if (ev === 'mousedown') return; if (e.isTrusted && !aMenu) hidAuto(); SON.init(); const l = e.clientX < innerWidth / 2 ? 'fr' : 'en'; if (l === langue) accueilAct('ok'); else { aMenu = true; choisitLangue(l); } } else SON.init(); }); // à l'accueil : un clic à gauche choisit le français, à droite l'anglais ; un second clic du même côté part
   const fmt = t => `${t / 60 | 0}'${String(t % 60 | 0).padStart(2, '0')}"${String(t * 100 % 100 | 0).padStart(2, '0')}`;
   addEventListener('mousemove', e => { if (state !== 'race' && state !== 'count') return; const vu = VUES[0]; vu.lookA = clamp(vu.lookA + e.movementX * 0.006, -Math.PI, Math.PI); vu.lookP = clamp(vu.lookP + e.movementY * 0.03, -1, 5); vu.lookT = 2.5; }); // caméra libre à la souris : celle de la première vue (il n'y a qu'une souris)
-  let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, manual = pref('vpr.boite', 'a') === 'm';
+  let state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, manual = pref('vpr.boite', 'a') === 'm';
   // secteurs (entrée et sortie de l'échangeur) et fantôme du record : [x, y, z, cap] à 20 Hz
   // mode : 'solo' (contre-la-montre à tours enchaînés), 'glisse' (deux tours, à points : le score est tenu par sim.js, voir GL), 'course' (3 tours contre les IA de sim.js) 'elim' (course à élimination : le dernier sort à chaque passage de ligne) ou 'tournee' (toutes les cartes à la suite, voir plus bas) ; race = la course en cours, sinon null
   const MODES = ['solo', 'glisse', 'course', 'elim', 'tournee'], MODES2 = ['course', 'elim', 'glisse'], AVEC_IA = ['course', 'elim', 'tournee'], enCourse = () => AVEC_IA.includes(mode);
@@ -780,7 +781,7 @@
   const GLT = 2 * REF * MED[0] * 1.3, GLM = { ville: [20000, 40000, 70000], touge: [20000, 40000, 70000], wangan: [50000, 90000, 140000], paris: [15000, 30000, 55000], canal: [150000, 250000, 350000], stade: [18000, 36000, 60000], givre: [40000, 75000, 120000], terre: [75000, 135000, 200000] }[M.id] || [8, 16, 28].map(k => Math.round(k * T.len / 1000) * 1000);
   const medG = s => GLM.filter(k => s >= k).length; let bestG = store.get('glisse') || 0, glFin = null; // glFin : le résultat de la manche, une fois les deux tours bouclés
   function finGlisse() {
-    const score = Math.round(car.score), valide = tRace <= GLT, rec = valide && score > bestG; glFin = { score, valide, rec }; raceEnd = true; car.manual = false;
+    const car = VUES[0].moi, score = Math.round(car.score), valide = tRace <= GLT, rec = valide && score > bestG; glFin = { score, valide, rec }; raceEnd = true; car.manual = false;
     if (rec && !AUTO) { bestG = score; store.set('glisse', score); }
     SON.stinger(rec);
   }
@@ -811,7 +812,7 @@
     tnFin = null; race = duel() ? newRace(T, 2, [], 0, { humains: 2, delai: GLT }) // Glisse en duel : les deux joueurs seuls en piste, le délai du solo pour chacun
       : enCourse() ? newRace(T, 3, AI_LVL.slice(0, 4 - nj).map(l => l * DIFF[diff].k), DIFF[diff].el, { elim: mode === 'elim', grille: mode === 'tournee' && tournee(tnOu().pts).grille, humains: nj }) : null; raceEnd = false; glFin = null; fsel = 0;
     if (race) race.cars.forEach((c, i) => { c.k = i < nj ? (i ? 3 : -1) : i - nj; c.rl = c.rlT = c.bl = 0; }); // et ses tours : dernier tour compté, son heure, meilleur tour (voir frame) // rang de chaque voiture dans OPP et opps : le joueur 2 prend le dernier modèle, les rivaux les premiers
-    car = race ? race.cars[0] : newCar(T); car.manual = manuel1(); VUES.forEach((vu, i) => { suit(vu, race ? race.cars[i] : car); vu.gear = 0; vu.splitMsg = null; }); for (const hu of HUM) hu.hist.length = 0; // (hors course, un mode sans rivaux lancé à deux : les deux vues suivent la seule voiture)
+    const seule = race ? null : newCar(T); VUES.forEach((vu, i) => { suit(vu, race ? race.cars[i] : seule); vu.gear = 0; vu.splitMsg = null; }); VUES[0].moi.manual = manuel1(); // (hors course, un mode sans rivaux lancé à deux : les deux vues suivent la seule voiture)
     si = 0; cur = []; recG = []; state = 'count'; count = 3; shown = 0; tRace = 0; tTraf = 0; acc = 0; lapN = 1;
   }
   function finish() { // tour bouclé : on l'enregistre, on affiche son temps 4 s, et le chrono repart aussitôt pour un tour lancé
@@ -820,12 +821,12 @@
       best = tRace; bestSpl = cur; ghost = recG; store.set('best', best); store.set('splits', cur); store.set('ghost', ghost); }
     if (fant > 1 && fant < 5 && tRace <= REF * MED[fant - 2]) choixF(fant < 4 ? fant + 1 : 1); // médaille visée battue : au fantôme de la suivante
     SON.stinger(rec);
-    lapN++; car.dist -= N; tRace = 0; si = 0; cur = []; recG = [];
+    lapN++; VUES[0].moi.dist -= N; tRace = 0; si = 0; cur = []; recG = [];
   }
   // menu de pause : [ligne, action]. À deux, ni boîte (chacun a la sienne, sur son périphérique), ni fantôme ; le fantôme seulement en contre-la-montre
-  const pauseItems = () => [['REPRENDRE', () => { state = prev; }], ['RECOMMENCER', start], ...(deux() ? [] : [['BOITE : ' + (manual ? 'MANUELLE' : 'AUTO'), () => { manual = !manual; car.manual = manual; }]]),
+  const pauseItems = () => [['REPRENDRE', () => { state = prev; }], ['RECOMMENCER', start], ...(deux() ? [] : [['BOITE : ' + (manual ? 'MANUELLE' : 'AUTO'), () => { manual = !manual; VUES[0].moi.manual = manual; }]]),
     ['RADIO : ' + SON.nom, zap], ['MUSIQUE : ' + (SON.musicOn ? 'OUI' : 'NON'), () => SON.toggleMusic()], ...(deux() || mode !== 'solo' ? [] : [['FANTOME : ' + nomF(), () => choixF((fant + 1) % FANT.length)]]), ['QUITTER', toMenu]];
-  function toMenu() { clos(); tnFin = null; state = 'title'; ins = false; race = null; raceEnd = false; glFin = null; car = newCar(T); for (const vu of VUES) suit(vu, car); tRace = 0; lapN = 1; for (const hu of HUM) hu.hist.length = 0; msel = 4; }
+  function toMenu() { clos(); tnFin = null; state = 'title'; ins = false; race = null; raceEnd = false; glFin = null; const c = newCar(T); for (const vu of VUES) suit(vu, c); tRace = 0; lapN = 1; msel = 4; }
   // menu principal : 0 carte, 1 joueurs, 2 mode, 3 boîte, 4 démarrer ; d = -1 / +1 (gauche / droite ; Entrée vaut +1)
   let cible = null, cibleT = 0; // carte demandée au menu, pas encore construite
   function changeCarte() {
@@ -845,7 +846,7 @@
     else if (msel === 2) { // les modes sans adversaire, puis la course et l'élimination à chaque difficulté ; à deux : Course, Élimination, Glisse en duel
       const O = (deux() ? MODES2 : MODES).flatMap(m => AVEC_IA.includes(m) ? DIFF.map((_, i) => [m, i]) : [[m, diff]]);
       [mode, diff] = O[(O.findIndex(([m, i]) => m === mode && i === diff) + d + O.length) % O.length]; setPref(cle('mode'), JSON.stringify(mode)); setPref(cle('diff'), diff); }
-    else if (msel === 3) { manual = !manual; car.manual = manual; setPref('vpr.boite', manual ? 'm' : 'a'); }
+    else if (msel === 3) { manual = !manual; VUES[0].moi.manual = manual; setPref('vpr.boite', manual ? 'm' : 'a'); }
     else start();
   }
   // Périphériques de conduite, chacun désigné par un nom : 'clavier' (entier, solo seulement), 'clavierG', 'clavierD', 'manette' + n (API Gamepad), 'joycon' + n (WebHID, n = 0 ou 1).
@@ -1101,7 +1102,7 @@
           txt(dans ? fmt(c.fin) : 'HORS DELAI', x, 142, 8, dans ? '#e8e8e4' : RD, 'center'); txt('GLISSES ' + c.nDrift + '  MURS ' + c.nWall, x, 156, 8, '#e8e8e4', 'center'); });
         txt('DELAI ' + fmt(race.delai), cx, 174, 8, C, 'center');
       } else {
-        txt('ARRIVEE', cx, 48, 16, Y, 'center', 1); txt(VUES.map(v => { const c = race.cars[v.n]; return nom(c) + ' ' + ord(c.pos); }).join('   '), cx, 70, 8, C, 'center');
+        txt('ARRIVEE', cx, 48, 16, Y, 'center', 1); txt(VUES.map(v => { const c = v.moi; return nom(c) + ' ' + ord(c.pos); }).join('   '), cx, 70, 8, C, 'center');
         txt('TEMPS', cx - 4, 88, 8, C, 'right'); txt('ECART', cx + 62, 88, 8, C, 'right'); txt('MEIL. TOUR', cx + 158, 88, 8, C, 'right');
         o.forEach((c, i) => { const y = 102 + i * 15, col = c.k < 0 || c.k === 3 ? pil(c)[1] : '#e8e8e4'; txt((i + 1) + '. ' + nom(c), cx - 158, y, 8, pil(c)[1]); // les deux joueurs dans leur couleur sur toute la ligne
           txt(c.fin ? fmt(c.fin) : c.out ? 'SORT A ' + fmt(c.out) : 'EN PISTE', cx + (c.fin ? -4 : 62), y, 8, col, 'right'); if (i && c.fin) txt('+' + (c.fin - t1).toFixed(2), cx + 62, y, 8, col, 'right'); txt(c.bl ? fmt(c.bl) : '--', cx + 158, y, 8, col, 'right'); });
@@ -1112,7 +1113,7 @@
     }
   }
   function drawHUD(vu, dt, sp, warn) { // le HUD d'une vue : sa voiture, sa caméra (étiquettes des adversaires), ses bandeaux, sur son canvas
-    const { car, cam, cth, rpm, load, peak, result, splitMsg, hudT, w: HW } = vu, seul = !COM, fini = raceEnd || vu.fini, manu = vu.n ? car.manual : manual, moi = race ? race.cars[vu.n] : car; hg = vu.hg; // fini : ce joueur est arrivé (à deux, l'autre peut rouler encore) ; manu : sa boîte ; moi : sa voiture (car est celle que la vue regarde : une autre une fois éliminé, à deux)
+    const { car, cam, cth, rpm, load, peak, result, splitMsg, hudT, w: HW } = vu, seul = !COM, fini = raceEnd || vu.fini, manu = vu.n ? car.manual : manual, moi = vu.moi; hg = vu.hg; // fini : ce joueur est arrivé (à deux, l'autre peut rouler encore) ; manu : sa boîte ; moi : sa voiture (car est celle que la vue regarde : une autre une fois éliminé, à deux)
     hg.clearRect(0, 0, HW, HH);
     const cx = HW / 2, blink = (performance.now() / 160 | 0) % 3 > 0;
     if (state === 'title') { if (seul) ecrans(HW); hudT.needsUpdate = true; return; } // accueil et menu : dans le HUD de la vue en solo, sur la couche commune à deux
@@ -1260,7 +1261,7 @@
       const k = entree(vu.periph); vu.inp = state === 'race' ? (AUTO || raceEnd || vu.fini ? autopilot(vu.car, T, 1, M.trafic && !race ? trafic(T, tTraf) : []) : k) : { steer: 0, gas: 0, brake: 0, hand: false };
       vu.gas = state === 'count' ? k.gas : vu.inp.gas; vu.hit = vu.bump = vu.land = 0;
     }
-    const inp = VUES[0].inp;
+    const J = VUES[0], inp = J.inp, car = J.moi; // le joueur 1 : sa hauteur et sa lumière lissées servent aux effets de la scène ; sa voiture est celle du jeu hors course
     for (acc += dt; acc >= H; acc -= H) {
       // en course, sim.js fait avancer tout le monde, avec une entrée par humain ; entrée nulle : l'IA conduit la voiture de ce joueur (?auto, ou une fois arrivé)
       if (race && state === 'race') { for (let i = 0; i < race.h; i++) INS[i] = AUTO || VUES[i].fini ? null : VUES[i].inp; stepRace(race, INS, H); } else { step(car, inp, T, H); if (M.trafic && state === 'race') hitTrafic(car, T, tTraf); }
@@ -1268,15 +1269,14 @@
       if (state === 'race' && !raceEnd) {
         tRace += H; tTraf += H;
         if (race) { let tous = true; // chaque joueur a sa fin (élimination : sortir, c'est avoir fini) ; la course n'est finie pour le jeu que quand tous les joueurs le sont
-          for (const vu of VUES) { const c = race.cars[vu.n]; if (!vu.fini && (c.fin || c.out || race.delai && race.t > race.delai)) { vu.fini = true; if (!c.fin) c.pts = 0; c.manual = false; SON.arrivee(c.pos); } tous = tous && vu.fini; } // Glisse en duel : le délai passé, un joueur encore en piste a fini, score nul (sinon une voiture à l'arrêt retiendrait l'autre joueur sans fin)
+          for (const vu of VUES) { const c = vu.moi; if (!vu.fini && (c.fin || c.out || race.delai && race.t > race.delai)) { vu.fini = true; if (!c.fin) c.pts = 0; c.manual = false; SON.arrivee(c.pos); } tous = tous && vu.fini; } // Glisse en duel : le délai passé, un joueur encore en piste a fini, score nul (sinon une voiture à l'arrêt retiendrait l'autre joueur sans fin)
           if (tous) { raceEnd = true; tRace = car.fin || car.out; tFin = performance.now(); } }
         else if (mode === 'glisse') { if (car.dist >= 2 * N) finGlisse(); }
         else if (car.dist >= N) finish();
       }
     }
-    if (COM && race && race.elim && state === 'race') for (const vu of VUES) { const moi = race.cars[vu.n]; // à deux, joueur éliminé depuis 3 s : sa vue passe sur le meneur, et le suit s'il change
+    if (COM && race && race.elim && state === 'race') for (const vu of VUES) { const moi = vu.moi; // à deux, joueur éliminé depuis 3 s : sa vue passe sur le meneur, et le suit s'il change
       if (moi.out && race.t - moi.out > 3) { const m = race.cars.find(c => c.pos === 1); if (vu.car !== m) { vu.car = m; vu.cth = m.th; vu.carY = m.y; vu.spec = true; } } }
-    const J = VUES[0]; // la voiture du joueur est celle de la première vue : sa hauteur et sa lumière lissées servent aux effets de la scène
     const beat = SON.beat, pulse = SON.pulse; // battement calé sur le kick
     // état lissé de chaque vue, avant de toucher à la scène : secousse, régime affiché, hauteur et assiette de la voiture suivie, cap de la caméra, fondus de nitro et de tunnel
     for (const vu of VUES) { const c = vu.car, [tg, rl] = assiette(c);
@@ -1296,10 +1296,10 @@
       const [t, ro] = assiette(c); g.userData.y += (c.y - g.userData.y) * Math.min(1, dt * 18);
       g.rotation.order = 'YZX'; g.position.set(c.x, g.userData.y, c.z); g.rotation.set(ro, -c.th, t);
     });
-    HUM.forEach((hu, i) => { const vu = VUES[i], on = !!vu && !vu.spec && (!i || vu.car !== car); hu.tr.visible = on; if (!i) carG.visible = !vu.spec; if (on) fxVoiture(hu, vu, dt); }); // (une vue passée sur le meneur ne pose plus la voiture de son joueur : celle du joueur 2 reste un adversaire rangé, celle du joueur 1 est cachée) // chaque voiture humaine, avec l'état lissé de sa vue (le modèle du joueur 2 vient d'être posé comme un adversaire : on le repose). Deux vues sur la même voiture, au menu : une seule fois
+    for (const vu of VUES) { const on = !vu.spec && (!vu.n || vu.car !== car); vu.hu.tr.visible = on; if (!vu.n) carG.visible = !vu.spec; if (on) fxVoiture(vu, dt); } // (une vue passée sur le meneur ne pose plus la voiture de son joueur : celle du joueur 2 reste un adversaire rangé, celle du joueur 1 est cachée) // chaque voiture humaine, avec l'état lissé de sa vue (le modèle du joueur 2 vient d'être posé comme un adversaire : on le repose). Deux vues sur la même voiture, au menu : une seule fois
     if (TH.alarme) { carMat.emissive.setRGB(0.3 * lm, 0.01 * lm, 0.03 * lm); for (const m of tunMats) m.color.setScalar((m.userData.amb || 1) * (0.75 + 0.5 * pulse)); }
     if (state === 'race' && race) for (let i = 0; i < race.cars.length; i++) { // course : le tour bouclé par chaque voiture, et son meilleur (tableau d'arrivée) ; pour un joueur, même bandeau « tour + temps » qu'en contre-la-montre, avec la place (le dernier tour est couvert par le classement d'arrivée)
-      const c = race.cars[i], vu = VUES[i], ln = Math.floor(c.dist / N); if (c.out || ln <= c.rl || ln > race.laps) continue;
+      const c = race.cars[i], vu = VUES.find(v => v.moi === c), ln = Math.floor(c.dist / N); if (c.out || ln <= c.rl || ln > race.laps) continue;
       const lt = (c.fin || race.t) - c.rlT; c.bl = c.bl ? Math.min(c.bl, lt) : lt; c.rl = ln; c.rlT = race.t;
       if (vu && ln < race.laps) vu.result = { n: ln, t: lt, pos: c.pos, of: vivantes().length, T: 5, b: bilan(vu) };
     }
@@ -1422,6 +1422,6 @@
     VUES.forEach(rendVue); post.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
   };
   try { if (sessionStorage.getItem('vpr.go')) { sessionStorage.removeItem('vpr.go'); if (mode === 'tournee') start(); } } catch (e) { } // arrivée sur la carte d'une manche de Tournée : la course part tout de suite
-  window.__g = { frame, start, fin, libere, joueurs, places: PLACES, get ins() { return ins; }, get com() { return COM; }, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return tnFin; }, get defi() { return { DEFI, defiErr, dernier }; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam: VUES[0].cam, vues: VUES, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return car; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
+  window.__g = { frame, start, fin, libere, joueurs, places: PLACES, get ins() { return ins; }, get com() { return COM; }, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return tnFin; }, get defi() { return { DEFI, defiErr, dernier }; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam: VUES[0].cam, vues: VUES, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return VUES[0].moi; }, get state() { return state; }, get t() { return tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
 })();
 if (/[?&]perf\b/.test(location.search)) import('./outils/perf.js').then(m => m.suite()); // banc de performance : voir outils/perf.js
