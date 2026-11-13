@@ -736,7 +736,7 @@
     else if (a === 'ok') { tFlash = performance.now(); SON.stinger(true); entrer(); }
   };
   try { const m = sessionStorage.getItem('vpr.menu'); if (m) { msel = 0; sessionStorage.removeItem('vpr.menu'); entrer(); SON.reprendre(JSON.parse(m)); } } catch (e) { } // la musique de menu reprend où elle en était // on vient de changer de carte : on reste sur cette ligne, sans repasser par l'accueil (le navigateur garde en général le droit au son d'une page à l'autre ; sinon il revient à la touche suivante)
-  for (const ev of ['mousedown', 'pointerup', 'touchend']) addEventListener(ev, e => { if (accueil) { if (ev === 'mousedown') return; if (e.isTrusted && !aMenu) hidAuto(); SON.init(); const l = e.clientX < innerWidth / 2 ? 'fr' : 'en'; if (l === langue) accueilAct('ok'); else { aMenu = true; choisitLangue(l); } } else SON.init(); }); // à l'accueil : un clic à gauche choisit le français, à droite l'anglais ; un second clic du même côté part
+  for (const ev of ['mousedown', 'pointerup', 'touchend']) addEventListener(ev, e => { if (accueil) { if (ev === 'mousedown') return; if (e.isTrusted && !aMenu) PER.hidAuto(); SON.init(); const l = e.clientX < innerWidth / 2 ? 'fr' : 'en'; if (l === langue) accueilAct('ok'); else { aMenu = true; choisitLangue(l); } } else SON.init(); }); // à l'accueil : un clic à gauche choisit le français, à droite l'anglais ; un second clic du même côté part
   const fmt = t => `${t / 60 | 0}'${String(t % 60 | 0).padStart(2, '0')}"${String(t * 100 % 100 | 0).padStart(2, '0')}`;
   addEventListener('mousemove', e => { if (state !== 'race' && state !== 'count') return; const vu = VUES[0]; vu.lookA = clamp(vu.lookA + e.movementX * 0.006, -Math.PI, Math.PI); vu.lookP = clamp(vu.lookP + e.movementY * 0.03, -1, 5); vu.lookT = 2.5; }); // caméra libre à la souris : celle de la première vue (il n'y a qu'une souris)
   let car = newCar(T), state = 'title', tRace = 0, best = store.get('best') || 0, count = 0, shown = 0, goT = 0, acc = 0, last = 0, manual = pref('vpr.boite', 'a') === 'm';
@@ -753,7 +753,7 @@
   const cle = k => 'vpr7.' + k + (deux() ? '2' : ''), duel = () => deux() && mode === 'glisse';
   const vivantes = () => race.cars.filter(c => !c.out), partie = c => c.out && race.t - c.out > 5; // élimination : voitures encore en course ; voiture sortie depuis 5 s, qu'on ne montre plus
   let si = 0, cur = [], bestSpl = store.get('splits'), ghost = store.get('ghost'), recG = [], lapN = 1, prev = 'race', psel = 0;
-  const keys = {}, H = 1 / 120, INS = []; // INS : l'entrée de chaque humain pour stepRace, réécrite à chaque pas
+  const H = 1 / 120, INS = []; // INS : l'entrée de chaque humain pour stepRace, réécrite à chaque pas
   let diff = clamp(+pref('vpr7.diff', 1) | 0, 0, DIFF.length - 1); // difficulté du mode course (DIFF de sim.js)
   // médailles du contre-la-montre : le tour lancé du pilote automatique sert de référence ; M.med = [bronze, argent, or] en multiples de ce temps
   const REFT = tourRef(T, H), REF = REFT.t; // (il part avec une jauge de nitro pleine, qu'il dépense en ligne droite : ce qu'un bon tour en gagne ; sa trace sert aux fantômes bronze et argent)
@@ -848,15 +848,6 @@
     else if (msel === 3) { manual = !manual; car.manual = manual; setPref('vpr.boite', manual ? 'm' : 'a'); }
     else start();
   }
-  // Périphériques de conduite, chacun désigné par un nom : 'clavier' (entier, solo seulement), 'clavierG', 'clavierD', 'manette' + n (API Gamepad), 'joycon' + n (WebHID, n = 0 ou 1).
-  // Touches de chaque clavier en positions physiques (e.code), dans l'ordre gauche, droite, gaz, frein, frein à main, nitro. Clavier droit : Maj droite = frein à main,
-  // touche à gauche de Maj droite (Slash : « ! » en AZERTY, « / » en QWERTY) ou Entrée du pavé = nitro. Pas Ctrl droite (Ctrl + flèches change de bureau sous macOS) ni Entrée (rejouée par les manettes).
-  const CLAV = {
-    clavier: [['ArrowLeft', 'KeyA'], ['ArrowRight', 'KeyD'], ['ArrowUp', 'KeyW'], ['ArrowDown', 'KeyS'], ['Space'], ['KeyX', 'KeyN']],
-    clavierG: [['KeyA'], ['KeyD'], ['KeyW'], ['KeyS'], ['Space'], ['KeyX'], ['KeyQ', 'KeyE']], // en plus : les rapports, pour qu'ils comptent comme un appui de ce clavier
-    clavierD: [['ArrowLeft'], ['ArrowRight'], ['ArrowUp'], ['ArrowDown'], ['ShiftRight'], ['Slash', 'NumpadEnter']],
-  };
-  const reel = {}, vus = []; // touches vraiment enfoncées (keys reçoit aussi celles que la manette rejoue) · appuis du clavier depuis la dernière image
   // boîte et rapports, attribués au périphérique qui a appuyé (d : +1, -1, 0 = bascule manuelle / automatique) : ils vont à la voiture de la vue inscrite sous ce périphérique, sinon à celle du joueur 1
   // (en solo, tout périphérique conduit la seule voiture). Le choix du joueur 1 est la préférence gardée (manual) ; celui du joueur 2 ne vit que sur sa voiture, automatique à chaque départ.
   const manuel1 = () => manual && !(deux() && PLACES[0] === 'clavierD'); // la boîte du joueur 1 : le clavier des flèches n'a pas de touches de rapport, il roule en automatique (la préférence, elle, reste)
@@ -866,13 +857,16 @@
     if (d) { if (m) c.gear = clamp(c.gear + d, 0, CARD.ratios.length - 1); return; }
     c.manual = !m; c.gear = vu.gear; if (!vu.n) { manual = !m; setPref('vpr.boite', manual ? 'm' : 'a'); }
   };
-  const onKey = e => {
-    keys[e.code] = 1; SON.init(); // le contexte audio ne peut démarrer qu'après un geste
-    if (!e.periph) { reel[e.code] = 1; const id = ['clavierG', 'clavierD'].find(c => CLAV[c].flat().includes(e.code)); if (id && !e.repeat) vus.push({ id, t: e.code }); }
+  const onKey = e => { // clavier : e.code = position physique (KeyW/KeyA sont Z/Q sur un clavier AZERTY)
+    PER.clavier(e); SON.init(); // le contexte audio ne peut démarrer qu'après un geste
     if (/^Arrow|Space|Slash/.test(e.code)) e.preventDefault(); // Slash : recherche rapide de Firefox
     if (e.repeat) return;
-    if (e.isTrusted && e.code === 'KeyJ') hidDemande(); // avant tout le reste : marche aussi depuis l'accueil
-    else if (e.isTrusted && accueil && !aMenu) hidAuto();
+    if (e.isTrusted && e.code === 'KeyJ') PER.hidDemande(); // avant tout le reste : marche aussi depuis l'accueil
+    else if (e.isTrusted && accueil && !aMenu) PER.hidAuto();
+    commande(e);
+  };
+  const commande = e => { // une commande de menu, d'une touche du clavier ou d'une manette (poll : { code, key, periph })
+    SON.init();
     if (accueil) { accueilAct(/^(ArrowUp|ArrowDown|KeyW|KeyS)$/.test(e.code) ? 'v' : /^(ArrowLeft|ArrowRight|KeyA|KeyD)$/.test(e.code) ? 'h' : e.code === 'Enter' || e.code === 'Space' ? 'ok' : ''); return; }
     const key = (e.key || '').toLowerCase(); // lettre réellement tapée, pour les commandes nommées par une lettre (le pilotage, lui, reste en positions physiques)
     if (ins) { // inscription : les places se prennent par les appuis (voir inscription) ; ici le clavier seul : Échap libère la dernière place tenue par un clavier, ou referme l'écran, Entrée part quand les deux places sont prises
@@ -913,92 +907,24 @@
     if (key === 'm') SON.toggleMusic();
   };
   addEventListener('keydown', onKey);
-  addEventListener('keyup', e => { keys[e.code] = reel[e.code] = 0; });
-  addEventListener('blur', () => { for (const k in keys) keys[k] = reel[k] = 0; }); // sinon une touche reste enfoncée après Alt-Tab
-  // e.code = position physique : KeyW/KeyA sont Z/Q sur un clavier AZERTY
-  // manette (disposition « standard » du navigateur, noms des boutons d'une manette de Switch) : stick ou croix = volant et menus, ZR ou B = gaz, ZL ou Y = frein,
-  // A = glisse, X = nitro, clic du stick = radio, L / R = rapports, + = pause, B = valider. Les boutons rejouent les touches du clavier, pour ne pas dédoubler les menus.
-  const PADK = { 12: 'ArrowUp', 13: 'ArrowDown', 14: 'ArrowLeft', 15: 'ArrowRight', 0: 'Enter', 9: 'Escape', 8: 'g', 10: 'c', 11: 'c', 4: 'KeyQ', 5: 'KeyE' }, padWas = {};
-  let pads = [], pad = null, retenu = '', appuis = [], ins = false, fsel = 0, tFin = 0; const padRepos = {}, padAvant = {}, PLACES = window.__places || (window.__places = ['', '']); // en solo, manette retenue = la dernière qui a eu une entrée : la première de la liste peut être un autre périphérique (volant, casque, second Joy-Con)
-  const padId = p => p.hid || 'manette' + p.index, branche = id => id in CLAV || pads.some(p => padId(p) === id); // branche : à interroger après padFrame, pour savoir qu'un périphérique inscrit est parti
+  let ins = false, fsel = 0, tFin = 0;
+  const PER = Peripheriques({ nav: navigator, win: window, signal: arret.signal, places: window.__places || (window.__places = ['', '']), dit: s => padDit(s) }), PLACES = PER.places, keys = PER.keys, branche = PER.branche; // PLACES : gardé sur window, il survit au changement de carte, comme le renderer
   const padNote = document.body.appendChild(document.createElement('div')); padNote.setAttribute('role', 'status');
   padNote.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);padding:8px 12px;background:#0c0c10;color:#ffd23a;font:12px "Press Start 2P",monospace;border:2px solid #ffd23a;pointer-events:none;display:none;z-index:9';
   let padNoteT = 0; const padDit = s => { padNote.textContent = tr(s); padNote.style.display = ''; clearTimeout(padNoteT); padNoteT = setTimeout(() => { padNote.style.display = 'none'; }, 3000); };
-  const parti = id => { delete padRepos[id]; delete padAvant[id]; if (id === retenu) { retenu = ''; padDit('MANETTE DÉCONNECTÉE'); } };
-  addEventListener('gamepaddisconnected', e => parti(padId(e.gamepad)));
-  // Joy-Con lus en direct (WebHID), deux au plus : sous Windows, Chrome reçoit leurs rapports mais ne les montre pas à l'API Gamepad (constaté sur Chrome 156, Joy-Con (R) en Bluetooth).
-  // Rapport 0x3f, Joy-Con seul tenu à l'horizontale : octet 0 = boutons (1 gauche, 2 haut, 4 bas, 8 droite, 16 SL, 32 SR), octet 1 = − ou + (1, 2), octet 2 = stick en 8 directions (0 = haut, sens horaire, 8 et plus = repos).
-  // Joy-Con (L) : même table. Déduit, pas essayé : ce rapport décrit le Joy-Con couché (le stick du (R) y arrive déjà tourné), donc un même bit devrait valoir une même position sous le pouce ; si le (L) arrive inversé, lui donner sa table dans hidLire selon dev.productId.
-  // Présentés comme des manettes « standard », pour que padFrame les traite comme les autres. shortcut: stick en tout-ou-rien, passer au rapport 0x30 (stick 12 bits + étalonnage) pour un volant progressif.
-  const hids = [null, null];
-  const hidLire = (e, p) => {
-    if (e.reportId !== 0x3f) return; const d = new Uint8Array(e.data.buffer, e.data.byteOffset), h = d[2], set = (i, v) => { p.buttons[i].pressed = !!v; p.buttons[i].value = v ? 1 : 0; };
-    [8, 5, 4, 0, 3, 1].forEach((b, i) => set(b, d[0] & 1 << i)); set(9, d[1] & 3); set(10, d[1] & 48); // (radio = Home ou Capture : bits 16 et 32, d'après le format du rapport, non essayé ; pas le clic du stick, que le pouce enfonce en serrant SL pour la nitro) · Joy-Con (R) couché, SL / SR vers le haut : bits gauche et haut (constatés par l'auteur), bas et droite (déduits), SL, SR -> boîte manuelle / automatique, rapport +, rapport -, gaz et valider, nitro, glisse (choix de l'auteur, qui ne freine pas à la manette)
-    p.axes = [h > 0 && h < 4 ? 1 : h > 4 && h < 8 ? -1 : 0, h === 7 || h < 2 ? -1 : h > 2 && h < 6 ? 1 : 0];
-  };
-  const hidOuvre = async d => {
-    const pris = () => hids.some(p => p && p.dev === d);
-    if (!d || pris() || (d.productId !== 0x2006 && d.productId !== 0x2007)) return; // Joy-Con gauche / droit
-    try { if (!d.opened) await d.open(); } catch (e) { return; }
-    const n = hids.indexOf(null); if (n < 0 || pris()) return; // revérifié après l'attente : deux recherches peuvent ouvrir le même Joy-Con en même temps
-    const p = hids[n] = { hid: 'joycon' + n, dev: d, connected: true, axes: [0, 0], buttons: Array.from({ length: 11 }, () => ({ pressed: false, value: 0 })) }; d.oninputreport = e => hidLire(e, p);
-  };
-  const hidDemande = () => navigator.hid && navigator.hid.requestDevice({ filters: [{ vendorId: 0x057e }] }).then(l => l.forEach(hidOuvre)).catch(() => { }); // touche J : fenêtre du navigateur pour autoriser le Joy-Con (une fois)
-  // Joy-Con par défaut : au premier geste (l'accueil), la fenêtre d'autorisation s'ouvre d'elle-même si aucun Joy-Con n'est encore autorisé ; ensuite Chrome s'en souvient et cherche() les ouvre sans fenêtre
-  const hidAuto = () => navigator.hid && navigator.hid.getDevices().then(l => { if (!l.some(d => d.productId === 0x2006 || d.productId === 0x2007)) hidDemande(); }).catch(() => { });
-  if (navigator.hid) {
-    const cherche = () => navigator.hid.getDevices().then(l => l.forEach(hidOuvre)).catch(() => { }); // déjà autorisé : pas de fenêtre
-    cherche(); navigator.hid.addEventListener('connect', cherche, { signal: arret.signal });
-    navigator.hid.addEventListener('disconnect', e => { const n = hids.findIndex(p => p && p.dev === e.device); if (n >= 0) { const id = hids[n].hid; hids[n] = null; parti(id); } }, { signal: arret.signal });
-  }
-  function padFrame() {
-    pads = [...(navigator.getGamepads ? navigator.getGamepads() : [])].filter(p => p && p.connected).concat(hids.filter(p => p));
-    // appuis de l'image, tous périphériques : { id, t }, t = code de touche ou numéro de bouton. C'est « qui vient d'appuyer » pour l'inscription, et les rapports d'une manette qui n'est pas la retenue.
-    appuis.length = 0; for (const a of vus) appuis.push(a); vus.length = 0; // les mêmes tableaux d'une image à l'autre, comme l'état des boutons : rien d'alloué sans appui
-    for (const p of pads) { const id = padId(p), w = padAvant[id] || (padAvant[id] = []); p.buttons.forEach((b, i) => { if (b.pressed && !w[i]) appuis.push({ id, t: i }); w[i] = b.pressed; }); }
-    // « entrée » = un bouton enfoncé ou un axe écarté de sa position de repos (une gâchette ou une croix vue comme axe ne repose pas à 0)
-    const actif = p => { const r = padRepos[padId(p)] = padRepos[padId(p)] || [...p.axes]; return p.buttons.some(b => b.pressed) || p.axes.some((x, i) => Math.abs(x - r[i]) > 0.5); };
-    pad = pads.find(p => padId(p) === retenu) || null;
-    if (!pad || !actif(pad)) { const n = pads.find(actif); if (n && n !== pad) { pad = n; retenu = padId(n); if (!deux()) padDit('MANETTE CONNECTÉE'); } } // (à deux, la manette retenue change dès que l'autre joueur appuie : pas d'annonce)
-    const on = {}, ax = pad ? pad.axes : [0, 0]; // sans manette on passe quand même dans la boucle, pour relâcher les touches d'une manette qui vient de partir
-    if (pad) pad.buttons.forEach((b, i) => { if (b.pressed && PADK[i]) on[PADK[i]] = 1; });
-    if (accueil && pad && pad.buttons.some(b => b.pressed)) on.Enter = 1; // à l'accueil, n'importe quel bouton vaut une touche
-    if (accueil || state === 'title' || state === 'pause' || raceEnd) { if (ax[1] < -0.6) on.ArrowUp = 1; if (ax[1] > 0.6) on.ArrowDown = 1; if (ax[0] < -0.6) on.ArrowLeft = 1; if (ax[0] > 0.6) on.ArrowRight = 1; } // en course le stick est lu en analogique, pas en flèches
-    for (const k of new Set([...Object.keys(on), ...Object.keys(padWas)])) {
-      if (on[k] && !padWas[k]) onKey({ code: k.length > 1 ? k : '', key: k.length > 1 ? '' : k, periph: retenu, preventDefault() { } });
-      else if (!on[k] && padWas[k]) keys[k] = 0;
-      if (on[k]) padWas[k] = 1; else delete padWas[k];
-    }
-  }
   // Écran partagé. PLACES[i] = périphérique du joueur i + 1, gardé pour la session (sur window : il survit au changement de carte, comme le renderer) et recopié dans vu.periph.
   // ins : l'écran d'inscription est ouvert, par-dessus le menu (avant un départ) ou par-dessus une course mise en pause (un périphérique inscrit a disparu). Il est dessiné par ecrans(), sur la couche commune.
   // Chaque périphérique qui appuie prend la première place libre ; + sur une manette libère sa place (sans place : referme l'écran) ; les deux places prises, B ou Entrée fait partir, ou rend la main au menu de pause.
   const nomP = id => id === 'clavierG' ? 'CLAVIER ZQSD' : id === 'clavierD' ? 'CLAVIER FLECHES' : (id[0] === 'j' ? 'JOY-CON ' : 'MANETTE ') + (+id.replace(/\D/g, '') + 1);
-  const inscrit = () => { ins = true; vus.length = appuis.length = 0; if (state !== 'title' && state !== 'pause') { prev = state; state = 'pause'; psel = 0; } }; // (les appuis de l'image qui ouvre l'écran ne prennent pas de place)
+  const inscrit = () => { ins = true; PER.oublie(); if (state !== 'title' && state !== 'pause') { prev = state; state = 'pause'; psel = 0; } }; // (les appuis de l'image qui ouvre l'écran ne prennent pas de place)
   const inscritFin = () => { ins = false; if (state === 'title') start(); };
   function inscription() {
-    for (const { id, t } of appuis) { const n = PLACES.indexOf(id), bouton = !(id in CLAV), l = PLACES.indexOf('');
-      if (bouton && t === 9) { if (n < 0) { ins = false; if (state !== 'title') toMenu(); return; } PLACES[n] = ''; }
-      else if (n < 0) { if (l >= 0) PLACES[l] = id; }
-      else if (bouton && t === 0 && l < 0) { inscritFin(); return; } }
-    VUES.forEach((vu, i) => { if (PLACES[i] && !branche(PLACES[i])) PLACES[i] = ''; vu.periph = PLACES[i]; }); // une manette partie rend sa place
+    const r = PER.inscrire(); if (r === 'ferme') { ins = false; if (state !== 'title') toMenu(); } else if (r === 'part') inscritFin(); else VUES.forEach((vu, i) => { vu.periph = PLACES[i]; });
   }
-  // À deux, hors inscription : les boutons d'une manette inscrite qui n'est pas la retenue sont rejoués une fois comme des touches (rapports, boîte, pause, radio, menus), à son nom : l'un ou l'autre met en pause et navigue.
-  // Puis la déconnexion : un périphérique inscrit qui n'est plus là en course met en pause et rouvre l'inscription pour sa place.
+  // À deux, hors inscription : un périphérique inscrit qui n'est plus là en course met en pause et rouvre l'inscription pour sa place.
   function manettes2() {
-    for (const { id, t } of appuis) if (id !== retenu && PADK[t] && PLACES.includes(id)) { const k = PADK[t]; onKey({ code: k.length > 1 ? k : '', key: k.length > 1 ? '' : k, periph: id, preventDefault() { } }); keys[k] = 0; } // (pas de touche tenue : rien ne la relâcherait)
     if (state !== 'title' && !AUTO && !ins) VUES.forEach((vu, i) => { if (!branche(vu.periph)) { PLACES[i] = vu.periph = ''; inscrit(); padDit('PÉRIPHÉRIQUE DÉCONNECTÉ : JOUEUR ' + (i + 1)); } });
   }
-  // Entrée de conduite d'un périphérique, et de lui seul. Sans nom : le solo, tout le clavier et la manette retenue, comme avant (sa croix passe par les touches rejouées).
-  // Un clavier nommé ne lit que les touches vraiment enfoncées et une manette nommée lit sa croix elle-même : la manette de l'un ne doit pas conduire le clavier de l'autre.
-  const entree = id => {
-    const p = id ? pads.find(p => padId(p) === id) : pad, K = CLAV[id || 'clavier'], t = id ? reel : keys;
-    const k = i => K && K[i].some(c => t[c]) ? 1 : 0, b = i => p && p.buttons[i] ? p.buttons[i].value : 0, c = i => id ? b(i) : 0, sx = p && Math.abs(p.axes[0]) > 0.15 ? p.axes[0] : 0;
-    return {
-      steer: clamp(k(1) - k(0) + c(15) - c(14) + sx, -1, 1),
-      gas: k(2) || b(7) > 0.1 || b(0) || c(12) ? 1 : 0, brake: k(3) || b(6) > 0.1 || b(2) || c(13) ? 1 : 0, hand: !!(k(4) || b(1)), nitro: !!(k(5) || b(3)),
-    };
-  };
 
   // ---------- HUD pixel (canvas 2D à la résolution du jeu) ----------
   const PS = '"Press Start 2P", monospace', JP = 'DotGothic16, sans-serif', HU = TH.hud, Y = HU.y, C = HU.c, RD = HU.r; // couleurs et style d'interface de la carte
@@ -1255,9 +1181,9 @@
     }
     if (goT > 0) goT -= dt;
     FEUX.forEach((m, i) => m.color.setHex(goT > 0 ? 0x30ff60 : state === 'count' && shown && shown <= 3 - i ? 0xff2030 : 0x3a0810)); // décompte 3, 2, 1 : un feu de plus à chaque chiffre ; vert au GO
-    padFrame(); if (ins) inscription(); else if (deux()) manettes2();
+    for (const c of PER.poll({ menu: accueil || state === 'title' || state === 'pause' || raceEnd, accueil, deux: deux() })) commande(c); if (ins) inscription(); else if (deux()) manettes2();
     for (const vu of VUES) { // l'entrée de chaque joueur, lue sur son périphérique ; le pilote automatique conduit en ?auto et une fois le joueur arrivé (son entrée ne sert alors qu'aux feux stop et au son)
-      const k = entree(vu.periph); vu.inp = state === 'race' ? (AUTO || raceEnd || vu.fini ? autopilot(vu.car, T, 1, M.trafic && !race ? trafic(T, tTraf) : []) : k) : { steer: 0, gas: 0, brake: 0, hand: false };
+      const k = PER.entree(vu.periph); vu.inp = state === 'race' ? (AUTO || raceEnd || vu.fini ? autopilot(vu.car, T, 1, M.trafic && !race ? trafic(T, tTraf) : []) : k) : { steer: 0, gas: 0, brake: 0, hand: false };
       vu.gas = state === 'count' ? k.gas : vu.inp.gas; vu.hit = vu.bump = vu.land = 0;
     }
     const inp = VUES[0].inp;
