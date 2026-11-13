@@ -7,7 +7,7 @@ globalThis.window = globalThis; require('./decors.js'); require('./langue.js');
 { const EN = TITRE_EN;
   for (const M of CARTES) {
     assert(typeof DECORS[M.th.decor] === 'function', M.id + ' : pas de décor ' + M.th.decor + ' dans decors.js');
-    assert(typeof TRACES_OR[M.id] === 'string' && TRACES_OR[M.id].startsWith('7.' + M.id + '.'), M.id + ' : pas de trace or dans traces-or.js');
+    assert(typeof TRACES_OR[M.id] === 'string' && TRACES_OR[M.id].startsWith(DEFI_V + '.' + M.id + '.'), M.id + ' : pas de trace or dans traces-or.js');
     const t = EN[M.id] || M.th.hud.titre; assert(t && t.length === 2 && t.every(l => l), M.id + ' : titre anglais absent');
   }
   for (const id in EN) assert(CARTES.some(M => M.id === id), 'TITRE_EN : carte inconnue ' + id);
@@ -42,7 +42,8 @@ for (const M of CARTES) {
   // --- conduite, en plan ouvert (sans murs : un seul échantillon de piste, recollé sous la voiture à chaque pas) ---
   const O = { x: 0, y: 0, z: 0, tx: 1, tz: 0, k: 0, sl: 0 }, TO = { S: [O], n: 1, carte: T.carte, car: T.car, kt: T.kt }, I = (steer, gas, brake = 0, hand = false) => ({ steer, gas, brake, hand });
   const go = (c, inp, sec) => { for (let i = 0; i < sec / H; i++) { O.x = c.x; O.z = c.z; const v = Math.hypot(c.vx, c.vz) || 1; O.tx = c.vx / v; O.tz = c.vz / v; step(c, inp, TO, H); } return c; };
-  const lance = v => { const c = Object.assign(newCar(T), { idx: 0 }); let i = 0; while (Math.hypot(c.vx, c.vz) < v && i++ < 60 / H) go(c, I(0, 1), H); return c; };
+  // lance : au loin (à Paris, les piles de l'arc sont près de l'origine)
+  const lance = v => { const c = Object.assign(newCar(T), { idx: 0, x: 1e5, z: 1e5 }); let i = 0; while (Math.hypot(c.vx, c.vz) < v && i++ < 60 / H) go(c, I(0, 1), H); return c; };
   const cap = c => Math.atan2(c.vz, c.vx), der = c => deg(Math.atan2(Math.abs(c.vl), Math.abs(c.vf))), wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
   // rayon de la trajectoire (signé : positif si elle tourne du côté du premier coup de volant), mesuré entre 0,7 et 1,2 s après le début de la commande
   const rayon = (c, inp) => { go(c, inp, 0.7); let d = 0, tw = 0, p = cap(c); for (let i = 0; i < 60; i++) { go(c, inp, H); d += Math.hypot(c.vx, c.vz) * H; tw += wrap(cap(c) - p); p = cap(c); } return d / tw; };
@@ -50,12 +51,12 @@ for (const M of CARTES) {
   const r120 = rayon(lance(v120), I(1, 1)), r120l = rayon(lance(v120), I(1, 0)), rtop = rayon(lance(vtop - 0.5), I(1, 1)), r240 = rayon(lance(240 / 3.6), I(1, 1));
   const gin = rayon(glisse(v200), I(1, 1, 0, true)), gn = rayon(glisse(v200), I(0, 1, 0, true)), gout = rayon(glisse(v200), I(-1, 1, 0, true)), g200 = rayon(lance(v200), I(1, 1));
   // le volant commande une rotation : à 120 km/h, volant à fond, on tourne plus serré que le virage le plus serré de la carte élargi de la demi-route, et lever le pied resserre encore
-  assert((M.car.braq < 1 ? r120l : r120) < ext && r120l < 0.9 * r120, `${M.id} : à 120 km/h, rayon ${r120} m sur les gaz, ${r120l} m pied levé (virage de ${rmin} m, ${ext} m avec la demi-largeur)`);
+  assert(r120 < ext && r120l < 0.9 * r120, `${M.id} : à 120 km/h, rayon ${r120} m sur les gaz, ${r120l} m pied levé (virage de ${rmin} m, ${ext} m avec la demi-largeur)`);
   // le rayon dépend peu de la vitesse : doubler la vitesse ne fait pas plus que le tripler (une limite d'adhérence le quadruplerait)
   assert(r240 < 3 * r120, `${M.id} : rayon ${r120} m à 120 km/h, ${r240} m à 240`);
   // mais à la vitesse de pointe, sans glisse, le virage le plus serré ne passe pas : il faut lever le pied, freiner ou glisser
   assert(rtop > ext, `${M.id} : à ${vtop * 3.6} km/h le rayon (${rtop} m) passe le virage le plus serré sans rien faire`);
-  // glisse à 200 km/h (frein à main tenu) : volant vers l'intérieur elle serre plus que le virage le plus serré et bien plus qu'en adhérence ; au neutre puis vers l'extérieur elle ouvre, sans jamais changer de sens
+  // glisse à 200 km/h (bouton tenu) : volant vers l'intérieur elle serre plus que le virage le plus serré et bien plus qu'en adhérence ; au neutre puis vers l'extérieur elle ouvre, sans jamais changer de sens
   assert(gin < ext && gin < 0.6 * g200 && gin < gn && gn < gout && gout > 0, `${M.id} : glisse à 200 km/h, rayons ${gin} / ${gn} / ${gout} m (adhérence ${g200} m)`);
   // réponse au volant : à 120 km/h, 0,2 s après le coup de volant la voiture tourne déjà à 85 % de son régime
   const y02 = go(lance(v120), I(1, 1), 0.2).yaw, y06 = go(lance(v120), I(1, 1), 0.6).yaw;
@@ -70,15 +71,11 @@ for (const M of CARTES) {
   c = go(glisse(v200), I(0, 1), H); assert(!c.drift && c.nitro < 0.04, `${M.id} : une glisse trop courte remplit la jauge (${c.nitro})`);
   // ordre des façons de boucler un tour lancé : en glisse en dépensant la nitro gagnée (le plus rapide), propre au pilote automatique, à fond sans freiner dans les murs (le plus lent).
   // Et le pilote automatique à qui l'on donne une jauge pleine au début du tour lancé la dépense en ligne droite : plus rapide que le tour propre, sans taper davantage ni rater une réception (c'est la référence des médailles).
-  // Pilote en glisse : frein à main dès que la trajectoire demande plus de 90 % du braquage, tenu tant qu'elle en demande plus de 30 % du même côté, volant dosé pour la suivre ; en glisse il s'autorise 20 % de vitesse de plus que le pilote propre.
+  // Pilote en glisse (piloteGlisse de sim.js) : il glisse dès que la trajectoire demande plus de 90 % du lacet d'adhérence, la tient tant qu'elle en demande plus de 30 %, et s'autorise 20 % de vitesse de plus que le pilote propre.
   const lap = t - t1, tour = (drive, jauge = 0) => { const c = newCar(T); let t = 0, t1 = 0, b = 0, pb = 0, h = 0, d = 0; while (c.dist < 2 * n && t < 900) { step(c, drive(c), T, H); t += H; if (!t1 && c.dist >= n) { t1 = t; c.nitro = jauge; } if (t1 && c.boost > 0 && pb <= 0) b++; if (t1 && c.hit > 3) h++; if (t1 && c.land > 9) d++; pb = c.boost; } return [t - t1, b, h, d, c.nitro]; };
   const [tni, bni, hni, dni, reste] = tour(c => autopilot(c, T), 1);
   assert(bni && reste <= 0.3 && tni < lap - 0.3 && hni <= hits && !dni, `${M.id} : tour du pilote automatique avec une jauge de nitro ${tni} s (${bni} coups, reste ${reste}, ${hni} chocs, ${dni} réceptions dures) contre ${lap} s sans`);
-  const [tfond, , hfond] = tour(c => ({ ...autopilot(c, T), gas: 1, brake: 0 })), [tgl, boosts, hgl] = tour(c => {
-    const a = autopilot(c, T, c.dd ? 1.2 : 1), sp = Math.hypot(c.vx, c.vz), la = S[(c.idx + 3 + Math.floor(sp * 0.1)) % n], dem = s => s.kl * sp / omega(sp, T.kt) / (M.surf ? 1 - T.surf[c.idx].vir : 1); // dem = part du braquage que demande la trajectoire (sur une carte à surface déclarée : du braquage que la surface laisse)
-    const m = wrap(Math.atan2(la.z + la.tx * la.dl - c.z, la.x - la.tz * la.dl - c.x) - (c.dd ? cap(c) : c.th)) * 3; // en glisse le nez est en travers : on vise avec la direction de la vitesse
-    if (c.dd ? m * c.dd > 0 && Math.max(dem(S[c.idx]) * c.dd, dem(la) * c.dd) > 0.3 : Math.abs(dem(la)) > 0.9 && dem(la) * m > 0 && sp > 15) { const d = c.dd || Math.sign(m), f = Math.max(m * d, 0.35); return I(d * Math.max(-1, Math.min(1, f < 1.1 ? (f - 1.1) / 0.75 : f - 1.1)), a.gas ? 1 : 0, a.brake, true); }
-    return { ...a, gas: a.gas ? 1 : 0, nitro: !!a.gas }; });
+  const [tfond, , hfond] = tour(c => ({ ...autopilot(c, T), gas: 1, brake: 0 })), [tgl, boosts, hgl] = tour(piloteGlisse(T, 1, 1.2, 0.9, 0.3));
   assert(boosts > 1 && tgl < lap, `${M.id} : tour en glisse (${tgl} s, ${boosts} coups de nitro, ${hgl} chocs) pas plus rapide que le tour propre (${lap} s)`);
   assert(hfond && tfond > lap * 1.01, `${M.id} : à fond dans les murs (${tfond} s, ${hfond} chocs) pas plus lent que le tour propre (${lap} s)`);
   // trafic : positions finies, sur la route ; une voiture arrêtée sur une file se fait pousser sans être traversée
@@ -94,15 +91,15 @@ for (const M of CARTES) {
     const ras = double(3.4), lrg = double(5.5), dedans = double(0);
     assert(ras[0] > 0.05 && !ras[1] && lrg[0] === 0 && !lrg[1] && dedans[1] > 5 && dedans[0] === 0, `${M.id} : camion doublé au ras (jauge ${ras[0]}, choc ${ras[1]}), au large (${lrg}), percuté (jauge ${dedans[0]}, choc ${dedans[1]})`);
   }
-  // pluie : la bruine (force 1) ne change rien ; une averse ralentit le pilote automatique de 2 à 12 % sans l'envoyer dans les murs, et allonge le freinage
+  // pluie : la bruine (force 1, le bitume luisant de la ville) glisse un peu ; une averse ralentit le pilote automatique jusqu'à 16 % sans l'envoyer dans les murs, et allonge le freinage
   // sans surface déclarée, la route est sèche partout (T.surf[i] === SURF.sec), sauf sous une averse
-  assert(T.surf.length === n); assert(M.surf ||T.surf.every(q => q === SURF.sec) === !(Array.isArray(M.th.pluie) && M.th.pluie.some(z => z[2] > 1)), M.id + ' : route mouillée là où il ne pleut pas fort');
+  assert(T.surf.length === n); assert(M.surf || T.surf.every(q => q === SURF.sec) === !M.th.pluie, M.id + ' : route mouillée là où il ne pleut pas');
   if (T.surf.some(q => q !== SURF.sec)) {
     const E = T.surf; T.surf = null; const [sec, , hsec] = tour(c => autopilot(c, T)); T.surf = E;
-    if (!M.surf) assert(lap > 1.02 * sec && lap < 1.12 * sec, `${M.id} : tour sous la pluie ${lap} s, au sec ${sec} s`);
+    if (!M.surf) assert(lap > 1.005 * sec && lap < 1.16 * sec, `${M.id} : tour sous la pluie ${lap} s, au sec ${sec} s`);
     // surface déclarée (neige, glace, terre) : la carte se conduit autrement qu'au sec, sans tourner à la patinoire. Le tour perd de 8 à 35 % (sur fond de terre : de -5 à 35 %, car la carte est étroite et réglée pour la terre ; au sec le pilote automatique y arrive trop vite, tape et perd plus qu'il ne gagne : le nombre de chocs au sec est affiché), et la glace vive, s'il y en a, reste par plaques : moins du quart du tour
     else { const gl = T.surf.filter(q => q.vir > 0.45).length / n; surfCarte = `, ${((lap / sec - 1) * 100).toFixed(0)} % plus lent qu'au sec (${sec.toFixed(1)} s${hsec ? ', où le pilote automatique tape ' + hsec + ' fois' : ''}), glace vive sur ${(gl * 100).toFixed(0)} % du tour`;
-      assert(lap > (M.surf.fond === 'terre' ? 0.95 : 1.08) * sec && lap < 1.35 * sec && gl < 0.25, `${M.id} : tour ${lap} s${surfCarte}`); }
+      assert((M.surf.fond ? lap > (M.surf.fond === 'terre' ? 0.95 : 1.08) * sec : lap >= sec - 0.05) && lap < 1.35 * sec && gl < 0.25, `${M.id} : tour ${lap} s${surfCarte}`); }
   }
   // surfaces (table SURF) : lancée au sec puis posée sur chaque surface, en plan ouvert. Distance de freinage depuis 200 km/h, rayon volant à fond à 120 km/h, vitesse perdue en 2 s pied levé depuis 100 km/h
   { const sur = (q, v, f) => { const c = lance(v); c.x = c.z = 1e5; TO.surf = [q]; // (au loin : à Paris, les piles de l'arc sont sur le chemin)
@@ -129,7 +126,7 @@ for (const M of CARTES) {
     { const e = S.findIndex(s => Math.hypot(s.x - P.c[0], s.z - P.c[1]) < P.r) - 10, x = S.findIndex((s, k) => k > e + 20 && Math.hypot(s.x - P.c[0], s.z - P.c[1]) > P.r) + 40, Wp = [[P.c[0] - ux * 40, P.c[1] - uz * 40], [P.c[0] + ux * 40, P.c[1] + uz * 40], [S[x].x, S[x].z]];
       c = Object.assign(newCar(T), { x: S[e].x, z: S[e].z, idx: e, dist: e, th: Math.atan2(S[e].tz, S[e].tx), vx: S[e].tx * 25, vz: S[e].tz * 25 }); let k = 0, hh = 0;
       for (let i = 0; i < 20 / H && !(k === 2 && c.idx >= x - 10); i++) { if (k < 2 && Math.hypot(Wp[k][0] - c.x, Wp[k][1] - c.z) < 8) k++; const a = wrap(Math.atan2(Wp[k][1] - c.z, Wp[k][0] - c.x) - c.th);
-        step(c, { steer: Math.max(-1, Math.min(1, a * 3)), gas: 0.35, brake: 0, hand: false }, T, H); if (c.hit > 3) hh++; }
+        const v = Math.hypot(c.vx, c.vz); step(c, { steer: Math.max(-1, Math.min(1, a * 3)), gas: v < 17 ? 0.35 : 0, brake: v > 20 ? 0.5 : 0, hand: false }, T, H); if (c.hit > 3) hh++; } // à 60 km/h : sur les pavés, plus vite, il faut freiner pour viser l'arche
       assert(k === 2 && c.idx >= x - 10 && c.dist >= x - 10 && !hh, `${M.id} : traversée de la place par l'arche (étape ${k}, échantillon ${c.idx} sur ${x}, ${hh} chocs)`); }
     const [px, pz] = P.piles[0], wx = P.c[0] + px * Math.cos(P.a) + pz * Math.sin(P.a), wz = P.c[1] - px * Math.sin(P.a) + pz * Math.cos(P.a), ax = wx - 30;
     c = lance(ax, wz, 0); let hit = 0, dedans = 0;

@@ -6,13 +6,14 @@
 //   W demi-largeur de route (m) · large [[a, b, w], …] demi-largeur w entre les points a et b (place) · place { c: [x, z], r, a, piles, ile } cercle où l'on roule partout, avec les piles d'un monument (boîtes [x, z, demi-largeurs] dans son repère tourné de a) et son terre-plein (ile [rayon de la couronne de bornes, demi-ouverture dans l'axe de la grande arche]) · grip adhérence latérale maxi (m/s²) · sc échelle du tracé · pts [x, z, altitude], sens horaire, départ en [0]
 //   camH hauteur de la caméra (m, 3,2 par défaut : à relever quand la voiture masque la route) · tun [a, b] tunnel entre deux points (ou null) · chaud [a, b] secteur où la musique se déchaîne · amb [[a, b], …] zones où l'on entend l'ambiance du lieu · sect [a, b] les deux temps intermédiaires
 //   sauts [[point, longueur, hauteur, fosse, profondeur], …] tremplin qui finit net au point, suivi ou non d'une fosse (m) · cuv [[a, b, largeur, rayon], …] murs roulables : un quart de tube de chaque côté du plat entre les points a et b. L'un ou l'autre active le relief (hauteur, gravité, vol : voir sim.js) ; th.paroi = texture des murs roulables
+//   surf : surface (SURF de sim.js) { fond, zones: [[a, b, type, force]], large } : large = hors de la bande de bitume (parties larges, place) ; à accorder avec ce que le décor y pose
 //   anticipe : le pilote automatique calcule sa distance de freinage (indispensable dès qu'il y a une épingle)
 //   rivaux : prénoms des trois adversaires du mode course (sinon ceux de la ville) · med : médailles [bronze, argent, or] en multiples du tour lancé du pilote automatique (défaut 1,1 / 1,03 / 0,97 ; plus bas là où la glisse rapporte beaucoup) · trafic : nombre de camions à doubler · car : la voiture (format CARD de sim.js) · radio : stations (voir RADIO plus bas) · th : thème
 (function (G) {
   const _ = null;
   // voiture : up / down = régimes de passage de la boîte auto ; trac = accélération maxi que les pneus passent au sol (m/s²) ;
   // rwd = propulsion : accélérer fort prend sur l'adhérence latérale des roues arrière ; son = hauteur du moteur ; look = silhouette ;
-  // braq = lacet volant à fond, en multiple de celui que le tracé impose (défaut 1, voir KT dans sim.js) : moins de 1 calme la voiture, qui ne passe plus le virage le plus serré sur les gaz à 120 km/h mais pied levé
+  // grip = adhérence de la voiture (défaut 1, voir KT0 dans sim.js) : multiplie ce qu'elle passe en virage et la vitesse à laquelle elle se remet dans l'axe
   const car = (o) => Object.assign({ up: o.red * 0.94, down: o.red * 0.775, eff: 0.88, trac: 8.5, rwd: 1, son: 1 }, o);
 
   // ---------- radio : trois stations par carte, chacune avec son instrumentarium et sa forme (compositions originales, jouées par audio.js) ----------
@@ -242,7 +243,7 @@
     { id: 'touge', nom: 'KARASU-TOGE', W: 6, grip: 21, sc: 1, tun: null, chaud: [14, 40], sect: [10, 40], amb: [[10, 13], [41, 45]], anticipe: 1, // forêt : le plateau du carrefour au sommet, et le bas des épingles
       pts: [[0, 0, 20], [150, 0, 14], [300, -40, 10], [430, -10, 22], [560, -70, 38], [700, -40, 56], [820, 40, 74], [860, 170, 92], [800, 290, 108], [840, 400, 122], [790, 500, 132], [720, 580, 135], [640, 610, 135], [570, 580, 133], [542, 520, 130], [540, 430, 121], [540, 345, 112], [534, 331, 111], [520, 325, 110], [506, 331, 109], [500, 345, 108], [500, 430, 99], [500, 515, 90], [494, 529, 89], [480, 535, 88], [466, 529, 87], [460, 515, 86], [460, 430, 77], [460, 345, 68], [454, 331, 67], [440, 325, 66], [426, 331, 65], [420, 345, 64], [420, 430, 55], [420, 515, 46], [414, 529, 45], [400, 535, 44], [386, 529, 43], [380, 515, 42], [380, 430, 33], [372, 350, 26], [335, 285, 22], [250, 250, 18], [150, 275, 16], [50, 300, 22], [-60, 260, 19], [-150, 180, 18], [-200, 80, 18], [-140, 5, 19]],
       // Mazda RX-7 Spirit R Type A (FD3S, 2002) : birotor biturbo 13B-REW, 280 ch à 6500 tr/min, 314 N·m à 5000, 1270 kg, propulsion (rapports à vérifier sur fiche)
-      car: car({ nom: 'MAZDA RX-7 SPIRIT R', braq: 0.77, ratios: [3.483, 2.015, 1.391, 1.000, 0.719], final: 4.1, wheel: 0.318, mass: 1345, idle: 900, red: 8000, cd: 0.31, area: 1.8,
+      car: car({ nom: 'MAZDA RX-7 SPIRIT R', ratios: [3.483, 2.015, 1.391, 1.000, 0.719], final: 4.1, wheel: 0.318, mass: 1345, idle: 900, red: 8000, cd: 0.31, area: 1.8,
         tq: [0, 150, 220, 270, 300, 314, 308, 290, 240], son: 1.5, look: { col: 0xf4f0e0, l: 0.95, w: 0.96, h: 0.9, nez: 0.72, cab: [-0.35, 1.9, 0.48], aileron: 1 } }),
       radio: RADIO.touge,
       th: { decor: 'touge', fog: 0x0b1614, fogD: [45, 560], sky: [[0, '#02040a'], [0.4, '#0a1420'], [0.49, '#1a2a30'], [0.5, '#0b1614'], [1, '#0b1614']], stars: 240,
@@ -265,10 +266,10 @@
         hud: { y: '#ffffff', c: '#ffb85a', r: '#ff2a3a', fond: 'rgba(10,84,52,.92)', style: 'panneau', split: 0, jp: ['周回', '速度'], sur: ['湾岸九号線', 'LIGNE DE BAIE'], titre: ['WAN-9', 'BAYSHORE'] } } },
 
     // Paris à l'aube : circuit de rues, relances entre des angles, pavés.
-    { id: 'paris', nom: 'PREMIER METRO', rivaux: ['LUCIE', 'MARC', 'INES'], W: 7, large: [[3, 7, 36], [7, 8, 11]], place: { c: [450, 0], r: 121, a: 2.39, piles: [[-14.9, -7.6, 8, 3.8], [14.9, -7.6, 8, 3.8], [-14.9, 7.6, 8, 3.8], [14.9, 7.6, 8, 3.8]], ile: [48, 14] }, grip: 19, sc: 1, tun: [27, 30], chaud: [13, 22], amb: [[3, 7], [23, 26]], sect: [12, 25], anticipe: 1,
+    { id: 'paris', nom: 'PREMIER METRO', rivaux: ['LUCIE', 'MARC', 'INES'], W: 7, large: [[3, 7, 36], [7, 8, 11]], surf: { zones: [[3, 8, 'paves']], large: 'paves' }, place: { c: [450, 0], r: 121, a: 2.39, piles: [[-14.9, -7.6, 8, 3.8], [14.9, -7.6, 8, 3.8], [-14.9, 7.6, 8, 3.8], [14.9, 7.6, 8, 3.8]], ile: [48, 14] }, grip: 19, sc: 1, tun: [27, 30], chaud: [13, 22], amb: [[3, 7], [23, 26]], sect: [12, 25], anticipe: 1,
       pts: [[0, 0, 0], [200, 0, 0], [330, 15, 0], [420, 80, 0], [480, 80, 0], [524, 42, 0], [534, -15, 0], [505, -65, 0], [430, -160, 0], [420, -300, 2], [450, -390, 4], [540, -420, 6], [700, -420, 8], [810, -435, 12], [880, -480, 19], [860, -545, 26], [800, -590, 31], [830, -660, 37], [930, -670, 42], [1020, -630, 44], [1070, -540, 38], [1040, -410, 26], [1085, -280, 14], [1060, -150, 4], [1100, 0, 0], [1090, 140, -2], [1010, 225, -4], [800, 240, -6], [600, 250, -12], [400, 250, -12], [200, 240, -6], [0, 240, -3], [-150, 225, 0], [-235, 150, 0], [-235, 60, 0], [-150, 0, 0]],
       // Renault 5 Maxi Turbo (1985, Groupe B) : 4 cylindres turbo 1,5 L, 350 ch, 905 kg, moteur central arrière, propulsion (rapports estimés)
-      car: car({ nom: 'RENAULT 5 MAXI TURBO', braq: 0.9, ratios: [3.36, 2.06, 1.38, 1.06, 0.82], final: 3.89, wheel: 0.29, mass: 980, idle: 1000, red: 7500, cd: 0.40, area: 1.9,
+      car: car({ nom: 'RENAULT 5 MAXI TURBO', ratios: [3.36, 2.06, 1.38, 1.06, 0.82], final: 3.89, wheel: 0.29, mass: 980, idle: 1000, red: 7500, cd: 0.40, area: 1.9,
         tq: [0, 120, 220, 330, 400, 420, 400, 370, 300], son: 1.25, look: { col: 0xf2c400, l: 0.8, w: 0.98, h: 1.12, nez: 0.3, cab: [-0.25, 2.3, 0.62], aileron: 0 } }),
       radio: RADIO.paris,
       th: { decor: 'paris', fog: 0xf0b89a, fogD: [140, 1500], sky: [[0, '#2b3a67'], [0.26, '#2b3a67'], [0.27, '#5a6a9a'], [0.38, '#5a6a9a'], [0.39, '#c08a9a'], [0.45, '#c08a9a'], [0.46, '#f0b89a'], [1, '#f0b89a']], stars: 0,
@@ -296,7 +297,7 @@
     // et le grand virage relevé de la tribune ouest qui ramène à la ligne (le mur y est plus rapide que la corde).
     { id: 'stade', nom: 'GRAND VACARME', rivaux: ['NOUR', 'ENZO', 'JADE'], med: [1.08, 1, 0.94], W: 9, grip: 20, sc: 1, tun: null, chaud: [23, 29], amb: [[0, 4], [23, 29]], sect: [9, 23], anticipe: 1,
       // lignes droites du départ et du fond élargies ; au centre, l'aire ouverte : on y roule partout, on coupe l'épingle par l'arche de feu (et l'on saute alors la butte de sortie)
-      large: [[0, 3, 18], [22, 24, 16]], place: { c: [150, 160], r: 59, a: 0, piles: [[34.5, 0, 24.5, 3], [-35.5, 0, 12.5, 1]] },
+      large: [[0, 3, 18], [22, 24, 16]], surf: { large: 'terre' }, place: { c: [150, 160], r: 59, a: 0, piles: [[34.5, 0, 24.5, 3], [-35.5, 0, 12.5, 1]] },
       // cinq tremplins (le quatrième par-dessus la fosse), trois hauteurs de mur roulable : 5, 7 et 10 m
       sauts: [[2, 40, 1.5], [9, 30, 1.7], [16, 24, 1.4], [22, 60, 2, 40, 5], [24, 30, 1.5]], cuv: [[4, 8, 6, 6], [17, 21, 10, 9], [25, 29, 13, 12]],
       pts: [[0, 0, 0], [80, 0, 0], [150, 0, 0], [230, 0, 0], [300, 0, 0], [339, 16, 0], [355, 55, 0], [339, 94, 0], [300, 110, 0], [255, 110, 0], [150, 110, 0], [80, 110, 0], [45, 125, 0], [30, 160, 0], [45, 195, 0], [80, 210, 0], [126, 210, 0], [300, 210, 0], [339, 226, 0], [355, 265, 0], [339, 304, 0], [300, 320, 0], [190, 320, 0], [100, 320, 0], [0, 320, 0], [-60, 320, 0], [-173, 273, 0], [-220, 160, 0], [-173, 47, 0], [-60, 0, 0]],
@@ -339,4 +340,18 @@
   let id = 'ville';
   if (typeof location !== 'undefined') try { id = (/^#defi=\d+\.([a-z0-9]+)\./.exec(location.hash) || [])[1] || new URLSearchParams(location.search).get('carte') || localStorage.getItem('vpr.carte') || id; } catch (e) { } // un lien de défi (#defi=version.carte.données, voir defiCode dans sim.js) ouvre sa carte
   G.CARTE = G.CARTE || G.CARTES.find(m => m.id === id) || G.CARTES[0];
+  // Piste d'essai de la conduite (hors des CARTES : ni menu, ni tests, ni records partagés) : ?carte=essai&grip=1&sol=sec|mouille|neige|terre|glace&voiture=<id d'une carte>
+  // Plate, 9 m de demi-largeur : ligne droite, grande courbe rapide, droite à 90°, épingle serrée comme celles du col, droite, chicane, longue courbe, enfilade de S, grande droite et retour.
+  // Décor, radio et voiture (par défaut) du col.
+  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null;
+  if (q && id === 'essai') {
+    const T = G.CARTES.find(m => m.id === 'touge'), V = G.CARTES.find(m => m.id === q.get('voiture')) || T, gr = +q.get('grip') || 1, sol = q.get('sol') || 'sec';
+    G.CARTE = { ...T, id: 'essai', nom: "PISTE D'ESSAI", W: 9, sauts: undefined, chaud: [3, 8], amb: [], sect: [10, 25], med: undefined,
+      surf: sol === 'sec' ? undefined : { fond: sol, zones: [] }, car: { ...V.car, grip: gr },
+      pts: [[0, 0, 0], [200, 0, 0], [400, 0, 0], [480, 15, 0], [540, 60, 0], [575, 130, 0], [580, 220, 0], [580, 320, 0], [570, 355, 0], [540, 370, 0], [490, 372, 0], [400, 372, 0],
+        [360, 372, 0], [340, 380, 0], [333, 395, 0], [340, 410, 0], [360, 418, 0], [420, 418, 0], [470, 418, 0], [495, 430, 0], [505, 455, 0], [505, 500, 0], [505, 520, 0], [490, 545, 0], [490, 575, 0], [505, 600, 0],
+        [505, 680, 0], [490, 740, 0], [440, 775, 0], [370, 785, 0], [300, 780, 0], [250, 805, 0], [200, 805, 0], [150, 780, 0], [100, 780, 0], [50, 805, 0], [-50, 805, 0], [-110, 790, 0], [-140, 740, 0], [-140, 600, 0],
+        [-140, 400, 0], [-140, 150, 0], [-130, 60, 0], [-90, 15, 0], [-40, 0, 0]],
+      th: { ...T.th, hud: { ...T.th.hud, sur: [null, 'ESSAI · GRIP ' + gr + ' · ' + sol.toUpperCase()], titre: ['PISTE', "D'ESSAI"] } } };
+  }
 })(typeof window !== 'undefined' ? window : globalThis);

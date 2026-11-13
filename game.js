@@ -72,7 +72,7 @@
   }
   // demi-teinte : quatre encres de la plus sombre à la plus claire, et une encre de signal (feux, néons rouges), par carte
   const PAL = { ville: [0x0a0614, 0x3a1a6a, 0xff3a8a, 0xfff0c8, 0xff2a3a], touge: [0x06100c, 0x1c4a3a, 0x7ab890, 0xfff2c8, 0xff5030], wangan: [0x060a16, 0x1a3a6a, 0xf0a040, 0xfff4d8, 0xff3030],
-    paris: [0x100c14, 0x4a3a5a, 0xd89a70, 0xfff0d8, 0xe83a30], canal: [0x0c0a12, 0x5a2a4a, 0xf08a50, 0xfff0c0, 0xff3a40], stade: [0x0a0a14, 0x3a3060, 0xe8a030, 0xfff4d8, 0xe8362a], givre: [0x080e22, 0x2c4478, 0x8fb4e8, 0xf4f8ff, 0xe8482a], terre: [0x140c08, 0x6a3a1c, 0xe8903a, 0xfff0d0, 0xe8482a] }[M.id];
+    paris: [0x100c14, 0x4a3a5a, 0xd89a70, 0xfff0d8, 0xe83a30], canal: [0x0c0a12, 0x5a2a4a, 0xf08a50, 0xfff0c0, 0xff3a40], stade: [0x0a0a14, 0x3a3060, 0xe8a030, 0xfff4d8, 0xe8362a], givre: [0x080e22, 0x2c4478, 0x8fb4e8, 0xf4f8ff, 0xe8482a], terre: [0x140c08, 0x6a3a1c, 0xe8903a, 0xfff0d0, 0xe8482a], essai: [0x06100c, 0x1c4a3a, 0x7ab890, 0xfff2c8, 0xff5030] }[M.id];
 
   // ---------- rendu basse définition : scène → cible 270p → passe finale (flou de vitesse, HUD, scanlines) ----------
   const renderer = window.__rendu || (window.__rendu = new THREE.WebGLRenderer({ antialias: false })); // un seul pour toute la session : il garde les shaders d'une carte à l'autre
@@ -227,7 +227,7 @@
   const skyMat = mat('ciel', { lum: 1, side: THREE.BackSide, fog: false, net: 1 }, TH.sky, TH.stars);
   const sky = new THREE.Mesh(new THREE.SphereGeometry(2500, 16, 12), skyMat); sky.userData.dyn = 1; scene.add(sky);
   const SD = new V3(...TH.astre.dir).normalize();
-  const sunDisc = new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, map: tx('astre', TH.astre.col, TH.astre.ombre) }));
+  const sunDisc = new THREE.Sprite(new THREE.SpriteMaterial({ fog: false, transparent: true, alphaTest: 0.5, depthWrite: false, map: tx('astre', TH.astre.col, TH.astre.ombre) }));
   sunDisc.scale.set(TH.astre.taille, TH.astre.taille, 1); scene.add(sunDisc);
 
   const hemi = new THREE.HemisphereLight(...TH.hemi); scene.add(hemi); // bleu d'en haut, rebond magenta de la ville
@@ -491,10 +491,10 @@
     hu.g.rotation.order = 'YZX'; // cap, puis tangage, puis roulis autour de l'axe de la voiture
     hu.g.position.set(car.x, carY, car.z); hu.g.rotation.set(vu.roll, -car.th, vu.pitch); hu.body.rotation.x = car.steer * Math.min(1, sp / TOP) * 0.07;
     for (let i = 0; i < 4; i++) { const st = hu.roues[i]; st.children[0].rotation.z -= car.vf * dt / rr; if (i > 1) st.rotation.y = -car.steer * 0.45; }
-    hu.feu.color.setHex(inp.brake ? 0xff7080 : 0x8a1020);
+    hu.feu.color.setHex(inp.brake || car.frA ? 0xff7080 : 0x8a1020);
     // traînées
     hist.unshift([car.x + fx * ENC.min.x, carY + 0.72, car.z + fz * ENC.min.x, rx, rz]); if (hist.length > TN) hist.length = TN;
-    const bst = car.boost > 0, glow = Math.min(1, sp / 15) * (inp.brake || bst ? 1 : 0.4) * Math.min(1, TH.phares / 0.4);
+    const bst = car.boost > 0, glow = Math.min(1, sp / 15) * (inp.brake || car.frA || bst ? 1 : 0.4) * Math.min(1, TH.phares / 0.4);
     for (let l = 0; l < 2; l++) for (let k = 0; k < TN; k++) {
       const h = hist[Math.min(k, hist.length - 1)], sd = l ? 0.78 : -0.78, a = (l * TN + k) * 6, f = (1 - k / TN) ** 2 * glow;
       P.set([h[0] + h[3] * sd, h[1] + 0.1, h[2] + h[4] * sd, h[0] + h[3] * sd, h[1] - 0.1, h[2] + h[4] * sd], a);
@@ -504,7 +504,7 @@
     // émissions
     if (land > 3) for (let i = 0; i < Math.min(14, land * 1.5); i++) { const sd = i & 1 ? 1 : -1, av = i & 2 ? 1.4 : -1.4; // réception : une bouffée de poussière chassée de chaque roue, vers l'extérieur
       emit(car.x + fx * av - fz * sd * 0.9, carY + 0.15, car.z + fz * av + fx * sd * 0.9, car.vx * 0.6 - fz * sd * (3 + Math.random() * 5), 0.5 + Math.random() * 2, car.vz * 0.6 + fx * sd * (3 + Math.random() * 5), 0.35, 0.2, 0.19, 0.17, -1); }
-    if (car.slide > 0.3 && sp > 10 && !car.air) for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.2, car.z - fz * 1.4 + rz * sd, car.vx * 0.25 + jit(4), 1 + Math.random() * 2.5, car.vz * 0.25 + jit(4), 0.9, lerp(0.16, 0.28, lm), lerp(0.18, 0.06, lm), lerp(0.28, 0.06, lm), -1);
+    if ((car.slide > 0.3 || car.frA) && sp > 10 && !car.air) for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.2, car.z - fz * 1.4 + rz * sd, car.vx * 0.25 + jit(4), 1 + Math.random() * 2.5, car.vz * 0.25 + jit(4), 0.9, lerp(0.16, 0.28, lm), lerp(0.18, 0.06, lm), lerp(0.28, 0.06, lm), -1);
     if (hit > 3) { const s = S[car.idx], sg = Math.sign(car.d); for (let i = 0; i < 16; i++) emit(car.x - s.tz * sg, carY + 0.5, car.z + s.tx * sg, car.vx * 0.5 + jit(14), 2 + Math.random() * 7, car.vz * 0.5 + jit(14), 0.5, 1, 0.75, 0.25, 22); }
     else if (car.rub && sp > 8) { const s = S[car.idx], sg = Math.sign(car.d); for (let i = 0; i < 3; i++) emit(car.x - s.tz * sg, carY + 0.4, car.z + s.tx * sg, car.vx * 0.6 + jit(5), 1 + Math.random() * 4, car.vz * 0.6 + jit(5), 0.35, 1, 0.75, 0.25, 22); } // frottement continu : gerbe plus fine que le choc
     for (const fl of hu.fl) { fl.visible = car.boost > 0; fl.scale.y = (0.5 + Math.random() * 0.7) * Math.min(1, car.boost * 2); } // nitro : deux flammes d'échappement qui vacillent, les traînées virent au bleu
@@ -613,10 +613,10 @@
   }
 
   // ---------- état de jeu ----------
-  // clés « vpr7. » : la V2 change la physique (jauge de nitro à la place du boost de sortie de glisse, aspiration, surfaces), les records « vpr6. » ne sont plus comparables.
+  // clés « vpr8. » : la V3 change la conduite (glisse progressive, frein arrière, adhérence sol × voiture, surfaces visibles), les records « vpr7. » ne sont plus comparables.
   // Le joueur qui en avait est prévenu au menu (anciens), jusqu'à son premier départ
   // une série de records par carte ; la ville garde ses clés d'origine
-  const PRE = 'vpr7.' + (M.id === 'ville' ? '' : M.id + '.');
+  const PRE = 'vpr8.' + (M.id === 'ville' ? '' : M.id + '.');
   const store = { get: k => { try { return JSON.parse(localStorage.getItem(PRE + k)); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(PRE + k, JSON.stringify(v)); } catch (e) { } } };
   const pref = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }, setPref = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } };
   // Langue de l'interface : 'fr' ou 'en', choisie à l'écran d'accueil et gardée (vpr.langue). Traduction et titres anglais : langue.js
@@ -624,7 +624,7 @@
   const tr = s => traduit(s, langue);
   const appliqueLangue = () => { document.documentElement.lang = langue; document.title = langue === 'en' ? 'Full Throttle City' : 'Ville à plein régime'; };
   appliqueLangue();
-  let anciens = (() => { try { return !localStorage.getItem('vpr7.vu') && Object.keys(localStorage).some(k => /^vpr6\..*best$/.test(k)); } catch (e) { return false; } })();
+  let anciens = (() => { try { return !localStorage.getItem('vpr8.vu') && Object.keys(localStorage).some(k => /^vpr7\..*best$/.test(k)); } catch (e) { return false; } })();
   let msel = 4; // ligne du menu principal
   // écran d'accueil : le navigateur n'autorise le son qu'après un geste ; on le demande d'abord, pour que la musique soit là quand le menu s'affiche
   // Écran d'accueil : il sert d'abord à choisir la langue. Gauche / droite (ou haut / bas) change la langue tout de suite, Entrée part vers le menu principal.
@@ -724,7 +724,7 @@
   const bilan = vu => { const c = vu.car, l = vu.lap0, b = [c.nDrift - l[0], c.nBoost - l[1], c.nWall - l[2]]; vu.lap0 = [c.nDrift, c.nBoost, c.nWall]; return b; }; // glisses, coups de nitro et murs du tour bouclé par le joueur de cette vue
 
   function start(go) { // go : départ demandé par l'hôte (invité en ligne)
-    SON.init(); accueil = false; if (anciens && !deux()) { anciens = false; setPref('vpr7.vu', 1); }
+    SON.init(); accueil = false; if (anciens && !deux()) { anciens = false; setPref('vpr8.vu', 1); }
     if (enLigne()) { if (invite() && !go) return; mode = 'course'; if (!invite()) { if (NET.n < 2) { padDit("EN ATTENTE D'UN AUTRE JOUEUR"); return; } NET.go(M.id); } } // en ligne : Course seulement ; l'hôte lance pour tous
     if (deux() && !AUTO && !PLACES.every(p => p && branche(p))) { inscrit(); return; } // à deux, on ne part que les deux places prises ; elles sont gardées : une revanche ne redemande rien
     ses.clos();
@@ -1233,7 +1233,7 @@
     LUX.uSunC.value.copy(SUNC).multiplyScalar(1 - lm); LUX.uSky.value.copy(scene.fog.color); LUX.uRes.value.set(TRB ? vu.rw / 2 / TRB : 0, RH / 2 / TRB);
     let nl = 0;
     const put = (x, y, z, c, r, k) => { if (nl < NL) { LUX.uLP.value[nl].set(x, y, z, r); LUX.uLC.value[nl++].copy(c).multiplyScalar(k * LUM_GAIN); } };
-    put(car.x - fx * 4.4, carY + 0.35, car.z - fz * 4.4, ROUGE, 9, NUIT * (inp.brake ? 2.4 : 0.45)); // feux arrière : ils teintent ce qui suit, davantage au freinage
+    put(car.x - fx * 4.4, carY + 0.35, car.z - fz * 4.4, ROUGE, 9, NUIT * (inp.brake || car.frA ? 2.4 : 0.45)); // feux arrière : ils teintent ce qui suit, davantage au freinage
     if (L.neon) put(car.x, carY + 0.3, car.z, NEONC, 5.5, NUIT * (0.8 + 0.4 * pulse)); // néon de bas de caisse
     // les deux véhicules les plus proches (adversaires, ou camions du trafic) : phares devant, feux rouges derrière
     const d2 = c => (c.x - car.x) ** 2 + (c.z - car.z) ** 2;
