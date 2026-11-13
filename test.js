@@ -2,7 +2,7 @@
 const assert = require('assert');
 const THREE = require('./three.min.js');
 require('./sim.js');
-const T = buildTrack(THREE), { S, n, W } = T, H = 1 / 120;
+const T = buildTrack(THREE, CARTE), { S, n, W } = T, CARD = T.car, H = 1 / 120;
 const run = (c, inp, sec) => { for (let i = 0; i < sec / H; i++) step(c, typeof inp === 'function' ? inp(c) : inp, T, H); };
 const I = (steer, gas, brake = 0, hand = false) => ({ steer, gas, brake, hand });
 
@@ -88,7 +88,7 @@ assert(c.nitro > 0.02 && c.nitro < 0.5, 'la glisse tenue doit remplir la jauge d
 let glisseTxt;
 {
   // en plan ouvert, comme test-cartes.js (sans murs : un seul échantillon de piste, recollé sous la voiture à chaque pas)
-  const O = { x: 0, y: 0, z: 0, tx: 1, tz: 0, k: 0, sl: 0 }, TO = { S: [O], n: 1 };
+  const O = { x: 0, y: 0, z: 0, tx: 1, tz: 0, k: 0, sl: 0 }, TO = { S: [O], n: 1, carte: T.carte, car: T.car, kt: T.kt };
   const go = (c, inp, sec) => { for (let i = 0; i < sec / H; i++) { O.x = c.x; O.z = c.z; const v = Math.hypot(c.vx, c.vz) || 1; O.tx = c.vx / v; O.tz = c.vz / v; step(c, inp, TO, H); } return c; };
   const neuve = () => Object.assign(newCar(T), { idx: 0 });
   // une glisse : lancée `elan` secondes, frein à main tenu `tenue` secondes, puis relâché
@@ -351,8 +351,8 @@ let duoTxt;
 }
 
 {
-  globalThis.CARTE = CARTES.find(m => m.id === 'stade'); delete require.cache[require.resolve('./sim.js')]; require('./sim.js');
-  const T = buildTrack(THREE), { S, n } = T, G = 9.81, v = c => Math.hypot(c.vx, c.vz), near = p => S.reduce((b, s, i) => Math.hypot(s.x - p[0], s.z - p[1]) < Math.hypot(S[b].x - p[0], S[b].z - p[1]) ? i : b, 0);
+  const CARTE = CARTES.find(m => m.id === 'stade');
+  const T = buildTrack(THREE, CARTE), { S, n } = T, G = 9.81, v = c => Math.hypot(c.vx, c.vz), near = p => S.reduce((b, s, i) => Math.hypot(s.x - p[0], s.z - p[1]) < Math.hypot(S[b].x - p[0], S[b].z - p[1]) ? i : b, 0);
   const pose = (i, d, sp) => { const c = newCar(T), s = S[i]; Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, idx: i, dist: i, d, th: Math.atan2(s.tz, s.tx), vx: s.tx * sp, vz: s.tz * sp }); c.y = sol(T, c); return c; };
   assert(T.vert, 'Grand Vacarme doit activer le relief');
   // un saut : lancée sur le tremplin, la voiture décolle au bout, suit une parabole (chute libre), ne répond ni au volant ni aux gaz, et se repose sans jamais passer sous le sol
@@ -410,9 +410,9 @@ console.log(`OK  glisse : ${glisseTxt}`);
 console.log(`OK  deux humains : ${duoTxt}`);
 console.log(`OK  fantôme des médailles : ${fantTxt}`);
 
-// ---------- traduction anglaise de l'interface (tr de game.js, isolée de son fichier) : ordinaux, expressions entières, jamais au milieu d'un mot ----------
+// ---------- traduction anglaise de l'interface (langue.js) : ordinaux, expressions entières, jamais au milieu d'un mot ----------
 {
-  const src = require('fs').readFileSync(__dirname + '/game.js', 'utf8'), tr = new Function('pref', src.slice(src.indexOf('  let langue'), src.indexOf('  const TITRE_EN')) + '; return tr;')(() => 'en');
+  require('./langue.js'); const tr = s => traduit(s, 'en');
   for (const [fr, en] of [['3E SUR 4', '3RD OF 4'], ['ARRIVEE : 1ER', 'FINISH: 1ST'], ['FANTÔME : OR', 'GHOST: GOLD'], ['RECORD 1\'00"00', 'RECORD 1\'00"00'], ['GRAND PRIX FM', 'GRAND PRIX FM'], ['4,2 KM   TRAFIC', '4.2 KM   TRAFFIC']])
     assert.strictEqual(tr(fr), en, 'traduction de « ' + fr + ' »');
   console.log('OK  traduction anglaise');
