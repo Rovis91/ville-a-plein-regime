@@ -2,7 +2,7 @@
 // Les records et préférences passent par des objets ordinaires à la place de localStorage.
 const assert = require('assert'), THREE = require('./three.min.js');
 require('./sim.js'); require('./session.js');
-const M = CARTE, T = buildTrack(THREE), N = T.n, H = 1 / 120, REFT = tourRef(T, H), MED = M.med || [1.1, 1.03, 0.97];
+const M = CARTE, T = buildTrack(THREE, M), N = T.n, H = 1 / 120, REFT = tourRef(T, H), MED = M.med || [1.1, 1.03, 0.97];
 const memoire = () => { const o = {}; return { o, get: k => k in o ? JSON.parse(o[k]) : null, set: (k, v) => { o[k] = JSON.stringify(v); } }; };
 const reglages = () => { const o = {}; return { o, get: (k, d) => k in o ? o[k] : d, set: (k, v) => { o[k] = String(v); } }; };
 const session = (store = memoire(), prefs = reglages(), auto = false) => nouvelleSession({ T, carte: M, cartes: CARTES, store, prefs, auto, defi: null, ref: REFT, med: MED });
