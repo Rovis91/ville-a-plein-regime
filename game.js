@@ -23,12 +23,13 @@
   const rnd = () => { seed = seed * 1664525 + 1013904223 >>> 0; return seed / 4294967296; };
 
   // ---------- réglages de la lumière et du rendu rétro (tout se règle ici) ----------
-  const NL = 16;        // luminaires calculés en même temps autour de la voiture (coût par pixel)
+  const NL = 20;        // luminaires calculés en même temps autour de la voiture (coût par pixel)
   const LUM_GAIN = 1;   // force de tous les luminaires, phares compris
   const LUM_PAS = 5;    // tunnels : un luminaire tous les LUM_PAS échantillons (2 m), en quinconce gauche / droite
   const QUANT = 32;     // passe finale : niveaux par canal (une console 15 bits en a 32) ; 0 = pas de quantification
   const TRAME = 0.8;     // force du tramage ordonné de Bayer, 0 à 1
   const TUN_AMB = 0.55; // tunnels : part de lumière ambiante sur sol, parois et plafond ; le reste vient des luminaires
+  const LOIN = 1.3;     // distance de vue : le brouillard de chaque carte (cartes.js, fogD) et la portée des ombres reculent d'autant
   const TREMBLE = 0;    // tremblement des sommets façon première console 3D : pas de la grille en pixels, 0 = aucun
 
   // ---------- styles visuels à comparer : ?style=<nom> (sans paramètre : rendu actuel, inchangé) ; planche des captures dans styles.html ----------
@@ -79,7 +80,7 @@
   document.body.prepend(renderer.domElement);
   const scene = new THREE.Scene();
   const FOG_OUT = new THREE.Color(TH.fog), FOG_IN = new THREE.Color(TH.tun ? TH.tun.fog : TH.fog), WHITE = new THREE.Color(0xffffff);
-  scene.fog = new THREE.Fog(TH.fog, TH.fogD[0], TH.fogD[1]);
+  scene.fog = new THREE.Fog(TH.fog, TH.fogD[0] * LOIN, TH.fogD[1] * LOIN);
   // Une « vue » par joueur (une seule en solo) : tout ce qui est propre à une caméra. La scène, le renderer et le shader de la passe finale restent communs.
   // Chaque image, la simulation avance une fois ; puis, pour chaque vue, vueFrame() pose la caméra, règle lumière, brouillard et pluie, dessine son HUD, la scène dans sa cible, et joue sa passe finale.
   // Une vue de plus = un appel à nouvelleVue() (après la construction du décor : elle copie la liste des luminaires et le semis de pluie) ; libere() rend au GPU la cible et la texture de chacune.
@@ -167,7 +168,7 @@
 
   const tex = (w, h, draw) => {
     const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'));
-    const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestMipmapNearestFilter; t.anisotropy = 8; // anisotropie : sans elle, les paliers de mipmap du sol vu en rasant avancent avec la voiture, à 10-100 m (on croit voir les textures se charger) ; jamais de filtrage linéaire, sauf ?lisse=1
+    const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestMipmapLinearFilter; t.anisotropy = renderer.capabilities.getMaxAnisotropy(); // MipmapLinear : fondu entre deux niveaux de mipmap, plus de lignes de palier qui avancent sur le sol avec la caméra ; anisotropie au maximum de la carte graphique : sans elle, les paliers de mipmap du sol vu en rasant avancent avec la voiture, à 10-100 m (on croit voir les textures se charger) ; jamais de filtrage linéaire, sauf ?lisse=1
     if (P('lisse')) { t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; }
     t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
   };
@@ -229,7 +230,7 @@
   const hemi = new THREE.HemisphereLight(...TH.hemi); scene.add(hemi); // bleu d'en haut, rebond magenta de la ville
   const sun = new THREE.DirectionalLight(...TH.sun); sun.castShadow = true; // clair de lune
   sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0015; sun.shadow.normalBias = 0.5;
-  Object.assign(sun.shadow.camera, { left: -300, right: 300, top: 300, bottom: -300, near: 10, far: 800 });
+  Object.assign(sun.shadow.camera, { left: -300 * LOIN, right: 300 * LOIN, top: 300 * LOIN, bottom: -300 * LOIN, near: 10, far: 800 * LOIN });
   scene.add(sun, sun.target);
 
   // ---------- lumière dynamique : un seul calcul, ajouté dans le shader de tous les matériaux de la scène (onBeforeCompile) ----------
@@ -1150,7 +1151,7 @@
   }
 
   // la lune suit la voiture, calée sur la grille de texels de l'ombre pour qu'elle ne fourmille pas
-  const LR = new V3().crossVectors(new V3(0, 1, 0), SD).normalize(), LU = new V3().crossVectors(SD, LR), TX = 600 / 2048, tmp = new V3();
+  const LR = new V3().crossVectors(new V3(0, 1, 0), SD).normalize(), LU = new V3().crossVectors(SD, LR), TX = 600 * LOIN / 2048, tmp = new V3();
   function sunFollow(car) {
     tmp.set(car.x, 0, car.z);
     const a = Math.round(tmp.dot(LR) / TX) * TX, b = Math.round(tmp.dot(LU) / TX) * TX, c = tmp.dot(SD);
@@ -1282,7 +1283,7 @@
     cam.updateProjectionMatrix();
     sky.position.copy(cam.position); sunDisc.position.copy(cam.position).addScaledVector(SD, 2000); sunFollow(car);
     // brouillard et ciel : nuit néon ↔ tunnel ; éclairs : flash double sur le ciel et l'éclairage (le tonnerre part de fxFrame)
-    scene.fog.color.copy(FOG_OUT).lerp(FOG_IN, lm); scene.fog.near = lerp(TH.fogD[0], 15, lm); scene.fog.far = lerp(TH.fogD[1], 320, lm);
+    scene.fog.color.copy(FOG_OUT).lerp(FOG_IN, lm); scene.fog.near = lerp(TH.fogD[0] * LOIN, 15, lm); scene.fog.far = lerp(TH.fogD[1] * LOIN, 320, lm);
     skyMat.color.copy(WHITE).lerp(FOG_IN, lm);
     const fl = flashT > 0 && lm < 0.5 ? ((flashT * 14 | 0) & 1 ? 1 : 0.3) : 0;
     hemi.intensity = TH.hemi[2] * (1 - 0.75 * lm) + 3 * fl; sun.intensity = TH.sun[1] * (1 - lm); // en tunnel, ciel et astre s'effacent : il ne reste que les luminaires skyMat.color.multiplyScalar(1 + 2.5 * fl); scene.fog.color.lerp(FLASH, 0.45 * fl);
