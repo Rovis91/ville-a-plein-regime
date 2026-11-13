@@ -474,48 +474,51 @@
   // et sa transcription Web Audio par Antonio-R1 (engine-sound-generator, MIT) : chaque cylindre pousse une impulsion (piston + allumage) dans des guides d'onde
   // (admission, cylindre, échappement, collecteur) dont les soupapes ouvrent et ferment les extrémités ; les collecteurs se rejoignent dans un tube droit, un silencieux
   // (guides d'onde en parallèle) et une sortie. Ce qu'on entend : la sortie d'échappement, plus l'admission et les vibrations du bloc. Longueurs en échantillons à 44,1 kHz.
-  // n : cylindres (explosions par cycle de deux tours) ; off : calage de chacun (V8 à vilebrequin croisé : légèrement irrégulier, d'où le galop) ; ign : durée de l'allumage (fraction de cycle)
+  // n : cylindres (explosions par cycle de deux tours) ; irr : écart de force entre cylindres et d'un cycle à l'autre (le grain) ; off : calage de chacun (V8 à vilebrequin croisé : légèrement irrégulier, d'où le galop) ; ign : durée de l'allumage (fraction de cycle)
   const MOT = {
-    l4: { n: 4, ign: 0.016, int: 100, exh: 100, ext: 100, str: 128, muf: [10, 15, 20, 25], out: 5 },
-    l5: { n: 5, ign: 0.016, int: 90, exh: 110, ext: 90, str: 140, muf: [12, 17, 23, 29], out: 6 },
-    l6: { n: 6, ign: 0.014, int: 80, exh: 90, ext: 80, str: 120, muf: [9, 13, 18, 24], out: 5 },
-    v8: { n: 8, ign: 0.012, int: 120, exh: 140, ext: 120, str: 180, muf: [14, 20, 27, 35], out: 8, off: [0, 0.14, 0.24, 0.395, 0.5, 0.61, 0.76, 0.855] },
-    v10: { n: 10, ign: 0.01, int: 90, exh: 100, ext: 90, str: 150, muf: [11, 16, 22, 28], out: 6 },
-    rot: { n: 4, ign: 0.03, int: 60, exh: 50, ext: 60, str: 100, muf: [8, 12, 16, 20], out: 4 },
+    l4: { n: 4, ign: 0.016, irr: 0.2, int: 100, exh: 100, ext: 100, str: 128, muf: [10, 15, 20, 25], out: 5 },
+    l5: { n: 5, ign: 0.016, irr: 0.25, int: 90, exh: 110, ext: 90, str: 140, muf: [12, 17, 23, 29], out: 6 },
+    l6: { n: 6, ign: 0.014, irr: 0.15, int: 80, exh: 90, ext: 80, str: 120, muf: [9, 13, 18, 24], out: 5 },
+    v8: { n: 8, ign: 0.012, irr: 0.3, int: 120, exh: 140, ext: 120, str: 180, muf: [14, 20, 27, 35], out: 8, off: [0, 0.14, 0.24, 0.395, 0.5, 0.61, 0.76, 0.855] },
+    v10: { n: 10, ign: 0.01, irr: 0.18, int: 90, exh: 100, ext: 90, str: 150, muf: [11, 16, 22, 28], out: 6 },
+    rot: { n: 4, ign: 0.03, irr: 0.1, int: 60, exh: 50, ext: 60, str: 100, muf: [8, 12, 16, 20], out: 4 },
   };
   const MOTEUR_JS = `
 class WG { // guide d'onde : deux lignes à retard (aller, retour) ; a, b : réflexion aux extrémités gauche et droite
   constructor(L, a, b) { this.L = L; this.r = new Float32Array(L); this.l = new Float32Array(L); this.p = 0; this.a = a; this.b = b; this.oL = 0; this.oR = 0; }
   step(iL, iR) { const p = this.p, xr = this.r[p], xl = this.l[p]; this.oR = xr * (1 - this.b); this.oL = xl * (1 - this.a); this.r[p] = iL + xl * this.a; this.l[p] = iR + xr * this.b; this.p = p + 1 === this.L ? 0 : p + 1; }
 }
-const mix = (v, o, c) => c + (o - c) * v, TAU = 2 * Math.PI;
+const mix = (v, o, c) => c + (o - c) * v, TAU = 2 * Math.PI, PB = 1.5; // PB : poids des bouffées d'échappement directes
 class Moteur extends AudioWorkletProcessor {
   static get parameterDescriptors() { return [{ name: 'rpm', defaultValue: 900, minValue: 0, maxValue: 15000 }, { name: 'load', defaultValue: 0, minValue: 0, maxValue: 1 }]; }
-  constructor() { super(); this.rev = 0; this.jit = 0; this.bl = 0; this.dx = 0; this.dy = 0; this.vit = true; this.port.onmessage = e => { if (e.data) this.cfg(e.data); else this.vit = false; }; }
+  constructor() { super(); this.rev = 0; this.jit = 0; this.bl = 0; this.pf = 0; this.dx = 0; this.dy = 0; this.vit = true; this.port.onmessage = e => { if (e.data) this.cfg(e.data); else this.vit = false; }; }
   cfg(P) { const k = sampleRate / 44100, L = x => Math.max(2, Math.round(x * k));
-    this.ign = P.ign; this.off = P.off || Array.from({ length: P.n }, (_, i) => i / P.n);
-    this.C = this.off.map(() => ({ cy: new WG(L(10), 0.75, 0.75), in: new WG(L(P.int), 0.01, 0.95), ex: new WG(L(P.exh), 0.95, 0.01), xt: new WG(L(P.ext), 0.01, 0.01) }));
+    this.ign = P.ign; this.irr = P.irr; this.off = P.off || Array.from({ length: P.n }, (_, i) => i / P.n);
+    this.C = this.off.map(() => ({ k: 1 + P.irr * (Math.random() * 2 - 1), f: 1, x0: 1, cy: new WG(L(10), 0.75, 0.75), in: new WG(L(P.int), 0.01, 0.95), ex: new WG(L(P.exh), 0.95, 0.01), xt: new WG(L(P.ext), 0.01, 0.01) }));
     this.st = new WG(L(P.str), 0.01, 0.01); this.mu = P.muf.map(x => new WG(L(x), 0.01, 0.01)); this.ou = new WG(L(P.out), 0.01, 0.01); }
   process(_, outs, par) {
     if (!this.C) return this.vit; // pas encore de configuration
-    const o = outs[0][0], R = par.rpm, LD = par.load, C = this.C, n = C.length, m = this.mu.length, kb = 1 - Math.exp(-TAU * 125 / sampleRate);
+    const o = outs[0][0], R = par.rpm, LD = par.load, C = this.C, n = C.length, m = this.mu.length, kb = 1 - Math.exp(-TAU * 125 / sampleRate), kp = 1 - Math.exp(-TAU * 4000 / sampleRate);
     for (let s = 0; s < o.length; s++) {
       const rpm = R.length > 1 ? R[s] : R[0], ld = LD.length > 1 ? LD[s] : LD[0], ig = 5 * (0.2 + 0.8 * ld);
       this.rev = (this.rev + rpm / 120 / sampleRate) % 1; this.jit += (Math.random() * 0.006 - this.jit) * 0.003; // vilebrequin, et le petit flottement d'un vrai moteur
-      const stL = this.st.oL / n; let sx = 0, si = 0, sb = 0;
+      const stL = this.st.oL / n; let sx = 0, si = 0, sb = 0, sp = 0;
       for (let i = 0; i < n; i++) { const c = C[i], x = (this.rev + this.off[i] + this.jit) % 1;
         const iv = x < 0.25 ? Math.sin(2 * TAU * x) : 0, ev = x > 0.75 ? -Math.sin(2 * TAU * x) : 0;
-        const dr = 1.5 * Math.cos(2 * TAU * x) + (x < this.ign / 2 ? ig * Math.sin(TAU * x / this.ign) : 0); // piston + explosion
+        if (x < c.x0) c.f = c.k * (1 + this.irr * 1.5 * (Math.random() * 2 - 1)); c.x0 = x; // nouvelle explosion : chaque cylindre a sa force, et elle varie d'un cycle à l'autre
+        const ia = this.ign * 0.2, e = x < ia ? x / ia : x < this.ign * 4 ? Math.exp((ia - x) / (this.ign * 0.6)) : 0; // front raide, puis la détente
+        const dr = 1.5 * Math.cos(2 * TAU * x) + ig * c.f * e * (1 + 0.5 * (Math.random() * 2 - 1)); // piston + explosion (avec son bruit)
         c.in.b = mix(iv, 0.01, 0.95); c.cy.a = mix(iv, 0.01, 0.95); c.cy.b = mix(ev, 0.01, 0.95); c.ex.a = mix(ev, 0.01, 0.95);
         c.in.step((Math.random() * 2 - 1) * iv * 0.2 * (0.3 + 0.7 * ld), c.cy.oL * 0.5);
         c.cy.step(dr + c.in.oR * 0.5, c.ex.oL * 0.5);
         c.ex.step(c.cy.oR, c.xt.oL); c.xt.step(c.ex.oR, stL);
+        const xb = x - 0.75; if (xb >= 0) sp += c.f * (0.35 + 0.65 * ld) * Math.exp(-xb / (this.ign * 1.5)) * (xb < this.ign * 0.15 ? xb / (this.ign * 0.15) : 1) * (1 + 0.6 * (Math.random() * 2 - 1)); // bouffée d'échappement à l'ouverture de la soupape : front raide, détente, souffle
         sx += c.xt.oR; si += c.in.oL; sb += c.cy.oL; }
       let mL = 0, mR = 0; const sR = this.st.oR / m, oL = this.ou.oL / m;
       for (const w of this.mu) { w.step(sR, oL); mL += w.oL; mR += w.oR; }
       this.st.step(sx, mL); this.ou.step(mR, 0);
       this.bl += (sb - this.bl) * kb; // vibrations du bloc, sous 125 Hz
-      const y = this.ou.oR + 0.35 * si + 0.5 * this.bl, d = y - this.dx + 0.995 * this.dy; this.dx = y; this.dy = d; o[s] = d; // + coupe-continu
+      this.pf += (sp - this.pf) * kp; const y = this.ou.oR + 0.35 * si + 0.5 * this.bl + PB * this.pf, d = y - this.dx + 0.995 * this.dy; this.dx = y; this.dy = d; o[s] = d; // + coupe-continu
     }
     return this.vit;
   }
@@ -526,7 +529,7 @@ registerProcessor('moteur', Moteur);`;
     try { const n = new AudioWorkletNode(AC, 'moteur', { numberOfInputs: 0, outputChannelCount: [1] }); n.connect(v.eng); v.node = n; v.typ = null;
       v.src.push({ stop: () => setTimeout(() => { n.disconnect(); n.port.postMessage(0); }, 400) }); } catch (e) { }
   }
-  const SEC = { colle: 0, roul: 0, vir: 0, aq: 0 }, RL = 0.14, ML = 0.18, GL = 0.3; // sol par défaut (banc d'écoute) : bitume sec ; niveaux du roulement, du gravier, de la glisse
+  const SEC = { colle: 0, roul: 0, vir: 0, aq: 0 }, RL = 0.06, ML = 0.07, GL = 0.25; // sol par défaut (banc d'écoute) : bitume sec ; niveaux du roulement, du gravier, de la glisse
   // Une voix = ce qu'un joueur entend de sa voiture ; vm, vp : ses deux sorties (moteur et boîte ; pneus et roulement), que tait() ferme.
   // Moteur : le modèle physique (MOTEUR_JS) → légère saturation en charge → caisse → rupteur ; + le sifflement du turbo.
   // Pneus (bruit de roulement d'un pneu de tourisme : pic vers 800-1 200 Hz, qui monte avec la vitesse) : bitume, gravier sur la terre, étouffé sur la neige, martèlement des pavés, eau sur le mouillé ; glisse ; ripage.
@@ -538,17 +541,17 @@ registerProcessor('moteur', Moteur);`;
     body.gain.value = 3;
     const limD = gain(0, lim.gain); os('square', 19).connect(limD); // rupteur : l'allumage coupé, rétabli, coupé
     const twG = gain(0, vm), tw = os('sine', 1500); tw.connect(twG); ns.connect(filt('bandpass', 1800, 2, gain(0.1, twG))); // turbo : sifflement et souffle
-    const roul = gain(0, vp), rm = gain(0.7, roul), rl = filt('bandpass', 900, 0.8, rm); ns.connect(rl); ns.connect(filt('lowpass', 120, 0.7, gain(0.8, rm))); // bitume : bande du roulement + grondement des bosses
+    const roul = gain(0, vp), rm = gain(0.7, roul), rl = filt('bandpass', 900, 0.8, filt('lowpass', 2500, 0.7, rm)); ns.connect(rl); ns.connect(filt('lowpass', 120, 0.7, gain(0.8, rm))); // bitume : bande du roulement + grondement des bosses
     lent(0.004).connect(gain(0.3, rm.gain)); // le grain de la route varie
     const gr = AC.createBufferSource(); gr.buffer = gbuf; gr.loop = true; go(gr);
-    const meub = gain(0, vp), mf = filt('bandpass', 1600, 0.6, meub); gr.connect(mf); gr.connect(filt('bandpass', 250, 1, gain(0.5, meub))); // gravier : les cailloux qui crépitent ; neige : plus sourde
+    const meub = gain(0, vp), mf = filt('bandpass', 1600, 0.6, filt('lowpass', 2500, 0.7, meub)); gr.connect(mf); gr.connect(filt('bandpass', 250, 1, gain(0.5, meub))); // gravier : les cailloux qui crépitent ; neige : plus sourde
     const pav = gain(0, vp), pavM = gain(0.5, pav), po = os('square', 20); po.connect(gain(0.5, pavM.gain)); ns.connect(filt('bandpass', 400, 0.7, pavM)); // pavés : martèlement
     const mou = gain(0, vp); ns.connect(filt('bandpass', 2200, 0.6, mou)); // mouillé : le chuintement de l'eau chassée
     const g = gain(0, vp), b1 = filt('bandpass', 500, 1, g); ns.connect(b1); // le caoutchouc qui frotte, large
     const cri = gain(0, vp), ac = gain(0.5, cri), b2 = filt('bandpass', 1000, 12, ac), b3 = filt('bandpass', 2000, 12, gain(0.35, ac)); ns.connect(b2); ns.connect(b3); // crissement : une note vers 1 kHz et son harmonique
     const sl = lent(0.03); sl.connect(gain(0.6, ac.gain)); sl.connect(gain(60, b2.detune)); sl.connect(gain(60, b3.detune)); // par à-coups (adhérence, glissement), hauteur qui erre
     const scrub = gain(0, vp); ns.connect(filt('lowpass', 200, 0.7, scrub));
-    const spray = gain(0, vp); gr.connect(filt('bandpass', 1400, 0.6, spray)); // gerbe de cailloux ou de neige en glisse
+    const spray = gain(0, vp); gr.connect(filt('bandpass', 1400, 0.6, filt('lowpass', 2500, 0.7, spray))); // gerbe de cailloux ou de neige en glisse
     const v = { vm, vp, eng, out, lim, limD, tw, twG, roul, rl, gr, meub, mf, pav, po, mou, g, cri, b1, b2, b3, scrub, spray, mot: vm, src, gas: 0, crk: 0, typ: null, node: null }; // gas : l'accélérateur à l'image précédente ; crk : les pétarades qui suivent un lever de pied
     if (modOk) brancher(v);
     return v;
@@ -696,7 +699,7 @@ registerProcessor('moteur', Moteur);`;
       const P = MOT[CARD.moteur] || MOT.l6;
       if (v.node) { if (v.typ !== P) { v.node.port.postMessage(P); v.typ = P; } k(v.node.parameters.get('rpm'), rpm * CARD.red, 0.02); k(v.node.parameters.get('load'), load, 0.03); } // le vrai régime : la hauteur vient de la physique
       k(v.eng.gain, 0.5 + 0.5 * load, 0.05);
-      k(v.out.gain, state === 'title' ? 0.004 : 0.02 + 0.018 * load + 0.01 * rpm); // sous la musique, mais présent
+      k(v.out.gain, state === 'title' ? 0.004 : 0.025 + 0.022 * load + 0.0125 * rpm); // sous la musique, mais présent
       const li = state !== 'title' && j.gas && rpm > 0.985 ? 0.5 : 0; k(v.lim.gain, 1 - li, 0.01); k(v.limD.gain, li, 0.01);
       const tb = CARD.turbo ? j.spool : 0; k(v.tw.frequency, 900 + 2600 * tb, 0.1); k(v.twG.gain, 0.005 * tb * tb * (0.25 + 0.75 * load), 0.1);
       if (v.gas && !j.gas && racing) { if (rpm > 0.55 && j.spool > 0.5) petarade(j.spool, t, v.mot); if (tb > 0.4) pschitt(tb, t, v.mot); v.crk = rpm > 0.5 ? 1 : 0; }
@@ -706,7 +709,7 @@ registerProcessor('moteur', Moteur);`;
       const Q = c.sol || SEC, air = c.air ? 0 : 1, meu = clamp((Q.colle - 0.35) / 0.25, 0, 1) * clamp(Q.roul / 0.2, 0, 1), neig = clamp(Q.vir / 0.3, 0, 1) * meu, ice = clamp((Q.vir - 0.3) / 0.3, 0, 1), pv = clamp(Q.roul / 0.15, 0, 1) * (1 - meu), we = clamp(Q.aq / 0.1, 0, 1), sv = Math.min(1, j.sp / 25);
       k(v.roul.gain, air * RL * j.r ** 1.3 * (1 - 0.7 * meu) * (1 - 0.5 * ice), 0.1); k(v.rl.frequency, 600 + 500 * j.r, 0.1); // le pic du roulement monte avec la vitesse, vers 1,1 kHz
       k(v.meub.gain, air * ML * meu * sv, 0.1); k(v.mf.frequency, lerp(1600, 700, neig), 0.2); k(v.gr.playbackRate, 0.8 + 0.4 * j.r, 0.1);
-      k(v.pav.gain, air * 0.2 * pv * sv, 0.1); k(v.po.frequency, 6 + j.sp * 0.8, 0.1); k(v.mou.gain, air * 0.06 * we * j.r, 0.2);
+      k(v.pav.gain, air * 0.08 * pv * sv, 0.1); k(v.po.frequency, 6 + j.sp * 0.8, 0.1); k(v.mou.gain, air * 0.03 * we * j.r, 0.2);
       // glisse : le caoutchouc qui feule (grave, large) et, au-dessus, un crissement par à-coups (adhérence et glissement alternés) ; sur sol meuble, la gerbe ; sur la glace, presque rien
       const slip = Math.abs(c.vl), a = air * (j.sp > 8 ? clamp((slip - 4) / 14, 0, 1) : 0), dur = (1 - meu) * (1 - 0.6 * ice);
       k(v.b1.frequency, 450 + 150 * a, 0.1); k(v.b2.frequency, 950 + 250 * a, 0.1); k(v.b3.frequency, (950 + 250 * a) * 2, 0.1);
