@@ -634,7 +634,6 @@
         if (rnd() < 0.45 && libre(x, z, 18)) cavaliers.push([x, g.hAt(x, z), z, Math.PI / 2 + (rnd() - 0.5) * 0.2]);
         x0 += L + allee;
       }
-      piles.forEach((l, i) => inst(h, h.geo('conteneur'), h.mat('tole', { c: cols[i] }), l));
       const structure = h.mat('metalClair', { c: 0xe0b020 }), cabine = h.mat('metalClair', { c: 0xe8e8e4 }), vitre = h.mat('vitreSombre'), roue = h.mat('roue'), pneu = h.mat('pneu'), machinerie = h.mat('metalClair', { c: 0x8a8e96 });
       insts(h, 'cavalier', { structure, cabine, vitre, roue }, cavaliers);
       insts(h, 'grueParc', { structure: h.mat('metalClair', { c: 0x2c6ab8 }), cabine, vitre, roue, machinerie }, portiques, { a: [24] });
@@ -652,6 +651,22 @@
         const xx = x + (z % 3) * 20; if (!libre(xx, z, 6)) continue; mats35.push([xx, g.hAt(xx, z), z]);
         if (g.dAt(xx, z) < 60) h.lum(near(h, xx, z), xx, 33, z, 0xe8f0ff, 70, 1.6);
       }
+      // ---------- l'enfilade du port (points 10 à 21) : le port vient jusqu'à la route. Vu de la chaussée, les parcs étaient à 40 m et plus, derrière le muret et le brouillard :
+      // un mur de conteneurs de chaque côté, juste derrière le muret, de 2 à 5 de haut avec des brèches sur les parcs ; des projecteurs blancs bas (le blanc dur des quais contre l'orange du sodium) ;
+      // et deux portiques de parc qui enjambent la route
+      { const i0 = pt(h, 10), n = (pt(h, 21) - i0 + N) % N, grues = []; let gr = 7; const al = () => (gr = gr * 16807 % 2147483647) / 2147483647; // hasard propre : ne décale pas rnd, donc rien du reste du décor
+        for (const sd of [-1, 1]) { let br = 0; // br : colonnes qui restent à sauter (une brèche)
+          for (let j = 0; j < n; j += 7) { const i = (i0 + j) % N, s = S[i], [x, z] = bord(s, sd, W + 6.5);
+            if (j % 140 < 14 || mer(x, z) || g.hAt(x, z) < -1.5 || z < CH1 + 4) continue; // de la place sous les deux portiques (j = 0, 140, 280…), pas dans l'eau
+            if (br > 0) { br--; continue; } if (al() < 0.08) { br = 2 + (al() * 3 | 0); continue; }
+            const hh = 2 + (al() * 4 | 0), dom = al() * cols.length | 0;
+            for (let k = 0; k < hh; k++) piles[al() < 0.6 ? dom : al() * cols.length | 0].push([x, g.hAt(x, z) + 1.3 + k * 2.6, z, h.across(s) + Math.PI / 2 + (al() - 0.5) * 0.04]); }
+        }
+        for (let j = 140; j < n - 40; j += 280) { const i = (i0 + j) % N, s = S[i]; grues.push([s.x, s.y, s.z, h.across(s)]); } // les portiques, à la place laissée dans le mur
+        insts(h, 'grueParc', { structure: h.mat('metalClair', { c: 0xe0b020 }), cabine: h.mat('metalClair', { c: 0xe8e8e4 }), vitre: h.mat('vitreSombre'), roue: h.mat('roue'), machinerie: h.mat('metalClair', { c: 0x8a8e96 }) }, grues, { a: [32] });
+        for (let j = 18; j < n; j += 36) { const i = (i0 + j) % N, s = S[i], sd = (j / 36) & 1 ? 1 : -1, [x, z] = bord(s, sd, W + 3.5); // un projecteur tous les 72 m, d'un côté puis de l'autre
+          mats35.push([x, g.hAt(x, z), z]); h.lum(i, x - s.tz * sd * -4, s.y + 20, z + s.tx * sd * -4, 0xe8f0ff, 48, 2.2); } }
+      piles.forEach((l, i) => inst(h, h.geo('conteneur'), h.mat('tole', { c: cols[i] }), l));
       insts(h, 'matEclairage', { acier: h.mat('acier'), lampe }, mats35);
 
       // ---------- navires : deux porte-conteneurs à quai, des remorqueurs, des navires au mouillage au large, et deux qui passent dans le chenal au-dessus du tunnel ----------

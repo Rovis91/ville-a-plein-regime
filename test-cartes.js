@@ -209,3 +209,10 @@ for (const M of CARTES) {
 }
 assert(/const juste = \(n, ok\) => ok\.has/.test(SRC), 'audio.js ne recale plus la basse');
 console.log('OK  radio   justesse vérifiée (thèmes, basses, accords) · ' + CARTES.map(M => M.radio.map(s => s.genre.toLowerCase()).join(' / ')).join(' · '));
+
+// niveau des rivaux : un niveau 0,95 perd au moins 2,5 % au tour sur chaque carte, même là où la voiture tape le rupteur (Paris, l'arène : sans plafond de pointe, 1,5 %)
+{ const pertes = [];
+  for (const id of ['paris', 'stade']) { const T = buildTrack(THREE, CARTES.find(M => M.id === id));
+    const tour = lvl => { const c = newCar(T); let t = 0; while (c.dist < T.n && t < 300) { step(c, autopilot(c, T, lvl), T, H); t += H; } return t; };
+    const p = tour(0.95) / tour(1) - 1; assert(p > 0.025, `${id} : un rival de niveau 0,95 ne perd que ${(p * 100).toFixed(1)} % au tour`); pertes.push(id + ' ' + (p * 100).toFixed(1) + ' %'); }
+  console.log('OK  niveau des rivaux à 0,95 : ' + pertes.join(', ')); }

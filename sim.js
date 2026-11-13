@@ -310,7 +310,9 @@
     }
     const la = S[(c.idx + look) % n];
     const e = wrap(Math.atan2(la.z + la.tx * (off || la.dl) - c.z, la.x - la.tz * (off || la.dl) - c.x) - c.th);
-    const va = vAdmise(T, c.idx), vt = Math.min(vcap, va * lvl * (off ? 0.9 : 1)); // hors trajectoire, on passe moins vite
+    // sous le niveau 1, la pointe baisse aussi : sur une carte où la voiture tape le rupteur (Paris, l'arène), le niveau ne jouait que dans les virages et les rivaux se tenaient en procession
+    const C = T.car, vg = T.vg || (T.vg = C.red / 60 * 2 * Math.PI * C.wheel / (C.ratios[C.ratios.length - 1] * C.final)); // vg : la pointe au rupteur, sur le dernier rapport
+    const va = vAdmise(T, c.idx), vt = Math.min(vcap, va * lvl * (off ? 0.9 : 1), lvl < 1 ? vg * lvl : 1e9); // hors trajectoire, on passe moins vite
     const st = clamp(e * 3, -1, 1);
     return { steer: st, gas: sp < vt ? lvl : 0, brake: sp > vt + 3 ? 1 : 0, hand: false, nitro: sp < vt - 8 && Math.abs(st) < 0.25 && (c.boost > 0 || c.nitro > 0.3) }; // la nitro : en ligne droite, loin du prochain freinage, par coups francs (il attend d'avoir un tiers de jauge)
   }
