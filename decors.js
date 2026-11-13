@@ -842,7 +842,10 @@
         for (let c = -7; c <= 0; c++) { const i0 = (iS + c * 10 + N) % N, dl = S[(i0 + K) % N].dl, f = s => 1 - ((rang.get(s) - i0 + N) % N) / K;
           ruban(i0, K, s => dl + L * f(s), 0.05, s => dl + L * f(s) - e, 0.05, peinture); ruban(i0, K, s => dl - L * f(s) + e, 0.05, s => dl - L * f(s), 0.05, peinture); }
         for (const sd of [-1, 1]) ruban(iS, 70, s => sd * (s.w - 0.4), 0.05, s => sd * (s.w - 1.2), 0.05, peinture); }
-      h.pose('arc', { pierre: h.mat('pierre'), relief: h.mat('basRelief') }, h.scene, [C[0], 0.02, C[1]]).forEach(m => m.rotation.y = PL.a); // l'arc au milieu, grande arche dans l'axe de la traversée ; ses piles sont des obstacles (sim.js)
+      // l'arc au milieu, grande arche dans l'axe de la traversée ; ses piles sont des obstacles (sim.js). Sa pierre est mise en lumière, dorée, comme à l'aube : on le voit du bout des avenues,
+      // c'est le repère de la place (gris comme les façades, il s'y perdait)
+      const dore = m => { m.emissive.setHex(0xffb860); m.emissiveMap = m.map; m.emissiveIntensity = 0.5; return m; };
+      h.pose('arc', { pierre: dore(h.mat('pierre')), relief: dore(h.mat('basRelief')) }, h.scene, [C[0], 0.02, C[1]]).forEach(m => m.rotation.y = PL.a);
       // ---- le terre-plein de l'arc (sim.js : place.ile) : dallage de granit clair, étoile à douze branches en pavés roses, cent bornes de granit reliées par des chaînes,
       // ouvertes dans l'axe de la grande arche ; sous l'arche, la dalle et la flamme ; dix candélabres. L'anneau de chaussée autour reste nu : c'est là qu'on glisse.
       { const [RI, OUV] = PL.ile, A0 = Math.PI / 2 - PL.a, cs = Math.cos(PL.a), sn = Math.sin(PL.a), P2 = (r, a) => [C[0] + Math.cos(a) * r, C[1] + Math.sin(a) * r];

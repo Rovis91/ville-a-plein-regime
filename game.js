@@ -1040,7 +1040,7 @@
       R(hg, HU.fond, bx - 50, by - 2, 172, 12); txt('NITRO', bx - 46, by, 8, f > 0 ? Y : '#6a6a78'); R(hg, '#30303c', bx + 2, by + 2, 116, 4); R(hg, car.boost > 0 ? C : plein ? '#ffffff' : Y, bx + 2, by + 2, Math.round(116 * f), 4);
     }
     if (splitMsg && (splitMsg.T -= dt) > 0) tag('S' + (splitMsg.i + 1) + ' ' + (splitMsg.d == null ? fmt(splitMsg.t) : (splitMsg.d <= 0 ? '-' : '+') + Math.abs(splitMsg.d).toFixed(2)), cx, 102, splitMsg.d == null ? Y : splitMsg.d <= 0 ? C : RD); // écart au record à chaque secteur
-    if (warn && blink) tag(warn > 0 ? '! VIRAGE DROITE >>' : '<< VIRAGE GAUCHE !', cx, 62, Y);
+    if (warn && blink) tag(warn === 2 ? '! GLACE !' : warn > 0 ? '! VIRAGE DROITE >>' : '<< VIRAGE GAUCHE !', cx, 62, warn === 2 ? C : Y); // warn : 1 droite, -1 gauche, 2 plaque de glace devant
     if (race && race.elim && !fini && state === 'race') { // élimination : qui vient de sortir (3 s), et l'alerte tant que le joueur est dernier (le premier tour du meneur est protégé)
       const v = vivantes(), o = race.cars.find(c => c.out && race.t - c.out < 3);
       if (o) tag(pil(o)[0] + ' SORT' + (v.length === 2 ? ' · DUEL FINAL' : ''), cx, 118, C);
@@ -1271,7 +1271,9 @@
     splGeo.attributes.position.needsUpdate = splGeo.attributes.color.needsUpdate = true;
 
     // alerte de virage : seulement un virage serré pour la vitesse du moment (alerteVirage, sim.js)
-    drawHUD(vu, dt, sp, state === 'race' ? alerteVirage(T, car.idx, sp) : 0);
+    // et la glace vive (T.surf, vir > 0,4) qui arrive entre 1,2 et 3,6 s devant, quand on n'y est pas encore : sans elle, une plaque était une surprise
+    const glace = j => !!T.surf && T.surf[(car.idx + j) % N].vir > 0.4, D = Math.round(sp * 0.6); let surGlace = false; if (state === 'race' && sp > 15 && !glace(0)) for (let j = D; j < 3 * D && !surGlace; j++) surGlace = glace(j);
+    drawHUD(vu, dt, sp, state === 'race' ? alerteVirage(T, car.idx, sp) || (surGlace ? 2 : 0) : 0);
     const U = post.uniforms; U.t.value = vu.rt.texture; U.h.value = vu.hudT; if (U.dz) U.dz.value = vu.rt.depthTexture; U.px.value.set(AA / vu.rw, AA / RH); post.uniforms.vig.value = nitE; // la passe finale est commune : ses entrées sont celles de la vue
     // flou de vitesse : rien sous 55 % de la vitesse de pointe, léger au-delà, franc seulement pendant la nitro
     post.uniforms.amt.value = 0.35 * Math.max(0, (r - 0.55) / 0.45) ** 2; post.uniforms.ab.value = 0.002 + 0.004 * r + (stun > 0 ? stun * 0.06 : 0);
