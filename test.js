@@ -71,6 +71,9 @@ assert(c.nitro > 0.02 && c.nitro < 0.5, 'la glisse tenue doit remplir la jauge d
   assert(ecart(vide, temoin) === 0 && !vide.boost, 'nitro sans jauge : aucun effet');
   assert(mi.boost && mi.nitro > 0.3 && mi.nitro < 0.9, 'la jauge doit se vider peu à peu pendant la poussée: ' + mi.nitro);
   assert(avec.nitro === 0 && !avec.boost && avec.dist > sans.dist + 15 && avec.vf > sans.vf + 5, `la nitro doit faire gagner du terrain en ligne droite: ${avec.dist * 2} m contre ${sans.dist * 2} m, ${avec.vf} contre ${sans.vf} m/s`);
+  // reprise : 2 s de nitro font gagner plus de vitesse à 30 km/h (après une erreur) qu'à 180 km/h
+  const gain = v0 => { const r = [false, true].map(nitro => { const c = newCar(T); run(c, I(0, 1), 0.01); c.vx = Math.cos(c.th) * v0 / 3.6; c.vz = Math.sin(c.th) * v0 / 3.6; c.nitro = 1; run(c, { ...I(0, 1), nitro }, 2); return c.vf; }); return r[1] - r[0]; };
+  assert(gain(30) > 1.2 * gain(180), `la nitro doit aider à reprendre : +${gain(30) * 3.6} km/h à 30 km/h, +${gain(180) * 3.6} à 180`);
   // boîte manuelle : la nitro ne passe le rupteur que sur le dernier rapport ; tenue en 1re, elle ne fait pas dépasser les 72 km/h du rupteur
   const m1 = newCar(T); m1.manual = true; m1.nitro = 1; run(m1, { ...I(0, 1), nitro: true }, 3);
   assert(m1.gear === 0 && m1.vf * 3.6 < 80, `nitro en 1re : ${m1.vf * 3.6} km/h, le rupteur ne tient plus`);

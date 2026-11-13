@@ -35,11 +35,11 @@
   const mele = (a, b, f) => f <= 0 ? a : f >= 1 ? b : Object.fromEntries(Object.keys(a).map(k => [k, lerp(a[k], b[k], f)]));
   const surf = (T, i) => T.surf ? T.surf[i] : SURF.sec;
   // Nitro : une jauge par voiture (c.nitro, 0 à 1) que la commande inp.nitro dépense, gaz ouverts et roues au sol. c.boost = 1 pendant qu'elle pousse.
-  //   dur = secondes de poussée d'une jauge pleine ; acc = poussée (m/s²)
+  //   dur = secondes de poussée d'une jauge pleine ; acc = poussée (m/s²) à TOP et au-delà, jusqu'à (1 + rep) fois plus à l'arrêt : elle sert aussi à repartir après une erreur
   //   remplissage, en jauge par seconde : gl = glisse tenue (à TOP, plein débit après 0,6 s de glisse) ; mur = frotter un mur sans le taper ; cam = doubler un camion au ras ; asp = dans l'aspiration d'un rival
   //   un choc franc (mur ou camion) la vide
   // Aspiration (course) : derrière une voiture, de 3 à ad m, dans un cône qui s'ouvre de ac par mètre : jusqu'à acx de traînée en moins, tout près
-  const NI = { dur: 3, acc: 6, gl: 0.3, mur: 0.5, cam: 0.6, asp: 0.12, ad: 30, ac: 0.08, acx: 0.5 };
+  const NI = { dur: 3, acc: 6, rep: 1, gl: 0.3, mur: 0.5, cam: 0.6, asp: 0.12, ad: 30, ac: 0.08, acx: 0.5 };
   const gagne = (c, x) => { c.nitro = Math.min(1, c.nitro + x); };
   // Mode Glisse : le score, calculé à part de la physique (points() ne fait que lire la voiture : aucun temps au tour n'en dépend). Tenu pour toute voiture, lu par le mode Glisse.
   //   c.cours = points de la glisse en cours ; c.score = points acquis ; c.mult = multiplicateur d'enchaînement
@@ -185,15 +185,15 @@
     const ratio = CARD.ratios[c.gear], wr = av * K * ratio, er = Math.max(wr, c.gear === 0 && inp.gas ? 3500 : CARD.idle); // en 1re, l'embrayage patine vers 3500 tr/min au démarrage
     c.rpm += (Math.min(er, CARD.red + 150) - c.rpm) * Math.min(1, dt * 18);
     const pousse = inp.nitro && inp.gas && c.nitro > 0 ? 1 : 0; if (pousse && !c.boost) c.nBoost++;
-    let acc = 0;
+    let acc = 0, rup = false;
     if (c.shiftT > 0) c.shiftT -= dt;
-    else if (wr > CARD.red && !(pousse && c.gear === CARD.ratios.length - 1)) acc = -6 * Math.sign(vf); // surrégime : rupteur et gros frein moteur
+    else if (wr > CARD.red && !(pousse && c.gear === CARD.ratios.length - 1)) { acc = -6 * Math.sign(vf); rup = true; } // surrégime : rupteur et gros frein moteur
     else {
       const tqe = inp.gas * torque(er) - (1 - inp.gas) * (20 + 0.01 * er) * Math.sign(vf); // couple moteur, ou frein moteur pied levé
       acc = Math.min(CARD.trac * (1 - Q.trac), tqe * ratio * CARD.final * CARD.eff / CARD.wheel / CARD.mass); // plafonné par la motricité (~1,1 g en 4 roues motrices, moins en propulsion)
     }
     c.boost = pousse; // (sur le dernier rapport la nitro passe le rupteur : elle pousse aussi une voiture en bout de course ; sur les autres le rupteur tient, sinon une 1re tenue en boîte manuelle garderait tout son couple au-delà du régime maxi)
-    if (pousse) { c.nitro = Math.max(0, c.nitro - dt / NI.dur); acc += NI.acc; }
+    if (pousse) { c.nitro = Math.max(0, c.nitro - dt / NI.dur); acc += NI.acc * (rup ? 1 : 1 + NI.rep * Math.max(0, 1 - av / TOP)); } // au rupteur, la poussée de base seulement : il tient toujours
     if (c.stun > 0) { c.stun -= dt; if (acc > 0) acc *= 0.2; }
     vf += acc * dt;
     const s0 = S[c.idx]; if (Math.abs(vf) > 1) vf -= 9.81 * s0.sl * (fx * s0.tx + fz * s0.tz) * dt; // la pente pousse ou retient
