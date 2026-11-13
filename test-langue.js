@@ -6,7 +6,7 @@ const assert = require('assert'), fs = require('fs');
 require('./langue.js'); require('./sim.js');
 const MEME = new Set(['XYZ', 'YXZ', 'YZX', // ordres de rotation de three.js
   'SPEED', 'CITY', 'NOODLE', 'BAR', 'KENJI', 'REI', 'JUN', // enseignes du décor, noms des rivaux
-  'RADIO', 'REC', 'SHIFT', 'GO', 'AUTO', 'MODE', 'NITRO', 'RECORD', 'MENU', 'PAUSE', 'SCORE', 'PTS', 'KM', 'TUNNEL', 'BRONZE', 'NORMAL', 'ENGLISH', 'FRANCAIS', 'JOY', 'CON', 'IA', 'FM', 'SPEEDWAY', 'PARIS', 'KARASU', 'TOGE', 'WAN', 'BAYSHORE', 'CANAL', 'SIX', 'PRIX', 'GRAND',
+  'RADIO', 'SOLO', 'REC', 'SHIFT', 'GO', 'AUTO', 'MODE', 'NITRO', 'RECORD', 'MENU', 'PAUSE', 'SCORE', 'PTS', 'KM', 'TUNNEL', 'BRONZE', 'NORMAL', 'ENGLISH', 'FRANCAIS', 'JOY', 'CON', 'IA', 'FM', 'SPEEDWAY', 'PARIS', 'KARASU', 'TOGE', 'WAN', 'BAYSHORE', 'CANAL', 'SIX', 'PRIX', 'GRAND',
   'ER', // shortcut: ordinal en morceaux (n + 'ER' / 'E'), que traduit() lit en entier ; à revoir si un « ER » isolé devient du texte
 ]);
 const sans = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '');

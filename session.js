@@ -39,7 +39,7 @@
     };
     S.start = ({ mode, diff, nj = 1, ia = false, duel = false }) => {
       S.mode = mode; S.diff = diff; S.tnFin = null;
-      S.race = duel ? G.newRace(T, 2, [], 0, { humains: 2, delai: GLT }) // Glisse en duel : les deux joueurs seuls en piste, le délai du solo pour chacun
+      S.race = duel ? G.newRace(T, 2, [], 0, { humains: nj, delai: GLT }) // Glisse en duel : les deux joueurs seuls en piste, le délai du solo pour chacun
         : ia ? G.newRace(T, 3, G.AI_LVL.slice(0, 4 - nj).map(l => l * G.DIFF[diff].k), G.DIFF[diff].el, { elim: mode === 'elim', grille: mode === 'tournee' && G.tournee(S.tnOu(diff).pts).grille, humains: nj }) : null; // à deux : toujours quatre voitures
       S.raceEnd = false; S.glFin = null; fini = []; si = 0; cur = []; recG = []; S.tRace = 0; S.lapN = 1;
       return S.race;
