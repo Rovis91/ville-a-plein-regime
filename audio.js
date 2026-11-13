@@ -370,9 +370,9 @@
       o.connect(filt('lowpass', 1200, 0.7, g)); g.connect(ambBed); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.03, t + 1.5); g.gain.linearRampToValueAtTime(0, t + 4); o.start(t); o.stop(t + 4.1); return rnd(25, 50); } // sirène lointaine
     return 10;
   }
-  function pump() { // avance le séquenceur jusqu'à 0,12 s devant l'horloge audio
+  function pump() { // avance le séquenceur jusqu'à 0,25 s devant l'horloge audio : une image qui cale (pluie du port de WAN-9, ramasse-miettes, shader compilé) ne fait plus de trou ; la musique réagit aux événements de course jusqu'à 0,25 s plus tard
     while (nextT < AC.currentTime - 0.2) { nextT += S16; stp++; } // onglet en veille : on saute au lieu de rattraper
-    while (nextT < AC.currentTime + 0.12) { sched(stp++, nextT); nextT += S16 / (1 - 0.1 * platine); }
+    while (nextT < AC.currentTime + 0.25) { sched(stp++, nextT); nextT += S16 / (1 - 0.1 * platine); }
   }
   // Une voix = ce qu'un joueur entend de sa voiture. Moteur : 3 oscillateurs (ordre 1, 1/2, 3/2) → saturation → filtre de charge → formant d'échappement → battement.
   // Pneus : la glisse se tient longtemps, donc un feulement grave et large plutôt qu'un sifflement ; + grondement de ripage.
