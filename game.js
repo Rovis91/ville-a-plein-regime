@@ -88,7 +88,7 @@
   // Une vue est un joueur : sa place (rang n, périphérique, entrée de l'image, compte de tours, « arrivé »), sa voiture (moi) et son modèle animé (hu), plus ce que sa caméra regarde (car : moi, sauf éliminé à deux).
   // VUES[0] est le joueur 1 : VUES[0].moi est la voiture du jeu hors course (il n'y a pas d'autre variable « la voiture du joueur »).
   const VUES = [], AA = ST ? ST.aa : 1, deux = () => VUES.length > 1;
-  const suit = (vu, c) => { vu.moi = vu.car = c; vu.hu.hist.length = 0; vu.cth = c.th; vu.carY = S[c.idx].y; vu.result = null; vu.fini = vu.spec = false; vu.lap0 = [0, 0, 0]; }; // la vue se cale derrière la voiture c, compteurs de course à zéro : au départ, au retour au menu
+  const suit = (vu, c) => { vu.moi = vu.car = c; vu.hu.hist.length = vu.hu.gR[0].length = vu.hu.gR[1].length = vu.hu.gOn[0] = vu.hu.gOn[1] = 0; vu.cth = c.th; vu.carY = S[c.idx].y; vu.result = null; vu.fini = vu.spec = false; vu.lap0 = [0, 0, 0]; }; // la vue se cale derrière la voiture c, compteurs de course à zéro : au départ, au retour au menu
   const nouvelleVue = () => {
     const rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
     if (ST && ST.aa > 1) rt.texture.minFilter = rt.texture.magFilter = THREE.LinearFilter; // suréchantillonnage : la cible est aa fois plus fine, la passe finale en fait la moyenne
@@ -465,21 +465,37 @@
   const trainee = () => { // un jeu de traînées par voiture humaine (voir HUM) ; caché tant qu'aucune vue ne le tient : ses dernières positions et son ruban
     const P = new Float32Array(TN * 12), C = new Float32Array(TN * 12), geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(P, 3)); geo.setAttribute('color', new THREE.BufferAttribute(C, 3)); geo.setIndex(trailI);
-    const tr = new THREE.Mesh(geo, trailMat); tr.frustumCulled = tr.visible = false; scene.add(tr); return { hist: [], P, C, geo, tr };
+    const tr = new THREE.Mesh(geo, trailMat); tr.frustumCulled = tr.visible = false; scene.add(tr);
+    const gP = new Float32Array(GN * 12), gC = new Float32Array(GN * 16), gGeo = new THREE.BufferGeometry(), gm = new THREE.Mesh(gGeo, gmMat); // traces de gomme
+    gGeo.setAttribute('position', new THREE.BufferAttribute(gP, 3)); gGeo.setAttribute('color', new THREE.BufferAttribute(gC, 4)); gGeo.setIndex(gmI); gm.frustumCulled = false; scene.add(gm);
+    return { hist: [], P, C, geo, tr, gR: [[], []], gOn: [0, 0], gP, gC, gGeo, vAcc: 0 };
   };
+  // traces de gomme de la glisse : un ruban au sol par roue arrière, un point tous les GD mètres au plus, effacé en GV secondes
+  const GN = 240, GV = 8, GD = 0.8, gmI = [], gmMat = new THREE.MeshBasicMaterial({ color: 0x050506, vertexColors: true, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  for (let l = 0; l < 2; l++) for (let k = 0; k < GN - 1; k++) { const a = (l * GN + k) * 2; gmI.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
 
   // particules additives : fumée de pneus, étincelles contre les murs, flammes d'échappement
   const PN = 320, pP = new Float32Array(PN * 3), pC = new Float32Array(PN * 3), pV = new Float32Array(PN * 3), pB = new Float32Array(PN * 3), pL = new Float32Array(PN), pM = new Float32Array(PN), pGv = new Float32Array(PN), pGeo = new THREE.BufferGeometry();
   let pi = 0;
   pGeo.setAttribute('position', new THREE.BufferAttribute(pP, 3)); pGeo.setAttribute('color', new THREE.BufferAttribute(pC, 3));
   const parts = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 1.1, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false })); parts.frustumCulled = false; scene.add(parts);
-  // poussière des cartes en terre (th.poussiere = sa teinte) : des disques flous, opaques, qui grossissent en s'effaçant ; à part des particules additives, qui la faisaient lire en carrés clairs
-  const DN = 480, dP = new Float32Array(DN * 3), dV = new Float32Array(DN * 3), dA = new Float32Array(DN).fill(1), dGeo = new THREE.BufferGeometry(), dEch = { value: 135 }; let di = 0;
-  dGeo.setAttribute('position', new THREE.BufferAttribute(dP, 3)); dGeo.setAttribute('age', new THREE.BufferAttribute(dA, 1));
-  if (TH.poussiere) { const d = new THREE.Points(dGeo, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { col: { value: new THREE.Color(...TH.poussiere) }, ech: dEch },
-    vertexShader: 'attribute float age; varying float a; uniform float ech; void main() { a = age; vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_PointSize = age < 1.0 ? ech * projectionMatrix[1][1] * (1.1 + 6.0 * age) / -p.z : 0.0; }',
-    fragmentShader: 'varying float a; uniform vec3 col; void main() { float r = length(gl_PointCoord - 0.5) * 2.0; if (r > 1.0 || a >= 1.0) discard; gl_FragColor = vec4(col, (1.0 - r * r) * (1.0 - a) * min(1.0, 0.15 + a * 4.0) * 0.5); }' })); d.frustumCulled = false; scene.add(d); }
-  function poussiere(x, y, z, vx, vy, vz) { const i = di++ % DN; dP.set([x, y, z], i * 3); dV.set([vx, vy, vz], i * 3); dA[i] = 0; }
+  // nuages flous : des disques opaques qui grossissent en s'effaçant (en additif ils se lisaient en carrés clairs) ; la poussière des cartes en terre (th.poussiere = sa teinte) et la fumée des pneus
+  const dEch = { value: 135 };
+  const flou = (N, col, op) => { const P = new Float32Array(N * 3), V = new Float32Array(N * 3), A = new Float32Array(N).fill(1), g = new THREE.BufferGeometry(); let i = 0;
+    g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('age', new THREE.BufferAttribute(A, 1));
+    const d = new THREE.Points(g, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { col: { value: new THREE.Color(...col) }, ech: dEch, op: { value: op } },
+      vertexShader: 'attribute float age; varying float a; uniform float ech; void main() { a = age; vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_PointSize = age < 1.0 ? ech * projectionMatrix[1][1] * (1.1 + 6.0 * age) / -p.z : 0.0; }',
+      fragmentShader: 'varying float a; uniform vec3 col; uniform float op; void main() { float r = length(gl_PointCoord - 0.5) * 2.0; if (r > 1.0 || a >= 1.0) discard; gl_FragColor = vec4(col, (1.0 - r * r) * (1.0 - a) * min(1.0, 0.15 + a * 4.0) * op); }' })); d.frustumCulled = false; scene.add(d);
+    return { emit(x, y, z, vx, vy, vz) { const k = i++ % N; P.set([x, y, z], k * 3); V.set([vx, vy, vz], k * 3); A[k] = 0; },
+      step(dt) { const fr = Math.exp(-3 * dt); for (let k = 0; k < N; k++) if (A[k] < 1) { const j = k * 3; A[k] += dt / 1.4; V[j] *= fr; V[j + 2] *= fr; P[j] += V[j] * dt; P[j + 1] += V[j + 1] * dt; P[j + 2] += V[j + 2] * dt; }
+        g.attributes.position.needsUpdate = g.attributes.age.needsUpdate = true; } };
+  };
+  const POUS = TH.poussiere && flou(480, TH.poussiere, 0.5), FUM = flou(600, [0.68, 0.68, 0.72], 0.55), poussiere = (...a) => POUS.emit(...a);
+  // lignes de vitesse de la nitro : des traits posés autour de la route, qui reculent vers la voiture et qu'elle dépasse ; tête vive, queue éteinte
+  const VN = 160, vP = new Float32Array(VN * 6), vCo = new Float32Array(VN * 6), vS = new Float32Array(VN * 4), vGeo = new THREE.BufferGeometry(); let vi = 0;
+  vGeo.setAttribute('position', new THREE.BufferAttribute(vP, 3)); vGeo.setAttribute('color', new THREE.BufferAttribute(vCo, 3));
+  const vites = new THREE.LineSegments(vGeo, new THREE.LineBasicMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false })); vites.frustumCulled = false; scene.add(vites);
+  function trait(x, y, z, vx, vz) { const i = vi++ % VN; vP.set([x, y, z], i * 6); vS.set([vx, vz, 0.6, 0.6], i * 4); } // vitesse au sol, vie restante, vie de départ
   function emit(x, y, z, vx, vy, vz, life, r, gg, b, grav) { const i = pi++ % PN; pP.set([x, y, z], i * 3); pV.set([vx, vy, vz], i * 3); pB.set([r, gg, b], i * 3); pL[i] = pM[i] = life; pGv[i] = grav; }
 
   let flashT = 0, nextFlash = 6;
@@ -504,11 +520,24 @@
     // émissions
     if (land > 3) for (let i = 0; i < Math.min(14, land * 1.5); i++) { const sd = i & 1 ? 1 : -1, av = i & 2 ? 1.4 : -1.4; // réception : une bouffée de poussière chassée de chaque roue, vers l'extérieur
       emit(car.x + fx * av - fz * sd * 0.9, carY + 0.15, car.z + fz * av + fx * sd * 0.9, car.vx * 0.6 - fz * sd * (3 + Math.random() * 5), 0.5 + Math.random() * 2, car.vz * 0.6 + fx * sd * (3 + Math.random() * 5), 0.35, 0.2, 0.19, 0.17, -1); }
-    if ((car.slide > 0.3 || car.frA) && sp > 10 && !car.air) for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.2, car.z - fz * 1.4 + rz * sd, car.vx * 0.25 + jit(4), 1 + Math.random() * 2.5, car.vz * 0.25 + jit(4), 0.9, lerp(0.16, 0.28, lm), lerp(0.18, 0.06, lm), lerp(0.28, 0.06, lm), -1);
+    if ((car.slide > 0.3 || car.frA || car.dd) && sp > 10 && !car.air) for (const sd of [-0.9, 0.9]) FUM.emit(car.x - fx * 1.4 + rx * sd + jit(0.4), carY + 0.25, car.z - fz * 1.4 + rz * sd + jit(0.4), car.vx * 0.65 + rx * sd * 2 + jit(3), 0.6 + Math.random(), car.vz * 0.65 + rz * sd * 2 + jit(3)); // fumée de pneus : un nuage qui gonfle et monte, chassé vers l'extérieur ; elle garde une part de la vitesse, sinon elle passe derrière la caméra avant d'avoir gonflé
     if (hit > 3) { const s = S[car.idx], sg = Math.sign(car.d); for (let i = 0; i < 16; i++) emit(car.x - s.tz * sg, carY + 0.5, car.z + s.tx * sg, car.vx * 0.5 + jit(14), 2 + Math.random() * 7, car.vz * 0.5 + jit(14), 0.5, 1, 0.75, 0.25, 22); }
     else if (car.rub && sp > 8) { const s = S[car.idx], sg = Math.sign(car.d); for (let i = 0; i < 3; i++) emit(car.x - s.tz * sg, carY + 0.4, car.z + s.tx * sg, car.vx * 0.6 + jit(5), 1 + Math.random() * 4, car.vz * 0.6 + jit(5), 0.35, 1, 0.75, 0.25, 22); } // frottement continu : gerbe plus fine que le choc
     for (const fl of hu.fl) { fl.visible = car.boost > 0; fl.scale.y = (0.5 + Math.random() * 0.7) * Math.min(1, car.boost * 2); } // nitro : deux flammes d'échappement qui vacillent, les traînées virent au bleu
-    if (car.dd && sp > 10 && !car.air) { const ok = car.driftT > 0.6; for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.15, car.z - fz * 1.4 + rz * sd, car.vx * 0.5 + rx * sd * 3 + jit(3), 1 + Math.random() * 3, car.vz * 0.5 + rz * sd * 3 + jit(3), 0.3, ok ? 1 : 0.3, ok ? 0.55 : 0.6, ok ? 0.1 : 1, 14); } // glisse : étincelles aux roues arrière, bleues puis orange quand la jauge se remplit à plein débit
+    const gl = car.dd && sp > 10 && !car.air;
+    if (gl && car.driftT > 0.6 && Math.random() < 0.12) for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.15, car.z - fz * 1.4 + rz * sd, car.vx * 0.5 + rx * sd * 3 + jit(3), 1 + Math.random() * 3, car.vz * 0.5 + rz * sd * 3 + jit(3), 0.3, 1, 0.55, 0.1, 14); // palier de glisse (la jauge se remplit à plein débit) : des étincelles orange dans la fumée
+    // traces de gomme : chaque roue arrière tire son ruban tant qu'elle glisse ; un point d'alpha nul ouvre et ferme chaque trace, pour ne pas la relier à la suivante
+    // shortcut: posées à la hauteur de la voiture, sans le tangage ; sur une pente raide le bout peut s'enfoncer ou flotter de quelques centimètres
+    for (let l = 0; l < 2; l++) { const R = hu.gR[l], sd = l ? zr : -zr, p = { x: car.x + fx * xr + rx * sd, y: carY + 0.04, z: car.z + fz * xr + rz * sd, rx, rz, t: 0, a: 0.7 };
+      if (gl) { if (!hu.gOn[l]) R.unshift({ ...p, a: 0 }); hu.gOn[l] = 1; if (!R[0].a || Math.hypot(p.x - R[1].x, p.z - R[1].z) > GD) R.unshift(p); else Object.assign(R[0], p, { t: R[0].t }); }
+      else if (hu.gOn[l]) { R.unshift({ ...R[0], a: 0 }); hu.gOn[l] = 0; }
+      for (const e of R) e.t += dt; while (R.length && (R.length > GN || R[R.length - 1].t > GV)) R.pop();
+      for (let k = 0; k < GN; k++) { const e = R[k], a = (l * GN + k) * 6, c = (l * GN + k) * 8, w = tw / 2; if (!e) { hu.gC.fill(0, c, c + 8); continue; }
+        hu.gP.set([e.x - e.rx * w, e.y, e.z - e.rz * w, e.x + e.rx * w, e.y, e.z + e.rz * w], a); const al = e.a * (1 - e.t / GV); hu.gC.set([1, 1, 1, al, 1, 1, 1, al], c); } }
+    hu.gGeo.attributes.position.needsUpdate = hu.gGeo.attributes.color.needsUpdate = true;
+    // nitro : tant qu'elle pousse, des lignes de vitesse filent autour de la voiture
+    if (car.boost > 0) for (hu.vAcc += 90 * dt; hu.vAcc >= 1; hu.vAcc--) { const an = Math.random() * Math.PI, r = 2.5 + Math.random() * 5, av = 15 + Math.random() * 30;
+      trait(car.x + fx * av + rx * Math.cos(an) * r, carY + 0.4 + Math.sin(an) * r, car.z + fz * av + rz * Math.cos(an) * r, -fx * 45, -fz * 45); }
   }
   // effets de la scène entière, une fois par image : poussière, particules, éclairs, vie du décor
   function fxFrame(dt, now) {
@@ -517,8 +546,12 @@
         if (v < 8 || c.air || c.out || !(VUES.some(v => v.car === c) || c.drift || Math.random() < 0.5)) continue;
         if (q.aq) for (let k = 0; k < 3; k++) poussiere(x + jit(1), c.y + 0.15, z + jit(1), c.vx * 0.8 + jit(5), 1.5 + Math.random() * 4, c.vz * 0.8 + jit(5)); // l'eau du gué est trouble : une gerbe de la même teinte, plus haute
         else if (q.roul > 0.25) for (let k = 0; k < 2; k++) poussiere(x + jit(0.6), c.y + 0.15, z + jit(0.6), c.vx * 0.7 + jit(2), 0.3 + Math.random() * 1.2, c.vz * 0.7 + jit(2)); }
-      const fr = Math.exp(-3 * dt); for (let i = 0; i < DN; i++) if (dA[i] < 1) { const j = i * 3; dA[i] += dt / 1.4; dV[j] *= fr; dV[j + 2] *= fr; dP[j] += dV[j] * dt; dP[j + 1] += dV[j + 1] * dt; dP[j + 2] += dV[j + 2] * dt; }
-      dEch.value = RH / 2; dGeo.attributes.position.needsUpdate = dGeo.attributes.age.needsUpdate = true; }
+      POUS.step(dt); }
+    FUM.step(dt); dEch.value = RH / 2;
+    for (let i = 0; i < VN; i++) { const j = i * 6, s = i * 4; if (vS[s + 2] <= 0) { vCo.fill(0, j, j + 6); continue; }
+      vS[s + 2] -= dt; const a = Math.max(0, vS[s + 2] / vS[s + 3]); vP[j] += vS[s] * dt; vP[j + 2] += vS[s + 1] * dt; vP[j + 4] = vP[j + 1];
+      vP[j + 3] = vP[j] - vS[s] * 0.12; vP[j + 5] = vP[j + 2] - vS[s + 1] * 0.12; vCo.set([0.7 * a, 0.9 * a, a, 0, 0, 0], j); }
+    vGeo.attributes.position.needsUpdate = vGeo.attributes.color.needsUpdate = true;
     for (let i = 0; i < PN; i++) {
       if (pL[i] <= 0) continue;
       pL[i] -= dt; const j = i * 3, f = Math.max(0, pL[i] / pM[i]);
