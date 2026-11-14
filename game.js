@@ -1621,8 +1621,11 @@
     const rs = clamp((rv - 0.4) / 0.6, 0, 1), shake = 0.03 * rs + 0.045 * rs * rs * rs, choc = stun > 0 ? stun * 0.35 : 0; // vitesse : rien sur les 40 % bas de la plage des effets (130 km/h → pointe), plein à la pointe ; choc : bref, nerveux
     // la caméra suit le sol sous elle, sans tomber dans une fosse que la voiture survole (±2,5 m autour du sol de la voiture), monte avec la voiture en vol et penche avec elle sur une paroi
     const y0 = yAt(car), ySol = k => clamp(yAt(car, k), y0 - 2.5, y0 + 2.5) + air;
-    cam.position.set(px + vib() * shake + (Math.random() - 0.5) * choc, ySol(-3) + (M.camH || 3.2) + lookP - 0.5 * rc + vib() * shake * 0.7 + (Math.random() - 0.5) * choc, pz);
-    cam.lookAt(car.x + cx * 10, ySol(5) + 1.1, car.z + cz * 10); cam.rotateZ(-0.6 * roll);
+    // hauteurs lissées : collée à la voiture, la caméra partait d'un coup au décollage et tombait sec à la réception ; plus mou en vol (~0,4 s) qu'au sol (~0,1 s, la pente reste suivie). Écart > 20 m (départ, replacement) : on recale net
+    const ky = Math.min(1, dt * (car.air ? 2.5 : 10)), lis = (k, t) => (vu[k] = Math.abs(t - vu[k]) < 20 ? vu[k] + (t - vu[k]) * ky : t);
+    const yc = Math.max(lis('cy', ySol(-3)), yAt(car, -3) + 0.8 - (M.camH || 3.2)), yl = lis('ly', ySol(5)); // jamais sous la route à l'endroit de la caméra
+    cam.position.set(px + vib() * shake + (Math.random() - 0.5) * choc, yc + (M.camH || 3.2) + lookP - 0.5 * rc + vib() * shake * 0.7 + (Math.random() - 0.5) * choc, pz);
+    cam.lookAt(car.x + cx * 10, yl + 1.1, car.z + cz * 10); cam.rotateZ(-0.6 * roll);
     cam.rotateX(vib() * shake * 0.12); cam.rotateY(vib() * shake * 0.08); // l'image elle-même tressaute (≈ 0,4° à la pointe), sec et petit
     const nitE = vu.nit * vu.nit * (3 - 2 * vu.nit); // nitro : départ et arrivée en douceur (champ élargi et vignette)
     cam.fov = 62 + 20 * rc + 10 * rv * rv + 3 * car.slide + 6 * nitE; // + grand-angle en fin de course : l'effet tunnel
