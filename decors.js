@@ -602,8 +602,8 @@
     terre(h) {
       const { THREE, S, N, W, rnd } = h, [[g0, g1], [b0, b1]] = h.M.surf.zones, entre = (i, a, n) => (i - a + 2 * N) % N <= n, m = i => S[(i + 2 * N) % N];
       const iG = (pt(h, g0) + pt(h, g1)) >> 1, iB = pt(h, b0), nB = (pt(h, b1) - iB + N) % N;
-      // plat(i) : là où le sol reste au niveau de la route (gué, hameau, parc d'assistance du départ) ; ailleurs les bas-côtés montent en talus
-      const plat = i => entre(i, iG - 30, 60) || entre(i, iB - 10, nB + 20) || entre(i, -50, 130), parc = i => entre(i, -50, 130);
+      // plat(i) : là où le sol reste au niveau de la route (gué, hameau avec son moulin et sa pâture, parc d'assistance du départ) ; ailleurs les bas-côtés montent en talus
+      const plat = i => entre(i, iG - 30, 60) || entre(i, iB - 60, nB + 80) || entre(i, -50, 130), parc = i => entre(i, -50, 130);
       const sub = S.filter((_, i) => i % 4 === 0), pres = (x, z) => { let b = 0, bd = 1e18; for (let k = 0; k < sub.length; k++) { const d = (sub[k].x - x) ** 2 + (sub[k].z - z) ** 2; if (d < bd) { bd = d; b = k; } } return [Math.sqrt(bd), b * 4]; };
       const ss = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
       // le village perché : sur une butte à sommet plat, au point de l'emprise le plus loin de la route
@@ -638,7 +638,7 @@
         for (let dk = -nb * 4 - 1; dk <= nb * 4 + 1; dk += 2) { const t = m(i + dk), [x, z] = bord(t, sd, W + 1.3); bottes.push([x, t.y - 0.1, z, h.across(t)]); }
         for (let dk = -nb * 4; dk <= nb * 4; dk += 4) { const t = m(i + dk), [x, z] = bord(t, -sd, W + 0.45); pan.push([x, t.y + 1.45, z, h.across(t) + Math.PI / 2]); } // banderoles en face, au-dessus du muret
         for (let k = 0; k < nb + 1; k++) { const t = m(i - nb * 4 + k * 7), [x, z] = bord(t, sd, W + 15 + rnd() * 5); if (prend(x, z, 3.5)) auto(x, z, h.across(t) + (rnd() - 0.5), COUL[(i + k) % 6]); } };
-      const pris = i => talus.some(t => entre(i, t[7] - 34, 68)), libre = i => !entre(i, iG - 22, 44) && !entre(i, iB - 14, nB + 28) && !parc(i);
+      const pris = i => talus.some(t => entre(i, t[7] - 34, 68)), libre = i => !entre(i, iG - 22, 44) && !entre(i, iB - 14, nB + 64) && !parc(i); // ni au gué, ni au hameau et à sa pâture, ni au parc
       for (const i of [-30, 0, 30, 60]) groupe(i, -1, 3); // la tribune de terre face au parc
       for (const i of crete) for (const sd of [-1, 1]) groupe(i + 22, sd, 2);
       for (let i = 0; i < N; i++) { const s = S[i], k = Math.abs(s.k); if (k >= 0.012 && k >= Math.abs(m(i + 1).k) && k >= Math.abs(m(i - 1).k) && libre(i) && !pris(i)) groupe(i, s.k > 0 ? -1 : 1, k > 0.022 ? 3 : 2); } // l'extérieur : à gauche d'un virage à droite
@@ -651,6 +651,27 @@
       inst(h, h.geo('boite', 7.6, 0.9, 0.1), h.mat('banderoleRallye', { side: THREE.DoubleSide }, 2), pan1).castShadow = false; // 7,6 m tous les 8 m : un jour entre deux, pas de chevauchement en virage
       // portiques des crêtes, 30 m avant le bout, aux couleurs de la spéciale : la crête se lit au relief, au portique et au public, sans marquage au sol
       insts(h, 'portiqueSaut', { acier: h.mat('acier'), banderole: h.mat('banderoleRallye', { side: THREE.DoubleSide, rep: [2, 1] }, 4) }, crete.map(i => { const s = m(i - 15); return [s.x, s.y, s.z, h.across(s)]; }), { a: [W] });
+      // pts 18-22 : l'hélicoptère de la télévision, en vol stationnaire à 26 m au-dessus du bord droit de la piste, le nez vers elle ; il se balance, le rotor tourne (animé plus bas)
+      const sH = m(pt(h, 20)), [hx, hz] = bord(sH, 1, 5), heli = new THREE.Group(), rotor = new THREE.Group(), hy = sH.y + 26; heli.userData.dyn = 1; h.scene.add(heli); // dyn : il bouge, hors fusion du décor fixe (game.js)
+      heli.position.set(hx, hy, hz); heli.rotation.y = h.across(sH) + Math.PI; rotor.position.y = 1.65; heli.add(rotor);
+      const peauH = { caisse: h.mat('peinture', { c: 0xe8482a }), vitre: h.mat('vitreSombre'), chassis: h.mat('matGris'), pale: h.mat('matGris') };
+      h.pose('helico', peauH, heli); h.pose('rotorHelico', peauH, rotor);
+      // pts 62-68 : à l'entrée du hameau, un moulin à vent en ruine sur le côté le plus dégagé ; à la sortie, un troupeau de moutons dans sa pâture et le berger, devant la clôture, qui fait signe aux voitures
+      const cote = s => g.dAt(...bord(s, 1, 40)) > g.dAt(...bord(s, -1, 40)) ? 1 : -1, face = (s, sd) => h.across(s) + (sd > 0 ? Math.PI : 0); // face : l'axe +X d'une forme tourné vers la route
+      const sM = m(pt(h, 62) + 4), dM = cote(sM), [mx, mz] = bord(sM, dM, W + 26), bois = h.mat('planches'), pierre = h.mat('pierre'); occ.push([mx, mz, 9]);
+      inst(h, h.geo('tourMoulin'), h.mat('pierre', { side: THREE.DoubleSide, c: 0xb89a78 }), [[mx, sol(mx, mz, -0.4), mz, 0, 1.4]]); // pierre plus sombre que celle des mas : il se détache du ciel
+      insts(h, 'moulinRuine', { bois, pierre }, [[mx, sol(mx, mz, -0.4), mz, face(sM, dM), 1.4]]); // à l'échelle 1,4 : une tour de 12,6 m
+      const sP = m(pt(h, 68) + 8), dP = cote(sP), along = (s, sd, off, a) => { const [x, z] = bord(s, sd, off); return [x + s.tx * a, z + s.tz * a]; }, P0 = W + 6, PL = 21, PA = 28; // la pâture : de P0 à P0 + PL en travers, PA le long de la route
+      const clot = [], moutons = [], seg = 7, aTr = h.across(sP), aLg = aTr + Math.PI / 2;
+      for (let a = -PA / 2 + seg / 2; a < PA / 2; a += seg) for (const off of [P0, P0 + PL]) { const [x, z] = along(sP, dP, off, a); clot.push([x, sol(x, z), z, aLg]); }
+      for (let o = seg / 2; o < PL; o += seg) for (const a of [-PA / 2, PA / 2]) { const [x, z] = along(sP, dP, P0 + o, a); clot.push([x, sol(x, z), z, aTr]); }
+      for (let k = 0; k < 18; k++) { const [x, z] = along(sP, dP, P0 + 2 + rnd() * (PL - 4), (rnd() - 0.5) * (PA - 4)); moutons.push([x, sol(x, z), z, rnd() * 6, 0.9 + rnd() * 0.25]); }
+      { const [x, z] = along(sP, dP, P0 + PL / 2, 0); occ.push([x, z, 18]); }
+      insts(h, 'cloture', { bois }, clot, { a: [seg] }); insts(h, 'mouton', { laine: h.mat('peinture', { c: 0xe4dccb }), tete: h.mat('peinture', { c: 0x2e2620 }) }, moutons);
+      const [qx, qz] = along(sP, dP, P0 - 1.4, -6), berger = new THREE.Group(), bras = new THREE.Group(); berger.userData.dyn = 1; h.scene.add(berger);
+      berger.position.set(qx, sol(qx, qz), qz); berger.rotation.y = face(sP, dP); berger.scale.setScalar(1.15); bras.position.set(0, 1.5, -0.3); berger.add(bras);
+      const peauB = { habit: h.mat('peinture', { c: 0x3a6ab0 }), peau: h.mat('peinture', { c: 0xc89870 }), chapeau: h.mat('peinture', { c: 0x2e2a24 }), bois };
+      h.pose('berger', peauB, berger); h.pose('brasBerger', peauB, bras);
       // dans la campagne : des mas isolés avec leurs cyprès, une chapelle au bord de la route, le village sur sa butte autour de la sienne
       const chap = [];
       for (let k = 0, nb = 0; k < 900 && nb < 9; k++) { const [x, z] = hasard(), d = g.dAt(x, z); if (d < 26 || d > 70 || plat(pres(x, z)[1]) || !prend(x, z, 13)) continue;
@@ -684,8 +705,8 @@
       for (let k = 0, nb = 0; k < 600 && nb < 20; k++) { const [x, z] = hasard(), d = g.dAt(x, z), l = 30 + rnd() * 40; if (d > l + 40 && d < 280 && prend(x, z, l + 40)) { nb++; buttes.push([x, sol(x, z, -6), z, rnd() * 6, l, 22 + rnd() * 26, l * (0.7 + rnd() * 0.6)]); } }
       for (let k = 0; k < 18; k++) { const a = k / 18 * 6.283 + rnd() * 0.2, r = 1000 + rnd() * 450, l = 170 + rnd() * 190; buttes.push([cx + Math.cos(a) * r, 0, cz + Math.sin(a) * r, rnd() * 6, l, 110 + rnd() * 110, l * (0.7 + rnd() * 0.6)]); }
       inst(h, h.geo('butte'), h.mat('falaiseOcre'), buttes);
-      // le ruisseau coule, le public lève les bras par moments
-      return (dt, now) => { eau.map.offset.y -= dt * 0.25; eauR.map.offset.x += dt * 0.08; foule.map.offset.y = Math.sin(now * 0.0023) + Math.sin(now * 0.0061) > 0.6 ? 0.5 : 0; };
+      // le ruisseau coule, le public lève les bras par moments, l'hélicoptère se balance sous son rotor, le berger agite le bras
+      return (dt, now) => { rotor.rotation.y = now * 0.025; heli.position.y = hy + Math.sin(now * 0.0011) * 0.6; heli.rotation.z = Math.sin(now * 0.0007) * 0.05; bras.rotation.x = -2.6 + Math.sin(now * 0.008) * 0.45; eau.map.offset.y -= dt * 0.25; eauR.map.offset.x += dt * 0.08; foule.map.offset.y = Math.sin(now * 0.0023) + Math.sin(now * 0.0061) > 0.6 ? 0.5 : 0; };
     },
     // ---------- Karasu-tōge : forêt de cèdres, glissières à catadioptres, et au sommet un carrefour : supérette de nuit, station-service, voitures garées ----------
     touge(h) {
