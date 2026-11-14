@@ -88,6 +88,7 @@
   // Une vue est un joueur : sa place (rang n, périphérique, entrée de l'image, compte de tours, « arrivé »), sa voiture (moi) et son modèle animé (hu), plus ce que sa caméra regarde (car : moi, sauf éliminé à deux).
   // VUES[0] est le joueur 1 : VUES[0].moi est la voiture du jeu hors course (il n'y a pas d'autre variable « la voiture du joueur »).
   const SSR = T.pluie.some(p => p > 0); // carte où il pleut quelque part : chaque vue a sa profondeur et sa passe de reflets (ssr)
+  const EAU = 0.5; // alpha de la route dans la cible : 1 - EAU × mouillure (écrit par eclaire, relu par ssr) ; tout autre opaque écrit 1
   const VUES = [], AA = ST ? ST.aa : 1, deux = () => VUES.length > 1;
   const suit = (vu, c) => { vu.moi = vu.car = c; vu.hu.hist.length = vu.hu.gR[0].length = vu.hu.gR[1].length = vu.hu.gOn[0] = vu.hu.gOn[1] = 0; vu.cth = c.th; vu.carY = S[c.idx].y; vu.result = null; vu.fini = vu.spec = false; vu.lap0 = [0, 0, 0]; }; // la vue se cale derrière la voiture c, compteurs de course à zéro : au départ, au retour au menu
   const nouvelleVue = () => {
@@ -148,7 +149,7 @@
       vec3 vpos(vec2 u){ vec4 p = Pi * vec4(u * 2. - 1., texture2D(dz, u).x * 2. - 1., 1.); return p.xyz / p.w; } // position dans le repère de la caméra
       vec2 ecran(vec3 q){ vec4 c = P * vec4(q, 1.); return c.xy / c.w * .5 + .5; }
       void main(){
-        vec4 c = texture2D(t, v); float w = c.a > .45 && c.a < .99 ? (1. - c.a) * 2. : 0.;
+        vec4 c = texture2D(t, v); float w = c.a > ${(0.95 - EAU).toFixed(2)} && c.a < .99 ? (1. - c.a) / ${EAU.toFixed(2)} : 0., trouve = 0.;
         if (w > 0.) {
           vec3 p = vpos(v), e = normalize(p), r = reflect(e, up), q = p; float s = .4, a = 0., b = 0.; vec2 h = vec2(-1.);
           for (int i = 0; i < 22; i++) { // pas qui s'allongent : 0,4 m au départ, plus de 300 m au bout
@@ -162,14 +163,16 @@
           }
           if (h.x >= 0.) {
             vec3 f = vec3(0.); for (int k = -2; k < 2; k++) f += texture2D(t, h + vec2(0., (float(k) + .5) * 2. * px.y)).rgb; // étiré à la verticale, comme un reflet sur l'eau
-            vec2 bd = min(h, 1. - h); float fond = smoothstep(0., .08, min(bd.x, bd.y)) * (1. - smoothstep(60., 320., a)); // s'éteint au bord de l'image et au loin
+            vec2 bd = min(h, 1. - h); trouve = smoothstep(0., .08, min(bd.x, bd.y)) * (1. - smoothstep(60., 320., a)); // s'éteint au bord de l'image et au loin
             float fr = .25 + .75 * pow(1. - max(dot(-e, up), 0.), 3.); // Fresnel : vu en rasant, la route est un miroir
-            c.rgb += f * .25 * w * fr * fond * .85;
+            c.rgb += f * .21 * w * fr * trouve;
           }
         }
-        gl_FragColor = vec4(c.rgb, 1.);
+        gl_FragColor = vec4(c.rgb, 1. - trouve); // alpha : 0 là où le reflet est trouvé, les rubans de repli n'y ajoutent rien (voir repli)
       }`,
   });
+  // rubans de repli : dessinés après ssr dans la même cible, pondérés par son alpha, cachés par ce qui est devant eux dans la profondeur de la scène
+  const REPLI = { rDz: { value: null }, rRes: { value: new THREE.Vector2() } }, repliScene = new THREE.Scene();
   const ssrScene = new THREE.Scene(), ssrQuad = new THREE.Mesh(quad.geometry, ssr); ssrQuad.frustumCulled = false; ssrScene.add(ssrQuad);
   if (ST) { // passe finale des styles : la scène telle quelle, l'effet du style, le HUD (toujours sur sa grille de 270 lignes), une vignette légère
     Object.assign(post.uniforms, { dz: { value: null }, ecr: { value: new THREE.Vector2(1, 1) }, pal: { value: PAL.map(c => new THREE.Color(c)) } });
@@ -332,23 +335,34 @@
     m.userData.lu = 1;
     const lit = m.fog !== false && m.blending === THREE.NormalBlending; // le ciel et les plans additifs ne reçoivent rien, mais tremblent avec le reste
     // alpha de la cible, lu par ssr : la route y écrit combien elle est mouillée (pluie de l'échantillon, flaques en plus), tout autre opaque 1 (sinon une texture à trous passerait pour de l'eau)
-    const mou = SSR && m.userData.mou ? 1 : 0, op = SSR && !m.transparent ? 1 : 0;
+    const mou = SSR && m.userData.mou ? 1 : 0, opaque = SSR && !m.transparent ? 1 : 0;
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, LUX, { uGloss: { value: m.userData.gloss || 0 }, uRetro: { value: m.userData.retro || 0 } });
       sh.vertexShader = 'varying vec3 vLw, vAf; uniform vec2 uRes;\n' + sh.vertexShader.replace('#include <fog_vertex>', LU_V + '#include <fog_vertex>');
       if (lit) sh.fragmentShader = LU_H + sh.fragmentShader.replace('#include <fog_fragment>', LU_F + '#include <fog_fragment>');
       if (mou) { sh.vertexShader = 'attribute float mou; varying float vMou;\n' + sh.vertexShader.replace('#include <fog_vertex>', 'vMou = mou;\n#include <fog_vertex>'); sh.fragmentShader = 'varying float vMou;\n' + sh.fragmentShader; }
-      if (op) sh.fragmentShader = sh.fragmentShader.replace('#include <fog_fragment>', (mou ? 'gl_FragColor.a = 1. - .5 * clamp(vMou * .3 + (1. - diffuseColor.a) * min(vMou, 1.), 0., 1.);' : 'gl_FragColor.a = 1.;') + '\n#include <fog_fragment>');
+      if (opaque) sh.fragmentShader = sh.fragmentShader.replace('#include <fog_fragment>', (mou ? `gl_FragColor.a = 1. - ${EAU.toFixed(2)} * clamp(vMou * .3 + (1. - diffuseColor.a) * min(vMou, 1.), 0., 1.);` : 'gl_FragColor.a = 1.;') + '\n#include <fog_fragment>');
       // textures sans correction de perspective : vAf = uv × w, interpolé puis divisé par w interpolé, redonne l'interpolation affine à l'écran
       if (ST && ST.affine) sh.fragmentShader = 'varying vec3 vAf;\n' + sh.fragmentShader.replace('#include <map_fragment>', THREE.ShaderChunk.map_fragment.replace('vUv', `mix(vUv, vAf.xy / vAf.z, ${ST.affine.toFixed(3)})`));
     };
-    m.customProgramCacheKey = () => 'lu' + lit + op + mou;
+    m.customProgramCacheKey = () => 'lu' + lit + opaque + mou;
   };
   const gloss = (m, g) => { m.userData.gloss = g; return m; }, retro = (m, r = 1.5) => { m.userData.retro = r; return m; };
 
   // ---------- matières additives (reflets, faisceaux, hologrammes) ----------
   const addMat = (map, o = {}) => new THREE.MeshBasicMaterial(Object.assign({ map, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, o));
   const adMats = [];
+  // reflet de repli (sous pluie seulement) : sorti de la scène, dessiné après ssr (voir REPLI) là où le reflet calculé n'a rien trouvé, au lieu de s'y ajouter
+  const repli = o => {
+    if (!SSR) return o;
+    scene.remove(o); repliScene.add(o); if (o.isInstancedMesh) o.frustumCulled = false;
+    const m = o.material; eclaire(m); const f = m.onBeforeCompile, k = m.customProgramCacheKey;
+    Object.assign(m, { blending: THREE.CustomBlending, blendSrc: THREE.DstAlphaFactor, blendDst: THREE.OneFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor });
+    m.onBeforeCompile = sh => { f(sh); Object.assign(sh.uniforms, REPLI);
+      sh.fragmentShader = 'uniform sampler2D rDz; uniform vec2 rRes;\n' + sh.fragmentShader.replace('void main() {', 'void main() {\n  if (texture2D(rDz, gl_FragCoord.xy / rRes).x < gl_FragCoord.z - 1e-6) discard;')
+        .replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  gl_FragColor.rgb *= gl_FragColor.a;'); }; // le mélange additif d'avant multipliait par l'alpha de la texture : on le fait ici
+    m.customProgramCacheKey = () => k() + 'repli'; return o;
+  };
 
   // ---------- géométrie de la piste (hauteurs relatives à l'altitude de la route) ----------
   function ribbon(i0, cnt, oa, ya, ob, yb, mat, vLen = 8) { // oa, ya, ob, yb : constantes, ou fonctions de l'échantillon (largeur et hauteur variables)
@@ -442,12 +456,12 @@
       }
     }
     sg.forEach((m, f) => { m.count = cnt[f]; scene.add(m); }); piles.count = np; scene.add(piles);
-    tubes.forEach((m, c) => { m.count = nt[c]; scene.add(m); streaks[c].count = nt[c]; scene.add(streaks[c]); });
+    tubes.forEach((m, c) => { m.count = nt[c]; scene.add(m); streaks[c].count = nt[c]; scene.add(streaks[c]); repli(streaks[c]); });
   }
 
   // reflets sur la route mouillée : liseré des glissières dehors, néons des murs dans l'échangeur (ceux-là battent avec la musique)
   for (const sd of [-1, 1]) {
-    if (TH.reflets) ribbon(T.t1, cO, sd * W, 0.04, sd * (W - 4), 0.04, addMat(tx('degrade', TH.reflets)));
+    if (TH.reflets) repli(ribbon(T.t1, cO, sd * W, 0.04, sd * (W - 4), 0.04, addMat(tx('degrade', TH.reflets))));
     if (T.tun && TH.tun.reflets) { const m = addMat(tx('degrade', TH.tun.reflets[sd < 0 ? 0 : 1])); ribbon(T.t0, cT, sd * W, 0.04, sd * (W - 5), 0.04, m); tunMats.push(m); }
   }
   if (TH.pubs) { // portiques au-dessus de la route, avec écran publicitaire qui défile
@@ -1417,7 +1431,8 @@
       if (avant && avant.libere) avant.libere(); avant = null; // l'ancienne carte peut maintenant rendre sa mémoire : la nouvelle tient les shaders communs (et on l'oublie, sinon chaque carte garderait toutes les précédentes)
     }
     renderer.setRenderTarget(vu.rt); renderer.render(scene, cam);
-    if (vu.rs) { const R = ssr.uniforms; R.t.value = vu.rt.texture; R.dz.value = vu.rt.depthTexture; R.P.value.copy(cam.projectionMatrix); R.Pi.value.copy(cam.projectionMatrixInverse); R.up.value.set(0, 1, 0).transformDirection(cam.matrixWorldInverse); R.px.value.set(1 / vu.rw, 1 / RH); renderer.setRenderTarget(vu.rs); renderer.render(ssrScene, postCam); }
+    if (vu.rs) { const R = ssr.uniforms; R.t.value = vu.rt.texture; R.dz.value = vu.rt.depthTexture; R.P.value.copy(cam.projectionMatrix); R.Pi.value.copy(cam.projectionMatrixInverse); R.up.value.set(0, 1, 0).transformDirection(cam.matrixWorldInverse); R.px.value.set(1 / vu.rw, 1 / RH); renderer.setRenderTarget(vu.rs); renderer.render(ssrScene, postCam);
+      REPLI.rDz.value = vu.rt.depthTexture; REPLI.rRes.value.set(vu.rw, RH); renderer.autoClear = false; renderer.render(repliScene, cam); renderer.autoClear = true; }
     renderer.setRenderTarget(null);
     if (COM) { const [cols, rows] = grille(VUES.length), x = (vu.n % cols) * vu.w, y = (rows - 1 - (vu.n / cols | 0)) * HH; renderer.setViewport(x, y, vu.w, HH); renderer.setScissor(x, y, vu.w, HH); } // à deux : la passe finale de la vue dans sa bande (y compté du bas : le joueur 1 en haut) ; le shader ne change pas, son centre de flou et sa vignette sont relatifs à la bande
     renderer.render(postScene, postCam);
@@ -1429,7 +1444,7 @@
   // arrêt (changement de carte) : plus de boucle ni d'écouteurs ; puis libere() rend au GPU tout ce que cette carte y avait mis (les shaders, eux, restent au renderer tant qu'une matière s'en sert)
   const fin = () => { cancelAnimationFrame(raf); arret.abort(); clearTimeout(padNoteT); padNote.remove(); if (COM) COM.c.remove(); };
   const libere = () => {
-    scene.traverse(o => { if (o.geometry) o.geometry.dispose(); for (const m of [].concat(o.material || [])) { for (const k of ['map', 'emissiveMap', 'alphaMap']) if (m[k]) m[k].dispose(); m.dispose(); } });
+    for (const sc of [scene, repliScene]) sc.traverse(o => { if (o.geometry) o.geometry.dispose(); for (const m of [].concat(o.material || [])) { for (const k of ['map', 'emissiveMap', 'alphaMap']) if (m[k]) m[k].dispose(); m.dispose(); } });
     VUES.forEach(rendVue); post.dispose(); ssr.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
   };
   try { if (sessionStorage.getItem('vpr.go')) { sessionStorage.removeItem('vpr.go'); if (mode === 'tournee') start(); } } catch (e) { } // arrivée sur la carte d'une manche de Tournée : la course part tout de suite
