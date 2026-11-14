@@ -474,6 +474,29 @@
     part(wheelGeo, roueMat, 0, 0, 0, st);
   }
   carG.traverse(o => { o.castShadow = true; });
+  // reflets : le vrai décor vu depuis la voiture du joueur 1, dans une cube map de 32 px par face, une face toutes les deux images (refFace, avant le rendu de la vue 1) ;
+  // vue à 300 m seulement (à 3° le pixel, plus loin ne fait presque rien et coûte des passes de dessin) : le ciel et l'astre y sont ramenés au dixième, en deçà ;
+  // la caisse l'ajoute à sa couleur (envMap), dosée pixel par pixel par un masque tiré de la livrée : vitrage (sombre, bleuté) fort, peinture modérée, joints et cadres presque rien.
+  // Les rivaux et les autres joueurs partagent la même cube map : prise à la voiture du joueur 1, elle ne leur est pas exacte, mais à leur taille à l'écran on ne le voit pas
+  const CUBE = new THREE.WebGLCubeRenderTarget(32, { generateMipmaps: false, minFilter: THREE.LinearFilter }), refCam = new THREE.CubeCamera(0.5, 300, CUBE);
+  let refF = 0;
+  const refFace = () => { // la voiture du joueur 1 ne se voit pas dans sa propre cube map ; l'ombre du soleil n'est pas recalculée pour si peu
+    if (refF++ & 1) return; const f = (refF >> 1) % 6, P = refCam.position, sp = sky.position.clone(), dp = sunDisc.position.clone(), ds = sunDisc.scale.x;
+    P.set(carG.position.x, carG.position.y + 0.9, carG.position.z); refCam.updateMatrixWorld(true);
+    sky.position.copy(P); sky.scale.setScalar(0.1); sunDisc.position.copy(P).addScaledVector(SD, 200); sunDisc.scale.setScalar(ds / 10);
+    const vis = carG.visible, rt = renderer.getRenderTarget(); carG.visible = false; renderer.shadowMap.autoUpdate = false;
+    renderer.setRenderTarget(CUBE, f); renderer.render(scene, refCam.children[f]);
+    renderer.shadowMap.autoUpdate = true; carG.visible = vis; renderer.setRenderTarget(rt);
+    sky.position.copy(sp); sky.scale.setScalar(1); sunDisc.position.copy(dp); sunDisc.scale.set(ds, ds, 1);
+  };
+  const reflete = m => { // le masque : rouge = part du reflet (specularMap de three)
+    const src = m.map.image.getContext('2d').getImageData(0, 0, 128, 128).data;
+    m.specularMap = tex(128, 128, g => { const im = g.createImageData(128, 128);
+      for (let i = 0; i < src.length; i += 4) { const r = src[i], v = src[i + 1], b = src[i + 2], l = (r * 0.3 + v * 0.59 + b * 0.11) / 255, k = l < 0.32 ? (b > r + 6 ? 0.9 : 0.08) : 0.45; im.data.fill(k * 255, i, i + 3); im.data[i + 3] = 255; }
+      g.putImageData(im, 0, 0); });
+    return Object.assign(m, { envMap: CUBE.texture, combine: THREE.AddOperation, reflectivity: 1 });
+  };
+  reflete(carMat);
   // encombrement de la voiture : la boîte d'ombre de la lumière dynamique (BOITE) et le fantôme en prennent les dimensions
   const ENC = new THREE.Box3().setFromObject(carG), ENCt = ENC.getSize(new V3()), ENCc = ENC.getCenter(new V3());
   if (L.neon) for (const z of [-1, 1]) box(3, 0.07, 0.05, new THREE.MeshBasicMaterial({ color: L.neon }), 0, VO.plan.bas - 0.02, z * (VO.plan.w / 2 - 0.05), body); // liserés néon sous le bas de caisse
@@ -599,7 +622,7 @@
   // pil(c) = [nom, couleur] d'une voiture, pour les étiquettes, la minicarte et le classement ; modele(c) = son modèle dans la scène
   const OPP = [['KENJI', '#00c8ff'], ['REI', '#ff8a00'], ['JUN', '#40ff80']].map(([n, c], i) => [M.rivaux ? M.rivaux[i] : n, c]).concat([['J2', '#ff4fd8'], ['J3', '#b070ff'], ['J4', '#ff4040']]);
   const opps = OPP.map(([, col]) => {
-    const g = carG.clone(), m = livree(new THREE.Color(col).getHex()), b = brakeMat.clone(), u = { feu: b, roue: roueMat.clone(), sol: solMat.clone() }; m.emissive.setRGB(1, 1, 1); m.emissiveMap = m.map; m.emissiveIntensity = 0.3; // un peu lumineuse : lisible de nuit et de loin
+    const g = carG.clone(), m = reflete(livree(new THREE.Color(col).getHex())), b = brakeMat.clone(), u = { feu: b, roue: roueMat.clone(), sol: solMat.clone() }; m.emissive.setRGB(1, 1, 1); m.emissiveMap = m.map; m.emissiveIntensity = 0.3; // un peu lumineuse : lisible de nuit et de loin
     g.traverse(o => { if (o.material === carMat) o.material = m; else if (o.material === brakeMat) o.material = b; else if (o.material === roueMat) o.material = u.roue; else if (o.material === solMat) o.material = u.sol; });
     g.visible = false; g.userData.y = 0; Object.assign(g.userData, u); scene.add(g); return g;
   });
@@ -1506,6 +1529,7 @@
       for (const o of caches) o.visible = false; for (const o of tri) o.frustumCulled = true;
       if (avant && avant.libere) avant.libere(); avant = null; // l'ancienne carte peut maintenant rendre sa mémoire : la nouvelle tient les shaders communs (et on l'oublie, sinon chaque carte garderait toutes les précédentes)
     }
+    if (!vu.n) refFace();
     renderer.setRenderTarget(vu.rt); renderer.render(scene, cam); renderer.setRenderTarget(null);
     if (COM) { const [cols, rows] = grille(VUES.length), x = (vu.n % cols) * vu.w, y = (rows - 1 - (vu.n / cols | 0)) * HH; renderer.setViewport(x, y, vu.w, HH); renderer.setScissor(x, y, vu.w, HH); } // à deux : la passe finale de la vue dans sa bande (y compté du bas : le joueur 1 en haut) ; le shader ne change pas, son centre de flou et sa vignette sont relatifs à la bande
     renderer.render(postScene, postCam);
@@ -1517,8 +1541,8 @@
   // arrêt (changement de carte) : plus de boucle ni d'écouteurs ; puis libere() rend au GPU tout ce que cette carte y avait mis (les shaders, eux, restent au renderer tant qu'une matière s'en sert)
   const fin = () => { cancelAnimationFrame(raf); arret.abort(); clearTimeout(padNoteT); padNote.remove(); if (COM) COM.c.remove(); };
   const libere = () => {
-    scene.traverse(o => { if (o.geometry) o.geometry.dispose(); for (const m of [].concat(o.material || [])) { for (const k of ['map', 'emissiveMap', 'alphaMap']) if (m[k]) m[k].dispose(); m.dispose(); } });
-    VUES.forEach(rendVue); post.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
+    scene.traverse(o => { if (o.geometry) o.geometry.dispose(); for (const m of [].concat(o.material || [])) { for (const k of ['map', 'emissiveMap', 'alphaMap', 'specularMap']) if (m[k]) m[k].dispose(); m.dispose(); } });
+    VUES.forEach(rendVue); CUBE.dispose(); post.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
   };
   try { if (sessionStorage.getItem('vpr.go')) { sessionStorage.removeItem('vpr.go'); if (mode === 'tournee') start(); } } catch (e) { } // arrivée sur la carte d'une manche de Tournée : la course part tout de suite
   try { const d = sessionStorage.getItem('vpr.demo'), f = sessionStorage.getItem('vpr.demoFin'); sessionStorage.removeItem('vpr.demo'); sessionStorage.removeItem('vpr.demoFin');
