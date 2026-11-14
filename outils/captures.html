@@ -11,7 +11,7 @@
 //   mode=course   le mode de jeu (mémorisé comme au menu, sinon celui du navigateur) ; tour=3 : les captures idx seulement à partir de ce tour (avec tours=3)
 //   vue=angle,distance,hauteur   caméra d'inspection autour de la voiture (window.__g.vue), sinon la caméra de course
 //   degats=0.7   chaque zone de chaque voiture abîmée à ce niveau (0 à 1) dès le départ, au lieu de compter sur les chocs du pilote automatique
-//   force=mur|nitro|glisse   avec idx : sur les 40 échantillons avant chaque capture, la voiture est poussée contre le mur de droite, ou la nitro tenue, ou la nitro tenue en glisse (pilote en glisse de sim.js) (le pilote auto ne fait ni l'un ni l'autre)
+//   force=mur|murG|droit|nitro|glisse   avec idx : sur les 40 échantillons avant chaque capture, la voiture est poussée contre le mur de droite (murG : de gauche), ou va tout droit, cap bloqué 150 images (droit : dans le mur d'un virage ; en course le jeu appelle le pilote de sim.js sans passer par ce relais), ou la nitro tenue, ou la nitro tenue en glisse (pilote en glisse de sim.js) (le pilote auto ne fait ni l'un ni l'autre)
 // Résultat : captures/<carte>-NN.jpg et captures/<carte>.json = { vues: [{ n, t, idx, kmh, tunnel }], erreurs, msParImage, tour }.
 // Quand le titre de la page passe à « FINI », tout est écrit.
 (async () => {
@@ -34,11 +34,11 @@
     vues.push({ n, t: +g.t.toFixed(1), idx: c.idx, kmh: Math.round(Math.hypot(c.vx, c.vz) * 3.6), tunnel: T.tun && ((c.idx - T.t0 + T.n) % T.n) < T.t1 - T.t0 });
     log(carte + '-' + n + '  t=' + g.t.toFixed(1) + ' s  échantillon ' + c.idx + '/' + T.n);
   };
-  let forcer = ''; const ap = w.autopilot; w.autopilot = (...a) => { const r = ap(...a); if (forcer === 'nitro') r.nitro = r.gas = 1; if (forcer === 'glisse') Object.assign(r, w.piloteGlisse(a[1], 1, 1.2, 0.6, 0.2)(a[0]), { nitro: 1, gas: 1 }); if (forcer === 'mur') r.steer = 0.4; forcer = ''; return r; }; // par la commande : sim.js remet c.boost à chaque pas, et le pilote ramène la voiture au milieu
+  let forcer = ''; const ap = w.autopilot; w.autopilot = (...a) => { const r = ap(...a); if (forcer === 'nitro') r.nitro = r.gas = 1; if (forcer === 'glisse') Object.assign(r, w.piloteGlisse(a[1], 1, 1.2, 0.6, 0.2)(a[0]), { nitro: 1, gas: 1 }); if (forcer === 'mur') r.steer = 0.4; if (forcer === 'murG') r.steer = -0.4; if (forcer === 'droit') Object.assign(r, { steer: 0, gas: 1, brake: 0 }); forcer = ''; return r; }; // par la commande : sim.js remet c.boost à chaque pas, et le pilote ramène la voiture au milieu
   g.start();
   let k = 0, dernier = -1;
   for (; k < 9000 && g.car.dist < T.n * tours - 3; k++) {
-    const force = q.get('force'), c = g.car; if (force && cibles.some(i => ((i - c.idx + T.n + 8) % T.n) < 48)) { if (force === 'mur') { const s = T.S[c.idx], e = s.w - (c.d || 0); c.x -= s.tz * e; c.z += s.tx * e; } else c.nitro = 1; forcer = force; }
+    const force = q.get('force'), c = g.car; if (force && cibles.some(i => ((i - c.idx + T.n + 8) % T.n) < 48)) { if (force === 'mur' || force === 'murG') { const s = T.S[c.idx], e = (force === 'mur' ? s.w : -s.w) - (c.d || 0); c.x -= s.tz * e; c.z += s.tx * e; } else if (force === 'droit') { c.thDroit ??= c.th; if ((c.nDroit = (c.nDroit || 0) + 1) < 150) { c.th = c.thDroit; c.yaw = 0; } } else c.nitro = 1; forcer = force; } else if (c.thDroit != null) c.thDroit = c.nDroit = null;
     g.frame(1e7 + k * 100); if (k === 1 && deg) g.degats(deg); // après une image : les voitures sont posées sur la grille, les pièces tombent de là
     if (cibles.length) { if (g.car.dist >= (tour - 1) * T.n) { const i = cibles.findIndex(c => ((g.car.idx - c + T.n) % T.n) < 8); if (i >= 0) { cibles.splice(i, 1); await prise(); if (!cibles.length) break; } } }
     else if (Math.floor(g.t / pas) > dernier && g.t > 0.5) { dernier = Math.floor(g.t / pas); await prise(); }

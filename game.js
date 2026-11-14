@@ -1548,7 +1548,8 @@
     const rs = clamp((rv - 0.4) / 0.6, 0, 1), shake = 0.03 * rs + 0.045 * rs * rs * rs, choc = stun > 0 ? stun * 0.35 : 0; // vitesse : rien sur les 40 % bas de la plage des effets (130 km/h → pointe), plein à la pointe ; choc : bref, nerveux
     // la caméra suit le sol sous elle, sans tomber dans une fosse que la voiture survole (±2,5 m autour du sol de la voiture), monte avec la voiture en vol et penche avec elle sur une paroi
     const y0 = yAt(car), ySol = k => clamp(yAt(car, k), y0 - 2.5, y0 + 2.5) + air;
-    cam.position.set(px + vib() * shake + (Math.random() - 0.5) * choc, ySol(-3) + (M.camH || 3.2) + lookP - 0.5 * rc + vib() * shake * 0.7 + (Math.random() - 0.5) * choc, pz);
+    const pc = s.y + paroi(s, (px - s.x) * nx + (pz - s.z) * nz) + 1.5; // au-dessus de la paroi là où est la caméra (voiture haut sur le mur, caméra écartée vers son sommet : elle passait dessous)
+    cam.position.set(px + vib() * shake + (Math.random() - 0.5) * choc, Math.max(pc, ySol(-3) + (M.camH || 3.2) + lookP - 0.5 * rc) + vib() * shake * 0.7 + (Math.random() - 0.5) * choc, pz);
     cam.lookAt(car.x + cx * 10, ySol(5) + 1.1, car.z + cz * 10); cam.rotateZ(-0.6 * roll);
     cam.rotateX(vib() * shake * 0.12); cam.rotateY(vib() * shake * 0.08); // l'image elle-même tressaute (≈ 0,4° à la pointe), sec et petit
     const nitE = vu.nit * vu.nit * (3 - 2 * vu.nit); // nitro : départ et arrivée en douceur (champ élargi et vignette)
