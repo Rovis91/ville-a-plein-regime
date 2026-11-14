@@ -445,12 +445,12 @@
   if (SSR) { route.material.userData.mou = 1; route.geometry.setAttribute('mou', new THREE.Float32BufferAttribute(Array.from({ length: (cO + 1) * 2 }, (_, j) => pluieAt((T.t1 + (j >> 1)) % N)), 1)); } // pluie par échantillon : ssr ne reflète que là où il pleut
   const barrier = mat('glissiere', { lum: TH.tubes, side: THREE.DoubleSide }, TH.mur); // ville : liseré néon, lumineux par lui-même ; ailleurs la glissière prend la lumière
   if (!T.vert) { ribbon(T.t1, cO, -W, TH.murH, -W, -2, barrier); ribbon(T.t1, cO, W, TH.murH, W, -2, barrier); }
-  else { // carte à relief : la glissière suit le haut des murs roulables, et chaque paroi est un quart de tube en 6 facettes, du pied du plat au mur
+  else { // carte à relief : la glissière suit le haut des murs roulables, et chaque paroi est un quart de tube en 16 facettes, du pied du plat au mur
     const haut = s => paroi(s, s.w), tube = mat(TH.paroi || 'beton', { side: THREE.DoubleSide });
     for (const sg of [-1, 1]) {
-      ribbon(T.t1, cO, s => sg * s.w, s => haut(s) + TH.murH, s => sg * s.w, s => haut(s) - 2, barrier);
+      if (TH.glis ?? 1) ribbon(T.t1, cO, s => sg * s.w, s => haut(s) + TH.murH, s => sg * s.w, s => haut(s) - 2, barrier); // th.glis = 0 : le décor pose lui-même ses glissières (stade : pas sur l'aire centrale), celle-ci doublerait la sienne
       for (let i = 0; i < N; i++) if (S[i].rc && !S[(i - 1 + N) % N].rc) { let c = 0; while (S[(i + c + 1) % N].rc) c++;
-        for (let j = 0; j < 6; j++) { const o = k => s => sg * (W + (s.w - W) * k / 6), y = k => s => paroi(s, W + (s.w - W) * k / 6); ribbon(i, c, o(j), y(j), o(j + 1), y(j + 1), tube, 16); } }
+        for (let j = 0; j < 16; j++) { const o = k => s => sg * (W + (s.w - W) * k / 16), y = k => s => paroi(s, W + (s.w - W) * k / 16); ribbon(i, c, o(j), y(j), o(j + 1), y(j + 1), tube, 16); } } // 16 facettes : avec 6, la corde passait jusqu'à 0,7 m au-dessus de la paroi de sim.js, la voiture s'y enfonçait
     }
   }
   const concrete = mat('betonSombre', { side: THREE.DoubleSide }), glowY = mat('neonJaune', LUMI), glowC = mat('neonCyan', LUMI), glowM = mat('neonMagenta', LUMI);
@@ -1486,7 +1486,8 @@
     for (const vu of VUES) { const c = vu.car, [tg, rl] = assiette(c);
       if (vu.hit > 8) vu.stun = 0.7; if (vu.land > 7) vu.stun = Math.max(vu.stun, Math.min(0.45, (vu.land - 6) * 0.08)); vu.stun -= dt; // une réception dure secoue aussi
       vu.up = drivetrain(vu, dt, vu.gas);
-      { const s = S[c.idx]; if (!c.air) vu.carY += s.sl * (c.vx * s.tx + c.vz * s.tz) * dt; } vu.carY += (c.y - vu.carY) * Math.min(1, dt * 18); // la pente d'abord, puis le lissage : sans elle la voiture lissée traînait sous la route en montée (30 cm à 13 %) et flottait en descente vu.pitch += (tg - vu.pitch) * Math.min(1, dt * 10); vu.roll += (rl - vu.roll) * Math.min(1, dt * 10);
+      { const s = S[c.idx]; if (!c.air) vu.carY += s.sl * (c.vx * s.tx + c.vz * s.tz) * dt; } vu.carY += (c.y - vu.carY) * Math.min(1, dt * 18); // la pente d'abord, puis le lissage : sans elle la voiture lissée traînait sous la route en montée (30 cm à 13 %) et flottait en descente
+      vu.pitch += (tg - vu.pitch) * Math.min(1, dt * 10); vu.roll += (rl - vu.roll) * Math.min(1, dt * 10); // tangage et roulis (pente, paroi, vol) : sur leur ligne, un commentaire les avait avalés
       if (state === 'title') vu.cth += dt * 0.22; else vu.cth += wrap(c.th - vu.cth) * Math.min(1, dt * 6); // au menu, la caméra tourne autour de la voiture pour montrer la carte
       if ((vu.lookT -= dt) < 0) { const k = Math.exp(-dt * 5); vu.lookA *= k; vu.lookP *= k; } // souris immobile depuis 2,5 s : la caméra revient derrière la voiture
       vu.nit = clamp(vu.nit + (c.boost > 0 ? dt / 0.7 : -dt / 1.1), 0, 1); // nitro : 0,7 s pour entrer, 1,1 s pour sortir
