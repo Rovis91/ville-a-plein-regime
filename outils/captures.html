@@ -10,10 +10,11 @@
 //   idx=700,1351   à la place de pas : une capture au passage de ces échantillons de piste (pour revoir un endroit précis)
 //   mode=course   le mode de jeu (mémorisé comme au menu, sinon celui du navigateur) ; tour=3 : les captures idx seulement à partir de ce tour (avec tours=3)
 //   vue=angle,distance,hauteur   caméra d'inspection autour de la voiture (window.__g.vue), sinon la caméra de course
+//   degats=0.7   chaque zone de chaque voiture abîmée à ce niveau (0 à 1) dès le départ, au lieu de compter sur les chocs du pilote automatique
 // Résultat : captures/<carte>-NN.jpg et captures/<carte>.json = { vues: [{ n, t, idx, kmh, tunnel }], erreurs, msParImage, tour }.
 // Quand le titre de la page passe à « FINI », tout est écrit.
 (async () => {
-  const q = new URLSearchParams(location.search), carte = q.get('carte') || 'ville', pas = +(q.get('pas') || 10), tours = +(q.get('tours') || 1), style = q.get('style') ?? 'net';
+  const q = new URLSearchParams(location.search), deg = +(q.get('degats') || 0), carte = q.get('carte') || 'ville', pas = +(q.get('pas') || 10), tours = +(q.get('tours') || 1), style = q.get('style') ?? 'net';
   const cibles = (q.get('idx') || '').split(',').filter(Boolean).map(Number), log = t => { document.getElementById('log').textContent += t + '\n'; };
   if (q.get('mode')) localStorage.setItem('vpr7.mode', JSON.stringify(q.get('mode')));
   const tour = +(q.get('tour') || 1), f = document.createElement('iframe'); f.style.cssText = 'width:960px;height:540px;border:0;display:block';
@@ -35,7 +36,7 @@
   g.start();
   let k = 0, dernier = -1;
   for (; k < 9000 && g.car.dist < T.n * tours - 3; k++) {
-    g.frame(1e7 + k * 100);
+    g.frame(1e7 + k * 100); if (k === 1 && deg) g.degats(deg); // après une image : les voitures sont posées sur la grille, les pièces tombent de là
     if (cibles.length) { if (g.car.dist >= (tour - 1) * T.n) { const i = cibles.findIndex(c => ((g.car.idx - c + T.n) % T.n) < 8); if (i >= 0) { cibles.splice(i, 1); await prise(); if (!cibles.length) break; } } }
     else if (Math.floor(g.t / pas) > dernier && g.t > 0.5) { dernier = Math.floor(g.t / pas); await prise(); }
     if (k % 30 === 0) await new Promise(r => setTimeout(r, 0));
