@@ -598,7 +598,7 @@
       // le gué : le ruisseau traverse la route au creux du parcours. Sur toute la zone mouillée de la carte (sim.js : surf.zones, là où la voiture chasse), de la boue sombre et des ornières pleines d'eau, fondues dans la terre sèche aux deux bouts ;
       // au milieu, 36 m d'eau brun vert, brillante (reflets du soleil et des phares), avec une ligne d'écume à l'entrée et à la sortie ; de part et d'autre, le lit du ruisseau, ses galets et ses roseaux
       const iG0 = pt(h, g0), nG = (pt(h, g1) - iG0 + N) % N, verre = { transparent: true, depthWrite: false, side: THREE.DoubleSide };
-      const eau = h.mat('eauGue', { ...verre, opacity: 0.92, gloss: 0.3, rep: [4, 1] }), eauR = h.mat('eauGue', { ...verre, opacity: 0.92, gloss: 0.3, rep: [18, 1] }), ecume = h.mat('ecume', { ...verre, rep: [6, 1] });
+      const eau = h.mat('eauGue', { ...verre, opacity: 0.92, gloss: 0.1, rep: [4, 1] }), eauR = h.mat('eauGue', { ...verre, opacity: 0.92, gloss: 0.3, rep: [18, 1] }), ecume = h.mat('ecume', { ...verre, rep: [6, 1] });
       h.ribbon((iG0 - 9 + N) % N, nG + 18, s => -s.w, 0.025, s => s.w, 0.025, h.mat('boueGue', { ...verre, gloss: 0.5 }), 2 * (nG + 18)).renderOrder = 1; // v de 0 à 1 sur toute la longueur : la texture s'efface aux deux bouts
       h.ribbon((iG - 9 + N) % N, 18, s => -s.w - 0.5, 0.07, s => s.w + 0.5, 0.07, eau, 8).renderOrder = 2;
       for (const i of [iG - 10, iG + 8]) h.ribbon((i + N) % N, 2, s => -s.w - 0.5, 0.08, s => s.w + 0.5, 0.08, ecume, 4).renderOrder = 3;
