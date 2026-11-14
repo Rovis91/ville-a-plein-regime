@@ -48,11 +48,11 @@
       const d = Math.sqrt(dm); let y = sy / sw - 0.5;
       if (d < pm.w + 1 && pm.pose) y -= 1.5; // sous la chaussée : on creuse, la route et ses murets cachent le raccord
       if (o.loin && d > o.loin) y -= (d - o.loin) * o.chute;
-      if (o.creux) y -= o.creux(x, z);
       if (o.sous && d < R) y = Math.max(y, pm.g - 1.7); // assez haut pour que le pied des murets ne flotte pas
       if (o.sous && d < RC) for (let cz = -1; cz <= 1; cz++) for (let cx = -1; cx <= 1; cx++) for (const s of cases.get((Math.floor(x / RC) + cx) * 1e4 + Math.floor(z / RC) + cz) || []) {
         const e = Math.hypot(s.x - x, s.z - z); if (e < RC) y = Math.min(y, s.y - 0.3 + Math.max(0, e - R) * o.sous); // au-delà de RC la remontée dépasse tout dénivelé de la carte
       }
+      if (o.creux) y -= o.creux(x, z); // après le plafond des lacets : un ravin (touge) peut passer sous la chaussée
       Y[k] = y; D[k] = d; pos.set([x, y, z], k * 3); uv.set(o.sous ? [(x + y) / 10, (z + y) / 10] : [x / 10, z / 10], k * 2); // touge : la texture suit aussi la hauteur, sans s'étirer sur les parois raides
       if (ix < nx - 1 && iz < nz - 1) idx.push(k, k + nx, k + 1, k + 1, k + nx, k + nx + 1);
     }
@@ -593,12 +593,18 @@
     // ---------- Karasu-tōge : forêt de cèdres, glissières à catadioptres, et au sommet un carrefour : supérette de nuit, station-service, voitures garées ----------
     touge(h) {
       const { THREE, S, N, W, rnd } = h;
-      const g = terrain(h, { pas: 7, sous: 6, marge: 320, loin: 60, chute: 1.1, mat: h.mat('bruit', {}, '#0c1a14', ['#12261e', '#081410', '#16302a']) });
+      // le torrent du bas de la montée (pt 2) : un ravin de 7 m qui serpente en travers de la route, sous un pont de pierre
+      const sp = S[pt(h, 2)], ravin = (x, z) => { const dx = x - sp.x, dz = z - sp.z, v = dz * sp.tx - dx * sp.tz, u = dx * sp.tx + dz * sp.tz - 6 * Math.sin(v / 25);
+        return Math.abs(v) > 90 || Math.abs(u) > 9 ? 0 : 7 * (1 - (u / 9) ** 2) * Math.min(1, (90 - Math.abs(v)) / 20); };
+      const g = terrain(h, { pas: 7, sous: 6, marge: 320, loin: 60, chute: 1.1, creux: ravin, mat: h.mat('bruit', {}, '#0c1a14', ['#12261e', '#081410', '#16302a']) });
       // le carrefour : sur le plateau du sommet, côté extérieur. Une route de traverse y part, barrée.
       const ic = pt(h, 11), sc = S[ic], sd = g.dAt(...bord(sc, 1, 60)) > g.dAt(...bord(sc, -1, 60)) ? 1 : -1, [cx, cz] = bord(sc, sd, W + 22);
       // cèdres : une rangée serrée le long de la route (le tunnel d'arbres), puis la forêt ; rien sur le carrefour.
       // Dans les lacets, rien côté vallée (ouest) et des cèdres plus petits côté amont, dont la cime reste sous le regard du lacet du dessus ; de jeunes plants sur la pente en contrebas : on voit la ville par-dessus
-      const arbres = [], lacets = (x, z) => x > 372 && x < 552 && z > 300 && z < 560, plants = (x, z) => x > 100 && x < 552 && z > 260 && z < 640, libre = (x, z) => (x - cx) ** 2 + (z - cz) ** 2 > 46 * 46;
+      const arbres = [], lacets = (x, z) => x > 372 && x < 552 && z > 300 && z < 576, plants = (x, z) => x > 100 && x < 552 && z > 260 && z < 640, libre0 = (x, z) => (x - cx) ** 2 + (z - cz) ** 2 > 46 * 46 && ravin(x, z) < 1;
+      // la trouée côté vallée (droite) entre les pts 7 et 9 : aucun arbre là où cette portion est la route la plus proche, la ville et la lune apparaissent
+      const i7 = pt(h, 7), i9 = pt(h, 9), trouee = (x, z) => { let b = null, bd = 1e18; for (let i = i7; i <= i9; i += 3) { const d = (S[i].x - x) ** 2 + (S[i].z - z) ** 2; if (d < bd) { bd = d; b = S[i]; } }
+        return bd < 160 * 160 && Math.sqrt(bd) < g.dAt(x, z) + 4 && (z - b.z) * b.tx - (x - b.x) * b.tz > 0; }, libre = (x, z) => libre0(x, z) && !trouee(x, z);
       for (let i = 0; i < N; i += 3) for (const side of [-1, 1]) {
         const [x, z] = bord(S[i], side, W + 4.5 + rnd() * 7);
         if (g.dAt(x, z) > W + 3.5 && libre(x, z) && !(lacets(x, z) && x < S[i].x - 3)) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, (0.8 + rnd() * 0.7) * (plants(x, z) && x < 545 ? (lacets(x, z) ? 0.75 : 0.4) : 1)]);
@@ -634,8 +640,60 @@
       for (const dz of [-16.5, -13.5, -10.5, -7.5]) h.pose('cone', cone, gr, [X(41.5), 0.5, dz]);
       gr.updateMatrixWorld(); // la vitrine et l'auvent éclairent l'esplanade, la route et les voitures qui passent
       for (const [lx, lz, col, d] of [[27, -8, 0xdfefff, 46], [15, 15, 0xffe0a0, 34], [3, 0, 0xdfefff, 22]]) { const p = gr.localToWorld(new THREE.Vector3(X(lx), 4.5, lz)); h.lum(ic, p.x, p.y, p.z, col, d, 3); }
+
+      // ---------- la montée (pts 1 à 12) : un repère par portion, pour qu'elle ne soit plus seulement de grandes courbes dans les cèdres ----------
+      const ext = i => g.dAt(...bord(S[i], 1, 30)) > g.dAt(...bord(S[i], -1, 30)) ? 1 : -1; // le côté qui s'éloigne des autres routes
+      // un groupe posé au sol à côté de la route, X local = en s'éloignant d'elle ; jamais plus de `bas` m sous la chaussée (les socles descendent dans la pente)
+      const site = (i, cote, off, bas = 9) => { const s = S[i], [x, z] = bord(s, cote, off), p = new THREE.Group(); p.position.set(x, Math.max(g.hAt(x, z), s.y - bas), z); p.rotation.y = h.across(s) + (cote > 0 ? 0 : Math.PI); h.scene.add(p); return p; };
+      const at = (i0, i1, f) => Math.round(i0 + (i1 - i0) * f), allume = (p, i, lx, ly, col, d, f) => { p.updateMatrixWorld(); const q = p.localToWorld(new THREE.Vector3(lx, ly, 0)); h.lum(i, q.x, q.y, q.z, col, d, f); };
+      const pierre = h.mat('pierreMousse'), feuDoux = h.mat('lanterne', LUM), beton = h.mat('beton'), bois = h.mat('tronc'), [i1, i3, i4, i5, i10] = [1, 3, 4, 5, 10].map(k => pt(h, k));
+      // pts 1-3 : pont de pierre sur le torrent, brume basse qui monte du ravin et traîne sur la route, panneau « 13 % »
+      h.pose('pontPierre', { pierre }, repere(h, sp), [0, 0, 0], W);
+      const eau = h.mat('eauVive', { lum: 1, c: 0x2a5058 }), flots = [], nappes = [], brumeG = new THREE.PlaneGeometry(1, 1); brumeG.rotateX(-Math.PI / 2);
+      const lit = v => { const u = 6 * Math.sin(v / 25); return [sp.x - sp.tz * v + sp.tx * u, sp.z + sp.tx * v + sp.tz * u]; }; // le fond du ravin, comme ravin()
+      for (let v = -86; v <= 86; v += 8) { const [x, z] = lit(v); flots.push([x, g.hAt(x, z) + 0.6, z, h.across(sp)]); } // le torrent descend en marches : des cascades
+      inst(h, h.geo('boite', 8.6, 0.3, 3.5), eau, flots);
+      for (let k = 0; k < 14; k++) { const [x, z] = lit((rnd() - 0.5) * 150); nappes.push([x, g.hAt(x, z) + 2 + rnd() * 3, z, rnd() * 6, 26 + rnd() * 20, 1, 18 + rnd() * 10]); }
+      for (let i = i1; i < i3; i += 12) for (const c of [-1, 0, 1]) { const [x, z] = c ? bord(S[i], c, W + 8 + rnd() * 14) : [S[i].x, S[i].z]; nappes.push([x, S[i].y + (c ? -0.8 + rnd() : 0.5), z, rnd() * 6, 24 + rnd() * 20, 1, 24 + rnd() * 20]); }
+      const brume = inst(h, brumeG, h.mat('brume', { lum: 1, c: 0x6a8088, transparent: true, opacity: 0.45, depthWrite: false }), nappes); brume.castShadow = brume.receiveShadow = false;
+      const retro = { lum: 1, retro: 1.2 }; // les panneaux s'allument dans les phares, comme les catadioptres
+      h.pose('panneauPente', { poteau: acier, plaque: h.mat('losange', { ...retro, alphaTest: 0.5 }, '13%'), sous: h.mat('ecrit', retro, 48, 20, '#f4f4f0', '#101010', '上り急勾配', 10) }, repere(h, S[i1 + 12]), [W + 1.5, 0, 0]);
+      // pts 3-5 : sanctuaire dans la pente (torii vermillon, escalier de pierre, tōrō allumés, oratoire), et des cerfs sika au bord de la route
+      { const i = at(i3, i4, 0.8), p = site(i, -ext(i), W + 4.5);
+        h.pose('sanctuaire', { vermillon: h.mat('vermillon'), noir: h.mat('vitreSombre'), marche: pierre, feu: feuDoux, bois, toit: h.mat('matGris') }, p);
+        allume(p, i, 2.5, 1.9, 0xffb050, 14, 1.6); allume(p, i, 9, 4.6, 0xffb050, 10, 1.2); }
+      const peauCerf = { poil: h.mat('pelage'), patte: h.mat('pelage'), croupe: h.mat('craie'), bois, yeux: h.mat('peinture', { lum: 1, retro: 4, c: 0xc8ffb0 }) }; // les yeux : même technique que les catadioptres
+      for (const [f, c, off, t] of [[0.15, 1, 3.4, 1], [0.2, 1, 6.5, 0.8], [0.62, -1, 3.2, 1.05], [0.7, -1, 7, 0.85], [0.74, -1, 5, 0.9]]) {
+        const p = site(at(i3, i5, f), c, W + off); p.rotation.y += -c * 2.36 + (rnd() - 0.5) * 0.6; p.scale.setScalar(t); h.pose('cerf', peauCerf, p); } // tournés vers la route et la voiture qui arrive
+      // pts 5-7 : mur de soutènement moussu à l'intérieur de l'épingle, filet pare-pierres au-dessus ; dehors, un distributeur de boissons allumé, seul
+      const murs = [], filets = [], poteaux = [];
+      for (let i = i5 + 8; i < i7; i += 2) { const s = S[i], [x, z] = bord(s, 1, W + 1.7), ry = h.across(s); murs.push([x, s.y + 1.75, z, ry]); filets.push([x, s.y + 5.7, z, ry]); if (i % 4 === 0) poteaux.push([x, s.y + 5.9, z, ry]); }
+      inst(h, h.geo('murSout'), h.mat('murMousse'), murs); inst(h, h.geo('filetPierres'), h.mat('filet', { alphaTest: 0.5, side: THREE.DoubleSide }), filets); inst(h, h.geo('poteauFilet'), acier, poteaux);
+      { const i = at(i5, i7, 0.55), p = site(i, -1, W + 3.2, 0.4); p.rotation.y += (rnd() - 0.5) * 0.3;
+        h.pose('distribIsole', { socle: beton, caisse: h.mat('laque', { c: 0xe8ecf0 }), face: h.mat('distributeur', LUM), bac: h.mat('laque', { c: 0x2a5ac8 }) }, p); allume(p, i, -1.2, 1.6, 0xe8f4ff, 11, 2.2); }
+      // pts 7-9 : la trouée côté vallée (les arbres y sont retirés plus haut), annoncée par un panneau de point de vue
+      h.pose('panneauVue', { poteau: acier, plaque: h.mat('ecrit', retro, 64, 24, '#5a3420', '#f4f0e0', '展望  VIEW', 14) }, repere(h, S[i7 + 6]), [W + 1.6, 0, 0]);
+      // pts 9-10 : trois voitures garées face à la vue, feux allumés, et leurs pilotes debout devant
+      { const i = at(i9, i10, 0.35), q = repere(h, S[i]), peau = col => ({ caisse: h.mat('laque', { c: col }), vitre, feuRouge, feuBlanc, chassis: h.mat('matGris'), roue: h.mat('roue'), pneu: h.mat('pneu') });
+        h.pose('boite', bitume, q, [W + 6, -0.35, 0], 10, 0.6, 34);
+        [[-11, 0.25, 0xd8d8d0], [-2, -0.1, 0x14161c], [8, 0.2, 0xc8102e]].forEach(([vz, a, col]) => { const v = new THREE.Group(); v.position.set(W + 5, 0, vz); v.rotation.y = a; q.add(v); h.pose('voitureGaree', peau(col), v); });
+        [[W + 8.6, -7, 1], [W + 8.9, -6.2, 0.92], [W + 9, 3, 1.04], [W + 3, 4.5, 0.98]].forEach(([px, pz, t]) => h.pose('passant', { ombre: vitre }, q, [px, 0, pz], t));
+        allume(q, i, W + 11, 1, 0xfff0d0, 16, 2); }
+      // pts 10-12 : une ligne à haute tension franchit la crête, feux rouges clignotants ; la lueur de la supérette se devine entre les troncs
+      const feuPylone = h.mat('feuRouge', LUM), fils = [];
+      { const i = at(i10, ic, 0.4), s = S[i], pyl = (sd > 0 ? [-260, -70, 75] : [-75, 70, 260]).map(o => { const p = site(i, Math.sign(o), Math.abs(o), 60); p.rotation.y = h.across(s) + Math.PI / 2; h.pose('pyloneHT', { acier: h.mat('matGris'), feu: feuPylone }, p); p.updateMatrixWorld(); return p; });
+        const bouts = pyl.map(p => [[-6.3, 26.7], [6.3, 26.7], [-6.3, 31.7], [6.3, 31.7], [-4.3, 36.7], [4.3, 36.7]].map(([lx, ly]) => p.localToWorld(new THREE.Vector3(lx, ly, 0))));
+        for (let k = 0; k + 1 < pyl.length; k++) for (let c = 0; c < 6; c++) { const A = bouts[k][c], Bq = bouts[k + 1][c], f = u => [A.x + (Bq.x - A.x) * u, A.y + (Bq.y - A.y) * u - 36 * u * (1 - u), A.z + (Bq.z - A.z) * u]; // 9 m de flèche
+          for (let t = 0; t < 1; t += 1 / 16) fils.push(...f(t), ...f(t + 1 / 16)); }
+        const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(fils, 3)); h.scene.add(new THREE.LineSegments(fg, new THREE.LineBasicMaterial({ color: 0x4a5058 }))); }
+      { const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: h.mat('brume').map, color: 0xbfdcff, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
+        halo.position.set(cx, g.hAt(cx, cz) + 8, cz); halo.scale.set(70, 34, 1); h.scene.add(halo); }
+      // le retour (pts 41-48) : des jizō à bavoir rouge et leur bougie, puis une cabine téléphonique allumée
+      { const i = pt(h, 43), p = site(i, ext(i), W + 2.6, 0.4); h.pose('jizos', { socle: beton, pierre, bavoir: h.mat('laque', { c: 0xc8102e }), bois, toit: h.mat('matGris'), feu: feuDoux }, p); allume(p, i, -0.6, 0.4, 0xffa040, 6, 1.2); }
+      { const i = pt(h, 46), p = site(i, ext(i), W + 2.8, 0.4); h.pose('cabine', { socle: beton, verre: h.mat('vitrine', { lum: 1, c: 0xd8ffe0 }), cadre: h.mat('laque', { c: 0x1f8f5a }) }, p); allume(p, i, 0, 2, 0xe0ffe8, 12, 2); }
+
       const rouge = ville(h, g); // la mégapole en contrebas, à l'ouest des lacets
-      return (dt, now) => { cligno.color.setHex((now / 450 & 1) ? 0xff8c1a : 0x3a2008); rouge.color.setHex(now % 1500 < 700 ? 0xff2018 : 0x300404); };
+      return (dt, now) => { cligno.color.setHex((now / 450 & 1) ? 0xff8c1a : 0x3a2008); const r = now % 1500 < 700 ? 0xff2018 : 0x300404; rouge.color.setHex(r); feuPylone.color.setHex(r); eau.map.offset.x += dt * 0.3; };
     },
 
     // ---------- Wan-9 : la ville au nord, le chenal, l'île du port au sud. Voie rapide du front de mer, pont à haubans, quais à conteneurs,
