@@ -243,28 +243,8 @@
       // bouches d'égout au bord de la chaussée : une plaque sombre, d'où game.js fait monter un panache de vapeur teinté par le néon le plus proche (h.vapeur)
       const plaque = mat('peinture', { c: 0x0e0e12 });
       for (let i = 40; i < h.N; i += 140) { if (h.zone(i, 30) > 0) continue; const s = S[i], sd = (i / 140 | 0) & 1 ? 1 : -1, x = s.x - s.tz * sd * (W - 1.6), z = s.z + s.tx * sd * (W - 1.6); box(1.1, 0.05, 1.1, plaque, x, s.y + 0.03, z); h.vapeur(x, s.y + 0.1, z); }
-      // ---------- trois repères du tour (sans tirage de rnd : le reste de la ville ne bouge pas) ----------
-      // la voie rapide est un viaduc : le sol de la ville est à -60 m ; Y0(s) = hauteur de ce sol dans le repère d'un échantillon s
-      const Y0 = s => -60 - s.y, dyn = [], acier = mat('acier'), DS = THREE.DoubleSide;
-      { // le monorail aérien franchit la voie rapide au sommet de la grande courbe (point 4) : poutre en travers, piles hors de la chaussée, station sur la droite, une rame qui fait la navette
-        const iM = pt(h, 4), sM = S[iM], gM = repere(h, sM), YM = 16, L = 340, libre = x => { const [wx, wz] = bord(sM, 1, x); return S.every(s => (s.x - wx) ** 2 + (s.z - wz) ** 2 > (W + 4) ** 2); };
-        box(L, 1.6, 2.2, concrete, 0, YM, 0, gM); box(L, 0.3, 2.4, mat('neonCyan', LUMI), 0, YM - 0.55, 0, gM); // liseré lumineux : la poutre se lit de loin sur le ciel
-        for (let x = -160; x <= 160; x += 40) if (libre(x)) box(2.2, YM - Y0(sM), 2.2, concrete, x, (YM + Y0(sM)) / 2, 0, gM); // piles jusqu'au sol de la ville, aucune sur la route
-        // la station, à droite : quai de chaque côté de la poutre, toit, bandeaux néon, enseigne ; elle porte sur deux piles
-        const X0 = W + 21; // le quai (36 m) commence 3 m après le bord de la chaussée
-        for (const z of [-4.6, 4.6]) { box(36, 0.8, 4.6, concrete, X0, YM - 0.6, z, gM); box(36, 0.12, 0.3, mat('neonCyan', LUMI), X0, YM - 0.15, z * 1.48, gM); box(36, 1.1, 0.12, mat('vitreSombre'), X0, YM + 0.35, z * 1.5, gM); }
-        box(40, 0.5, 15, concrete, X0, YM + 6.5, 0, gM); box(40, 0.3, 15.2, mat('neonMagenta', LUMI), X0, YM + 6.1, 0, gM);
-        for (const x of [-16, 16]) for (const z of [-6.8, 6.8]) box(0.5, 6, 0.5, acier, X0 + x, YM + 3.2, z, gM);
-        for (const z of [-7.62, 7.62]) box(18, 2.2, 0.2, mat('ecrit', LUMI, 128, 16, '#08080c', '#00f0ff', 'モノレール  港北ネオン駅', 11), X0, YM + 5.2, z, gM);
-        for (const x of [X0 - 12, X0 + 12]) box(3, YM - 1 - Y0(sM), 3, concrete, x, (YM - 1 + Y0(sM)) / 2, 0, gM);
-        const [lx, lz] = bord(sM, 1, X0); lum(iM, lx, sM.y + YM + 4, lz, 0x9fe8ff, 30, 0.8); // la station éclaire sa poutre
-        lum(iM, sM.x, sM.y + YM - 2, sM.z, 0xff4fc8, 18, 0.5); // et un néon sous la poutre, au-dessus de la route
-        // la rame : trois voitures, une seule passe de dessin par zone ; elle va et vient d'un bout à l'autre de la poutre (période 30 s) : elle passe deux fois au-dessus de la route par aller-retour
-        const rame = new THREE.Group(); rame.userData.dyn = 1; gM.add(rame); rame.position.y = YM + 0.4;
-        insts(h, 'rameMono', { caisse: mat('peinture', { c: 0xe4e6ee }), vitres: mat('fenetresAllumees', { lum: 1 }, ['#d0f8ff', '#ffe9b0'], 0.9), bande: mat('peinture', { lum: 1, c: 0xff003c }), patin: mat('matGris') },
-          [-11.6, 0, 11.6].map(x => [x, 0, 0])).forEach(m => { scene.remove(m); rame.add(m); });
-        dyn.push(now => { rame.position.x = (L / 2 - 18) * Math.max(-1, Math.min(1, 1.3 * Math.sin(now / 30000 * 2 * Math.PI))); }); // un arrêt à chaque bout
-      }
+      // ---------- repères du tour (sans tirage de rnd : le reste de la ville ne bouge pas) ----------
+      const dyn = [], acier = mat('acier'), DS = THREE.DoubleSide;
       { // le marché de nuit (points 13 à 16) : une dalle de chaque côté de la voie rapide, des étals qui fument, la foule sous des parapluies transparents, des lanternes rouges en travers de la rue
         const i0 = pt(h, 13), i1 = pt(h, 16) - 10, n = i1 - i0, D0 = W + 1.6, D1 = W + 15;
         const dalle = mat('peinture', { c: 0x2a2630, side: DS });
@@ -318,7 +298,7 @@
           let x = mvP[i * 3] + mvV[i * 2] * dt, z = mvP[i * 3 + 2] + mvV[i * 2 + 1] * dt;
           mvP[i * 3] = x < -700 ? x + 1600 : x > 900 ? x - 1600 : x; mvP[i * 3 + 2] = z < -350 ? z + 1200 : z > 850 ? z - 1200 : z;
         }
-        mvGeo.attributes.position.needsUpdate = true; beaconPts.visible = (now / 700 & 1) === 1; dyn.forEach(f => f(now)); // monorail, écran du départ, drones
+        mvGeo.attributes.position.needsUpdate = true; beaconPts.visible = (now / 700 & 1) === 1; dyn.forEach(f => f(now)); // écran du départ, drones
       };
     },
     // ---------- Grand Vacarme : une arène couverte, comble. Sol de terre battue, gradins sur tout le pourtour, charpente et rampes de projecteurs, cube d'affichage au centre.
