@@ -26,5 +26,20 @@
       ...[-1, 1].map(sd => ['costume', 0.6, 0.18, 0.18, 0.55, 1.65, sd * 0.38])],
     // kota, la tente lapone en cône de toile et de perches
     kota: () => { const g = new THREE.ConeGeometry(2.6, 5.5, 9); g.translate(0, 2.75, 0); return g; },
+    // chasse-neige de la DDE garé (X = vers l'avant) : châssis, cabine vitrée, benne à sel, lame biaise à rayures devant, six roues (jante et pneu croisés, comme roues de formes.js).
+    // Le gyrophare n'en fait pas partie : il clignote, il est posé à part (hors fusion du décor fixe)
+    chasseNeige: () => [['chassis', 7, 0.5, 2.3, 0, 0.95, 0], ['caisse', 2.2, 2, 2.4, 2, 2.2, 0, null, 1], ['vitre', 0.1, 0.9, 2.1, 3.12, 2.65, 0], ['vitre', 1.5, 0.8, 2.44, 2.1, 2.65, 0],
+      ['caisse', 4.2, 1.7, 2.4, -1.5, 2.05, 0, null, 1], ['neige', 4.3, 0.3, 2.5, -1.5, 3.05, 0], ['neige', 2.3, 0.2, 2.5, 2, 3.3, 0], ['chassis', 1, 0.3, 1, 3.6, 0.9, 0],
+      ['lame', 0.3, 1.2, 3.4, 4.25, 0.75, 0, [0, 0.35, 0]], ['neige', 1.2, 0.6, 3.6, 4.9, 0.3, 0, [0, 0.35, 0]],
+      ...[2.2, -1, -2.4].flatMap(x => [-1, 1].flatMap(sd => [0, 0.785].map(a => [a ? 'pneu' : 'roue', 1.1, 1.1, 0.4, x, 0.55, sd * 1.05, [0, 0, a]])))],
+    // pylône de télésiège (origine au pied, la ligne suit Z, la traverse X) : fût, traverse et ses deux trains de galets, chargés de neige
+    pyloneTelesiege: () => [['acier', 0.7, 9, 0.7, 0, 4.5, 0, null, 1], ['acier', 4.4, 0.3, 0.3, 0, 9, 0], ...[-1, 1].map(sd => ['acier', 0.25, 0.25, 0.9, sd * 2.1, 8.7, 0]), ['neige', 4.5, 0.2, 0.45, 0, 9.25, 0]],
+    // siège du télésiège, figé (origine au câble, X = dans le sens de la ligne) : suspente, assise et dossier, la neige tombée dessus
+    siege: () => [['acier', 0.08, 1.6, 0.08, 0, -0.8, 0], ['acier', 0.08, 0.08, 1.4, 0, -0.05, 0], ['siege', 0.6, 0.12, 1.3, 0, -1.65, 0], ['siege', 0.1, 0.6, 1.3, -0.3, -1.35, 0], ['neige', 0.6, 0.1, 1.3, 0, -1.55, 0]],
+    // chouette harfang perchée (origine aux serres, X = vers où elle regarde) : corps, tête ronde, aigrettes, yeux d'ambre qui renvoient les phares
+    chouette: () => [['plume', 0.26, 0.34, 0.24, 0, 0.17, 0], ['plume', 0.24, 0.2, 0.24, 0, 0.44, 0], ['tache', 0.27, 0.06, 0.25, 0, 0.12, 0], ['tache', 0.27, 0.04, 0.25, 0, 0.25, 0],
+      ...[-1, 1].flatMap(sd => [['oeil', 0.03, 0.06, 0.06, 0.12, 0.46, sd * 0.055], ['plume', 0.05, 0.08, 0.05, 0, 0.58, sd * 0.08], ['tache', 0.2, 0.25, 0.04, -0.02, 0.2, sd * 0.13]]), ['bec', 0.05, 0.05, 0.04, 0.13, 0.41, 0]],
+    // panneau « verglas » à 150 m de chaque plaque (plaque face à X), un feu bleu au sommet, comme les balises des cols
+    panneauVerglas: () => [['poteau', 0.14, 3.6, 0.14, 0, 1.8, 0], ['plaque', 0.08, 1.1, 2.9, 0.08, 2.9, 0], ['feu', 0.45, 0.45, 0.45, 0, 3.8, 0]],
   });
 })();
