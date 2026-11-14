@@ -26,7 +26,7 @@
   let mix = 0, inten = 0, driftL = 0, drums = 0, fin = false, wasIn = false, wasNear = false, wasBoost = false;
   let rubT = 0, satT = 0, platine = 0; // frottement bref entre voitures ; saturation de la musique après un choc ; ralenti de platine (1 → 0)
   const VX = [], UN = [], PANJ = 0.35; // voix moteur + boîte + pneus : VX[0] celle du solo (au centre, branchée comme toujours), VX[1] et VX[2] celles de l'écran partagé (joueur 1 à gauche, joueur 2 à droite) ; UN : liste d'un seul joueur, réutilisée quand le jeu n'en passe pas
-  let scrapeG, windG, windL, windF, nitroG, gbuf, pluie, ambBed, ambT = 2, inZone = false, uiF;
+  let scrapeG, windG, windL, windF, nitroG, gbuf, esp, AU = [], pluie, ambBed, ambT = 2, inZone = false, uiF;
   const auHasard = () => Math.random() * ST.length | 0; // à chaque carte, une de ses stations au hasard
   let station = auHasard(), S16 = 60 / ST[station].bpm / 4;
 
@@ -48,6 +48,8 @@
     wangan: [['bandpass', 350, 0.8, 0.07, 0.08, 0.7], ['lowpass', 90, 0.7, 0.2]], // vent de la baie, ronflement du port (+ corne de navire)
     paris: [['lowpass', 140, 0.7, 0.15, 0.05, 0.3], ['highpass', 7000, 0.5, 0.004]], // ville qui s'éveille (+ oiseaux)
     canal: [['lowpass', 500, 0.5, 0.06, 0.06, 0.7], ['bandpass', 220, 0.7, 0.06]], // vent sec, autoroute lointaine (+ hélicoptère)
+    stade: [['bandpass', 450, 0.6, 0.12, 0.09, 0.35], ['bandpass', 1100, 0.8, 0.05, 0.13, 0.5], ['lowpass', 120, 0.7, 0.1]], // la foule des tribunes, son brouhaha qui ondule (+ clameurs)
+    givre: [['bandpass', 320, 3, 0.05, 0.07, 0.8], ['lowpass', 200, 0.7, 0.05, 0.04, 0.5]], // le vent qui siffle dans les sapins (+ grelots au loin)
   };
 
   const gain = (v, dest) => { const g = AC.createGain(); g.gain.value = v; g.connect(dest); return g; };
@@ -401,6 +403,9 @@
   }
   carte(M);
   function buildAmb() {
+    if (esp) { const P = ESP[M.id] || ESP.essai, n = Math.round(AC.sampleRate * P.dur), ir = AC.createBuffer(2, n, AC.sampleRate); // la salle du lieu
+      for (let c = 0; c < 2; c++) { const x = ir.getChannelData(c); for (let i = 0; i < n; i++) x[i] = (Math.random() * 2 - 1) * Math.exp(-i / AC.sampleRate / (P.dur / 6.9)); } // -60 dB au bout de dur
+      esp.conv.buffer = ir; esp.lp.frequency.value = P.lp; }
     if (ambBed) ambBed.disconnect();
     ambBed = gain(1, V.amb);
     for (const [type, f, q, lv, rate, depth] of AMB[M.id] || []) {
@@ -417,6 +422,9 @@
     if (id === 'canal') { for (let i = 0; i < 110; i++) nz(t + i * 0.075, 0.06, 0.2 * Math.sin(Math.PI * i / 110), ambBed, 'lowpass', 260); return rnd(30, 50); } // hélicoptère qui passe au loin
     if (id === 'ville') { const o = AC.createOscillator(), g = AC.createGain(); o.frequency.setValueAtTime(620, t); for (let i = 0; i < 4; i++) { o.frequency.linearRampToValueAtTime(840, t + i + 0.5); o.frequency.linearRampToValueAtTime(620, t + i + 1); }
       o.connect(filt('lowpass', 1200, 0.7, g)); g.connect(ambBed); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.03, t + 1.5); g.gain.linearRampToValueAtTime(0, t + 4); o.start(t); o.stop(t + 4.1); return rnd(25, 50); } // sirène lointaine
+    if (id === 'stade') { const c = nz(t, 2.6, 0.22, ambBed, 'bandpass', 900, 0.6, nbuf, 0.5); c && c.frequency.linearRampToValueAtTime(1300, t + 0.8); // clameur qui monte et retombe
+      for (let i = 0; i < 3; i++) { const f = rnd(1800, 2600), o = osc('sine', f, t + rnd(0.3, 1.5), 0.35, 0.025, ambBed); o && o.frequency.linearRampToValueAtTime(f * 1.25, t + 2); } return rnd(6, 12); } // + quelques sifflets
+    if (id === 'givre') { for (let i = 0, f = rnd(2300, 2700); i < 14; i++) { const d = t + i * 0.11 + Math.random() * 0.03; osc('sine', f, d, 0.12, 0.012, ambBed); osc('sine', f * 1.51, d, 0.08, 0.006, ambBed); } return rnd(20, 40); } // grelots d'un traîneau, au loin
     return 10;
   }
   // ---------- passage DJ (piste MULTI-PISTE) : deux platines, comme un DJ qui enchaîne deux disques ----------
@@ -482,6 +490,21 @@
     v8: { n: 8, ign: 0.012, irr: 0.3, int: 120, exh: 140, ext: 120, str: 180, muf: [14, 20, 27, 35], out: 8, off: [0, 0.14, 0.24, 0.395, 0.5, 0.61, 0.76, 0.855] },
     v10: { n: 10, ign: 0.01, irr: 0.18, int: 90, exh: 100, ext: 90, str: 150, muf: [11, 16, 22, 28], out: 6 },
     rot: { n: 4, ign: 0.03, irr: 0.1, int: 60, exh: 50, ext: 60, str: 100, muf: [8, 12, 16, 20], out: 4 },
+  };
+  const CAMION = { n: 6, ign: 0.02, irr: 0.2, int: 160, exh: 200, ext: 160, str: 260, muf: [20, 28, 36, 46], out: 10 }; // gros diesel du trafic, qui tourne vers 1 500 tr/min
+  // Acoustique du lieu : ce que renvoient les murs, les façades et le relief (moteur, pneus, chocs). slap = retard du premier écho (s), sl = son niveau,
+  // mur = ce que le bord de la route ajoute quand on le serre (façades, glissières, parois ; 0 en terrain ouvert), rv = réverbération, dur = sa durée (s), lp = sa clarté (Hz).
+  // En tunnel, l'écho devient court et fort, et la réverbération du tunnel (rev) prend le relais.
+  const ESP = {
+    ville: { slap: 0.034, sl: 0.3, mur: 1, rv: 0.12, dur: 1.2, lp: 4000 }, // rues encaissées entre les tours
+    touge: { slap: 0.16, sl: 0.12, mur: 0.4, rv: 0.06, dur: 2.2, lp: 2500 }, // la montagne renvoie l'écho de loin ; forêt qui l'étouffe
+    wangan: { slap: 0.022, sl: 0.2, mur: 0.8, rv: 0.06, dur: 1, lp: 4500 }, // autoroute surélevée entre deux glissières de béton
+    paris: { slap: 0.028, sl: 0.3, mur: 1, rv: 0.14, dur: 1.4, lp: 3800 }, // façades de pierre
+    canal: { slap: 0.05, sl: 0.25, mur: 0.7, rv: 0.1, dur: 1.6, lp: 3500 }, // le lit de béton du canal
+    stade: { slap: 0.09, sl: 0.25, mur: 0.5, rv: 0.45, dur: 3, lp: 3000 }, // arène couverte : grande salle
+    givre: { slap: 0.06, sl: 0.04, mur: 0.2, rv: 0.03, dur: 0.8, lp: 2000 }, // la neige boit le son
+    terre: { slap: 0.12, sl: 0.06, mur: 0, rv: 0.03, dur: 1, lp: 2500 }, // garrigue à découvert
+    essai: { slap: 0.04, sl: 0.1, mur: 0.5, rv: 0.05, dur: 1, lp: 3000 },
   };
   const MOTEUR_JS = `
 class WG { // guide d'onde : deux lignes à retard (aller, retour) ; a, b : réflexion aux extrémités gauche et droite
@@ -562,6 +585,20 @@ registerProcessor('moteur', Moteur);`;
     const pm = AC.createStereoPanner(), pp = AC.createStereoPanner(), ns = AC.createBufferSource(); pm.pan.value = pp.pan.value = p; pm.connect(V.mot); pp.connect(V.pneu);
     ns.buffer = nbuf; ns.loop = true; ns.start(0, Math.random() * 2); return voix(ns, pm, pp, [ns]);
   }
+  // voix d'un autre véhicule (rival, camion) : son moteur physique, atténué par la distance (niveau et aigus, comme l'air), placé à gauche ou à droite ;
+  // l'effet Doppler passe par le régime (la hauteur suit le régime) ; wh : le souffle de l'air quand il passe tout près
+  function voixLoin(ns) {
+    const pan = AC.createStereoPanner(); pan.connect(V.mot); const g = gain(0, pan), lp = filt('lowpass', 8000, 0.7, g), eng = gain(1, lp), wh = gain(0, pan); ns.connect(filt('bandpass', 700, 0.8, wh));
+    const v = { eng, g, lp, pan, wh, src: [], node: null, typ: null }; if (modOk) brancher(v); return v;
+  }
+  function klaxon(t = AC.currentTime, d = V.mot) { // trompe à air d'un camion : deux notes en accord, cuivrées, un coup long
+    for (const f of [155, 196]) { const o = AC.createOscillator(), g = AC.createGain(); o.type = 'sawtooth'; o.frequency.value = f; o.connect(filt('lowpass', 1800, 1, g)); g.connect(d);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05, t + 0.04); g.gain.setValueAtTime(0.05, t + 0.9); g.gain.linearRampToValueAtTime(0, t + 1.1); o.start(t); o.stop(t + 1.15); }
+  }
+  function reception(l, t = AC.currentTime, d = V.choc) { // réception d'un saut : les pneus et la suspension encaissent ; au-delà, la caisse talonne
+    const v = Math.min(0.45, (l - 3) * 0.06), o = osc('sine', 95, t, 0.28, v, d); o && o.frequency.exponentialRampToValueAtTime(38, t + 0.22);
+    nz(t, 0.09, v * 0.6, d, 'lowpass', 450); if (l > 8) { nz(t + 0.015, 0.14, v * 0.35, d, 'bandpass', 1100, 3, mbuf); nz(t + 0.03, 0.05, v * 0.3, d, 'bandpass', 2400, 2); }
+  }
   const tait = (v, t) => { v.vm.gain.setTargetAtTime(0, t, 0.05); v.vp.gain.setTargetAtTime(0, t, 0.05); };
   // la chaîne d'une platine (couleur de la station, filtres, batterie, bus pompé, saturations, réverbération, écho, chorus, tranches) : une au départ, une seconde pendant un passage DJ
   function chaine() {
@@ -600,6 +637,11 @@ registerProcessor('moteur', Moteur);`;
     rev = AC.createConvolver(); const ir = AC.createBuffer(2, AC.sampleRate * 1.6, AC.sampleRate);
     for (let c = 0; c < 2; c++) { const x = ir.getChannelData(c); for (let i = 0; i < x.length; i++) x[i] = (Math.random() * 2 - 1) * Math.exp(-i / AC.sampleRate / 0.35); }
     rev.buffer = ir; rev.connect(gain(0.5, master)); musSend = gain(0, rev); motSend = gain(0, rev); V.mus.connect(musSend); V.mot.connect(motSend);
+    // espace (ESP) : moteur, pneus et chocs → un écho par côté (retard, filtre, un peu de retour, panoramique) + la réverbération du lieu
+    { const eIn = AC.createGain(); V.mot.connect(eIn); V.pneu.connect(gain(0.6, eIn)); V.choc.connect(gain(0.8, eIn));
+      const cote = p => { const g = gain(0, eIn), d = AC.createDelay(0.5), lp = filt('lowpass', 3500, 0.7, gain(0.25, d)), pn = AC.createStereoPanner(); pn.pan.value = p; g.connect(d); d.connect(pn); pn.connect(master); d.connect(lp); return { g, d }; };
+      const L = cote(-0.85), R = cote(0.85), conv = AC.createConvolver(), lp = filt('lowpass', 3000, 0.7, master), rvG = gain(0, conv); eIn.connect(rvG); conv.connect(lp);
+      esp = { L, R, conv, lp, rvG }; }
     musF = filt('lowpass', 18000, 0.7, V.mus); musicG = gain(musicOn ? 1 : 0, musF);
     // bus de mixage : les platines y entrent ; pendant un passage DJ, il passe par une compression qui colle les deux morceaux (sans elle, ils s'additionnent)
     musIn = AC.createGain(); mixDry = gain(1, musicG); musIn.connect(mixDry); const mc = AC.createDynamicsCompressor(); musIn.connect(mc);
@@ -613,11 +655,12 @@ registerProcessor('moteur', Moteur);`;
       AC.decodeAudioData(u8.buffer, b => { smp[k] = b; ok(); }, ok);
     })));
     modOk = false; const ac0 = AC, url = URL.createObjectURL(new Blob([MOTEUR_JS], { type: 'application/javascript' }));
-    modP = AC.audioWorklet ? AC.audioWorklet.addModule(url).then(() => { if (AC !== ac0) return; modOk = true; for (const v of VX) brancher(v); }, () => { }) : Promise.resolve(); // sans AudioWorklet : pas de moteur, le reste joue
+    modP = AC.audioWorklet ? AC.audioWorklet.addModule(url).then(() => { if (AC !== ac0) return; modOk = true; for (const v of [...VX, ...AU]) brancher(v); }, () => { }) : Promise.resolve(); // sans AudioWorklet : pas de moteur, le reste joue
     pret = Promise.all([pret, modP]);
     const ns = AC.createBufferSource(); ns.buffer = nbuf; ns.loop = true; ns.start();
     gbuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate); // gravier : des impacts serrés de 7 ms, lus plus vite avec la vitesse
     { const x = gbuf.getChannelData(0); let a = 0; for (let i = 0; i < x.length; i++) { if (Math.random() < 0.012) a = 0.3 + 0.7 * Math.random(); x[i] = (Math.random() * 2 - 1) * a; a *= 0.997; } }
+    AU = [voixLoin(ns), voixLoin(ns)]; // les deux autres véhicules les plus proches (rivaux ou camions)
     VX.length = 0; VX[0] = voix(ns, V.mot, V.pneu); // un contexte neuf repart avec la seule voix du solo
     // frottement : tôle (bande médium et grondement) mêlée à une meule (bande aiguë étroite hachée à 72 Hz, étincelles)
     scrapeG = gain(0, V.choc); ns.connect(filt('bandpass', 1700, 1.2, scrapeG)); ns.connect(filt('lowpass', 260, 0.7, gain(1.5, scrapeG)));
@@ -695,7 +738,7 @@ registerProcessor('moteur', Moteur);`;
   function audioFrame(dt, e) {
     if (!AC) return;
     const { state, car, T, r, sp } = e, N = T.n, tun = e.tun || 0, CARD = M.car, t = AC.currentTime, racing = state === 'race', k = (p, v, tc = 0.04) => p.setTargetAtTime(v, t, tc);
-    if (state === 'pause') { for (const v of VX) tait(v, t); k(scrapeG.gain, 0, 0.05); k(windG.gain, 0, 0.05); k(windL.gain, 0, 0.05); k(nitroG.gain, 0, 0.05); k(pluie.rid.gain, 0, 0.05); k(pluie.aq.gain, 0, 0.05); return; } // en pause : la radio continue, les voitures se taisent
+    if (state === 'pause') { for (const v of VX) tait(v, t); for (const v of AU) { k(v.g.gain, 0, 0.05); k(v.wh.gain, 0, 0.05); } k(scrapeG.gain, 0, 0.05); k(windG.gain, 0, 0.05); k(windL.gain, 0, 0.05); k(nitroG.gain, 0, 0.05); k(pluie.rid.gain, 0, 0.05); k(pluie.aq.gain, 0, 0.05); return; } // en pause : la radio continue, les voitures se taisent
     if ((state === 'title') !== menu) { if (dk) finMix(); menu = !menu; retune(t + 0.05); tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.3); } // menu ↔ course : la boucle de menu laisse la place à la station
     // une voix par joueur : seul, celle du centre, inchangée ; à deux, une de chaque côté, créées à l'arrivée du deuxième joueur et retirées à son départ (fondu, puis arrêt des sources)
     const L = e.cars || (UN[0] = e, UN), duo = L.length > 1; let hit = 0, bump = 0, rub = false; // chocs et frottement : ceux de n'importe quel joueur s'entendent (la musique, elle, n'encaisse que ceux du mieux placé)
@@ -726,6 +769,7 @@ registerProcessor('moteur', Moteur);`;
       k(v.g.gain, GL * a * dur, 0.15); k(v.cri.gain, GL * 0.6 * a * a * dur, 0.15);
       k(v.spray.gain, meu * (0.15 * a + 0.08 * clamp(slip / 12, 0, 1) * j.r), 0.1);
       k(v.scrub.gain, air * 0.5 * clamp(slip / 12, 0, 1) * j.r, 0.08);
+      if ((j.land || 0) > 3.5 && t - (v.landT || 0) > 0.3 && racing) { v.landT = t; reception(j.land, t); } // réception de saut (à part des chocs)
       hit = Math.max(hit, j.hit || 0); bump = Math.max(bump, j.bump || 0); rub = rub || !!c.rub;
     }
     const w = clamp((r - 0.2) / 0.8, 0, 1) * (1 - tun); k(windL.gain, 0.05 * w * w, 0.2); k(windG.gain, 0.035 * w ** 3, 0.2); k(windF.frequency, 500 + 1300 * r, 0.3); // vent : monte avec la vitesse, coupé en tunnel
@@ -764,6 +808,18 @@ registerProcessor('moteur', Moteur);`;
     // (la musique n'est plus étouffée par un choc, et à peine quand on ralentit : passe-bas de 5 à 18 kHz selon la vitesse ; elle s'efface derrière le tableau d'arrivée)
     k(musF.frequency, e.fini ? 900 : Math.min(state === 'title' ? 7000 : 5000 * 3.6 ** Math.min(1, inten * 1.4 + mix), lerp(18000, 2500, tun)), 0.08);
     k(musSend.gain, 0.7 * tun, 0.2); k(motSend.gain, 2.5 * tun, 0.2);
+    // espace : les deux échos (le côté du mur qu'on serre répond plus fort et plus tôt), la salle du lieu ; en tunnel, écho court et fort des deux côtés
+    { const P = ESP[M.id] || ESP.essai, mu = state === 'title' ? 0 : e.mur || 0, on = state === 'title' ? 0.3 : 1;
+      for (const [s, cote] of [[-1, esp.L], [1, esp.R]]) { const pr = P.mur * Math.max(0, mu * s); k(cote.g.gain, on * (P.sl * (1 - tun) * (1 + 1.5 * pr) + 0.45 * tun), 0.1); k(cote.d.delayTime, lerp(lerp(P.slap, 0.008, pr), 0.014, tun) * (s > 0 ? 1.13 : 1), 0.1); }
+      k(esp.rvG.gain, on * P.rv * (1 - tun), 0.3); }
+    // les autres véhicules (e.autres, du plus proche au plus lointain : lat, fwd en m, dist, vr = vitesse de rapprochement, vrel = vitesse relative, rpm, camion)
+    for (let i = 0; i < AU.length; i++) { const o = e.autres && e.autres[i], v = AU[i];
+      if (!o || state === 'title') { k(v.g.gain, 0, 0.15); k(v.wh.gain, 0, 0.15); continue; }
+      const P = o.camion ? CAMION : MOT[CARD.moteur] || MOT.l6, d = Math.max(3, o.dist), dop = clamp(343 / (343 - clamp(o.vr, -150, 150)), 0.7, 1.5);
+      if (v.node) { if (v.typ !== P) { v.node.port.postMessage(P); v.typ = P; } k(v.node.parameters.get('rpm'), o.rpm * dop, 0.04); k(v.node.parameters.get('load'), o.camion ? 0.6 : 0.85, 0.1); }
+      k(v.g.gain, (o.camion ? 0.12 : 0.09) / d, 0.05); k(v.lp.frequency, 9000 / (1 + d / 25), 0.1); k(v.pan.pan, clamp(1.2 * o.lat / d, -1, 1), 0.05);
+      k(v.wh.gain, 0.12 * clamp(o.vrel / 30, 0, 1) * clamp(1 - d / 14, 0, 1) ** 2, 0.04);
+      if (o.camion && racing) { if (v.pf > 0 && o.fwd <= 0 && Math.abs(o.lat) < 8 && t - (AU.kt || 0) > 4) { AU.kt = t; klaxon(t + 0.12, gain(clamp(10 / d, 0.4, 1), v.pan)); } v.pf = o.fwd; } else v.pf = 0; } // on vient de doubler un camion : il klaxonne
   }
 
   document.addEventListener('visibilitychange', () => { if (AC && live) document.hidden ? AC.suspend() : AC.resume(); }); // pas de musique hachée ni de moteur figé en arrière-plan
@@ -774,7 +830,7 @@ registerProcessor('moteur', Moteur);`;
     toggleMusic() { musicOn = !musicOn; if (AC) musicG.gain.value = musicOn ? 1 : 0; },
     volume(fam, v) { vol[fam] = v; if (V[fam]) V[fam].gain.value = v; },
     evenement: () => { ambT = 0; }, get live() { return live; },
-    clac: down => AC && clac(down), levier: down => AC && levier(down), choc: v => AC && choc(v), boost: () => AC && boostFx(), petarade: () => AC && petarade(), pschitt: () => AC && pschitt(),
+    clac: down => AC && clac(down), levier: down => AC && levier(down), choc: v => AC && choc(v), boost: () => AC && boostFx(), petarade: () => AC && petarade(), pschitt: () => AC && pschitt(), reception: l => AC && reception(l), klaxon: () => AC && klaxon(),
     moniteur(v) { if (outG) outG.gain.value = OUT * v; }, get vu() { return vu; }, // gain d'écoute du banc : sans effet sur le jeu
     get vol() { return vol; }, get pret() { return pret; }, get stations() { return ST; },
     get station() { return station; }, get nom() { return ST[station].name; }, get fq() { return ST[station].fq; }, get genre() { return ST[station].genre; }, get musicOn() { return musicOn; },

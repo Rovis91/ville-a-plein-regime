@@ -1236,8 +1236,13 @@
     fxFrame(dt, now);
     // son : moteur, boîte et pneus par joueur (SE.cars, une entrée par vue ; muette si la vue regarde une autre voiture que celle de son joueur, ou la voiture que la première vue fait déjà entendre : après une élimination, au menu à deux) ; la radio, le tunnel, la pluie et l'ambiance suivent l'humain le mieux placé encore en course (seul, hors course ou tous arrivés : le joueur 1). Les objets restent accrochés aux vues : rien n'est alloué par image
     const SE = J.son || (J.son = { cars: [] }); let Jm = J; if (race) for (const vu of VUES) if (!vu.fini && (Jm.fini || vu.car.pos < Jm.car.pos)) Jm = vu;
-    SE.cars.length = 0; for (const vu of VUES) { const c = vu.car, o = vu.sj || (vu.sj = {}); o.muet = vu.spec || (vu !== J && !J.spec && J.car === c); o.car = c; o.sp = Math.hypot(c.vx, c.vz); o.r = Math.min(1, o.sp / TOP); o.gas = vu.gas; o.hit = vu.hit; o.bump = Math.max(vu.bump, vu.land > 7 ? (vu.land - 6) * 0.4 : 0); o.up = vu.up > 0; o.down = vu.up < 0; o.rpm = vu.rpm; o.load = vu.load; o.spool = vu.spool; SE.cars.push(o); }
+    SE.cars.length = 0; for (const vu of VUES) { const c = vu.car, o = vu.sj || (vu.sj = {}); o.muet = vu.spec || (vu !== J && !J.spec && J.car === c); o.car = c; o.sp = Math.hypot(c.vx, c.vz); o.r = Math.min(1, o.sp / TOP); o.gas = vu.gas; o.hit = vu.hit; o.bump = vu.bump; o.land = vu.land; o.up = vu.up > 0; o.down = vu.up < 0; o.rpm = vu.rpm; o.load = vu.load; o.spool = vu.spool; SE.cars.push(o); }
     const cm = Jm.car, jm = Jm.sj; SE.state = state; SE.car = cm; SE.T = T; SE.tour = race ? Math.min(race.laps - 1, Math.max(0, Math.floor(cm.dist / N))) : 0; SE.tours = race ? race.laps : 0; SE.hot = hot(cm.idx, 50); SE.tun = Jm.lm; SE.amb = ambAt(cm.idx); SE.r = jm.r; SE.sp = jm.sp; SE.hit = jm.hit; SE.bump = jm.bump; SE.fini = ses.raceEnd; // fini : la radio s'efface derrière le tableau d'arrivée
+    { const s = S[cm.idx], L = s.w - 1.1; SE.mur = Math.sign(cm.d) * clamp(1 - (L - Math.abs(cm.d)) / 5, 0, 1); } // le bord qu'on serre (+ à droite) : son écho répond plus fort
+    { const fx = Math.cos(cm.th), fz = Math.sin(cm.th), veh = race ? race.cars.filter(c => c !== cm && !partie(c)) : M.trafic && state !== 'title' ? trafic(T, tTraf) : []; // les deux autres véhicules les plus proches, qu'on entend
+      SE.autres = veh.map(c => [c, Math.hypot(c.x - cm.x, c.z - cm.z)]).filter(a => a[1] < 150).sort((a, b) => a[1] - b[1]).slice(0, 2).map(([c, d]) => {
+        const dx = c.x - cm.x, dz = c.z - cm.z, rx = c.vx - cm.vx, rz = c.vz - cm.vz, cam = c.lane !== undefined;
+        return { lat: dz * fx - dx * fz, fwd: dx * fx + dz * fz, dist: d, vr: -(rx * dx + rz * dz) / Math.max(d, 1), vrel: Math.hypot(rx, rz), rpm: cam ? 1500 : c.rpm, camion: cam }; }); }
     SON.frame(dt, SE);
     if (state !== 'title') radioT -= dt; // l'annonce de la station clignote 2,5 s (une radio pour toutes les vues)
     for (const vu of VUES) vueFrame(vu, dt, now);
