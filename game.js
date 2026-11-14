@@ -1251,6 +1251,7 @@
       const c = race && race.cars.find(c => c.k === i); g.visible = !!c && !partie(c) && !(c.out && race.t - c.out > 3 && now / 120 & 1); if (!c) return; // une voiture sortie se range, clignote, puis disparaît
       const [t, ro] = assiette(c); g.userData.y += (c.y - g.userData.y) * Math.min(1, dt * 18);
       g.rotation.order = 'YZX'; g.position.set(c.x, g.userData.y, c.z); g.rotation.set(ro, -c.th, t);
+      if (i < 3) for (let r = 1; r < 5; r++) { const st = g.children[r]; st.children[0].rotation.z -= (c.vf || 0) * dt / rr; if (r > 2) st.rotation.y = -(c.steer || 0) * 0.45; } // les rivaux ; les modèles des joueurs 2 à 4 tournent leurs roues dans fxVoiture
     });
     for (const vu of VUES) { const on = !vu.spec && (!vu.n || vu.car !== car); vu.hu.tr.visible = on; if (!vu.n) carG.visible = !vu.spec; if (on) fxVoiture(vu, dt); } // (une vue passée sur le meneur ne pose plus la voiture de son joueur : celle du joueur 2 reste un adversaire rangé, celle du joueur 1 est cachée) // chaque voiture humaine, avec l'état lissé de sa vue (le modèle du joueur 2 vient d'être posé comme un adversaire : on le repose). Deux vues sur la même voiture, au menu : une seule fois
     if (TH.alarme) { carMat.emissive.setRGB(0.3 * lm, 0.01 * lm, 0.03 * lm); for (const m of tunMats) m.color.setScalar((m.userData.amb || 1) * (0.75 + 0.5 * pulse)); }
