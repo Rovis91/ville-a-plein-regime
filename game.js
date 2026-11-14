@@ -92,14 +92,15 @@
   const VUES = [], AA = ST ? ST.aa : 1, deux = () => VUES.length > 1;
   const suit = (vu, c) => { vu.moi = vu.car = c; vu.hu.hist.length = vu.hu.gR[0].length = vu.hu.gR[1].length = vu.hu.gOn[0] = vu.hu.gOn[1] = 0; vu.cth = c.th; vu.carY = S[c.idx].y; vu.result = null; vu.fini = vu.spec = false; vu.lap0 = [0, 0, 0]; }; // la vue se cale derrière la voiture c, compteurs de course à zéro : au départ, au retour au menu
   const nouvelleVue = () => {
-    const rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
+    const rt = new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, type: ST ? THREE.UnsignedByteType : THREE.HalfFloatType }); // sans style, la scène garde ce qui dépasse le blanc : la passe finale l'expose (adaptation de l'œil)
     if (ST && ST.aa > 1) rt.texture.minFilter = rt.texture.magFilter = THREE.LinearFilter; // suréchantillonnage : la cible est aa fois plus fine, la passe finale en fait la moyenne
-    if (SSR || (ST && ST.z)) { rt.depthTexture = new THREE.DepthTexture(1, 1); rt.depthTexture.type = THREE.UnsignedIntType; }
+    if (SSR || !ST || ST.z) { rt.depthTexture = new THREE.DepthTexture(1, 1); rt.depthTexture.type = THREE.UnsignedIntType; } // sans style : la profondeur coupe les rayons de lumière (et sert aux reflets)
+    const oeil = ST ? null : [0, 1].map(() => new THREE.WebGLRenderTarget(1, 1, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, type: THREE.HalfFloatType })); // un pixel : luminosité à laquelle l'œil est fait, et celle du dehors ; lu et réécrit à tour de rôle
     // le HUD est dessiné sur un canvas 2D à la même résolution que le jeu, puis composé dans la passe finale : une seule grille de pixels
-    const rs = SSR ? new THREE.WebGLRenderTarget(1, 1, { minFilter: rt.texture.minFilter, magFilter: rt.texture.magFilter, depthBuffer: false }) : null; // la scène + ses reflets calculés à l'écran (voir ssr)
+    const rs = SSR ? new THREE.WebGLRenderTarget(1, 1, { minFilter: rt.texture.minFilter, magFilter: rt.texture.magFilter, depthBuffer: false, type: rt.texture.type }) : null; // la scène + ses reflets calculés à l'écran (voir ssr)
     const hudC = document.createElement('canvas'), hudT = new THREE.CanvasTexture(hudC);
     hudT.minFilter = hudT.magFilter = THREE.NearestFilter;
-    const vu = { cam: new THREE.PerspectiveCamera(70, 1, 0.5, 3000), rt, rs, hudC, hg: hudC.getContext('2d'), hudT, w: 480, rw: 480, // w : largeur de la grille du HUD ; rw : celle de la cible (la même sans style)
+    const vu = { cam: new THREE.PerspectiveCamera(70, 1, 0.5, 3000), rt, rs, oeil, hudC, hg: hudC.getContext('2d'), hudT, w: 480, rw: 480, // w : largeur de la grille du HUD ; rw : celle de la cible (la même sans style)
       moi: null, hu: HUM[VUES.length], car: null, cth: 0, carY: 0, pitch: 0, roll: 0, // voiture suivie ; cap de la caméra, hauteur, tangage et roulis lissés
       lookA: 0, lookP: 0, lookT: 0, // caméra libre à la souris : angle autour de la voiture, hauteur en plus, délai avant retour
       hit: 0, bump: 0, land: 0, stun: 0, nit: 0, lm: 0, rv: 0, rc: 0, // chocs de la voiture suivie pendant l'image ; secousse, fondu de nitro, fondu de tunnel
@@ -111,7 +112,7 @@
       rainP: rainP.slice(), splP: new Float32Array(SN * 3), splA: splA.slice(), splD: new Float32Array(SN) }; // gouttes (autour de la voiture) et impacts : mêmes tirages de départ pour toutes les vues, rnd n'est pas tiré
     suit(vu, VUES.length ? VUES[0].moi : newCar(T)); VUES.push(vu); resize(); return vu; // une vue ajoutée (au menu) suit la voiture du joueur 1, comme toutes les vues hors course
   };
-  const rendVue = vu => { vu.rt.dispose(); if (vu.rs) vu.rs.dispose(); if (vu.rt.depthTexture) vu.rt.depthTexture.dispose(); vu.hudT.dispose(); }; // ce qu'une vue tient au GPU (son canvas de HUD n'est pas dans la page)
+  const rendVue = vu => { vu.rt.dispose(); if (vu.rs) vu.rs.dispose(); if (vu.rt.depthTexture) vu.rt.depthTexture.dispose(); if (vu.oeil) vu.oeil.forEach(o => o.dispose()); vu.hudT.dispose(); }; // ce qu'une vue tient au GPU (son canvas de HUD n'est pas dans la page)
   const retireVue = () => { const vu = VUES.pop(); vu.hu.tr.visible = false; rendVue(vu); resize(); }; // ses traînées ne sont plus tenues par aucune vue
   let COM = null; // couche plein écran commune aux deux vues : un canvas 2D posé sur celui du jeu, { c, g }. Elle n'existe qu'à deux joueurs (voir joueurs et couche, près de la boucle)
   let hg = null; // contexte 2D du HUD en cours de dessin (celui de la vue, ou de la couche commune), pour txt, panel, tag
@@ -128,21 +129,32 @@
           o.xy += k * vec2(sin(v.y * 420. + cr.z * 9.) * .004, sin(v.y * 260. - cr.z * 6.) * .0016); }
         return o; }`;
   const post = new THREE.ShaderMaterial({
-    uniforms: { t: { value: null }, h: { value: null }, amt: { value: 0 }, ab: { value: 0 }, vig: { value: 0 }, res: { value: 270 }, bloom: { value: TH.bloom }, scan: { value: TH.scan }, px: { value: new THREE.Vector2(1 / 480, 1 / 270) },
-      gt: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, ch: { value: new THREE.Vector4() }, cr: { value: new THREE.Vector4() } },
+    uniforms: { t: { value: null }, h: { value: null }, dz: { value: null }, oe: { value: null }, dn: { value: 1 }, amt: { value: 0 }, ab: { value: 0 }, vig: { value: 0 }, res: { value: 270 }, bloom: { value: TH.bloom }, scan: { value: TH.scan }, px: { value: new THREE.Vector2(1 / 480, 1 / 270) },
+      gt: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, ch: { value: new THREE.Vector4() }, cr: { value: new THREE.Vector4() },
+      ray: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, rayC: { value: [0, 1, 2, 3].map(() => new THREE.Color(0)) } }, // rayons : position à l'écran (xy), profondeur de la source (z), 1 / rayon² du halo (w) ; couleur × force
     vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0., 1.); }',
-    fragmentShader: `uniform sampler2D t, h; uniform float amt, ab, vig, res, bloom, scan; uniform vec2 px; varying vec2 v; ${AIR}
+    fragmentShader: `uniform sampler2D t, h, dz, oe; uniform float amt, ab, vig, res, bloom, scan, dn; uniform vec2 px; uniform vec4 ray[4]; uniform vec3 rayC[4]; varying vec2 v; ${AIR}
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); } // matrice de Bayer 4×4, par récurrence
       void main(){
+        vec2 o = texture2D(oe, vec2(.5)).rg; // log de la luminosité à laquelle l'œil est fait (r) et de celle du dehors (g)
+        float e = clamp(exp(o.g - o.r), 1., 3.) * dn; // exposition : l'œil fait au noir ouvre l'image (jusqu'à ×3), puis se referme ; dn : la lumière vraie du tunnel (voir OEIL) ; fait au dehors, ×1 : l'image d'avant
         vec3 ai = air(v, px); vec2 w = v + ai.xy, c0 = vec2(.5, .42), d = w - c0; float l = length(d); vec3 c = vec3(0.);
         for (int i = 0; i < 8; i++) { // flou radial : nul au centre, fort sur les bords, proportionnel à la vitesse
           vec2 u = c0 + d * (1. - amt * l * float(i) * .026);
-          c += vec3(texture2D(t, u + d * ab).r, texture2D(t, u).g, texture2D(t, u - d * ab).b); // + aberration chromatique
+          c += min(vec3(texture2D(t, u + d * ab).r, texture2D(t, u).g, texture2D(t, u - d * ab).b) * e, 1.); // + aberration chromatique ; exposé et écrêté au blanc, échantillon par échantillon comme l'ancienne cible 8 bits
         }
         c /= 8.;
         vec3 bl = vec3(0.); // halo : on ajoute ce qui dépasse un seuil de luminosité, prélevé en couronne
-        for (int i = 0; i < 12; i++) { float a = float(i) * .5236, rr = 2. + 2.5 * mod(float(i), 3.); bl += max(texture2D(t, w + vec2(cos(a), sin(a)) * rr * px).rgb - .5, 0.); }
-        c = (c + bl * bloom) * ai.z;
+        for (int i = 0; i < 12; i++) { float a = float(i) * .5236, rr = 2. + 2.5 * mod(float(i), 3.); bl += max(min(texture2D(t, w + vec2(cos(a), sin(a)) * rr * px).rgb * e, 1.) - .5, 0.); }
+        c += bl * bloom;
+        vec3 ry = vec3(0.); float j = fract(52.98 * fract(dot(v / px, vec2(.0671, .0058)))); // rayons de lumière : un halo autour de chaque source, masqué par ce qui est devant elle, étiré vers le pixel ; décalage par pixel, du grain plutôt que des marches
+        for (int k = 0; k < 4; k++) if (rayC[k] != vec3(0.)) {
+          vec2 s = ray[k].xy, dd = (s - v) / 12., q; float f = 0.;
+          for (int i = 0; i < 12; i++) { vec2 u = v + dd * (float(i) + j); q = (u - s) * vec2(px.y / px.x, 1.); f += step(ray[k].z, texture2D(dz, u).x) * exp(-dot(q, q) * ray[k].w); }
+          q = (v - s) * vec2(px.y / px.x, 1.); ry += rayC[k] * f * max(0., 1. - 1.4 * length(q)); // portée : un peu plus d'une demi-hauteur d'écran
+        }
+        c += ry * e / 12.;
+        c *= ai.z; // assombri sous les gouttes
         ${QUANT ? `vec2 q = v / px; c = floor(c * ${QUANT}. + (b2(.5 * q) * .25 + b2(q) - .5) * ${TRAME.toFixed(2)} + .5) / ${QUANT}.; // couleurs réduites et tramées, sur la grille de pixels du jeu` : ''}
         vec4 hd = texture2D(h, v); c = mix(c, hd.rgb, hd.a);
         c *= 1. - scan * mod(floor(v.y * res), 2.); // scanlines calées sur la grille
@@ -152,41 +164,55 @@
   });
   const postScene = new THREE.Scene(), postCam = new THREE.Camera(), quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post);
   quad.frustumCulled = false; postScene.add(quad);
-  // reflets de la route mouillée calculés à l'écran : entre la scène et la passe finale. La route écrit dans l'alpha de la cible combien elle est mouillée
-  // (1 = sèche, 0,5 = détrempée, voir eclaire) ; de chacun de ses pixels on suit le rayon réfléchi dans la profondeur de la vue, et on ajoute la couleur qu'il rencontre :
-  // voitures, néons, feux arrière. Ce que le rayon ne trouve pas à l'écran (le ciel, ce qui est hors champ) reste aux rubans et aux reflets étirés de la lumière dynamique.
-  const ssr = new THREE.ShaderMaterial({
-    uniforms: { t: { value: null }, dz: { value: null }, P: { value: new THREE.Matrix4() }, Pi: { value: new THREE.Matrix4() }, up: { value: new V3() }, px: { value: new THREE.Vector2() } },
-    vertexShader: post.vertexShader,
-    fragmentShader: `uniform sampler2D t, dz; uniform mat4 P, Pi; uniform vec3 up; uniform vec2 px; varying vec2 v;
-      vec3 vpos(vec2 u){ vec4 p = Pi * vec4(u * 2. - 1., texture2D(dz, u).x * 2. - 1., 1.); return p.xyz / p.w; } // position dans le repère de la caméra
-      vec2 ecran(vec3 q){ vec4 c = P * vec4(q, 1.); return c.xy / c.w * .5 + .5; }
-      void main(){
-        vec4 c = texture2D(t, v); float w = c.a > ${(0.95 - EAU).toFixed(2)} && c.a < .99 ? (1. - c.a) / ${EAU.toFixed(2)} : 0., trouve = 0.;
-        if (w > 0.) {
-          vec3 p = vpos(v), e = normalize(p), r = reflect(e, up), q = p; float s = .4, a = 0., b = 0.; vec2 h = vec2(-1.);
-          for (int i = 0; i < 22; i++) { // pas qui s'allongent : 0,4 m au départ, plus de 300 m au bout
-            b = a; a += s; s *= 1.28; q = p + r * a; vec2 u = ecran(q);
-            if (q.z > -.5 || u.x < 0. || u.x > 1. || u.y < 0. || u.y > 1.) break;
-            float z = vpos(u).z;
-            if (q.z < z && q.z > z - max(1.2, s * 2.)) { // le rayon vient de passer derrière une surface, à moins d'une épaisseur : on resserre entre les deux derniers pas
-              for (int j = 0; j < 5; j++) { float m = (a + b) * .5; vec2 um = ecran(p + r * m); if (p.z + r.z * m < vpos(um).z) a = m; else b = m; }
-              h = ecran(p + r * a); break;
-            }
-          }
-          if (h.x >= 0.) {
-            vec3 f = vec3(0.); for (int k = -2; k < 2; k++) f += texture2D(t, h + vec2(0., (float(k) + .5) * 2. * px.y)).rgb; // étiré à la verticale, comme un reflet sur l'eau
-            vec2 bd = min(h, 1. - h); trouve = smoothstep(0., .08, min(bd.x, bd.y)) * (1. - smoothstep(60., 320., a)); // s'éteint au bord de l'image et au loin
-            float fr = .25 + .75 * pow(1. - max(dot(-e, up), 0.), 3.); // Fresnel : vu en rasant, la route est un miroir
-            c.rgb += f * .21 * w * fr * trouve;
-          }
-        }
-        gl_FragColor = vec4(c.rgb, 1. - trouve); // alpha : 0 là où le reflet est trouvé, les rubans de repli n'y ajoutent rien (voir repli)
-      }`,
-  });
-  // rubans de repli : dessinés après ssr dans la même cible, pondérés par son alpha, cachés par ce qui est devant eux dans la profondeur de la scène
-  const REPLI = { rDz: { value: null }, rRes: { value: new THREE.Vector2() } }, repliScene = new THREE.Scene();
+  // reflets de la route mouillée calculés à l'écran : entre la scène et la passe finale. La route écrit dans l'alpha de la cible combien elle est mouillée
+  // (1 = sèche, 0,5 = détrempée, voir eclaire) ; de chacun de ses pixels on suit le rayon réfléchi dans la profondeur de la vue, et on ajoute la couleur qu'il rencontre :
+  // voitures, néons, feux arrière. Ce que le rayon ne trouve pas à l'écran (le ciel, ce qui est hors champ) reste aux rubans et aux reflets étirés de la lumière dynamique.
+  const ssr = new THREE.ShaderMaterial({
+    uniforms: { t: { value: null }, dz: { value: null }, P: { value: new THREE.Matrix4() }, Pi: { value: new THREE.Matrix4() }, up: { value: new V3() }, px: { value: new THREE.Vector2() } },
+    vertexShader: post.vertexShader,
+    fragmentShader: `uniform sampler2D t, dz; uniform mat4 P, Pi; uniform vec3 up; uniform vec2 px; varying vec2 v;
+      vec3 vpos(vec2 u){ vec4 p = Pi * vec4(u * 2. - 1., texture2D(dz, u).x * 2. - 1., 1.); return p.xyz / p.w; } // position dans le repère de la caméra
+      vec2 ecran(vec3 q){ vec4 c = P * vec4(q, 1.); return c.xy / c.w * .5 + .5; }
+      void main(){
+        vec4 c = texture2D(t, v); float w = c.a > ${(0.95 - EAU).toFixed(2)} && c.a < .99 ? (1. - c.a) / ${EAU.toFixed(2)} : 0., trouve = 0.;
+        if (w > 0.) {
+          vec3 p = vpos(v), e = normalize(p), r = reflect(e, up), q = p; float s = .4, a = 0., b = 0.; vec2 h = vec2(-1.);
+          for (int i = 0; i < 22; i++) { // pas qui s'allongent : 0,4 m au départ, plus de 300 m au bout
+            b = a; a += s; s *= 1.28; q = p + r * a; vec2 u = ecran(q);
+            if (q.z > -.5 || u.x < 0. || u.x > 1. || u.y < 0. || u.y > 1.) break;
+            float z = vpos(u).z;
+            if (q.z < z && q.z > z - max(1.2, s * 2.)) { // le rayon vient de passer derrière une surface, à moins d'une épaisseur : on resserre entre les deux derniers pas
+              for (int j = 0; j < 5; j++) { float m = (a + b) * .5; vec2 um = ecran(p + r * m); if (p.z + r.z * m < vpos(um).z) a = m; else b = m; }
+              h = ecran(p + r * a); break;
+            }
+          }
+          if (h.x >= 0.) {
+            vec3 f = vec3(0.); for (int k = -2; k < 2; k++) f += texture2D(t, h + vec2(0., (float(k) + .5) * 2. * px.y)).rgb; // étiré à la verticale, comme un reflet sur l'eau
+            vec2 bd = min(h, 1. - h); trouve = smoothstep(0., .08, min(bd.x, bd.y)) * (1. - smoothstep(60., 320., a)); // s'éteint au bord de l'image et au loin
+            float fr = .25 + .75 * pow(1. - max(dot(-e, up), 0.), 3.); // Fresnel : vu en rasant, la route est un miroir
+            c.rgb += f * .21 * w * fr * trouve;
+          }
+        }
+        gl_FragColor = vec4(c.rgb, 1. - trouve); // alpha : 0 là où le reflet est trouvé, les rubans de repli n'y ajoutent rien (voir repli)
+      }`,
+  });
+  // rubans de repli : dessinés après ssr dans la même cible, pondérés par son alpha, cachés par ce qui est devant eux dans la profondeur de la scène
+  const REPLI = { rDz: { value: null }, rRes: { value: new THREE.Vector2() } }, repliScene = new THREE.Scene();
   const ssrScene = new THREE.Scene(), ssrQuad = new THREE.Mesh(quad.geometry, ssr); ssrQuad.frustumCulled = false; ssrScene.add(ssrQuad);
+  // adaptation de l'œil (sans style) : 96 points de la scène, moyenne des log de luminosité, rapprochée de la valeur de l'image d'avant ; tout reste sur le GPU, rien n'est relu
+  // Les tunnels sont peints aussi clairs que le dehors, comme vus par un œil déjà fait au noir : la lumière « vraie » y est TUN fois plus faible (ld = son log). Une fois l'œil adapté, l'image est celle d'avant ;
+  // à l'entrée il fait d'abord sombre puis la rétine s'habitue, à la sortie le dehors éblouit puis l'œil se referme.
+  const TUN = 0.4;
+  const OEIL = new THREE.ShaderMaterial({ uniforms: { t: { value: null }, prev: { value: null }, ld: { value: 0 }, kc: { value: 0 }, kn: { value: 0 }, kd: { value: 0 } }, depthTest: false, depthWrite: false,
+    vertexShader: post.vertexShader,
+    fragmentShader: `uniform sampler2D t, prev; uniform float ld, kc, kn, kd;
+      void main(){
+        float s = 0.; for (int i = 0; i < 12; i++) for (int j = 0; j < 8; j++) s += log(dot(texture2D(t, (vec2(i, j) + .5) / vec2(12., 8.)).rgb, vec3(.3, .59, .11)) + .002);
+        float L = s / 96., A = L + ld; vec4 p = texture2D(prev, vec2(.5));
+        if (p.a < .5) p = vec4(A, L, 0., 1.); // première image : l'œil est déjà fait à la scène
+        gl_FragColor = vec4(mix(p.r, A, A > p.r ? kc : kn), mix(p.g, L, kd), 0., 1.); // r : l'œil, vite vers le clair, lentement vers le noir ; g : la référence du dehors, suivie plus lentement encore, figée en tunnel
+      }` });
+  const oeilScene = new THREE.Scene(), oeilQ = new THREE.Mesh(quad.geometry, OEIL); oeilQ.frustumCulled = false; oeilScene.add(oeilQ);
   if (ST) { // passe finale des styles : la scène telle quelle, l'effet du style, le HUD (toujours sur sa grille de 270 lignes), une vignette légère
     Object.assign(post.uniforms, { dz: { value: null }, ecr: { value: new THREE.Vector2(1, 1) }, pal: { value: PAL.map(c => new THREE.Color(c)) } });
     post.fragmentShader = `uniform sampler2D t, h, dz; uniform float amt, vig; uniform vec2 px, ecr; uniform vec3 pal[5]; varying vec2 v; ${AIR}
@@ -1509,6 +1535,7 @@
   }
   // Une vue : la caméra derrière sa voiture (plus basse, plus proche et plus grand-angle avec la vitesse), puis tout ce qui dans la scène dépend de qui regarde
   // (ciel, lune et son ombre, brouillard, lumière dynamique, feux lointains, pluie), son HUD, la scène dans sa cible et la passe finale.
+  const ASTRE = new THREE.Color(TH.astre.col), RAYS = 0.6; // RAYS : force des rayons de lumière (passe finale)
   const [V0, V1] = (M.vit || [130, 200]).map(v => v / 3.6 / (M.kmh || 1)); // plage des effets de vitesse de la carte, en m/s vrais
   function vueFrame(vu, dt, now) {
     const { cam, car, carY, pitch, roll, lm, cth, stun, lookA, lookP, rainP, splP, splA, splD, inp } = vu, pulse = SON.pulse, G = modele(car);
@@ -1601,6 +1628,18 @@
     // alerte de virage : seulement un virage serré pour la vitesse du moment (alerteVirage, sim.js)
     // et la glace vive (T.surf, vir > 0,4) qui arrive entre 1,2 et 3,6 s devant, quand on n'y est pas encore : sans elle, une plaque était une surprise
     const glace = j => !!T.surf && T.surf[(car.idx + j) % N].vir > 0.4, D = Math.round(sp * 0.6); let surGlace = false; if (state === 'race' && sp > 15 && !glace(0)) for (let j = D; j < 3 * D && !surGlace; j++) surGlace = glace(j);
+    if (!ST) { // rayons de lumière : l'astre, les deux luminaires proches les plus forts à l'écran, les phares du véhicule le plus proche s'ils nous font face ; plus forts sous la pluie, dans la brume et en tunnel
+      cam.updateMatrixWorld(); const RY = post.uniforms.ray.value, RC = post.uniforms.rayC.value, brume = RAYS * Math.max(Math.min(1, pl), 600 / TH.fogD[1], lm), th = Math.tan(cam.fov * Math.PI / 360); let n = 0;
+      const src = (x, y, z, col, k, rw) => { // rw : rayon du halo autour de la source, en m (0 : l'astre, à l'infini)
+        const dc = cam.position.distanceTo(tmp.set(x, y, z)); if (n > 3 || k < 0.01 || (rw && dc > 90)) return false;
+        tmp.lerp(cam.position, rw ? Math.min(0.5, 1.5 / dc) : 0).project(cam); // 1,5 m vers la caméra : la lanterne ne cache pas sa propre lumière
+        if (tmp.z > 1 || Math.abs(tmp.x) > 1.4 || Math.abs(tmp.y) > 1.4) return false;
+        const r = rw ? rw / (2 * dc * th) : 0.08; RY[n].set(tmp.x * 0.5 + 0.5, tmp.y * 0.5 + 0.5, tmp.z * 0.5 + 0.5, 1 / (r * r)); RC[n++].copy(col).multiplyScalar(k); return true; };
+      if (TH.astre.taille > 1) { const p = cam.position; src(p.x + SD.x * 1800, p.y + SD.y * 1800, p.z + SD.z * 1800, ASTRE, 1.3 * RAYS * TH.sun[1] * (1 - lm), 0); } // tout ce qui est à moins de 1 800 m cache l'astre ; le ciel (2 500 m), non
+      for (let k = 0, m = 0; k < 8 && k < vu.lums.length && m < 2; k++) { const l = vu.lums[k].l; if (src(l.x, l.y, l.z, l.c, brume, 3)) m++; }
+      const c = veh[0]; if (c && Math.cos(c.th) * (cam.position.x - c.x) + Math.sin(c.th) * (cam.position.z - c.z) > 0) { const av = c.lane === undefined ? 6.5 : 10; src(c.x + Math.cos(c.th) * av, c.y + 0.8, c.z + Math.sin(c.th) * av, PHARE, brume * NUIT, 2); }
+      for (; n < 4; n++) RC[n].setScalar(0);
+    }
     drawHUD(vu, dt, sp, state === 'race' ? alerteVirage(T, car.idx, sp) || (surGlace ? 2 : 0) : 0);
     const U = post.uniforms; U.t.value = (vu.rs || vu.rt).texture; U.h.value = vu.hudT; if (U.dz) U.dz.value = vu.rt.depthTexture; U.px.value.set(AA / vu.rw, AA / RH); post.uniforms.vig.value = 0.6 * nitE + 1.3 * rv * rv; // vignette resserrée par la vitesse et la nitro ; la passe finale est commune : ses entrées sont celles de la vue
     // flou de vitesse : rien sous 130 km/h, il monte ensuite jusqu'à la pointe ; l'aberration chromatique suit
@@ -1628,6 +1667,8 @@
     renderer.setRenderTarget(vu.rt); renderer.render(scene, cam);
     if (vu.rs) { const R = ssr.uniforms; R.t.value = vu.rt.texture; R.dz.value = vu.rt.depthTexture; R.P.value.copy(cam.projectionMatrix); R.Pi.value.copy(cam.projectionMatrixInverse); R.up.value.set(0, 1, 0).transformDirection(cam.matrixWorldInverse); R.px.value.set(1 / vu.rw, 1 / RH); renderer.setRenderTarget(vu.rs); renderer.render(ssrScene, postCam);
       REPLI.rDz.value = vu.rt.depthTexture; REPLI.rRes.value.set(vu.rw, RH); renderer.autoClear = false; renderer.render(repliScene, cam); renderer.autoClear = true; }
+    if (vu.oeil) { const [a, b] = vu.oeil, O = OEIL.uniforms; O.t.value = vu.rt.texture; O.prev.value = a.texture; O.kc.value = 1 - Math.exp(-dt / 0.6); O.kn.value = 1 - Math.exp(-dt / 2.5); O.kd.value = (1 - Math.exp(-dt / 3)) * (1 - lm); U.dn.value = 1 - (1 - TUN) * lm; O.ld.value = Math.log(U.dn.value);
+      renderer.setRenderTarget(b); renderer.render(oeilScene, postCam); vu.oeil = [b, a]; U.oe.value = b.texture; }
     renderer.setRenderTarget(null);
     if (COM) { const [cols, rows] = grille(VUES.length), x = (vu.n % cols) * vu.w, y = (rows - 1 - (vu.n / cols | 0)) * HH; renderer.setViewport(x, y, vu.w, HH); renderer.setScissor(x, y, vu.w, HH); } // à deux : la passe finale de la vue dans sa bande (y compté du bas : le joueur 1 en haut) ; le shader ne change pas, son centre de flou et sa vignette sont relatifs à la bande
     renderer.render(postScene, postCam);
@@ -1640,7 +1681,7 @@
   const fin = () => { cancelAnimationFrame(raf); arret.abort(); clearTimeout(padNoteT); padNote.remove(); if (COM) COM.c.remove(); };
   const libere = () => {
     for (const sc of [scene, repliScene]) sc.traverse(o => { if (o.geometry) o.geometry.dispose(); for (const m of [].concat(o.material || [])) { for (const k of ['map', 'emissiveMap', 'alphaMap', 'specularMap']) if (m[k]) m[k].dispose(); m.dispose(); } });
-    VUES.forEach(rendVue); CUBE.dispose(); post.dispose(); ssr.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
+    VUES.forEach(rendVue); CUBE.dispose(); post.dispose(); ssr.dispose(); OEIL.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
   };
   try { if (sessionStorage.getItem('vpr.go')) { sessionStorage.removeItem('vpr.go'); if (mode === 'tournee') start(); } } catch (e) { } // arrivée sur la carte d'une manche de Tournée : la course part tout de suite
   try { const d = sessionStorage.getItem('vpr.demo'), f = sessionStorage.getItem('vpr.demoFin'); sessionStorage.removeItem('vpr.demo'); sessionStorage.removeItem('vpr.demoFin');
