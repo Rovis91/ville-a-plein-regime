@@ -1,11 +1,13 @@
 // Ville à plein régime — rendu, effets, HUD, commandes et boucle de jeu. La piste et la physique sont dans sim.js.
 // Plan du fichier (chercher « // ---------- ») : rendu et passe finale · les trois entités du décor (textures.js, formes.js, placement) · piste · ville · horizon · voiture et effets ·
 // état de jeu et commandes · HUD · boucle. Voir README.md pour savoir où régler quoi.
-(window.lanceJeu = () => {
-  // Changer de carte ne recharge pas la page : lanceJeu est rejoué sur la nouvelle carte (voir changeCarte). La carte précédente s'arrête ici ; son décor n'est libéré
-  // qu'après la première image de la nouvelle, pour que les shaders compilés resservent (les compiler était l'essentiel de l'attente).
-  let avant = window.__g; if (avant && avant.fin) avant.fin();
-  const arret = new AbortController(), addEventListener = (ev, f) => window.addEventListener(ev, f, { signal: arret.signal }); // tous les écouteurs de ce fichier tombent d'un coup à l'arrêt
+(window.lanceJeu = async (CARTE = window.CARTE, fond = false) => {
+  // Une instance par carte, gardée en mémoire (window.__cartes) : changer de carte affiche une instance déjà construite (veille / reprend), sans rien reconstruire.
+  // Une carte pas encore vue se construit en fond (fond = true), par morceaux (await souffle()) pour que la carte affichée continue de tourner, puis reprend() l'affiche.
+  // Sans fond (premier chargement de la page), tout se fait d'un trait, comme avant : __g existe dès la fin du script (rythme.js s'en sert).
+  const souffle = () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = r; c.port2.postMessage(0); }); // pas setTimeout : bridé à 1 par seconde en arrière-plan
+  let actif = false; // seule l'instance affichée écoute clavier, souris et fenêtre
+  const arret = new AbortController(), addEventListener = (ev, f) => window.addEventListener(ev, e => { if (actif) f(e); }, { signal: arret.signal }); // tous les écouteurs de ce fichier tombent d'un coup à l'arrêt
   const T = buildTrack(THREE, CARTE), CARD = T.car, S = T.S, N = T.n, W = T.W, V3 = THREE.Vector3, M = CARTE, TH = M.th; // carte active et son thème : voir cartes.js
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
@@ -99,7 +101,7 @@
     const rs = SSR ? new THREE.WebGLRenderTarget(1, 1, { minFilter: rt.texture.minFilter, magFilter: rt.texture.magFilter, depthBuffer: false, type: rt.texture.type }) : null; // la scène + ses reflets calculés à l'écran (voir ssr)
     const hudC = document.createElement('canvas'), hudT = new THREE.CanvasTexture(hudC);
     hudT.minFilter = hudT.magFilter = THREE.NearestFilter;
-    const vu = { cam: new THREE.PerspectiveCamera(70, 1, 0.5, 3000), rt, rs, oeil: 0, hudC, hg: hudC.getContext('2d'), hudT, w: 480, rw: 480, // w : largeur de la grille du HUD ; rw : celle de la cible (la même sans style)
+    const vu = { cam: Object.assign(new THREE.PerspectiveCamera(70, 1, 0.5, 3000), { layers: Object.assign(new THREE.Layers(), { mask: 1 | 1 << 2 | 1 << 3 }) }), rt, rs, oeil: 0, hudC, hg: hudC.getContext('2d'), hudT, w: 480, rw: 480, // w : largeur de la grille du HUD ; rw : celle de la cible (la même sans style)
       moi: null, hu: HUM[VUES.length], car: null, cth: 0, carY: 0, pitch: 0, roll: 0, // voiture suivie ; cap de la caméra, hauteur, tangage et roulis lissés
       lookA: 0, lookP: 0, lookT: 0, // caméra libre à la souris : angle autour de la voiture, hauteur en plus, délai avant retour
       hit: 0, bump: 0, land: 0, stun: 0, nit: 0, lm: 0, rv: 0, rc: 0, // chocs de la voiture suivie pendant l'image ; secousse, fondu de nitro, fondu de tunnel
@@ -135,11 +137,14 @@
       void main(){
         float e = ex; // exposition : l'œil (voir TUN et rendVue)
         vec3 ai = air(v, px); vec2 w = v + ai.xy, c0 = vec2(.5, .42), d = w - c0; float l = length(d); vec3 c = vec3(0.);
-        for (int i = 0; i < 8; i++) { // flou radial : nul au centre, fort sur les bords, proportionnel à la vitesse
-          vec2 u = c0 + d * (1. - amt * l * float(i) * .026);
+        // flou radial : nul au centre, fort sur les bords, proportionnel à la vitesse ; autant d'échantillons que de texels traversés (8 au plus) : un flou de moins d'un pixel
+        // (au centre, sous 130 km/h) relisait 8 fois le même texel, un tiers du coût de la passe
+        float nf = clamp(ceil(length(d * amt * l * .182 / px)) + 1., 1., 8.), pas = nf > 1. ? amt * l * .182 / (nf - 1.) : 0.;
+        for (int i = 0; i < 8; i++) { if (float(i) >= nf) break;
+          vec2 u = c0 + d * (1. - pas * float(i));
           c += min(vec3(texture2D(t, u + d * ab).r, texture2D(t, u).g, texture2D(t, u - d * ab).b) * e, 1.); // + aberration chromatique ; exposé et écrêté au blanc, échantillon par échantillon comme l'ancienne cible 8 bits
         }
-        c /= 8.;
+        c /= nf;
         vec3 bl = vec3(0.); // halo : on ajoute ce qui dépasse un seuil de luminosité, prélevé en couronne
         for (int i = 0; i < 12; i++) { float a = float(i) * .5236, rr = 2. + 2.5 * mod(float(i), 3.); bl += max(min(texture2D(t, w + vec2(cos(a), sin(a)) * rr * px).rgb * e, 1.) - .5, 0.); }
         c += bl * bloom;
@@ -225,11 +230,11 @@
     const [cols, rows] = grille(n);
     for (const vu of VUES) { // chaque vue prend une case de la grille (à 2 : bandes superposées ; à 3 ou 4 : 2 × 2) : sa largeur de grille suit le rapport de cette case, dans les bornes du solo, la haute multipliée par l'allongement de la case (une bande est n fois plus allongée que l'écran : bornée à 960, elle s'étirait dès que l'écran dépassait le 16/9)
       vu.w = clamp(Math.round(HH * rows / cols * innerWidth / (innerHeight || 1)), 360, 960 * rows / cols); vu.rw = Math.round(vu.w * k);
-      vu.rt.setSize(vu.rw, RH); if (vu.rs) vu.rs.setSize(vu.rw, RH); vu.hudC.width = vu.w; vu.hudC.height = HH; vu.cam.aspect = vu.w / HH; vu.cam.updateProjectionMatrix();
+      vu.rt.setSize(vu.rw, RH); if (vu.rs) vu.rs.setSize(vu.rw, RH); vu.hudC.width = vu.w; vu.hudC.height = HH; vu.hg.f_ = null; vu.cam.aspect = vu.w / HH; vu.cam.updateProjectionMatrix();
     }
     if (ST) { renderer.setSize(OW, OH, false); post.uniforms.ecr.value.set(OW, OH); } else if (n) renderer.setSize(VUES[0].w * cols, HH * rows, false);
     renderer.setScissorTest(n > 1); // à deux, la passe finale de chaque vue ne touche que sa bande (voir vueFrame)
-    if (COM) { COM.c.width = clamp(Math.round(HH * innerWidth / (innerHeight || 1)), 360, 960); COM.c.height = HH; } // la couche commune garde la grille du solo, étirée sur tout l'écran : menu et pause y sont dessinés comme en solo
+    if (COM) { COM.c.width = clamp(Math.round(HH * innerWidth / (innerHeight || 1)), 360, 960); COM.c.height = HH; COM.g.f_ = null; } // la couche commune garde la grille du solo, étirée sur tout l'écran : menu et pause y sont dessinés comme en solo
   };
   addEventListener('resize', resize);
 
@@ -295,7 +300,7 @@
   sunDisc.scale.set(TH.astre.taille, TH.astre.taille, 1); scene.add(sunDisc);
 
   const hemi = new THREE.HemisphereLight(...TH.hemi); scene.add(hemi); // bleu d'en haut, rebond magenta de la ville
-  const sun = new THREE.DirectionalLight(...TH.sun); sun.castShadow = true; // clair de lune
+  const sun = new THREE.DirectionalLight(...TH.sun); sun.castShadow = true; const OMBD = 2, OMBI = 3; // clair de lune ; OMBD, OMBI : calques des objets mobiles qui portent une ombre, simples et instanciés (voir ombres)
   sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0015; sun.shadow.normalBias = 0.5;
   Object.assign(sun.shadow.camera, { left: -300 * LOIN, right: 300 * LOIN, top: 300 * LOIN, bottom: -300 * LOIN, near: 10, far: 800 * LOIN });
   scene.add(sun, sun.target);
@@ -308,7 +313,8 @@
   const LUMS = [], lum = (i, x, y, z, col, r, k = 1, tun = 0) => LUMS.push({ i, x, y, z, c: new THREE.Color(col).multiplyScalar(k), r, tun });
   const NUIT = TH.phares / 2.6; // force des feux de voiture : pleine de nuit, faible à l'aube et au couchant
   const SUNC = new THREE.Color(TH.sun[0]).multiplyScalar(TH.sun[1]);
-  const LUX = { uLP: { value: Array.from({ length: NL }, () => new THREE.Vector4(0, 0, 0, 1)) }, uLC: { value: Array.from({ length: NL }, () => new THREE.Color(0)) },
+  const LUX = { uLP: { value: Float32Array.from({ length: NL * 4 }, (_, i) => i % 4 === 3 ? 1 : 0) }, uLC: { value: new Float32Array(NL * 3) }, // à plat : three envoie le tableau tel quel au lieu de recopier 20 vecteurs à chaque passe de dessin
+   
     uHP: { value: new V3() }, uHD: { value: new V3(1, 0, 0) }, uHC: { value: new THREE.Color(0xfff2d0).multiplyScalar(TH.phares * 1.1 * LUM_GAIN) }, uBox: { value: new THREE.Matrix4() },
     uSunD: { value: SD }, uCam: { value: new V3() }, uSunC: { value: new THREE.Color() }, uSky: { value: new THREE.Color() }, uN: { value: 0 }, uRes: { value: new THREE.Vector2() } };
   const LU_V = `{ vec4 lw = vec4(transformed, 1.);
@@ -405,6 +411,7 @@
     m.customProgramCacheKey = () => k() + 'repli'; return o;
   };
 
+  fond && await souffle();
   // ---------- géométrie de la piste (hauteurs relatives à l'altitude de la route) ----------
   function ribbon(i0, cnt, oa, ya, ob, yb, mat, vLen = 8) { // oa, ya, ob, yb : constantes, ou fonctions de l'échantillon (largeur et hauteur variables)
     const pos = [], uv = [], idx = [], f = (o, s) => typeof o === 'function' ? o(s) : o;
@@ -419,10 +426,10 @@
     const m = new THREE.Mesh(g, mat); m.receiveShadow = true; scene.add(m); return m;
   }
   // mouillure pour le dessin : texture MO.nb × N (bandes en travers de -W à W × échantillons), rouge = mouillure de la course (R.mo, voir MO dans sim.js ; 1 hors course), vert = pluie de l'échantillon (0 à 1)
-  // Un shader qui veut savoir si la route est mouillée lit MOT : mouillure = rouge × vert. Remise à jour à chaque image (moMaj).
-  const MOI = new Uint8Array(N * MO.nb * 4).fill(255), MOT = new THREE.DataTexture(MOI, MO.nb, N, THREE.RGBAFormat); MOT.magFilter = MOT.minFilter = THREE.LinearFilter;
+  // Un shader qui veut savoir si la route est mouillée lit MOT : mouillure = rouge × vert. Remise à jour toutes les 8 images (moMaj).
+  const MOI = new Uint8Array(N * MO.nb * 4).fill(255), MOT = new THREE.DataTexture(MOI, MO.nb, N, THREE.RGBAFormat); MOT.magFilter = MOT.minFilter = THREE.LinearFilter; MOT.k = 0;
   for (let k = 0; k < N * MO.nb; k++) MOI[k * 4 + 1] = Math.min(1, T.pluie[k / MO.nb | 0]) * 255; MOT.needsUpdate = true;
-  const moMaj = () => { const mo = race && race.mo; if (!mo && !MOT.sale) return; for (let k = 0; k < N * MO.nb; k++) MOI[k * 4] = mo ? mo[k] * 255 : 255; MOT.sale = !!mo; MOT.needsUpdate = true; };
+  const moMaj = () => { const mo = race && race.mo; if (!mo && !MOT.sale || ++MOT.k & 7) return; for (let k = 0; k < N * MO.nb; k++) MOI[k * 4] = mo ? mo[k] * 255 : 255; MOT.sale = !!mo; MOT.needsUpdate = true; }; // toutes les 8 images : la route sèche lentement, et chaque envoi est toute la texture
   const across = s => Math.atan2(-s.tx, -s.tz); // rotation Y qui met l'axe X local en travers de la route
   const box = (w, h, d, mat, x, y, z, parent = scene) => { const m = new THREE.Mesh(habille(geo('boite', w, h, d), mat), mat); m.position.set(x, y, z); parent.add(m); return m; };
 
@@ -525,6 +532,7 @@
     }
   }
 
+  fond && await souffle();
   // ---------- décor de la carte : decors.js ----------
   const VAP = [], vapeur = (x, y, z) => VAP.push([x, y, z]); // bouches de vapeur déclarées par le décor (panaches : voir flou)
   const beams = [], decorTick = window.DECORS[TH.decor]({ THREE, scene, T, S, N, W, M, TH, ribbon, rnd, across, zone, lum, geo, mat, tx, addMat, box, concrete, beams, pose, zones, habille, vapeur, temps: () => race ? -1 : tTraf }); // pas de trafic en course : les adversaires ne savent pas l'éviter
@@ -544,6 +552,7 @@
   const splash = new THREE.Points(splGeo, new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false }));
   splash.frustumCulled = false; scene.add(splash);
 
+  fond && await souffle();
   // ---------- voiture : géométrie dans formes-voitures.js, livrée dans textures-voitures.js ; ici le placement, les roues qui tournent et braquent, les feux stop, le roulis ----------
   const carG = new THREE.Group(), body = new THREE.Group(); carG.add(body); carG.userData.dyn = 1; scene.add(carG); // dyn : ne pas fondre dans le décor fixe (voir « fusion »)
   const L = CARD.look, K = L.type || 'gtr'; // le modèle de formes-voitures.js
@@ -558,20 +567,20 @@
     part(wheelGeo, roueMat, 0, 0, 0, st);
   }
   carG.traverse(o => { o.castShadow = true; });
-  // reflets : le vrai décor vu depuis la voiture du joueur 1, dans une cube map de 32 px par face, une face toutes les deux images (refFace, avant le rendu de la vue 1) ;
+  // reflets : le vrai décor vu depuis la voiture du joueur 1, dans une cube map de 32 px par face, une face toutes les six images (refFace, chacune près de 100 passes de dessin : toutes les deux, elle coûtait 0,25 à 0,5 ms de GPU par image en moyenne ; le cube entier est refait en 0,3 s à 120 images/s, avant le rendu de la vue 1) ;
   // vue à 300 m seulement (à 3° le pixel, plus loin ne fait presque rien et coûte des passes de dessin) : le ciel et l'astre y sont ramenés au dixième, en deçà ;
   // la caisse l'ajoute à sa couleur (envMap), dosée pixel par pixel par un masque tiré de la livrée : vitrage (sombre, bleuté) fort, peinture modérée, joints et cadres presque rien.
   // Les rivaux et les autres joueurs partagent la même cube map : prise à la voiture du joueur 1, elle ne leur est pas exacte, mais à leur taille à l'écran on ne le voit pas
-  const CUBE = new THREE.WebGLCubeRenderTarget(32, { generateMipmaps: false, minFilter: THREE.LinearFilter }), refCam = new THREE.CubeCamera(0.5, 300, CUBE);
+  const CUBE = new THREE.WebGLCubeRenderTarget(32, { generateMipmaps: false, minFilter: THREE.LinearFilter }), refCam = new THREE.CubeCamera(0.5, 300, CUBE); refCam.children.forEach(c => { c.layers.enable(OMBD); c.layers.enable(OMBI); }); // les objets mobiles qui portent une ombre
   let refF = 0;
   const refFace = () => { // la voiture du joueur 1 ne se voit pas dans sa propre cube map ; l'ombre du soleil n'est pas recalculée pour si peu
-    if (refF++ & 1) return; const f = (refF >> 1) % 6, P = refCam.position, sp = sky.position.clone(), dp = sunDisc.position.clone(), ds = sunDisc.scale.x;
+    if (refF++ % 6) return; const f = (refF / 6 | 0) % 6, P = refCam.position, sp = sky.position.clone(), dp = sunDisc.position.clone(), ds = sunDisc.scale.x;
     P.set(carG.position.x, carG.position.y + 0.9, carG.position.z); refCam.updateMatrixWorld(true);
-    sky.position.copy(P); sky.scale.setScalar(0.1); sunDisc.position.copy(P).addScaledVector(SD, 200); sunDisc.scale.setScalar(ds / 10);
-    const vis = carG.visible, rt = renderer.getRenderTarget(); carG.visible = false; renderer.shadowMap.autoUpdate = false;
+    sky.position.copy(P); sky.scale.setScalar(0.1); sunDisc.position.copy(P).addScaledVector(SD, 200); sunDisc.scale.setScalar(ds / 10); sky.updateMatrixWorld(); sunDisc.updateMatrixWorld();
+    const vis = carG.visible, rt = renderer.getRenderTarget(); carG.visible = false;
     renderer.setRenderTarget(CUBE, f); renderer.render(scene, refCam.children[f]);
-    renderer.shadowMap.autoUpdate = true; carG.visible = vis; renderer.setRenderTarget(rt);
-    sky.position.copy(sp); sky.scale.setScalar(1); sunDisc.position.copy(dp); sunDisc.scale.set(ds, ds, 1);
+    carG.visible = vis; renderer.setRenderTarget(rt);
+    sky.position.copy(sp); sky.scale.setScalar(1); sunDisc.position.copy(dp); sunDisc.scale.set(ds, ds, 1); sky.updateMatrixWorld(); sunDisc.updateMatrixWorld();
   };
   const reflete = m => { // le masque : rouge = part du reflet (specularMap de three)
     const src = m.map.image.getContext('2d').getImageData(0, 0, 128, 128).data;
@@ -752,7 +761,12 @@
   // les voitures humaines, une par place de joueur (vu.hu de la vue de rang n : HUM[n]) : modèle, caisse (roulis), roues, feu stop, flammes de nitro et traînées. Une copie de carG a les mêmes enfants dans le même ordre : caisse, quatre roues, deux flammes.
   // Le joueur 2 a donc toute l'animation du joueur 1, alors que les adversaires gardent leurs roues fixes
   const HUM = [[carG, brakeMat], ...opps.slice(3).map(g => [g, g.userData.feu])].map(([g, feu]) => ({ g, feu, body: g.children[0], roues: g.children.slice(1, 5), fl: g.children.slice(5, 7), ...trainee() }));
+  // les quatre roues d'une voiture en une passe de dessin (et une dans l'ombre) au lieu de quatre : les groupes de roue (enfants 1 à 4) restent et tournent comme avant, leurs maillages sont cachés,
+  // et rouesInst recopie leur pose dans l'instance, ajoutée en dernier enfant (l'ordre des autres ne change pas)
+  const RI = [carG, ...opps].map(g => { const w = g.children[1].children[0], m = new THREE.InstancedMesh(w.geometry, w.material, 4); m.castShadow = true; g.add(m); for (let r = 1; r < 5; r++) g.children[r].children[0].visible = false; return [g, m]; }), mRI = new THREE.Matrix4();
+  const rouesInst = () => { for (const [g, m] of RI) if (g.visible) { for (let r = 1; r < 5; r++) { const st = g.children[r], w = st.children[0]; st.updateMatrix(); w.updateMatrix(); m.setMatrixAt(r - 1, mRI.multiplyMatrices(st.matrix, w.matrix)); } m.instanceMatrix.needsUpdate = true; } };
 
+  fond && await souffle();
   // ---------- dégâts : purement visuels et sonores (la conduite et les temps n'en savent rien : fantômes, médailles et réseau intacts), remis à zéro à chaque départ ----------
   // Par modèle (g.userData.dg) : z = usure des zones [avant, arrière, flanc z < 0, flanc z > 0] de 0 à 1 ; la caisse s'enfonce autour de chaque impact (au plus DG_MAX mètres par sommet) ;
   // ph / fe = phare / feu cassé de chaque côté [z < 0, z > 0] : éteint, et sa lumière dynamique avec (vueFrame) ; pare-chocs et rétroviseurs qui tombent ; fumée du capot ; vitre fêlée peinte sur la livrée.
@@ -772,6 +786,7 @@
       if (zn === 'noir') { cherche('av', 0, (x, y) => x > nez - 0.3 && y < 0.5, [1, 0]); cherche('ar', 1, (x, y) => x < cul + 0.3 && y < 0.5, [-1, 0]); }
       if (zn === 'caisse') for (const s of [-1, 1]) cherche('retro', s < 0 ? 2 : 3, (x, y, z, i) => uni(i) && z * s > VO.plan.wc / 2 && x > cab0 - 0.5 && x < cab0 + 0.3, [0, s]);
     });
+    if (D.liv) { const im = D.liv.map.image; D.fis0 = im.getContext('2d').getImageData(0, 0, im.width, im.height); } // la livrée intacte, lue au chargement : la relire au premier choc (fissure) bloquait jusqu'à ce que le GPU rende le canvas, de 50 ms à près d'une seconde
     return g.userData.dg = D;
   });
   const dgEcrit = (D, me) => { const ge = me.o.geometry, P = ge.attributes.position.array; for (let i = 0; i < P.length; i++) P[i] = me.P0[i] + me.d[i];
@@ -809,14 +824,14 @@
     tri.forEach((i, k) => { for (let j = 0; j < 9; j++) A[k * 9 + j] = me.P0[i + j] + me.d[i + j]; U.set(uv.subarray(i / 3 * 2, i / 3 * 2 + 6), k * 6); });
     ge.setAttribute('position', new THREE.BufferAttribute(A, 3)); ge.setAttribute('uv', new THREE.BufferAttribute(U, 2));
     ge.computeBoundingBox(); ge.boundingBox.getCenter(c); ge.translate(-c.x, -c.y, -c.z); ge.computeVertexNormals();
-    const m = new THREE.Mesh(ge, me.o.material); m.castShadow = true; m.userData.dyn = 1; g.updateMatrixWorld(true);
+    const m = new THREE.Mesh(ge, me.o.material); m.castShadow = true; m.userData.dyn = 1; m.layers.set(OMBD); g.updateMatrixWorld(true);
     m.position.copy(c).applyMatrix4(me.o.matrixWorld); m.quaternion.setFromRotationMatrix(me.o.matrixWorld); scene.add(m);
     const fx = Math.cos(g.rotation.y), fz = -Math.sin(g.rotation.y), ox = fx * sg[0] - fz * sg[1], oz = fz * sg[0] + fx * sg[1]; // g.rotation.y = -cap
     DEB.push({ m, v: new V3(vx * 0.8 + ox * 3, 2 + Math.random() * 2, vz * 0.8 + oz * 3), w: new V3(jit(10), jit(10), jit(10)), y0: g.position.y, t: 20 });
   }
   function fissure(D, lx) { // choc violent : une étoile de fêlures sur le pare-brise (la lunette si le choc vient de l'arrière), peinte sur la livrée de ce modèle ; dgRaz rend l'image d'origine
     const lv = D.liv.map, g = lv.image.getContext('2d'), p = VO.plan, [[x0], [x1], [x2], [x3]] = p.cab, hw = p.wc / 2 - 0.16, av = lx > -0.4, xa = av ? x0 : x3, xb = av ? x1 : x2;
-    D.fis = g.getImageData(0, 0, lv.image.width, lv.image.height);
+    D.fis = D.fis0;
     const [ax, ay] = p.dessus(xa, -hw), [bx, by] = p.dessus(xb, hw), [cx, cy] = p.dessus(xa + (xb - xa) * (0.3 + Math.random() * 0.4), (Math.random() * 2 - 1) * hw * 0.6);
     g.save(); g.beginPath(); g.rect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)); g.clip();
     g.strokeStyle = 'rgba(225,238,255,0.9)'; g.lineWidth = 1; g.beginPath();
@@ -842,6 +857,7 @@
   const feuxGeo = new THREE.BufferGeometry(), feuxP = new Float32Array(6 * Math.max(3, M.trafic || 0)); feuxGeo.setAttribute('position', new THREE.BufferAttribute(feuxP, 3));
   const feux = new THREE.Points(feuxGeo, new THREE.PointsMaterial({ color: 0xff2030, size: 1, fog: false })); feux.frustumCulled = false; scene.add(feux);
 
+  fond && await souffle();
   // ---------- fusion du décor fixe : une passe de dessin par matière, au lieu d'une par objet ----------
   // Tout maillage simple, opaque et immobile est fondu avec ceux de la même matière (mêmes ombres) en une seule géométrie, en coordonnées du monde : l'image est la même,
   // mais la ville passe de 950 passes de dessin à 150. Ce qui bouge, ou s'affiche et se cache, doit porter userData.dyn = 1 (lui ou un parent) :
@@ -850,7 +866,18 @@
     const PAVE = 500, GROS = 30000, lots = new Map(), NM = new THREE.Matrix3(), v = new V3(), cand = [];
     const fixe = o => { for (let p = o; p; p = p.parent) if (p.userData.dyn || !p.visible) return false; return true; };
     scene.updateMatrixWorld(true);
-    scene.traverse(o => { const m = o.material, g = o.geometry; if (o.isMesh && !o.isInstancedMesh && !Array.isArray(m) && !m.transparent && g.drawRange.count === Infinity && !Object.keys(g.morphAttributes).length && fixe(o)) cand.push(o); });
+    const simple = o => { const m = o.material, g = o.geometry; return !Array.isArray(m) && !m.transparent && g.drawRange.count === Infinity && !Object.keys(g.morphAttributes).length && fixe(o); };
+    scene.traverse(o => { if (o.isMesh && !o.isInstancedMesh && simple(o)) cand.push(o); });
+    // le décor posé en nombre (InstancedMesh immobile) y passe aussi : chaque exemplaire devient une pièce, fondue avec tout ce qui a sa matière (une passe de dessin en moins par forme et par zone, ombres et reflets compris) ;
+    // sa teinte par exemplaire passe dans une couleur de sommet, sur une copie de la matière. Au-delà de INST sommets, l'instance reste : ce serait trop de mémoire. Ses pièces ne sont pas découpées en pavés (elle était dessinée entière, en une passe), sauf au-delà de 100 000 sommets : les 15 500 blocs du canal (560 000 sommets) coûtaient 1,5 ms de GPU par image, entiers dans la vue et dans chaque face du cube des reflets
+    const INST = 600000, inst = [], vc = new Map(), ni = new Map(), uni = g => ni.get(g) || ni.set(g, g.index ? g.toNonIndexed() : g).get(g);
+    scene.traverse(o => { if (o.isInstancedMesh && o.count > 0 && simple(o) && (o.geometry.index || o.geometry.attributes.position).count * o.count <= INST) inst.push(o); });
+    for (const o of inst) {
+      let g = o.geometry, mat = o.material; if (!g.boundingSphere) g.computeBoundingSphere();
+      if (o.instanceColor) { g = g.clone(); g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(1), 3)); mat = vc.get(mat) || vc.set(mat, Object.assign(mat.clone(), { vertexColors: true })).get(mat); }
+      for (let i = 0; i < o.count; i++) { const mw = new THREE.Matrix4(); o.getMatrixAt(i, mw); mw.premultiply(o.matrixWorld); const s = mw.getMaxScaleOnAxis();
+        cand.push({ virt: o, enorme: (o.geometry.index || o.geometry.attributes.position).count * o.count > 100000, geometry: g, material: mat, matrixWorld: mw, scale: { x: s, y: s, z: s }, col: o.instanceColor && new THREE.Color().fromArray(o.instanceColor.array, i * 3), castShadow: o.castShadow, receiveShadow: o.receiveShadow, frustumCulled: true, renderOrder: o.renderOrder, layers: o.layers, userData: {}, children: [] }); }
+    }
     for (const o of cand) {
       const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere();
       const k = [o.material.uuid, +o.castShadow, +o.receiveShadow, +o.frustumCulled, o.renderOrder, o.layers.mask, Object.keys(g.attributes).sort().map(n => n + g.attributes[n].itemSize).join()].join('|');
@@ -862,19 +889,24 @@
       if (l.reduce((s, o) => s + (o.geometry.index || o.geometry.attributes.position).count, 0) < GROS) continue;
       lots.delete(k);
       for (const o of l) { const g = o.geometry, r = g.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis(); v.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld);
-        const kp = k + '|' + (r < PAVE / 2 ? Math.floor(v.x / PAVE) + ':' + Math.floor(v.z / PAVE) : 'grand'); if (!lots.has(kp)) lots.set(kp, []); lots.get(kp).push(o); }
+        const kp = k + '|' + (r < PAVE / 2 && (!o.virt || o.enorme) ? Math.floor(v.x / PAVE) + ':' + Math.floor(v.z / PAVE) : 'grand'); if (!lots.has(kp)) lots.set(kp, []); lots.get(kp).push(o); }
     }
     for (const l of lots.values()) {
-      if (l.length < 2) continue;
-      const src = l.map(o => o.geometry.index ? o.geometry.toNonIndexed() : o.geometry), n = src.reduce((s, g) => s + g.attributes.position.count, 0), G = new THREE.BufferGeometry();
+      if (l.length < 2 && !l[0].virt) continue; // un exemplaire seul est fondu quand même : son instance disparaît entière
+      // indexé si toutes les pièces le sont : un sommet partagé n'est calculé qu'une fois par le GPU (une boîte : 24 sommets au lieu de 36), et la scène est surtout limitée par ses sommets
+      const ix = l.every(o => o.geometry.index), src = l.map(o => ix ? o.geometry : uni(o.geometry)), n = src.reduce((s, g) => s + g.attributes.position.count, 0), G = new THREE.BufferGeometry();
+      if (ix) { const I = new (n > 65535 ? Uint32Array : Uint16Array)(src.reduce((s, g) => s + g.index.count, 0)); let b = 0, p = 0;
+        l.forEach((o, i) => { const x = src[i].index, miroir = o.matrixWorld.determinant() < 0; for (let j = 0; j < x.count; j++) I[p + j] = b + x.getX(miroir ? j - j % 3 + [0, 2, 1][j % 3] : j); p += x.count; b += src[i].attributes.position.count; });
+        G.setIndex(new THREE.BufferAttribute(I, 1)); }
       for (const nom in src[0].attributes) {
         const sz = src[0].attributes[nom].itemSize, A = new Float32Array(n * sz); let base = 0;
         l.forEach((o, i) => {
           const a = src[i].attributes[nom], mw = o.matrixWorld, miroir = mw.determinant() < 0; if (nom === 'normal') NM.getNormalMatrix(mw);
           for (let j = 0; j < a.count; j++) {
-            const d = (base + (miroir ? j - j % 3 + [0, 2, 1][j % 3] : j)) * sz; // échelle négative : on retourne chaque triangle pour qu'il garde sa face
+            const d = (base + (miroir && !ix ? j - j % 3 + [0, 2, 1][j % 3] : j)) * sz; // échelle négative : on retourne chaque triangle pour qu'il garde sa face (indexé : dans l'index)
             if (nom === 'position') { v.fromBufferAttribute(a, j).applyMatrix4(mw); A[d] = v.x; A[d + 1] = v.y; A[d + 2] = v.z; }
             else if (nom === 'normal') { v.fromBufferAttribute(a, j).applyMatrix3(NM).normalize(); A[d] = v.x; A[d + 1] = v.y; A[d + 2] = v.z; }
+            else if (nom === 'color' && o.col) { A[d] = a.getX(j) * o.col.r; A[d + 1] = a.getY(j) * o.col.g; A[d + 2] = a.getZ(j) * o.col.b; }
             else { A[d] = a.getX(j); if (sz > 1) A[d + 1] = a.getY(j); if (sz > 2) A[d + 2] = a.getZ(j); if (sz > 3) A[d + 3] = a.getW(j); }
           }
           base += a.count;
@@ -885,13 +917,19 @@
       m.matrixAutoUpdate = false; m.userData.petit = l.some(o => o.userData.petit); scene.add(m);
       for (const o of l) o.userData.fondu = 1;
     }
-    for (const o of cand.reverse()) if (o.userData.fondu) { if (o.children.length) o.layers.set(31); else o.parent.remove(o); } // les enfants d'abord ; un parent qui en garde reste dans l'arbre sans être dessiné (calque 31)
+    for (const o of inst) o.parent.remove(o); // toutes ses pièces sont fondues (même seules dans leur lot)
+    for (const o of cand.reverse()) if (o.userData.fondu && !o.virt) { if (o.children.length) o.layers.set(31); else o.parent.remove(o); } // les enfants d'abord ; un parent qui en garde reste dans l'arbre sans être dessiné (calque 31)
   }
+  { const fixe = o => { for (let p = o; p; p = p.parent) if (p.userData.dyn || !p.visible) return false; return true; }; // les ombres mobiles (voir ombres) : tout ce qui porte une ombre sans être fixe
+    scene.traverse(o => { if (o.isLight) { o.layers.enable(OMBD); o.layers.enable(OMBI); } else if (o.castShadow && !fixe(o)) o.layers.set(o.isInstancedMesh ? OMBI : OMBD); }); } // les lumières aussi : sans elles, la passe des ombres mobiles changeait l'éclairage de three, qui recompilait alors la clé de chaque matière à chaque image
   scene.traverse(o => { if (o.isInstancedMesh) o.frustumCulled = false; if (o.material) eclaire(o.material); }); // r128 calcule le culling sur la géométrie de base, pas sur les instances
 
   // ---------- audio : voir audio.js (window.SON) ; ici seulement ce que le jeu et le HUD lisent ----------
   let radioT = 0;
-  const zap = () => { SON.setStation(SON.station + 1); radioT = 2.5; };
+  const zap = () => { // après la dernière station : SILENCE (musique coupée), puis retour à la première
+    if (!SON.musicOn) { SON.toggleMusic(); SON.setStation(0); } else if (SON.station === SON.stations.length - 1) SON.toggleMusic(); else SON.setStation(SON.station + 1);
+    radioT = 2.5; };
+  const nomRadio = () => SON.musicOn ? SON.nom : 'SILENCE';
   // boîte et régime : calculés même sans audio, la jauge du HUD s'en sert
   function drivetrain(vu, dt, gas) { // rapport et régime viennent de la physique (sim.js) ; ici on les lisse, par vue, pour le son et la jauge
     const car = vu.car, up = Math.sign(car.gear - vu.gear); vu.gear = car.gear; // +1 rapport monté, -1 descendu
@@ -901,6 +939,7 @@
     return up;
   }
 
+  fond && await souffle();
   // ---------- état de jeu ----------
   // clés « vpr8. » : la V3 change la conduite (glisse progressive, frein arrière, adhérence sol × voiture, surfaces visibles), les records « vpr7. » ne sont plus comparables.
   // une série de records par carte ; la ville garde ses clés d'origine
@@ -912,7 +951,7 @@
   const tr = s => traduit(s, langue);
   const appliqueLangue = () => { document.documentElement.lang = langue; document.title = langue === 'en' ? 'Full Throttle City' : 'Ville à plein régime'; };
   appliqueLangue();
-  let msel = 4; // ligne du menu principal
+  let msel = 5; // ligne du menu principal
   // écran d'accueil : le navigateur n'autorise le son qu'après un geste ; on le demande d'abord, pour que la musique soit là quand le menu s'affiche
   // Écran d'accueil : il sert d'abord à choisir la langue. Gauche / droite (ou haut / bas) change la langue tout de suite, Entrée part vers le menu principal.
   // (variantes essayées et écartées : branche prototype/accueil)
@@ -933,7 +972,7 @@
     else if (code === 'Escape') { choix = false; accueil = true; }
     else if (code === 'Enter' || code === 'Space') {
       if (csel === 2) { enl = { sel: 0, saisie: '' }; SON.beep(660); return; }
-      joueurs(csel ? Math.max(2, +pref('vpr7.ecran', '2')) : 1); setPref('vpr7.joueurs', VUES.length); choix = false; msel = 4; SON.beep(660); }
+      joueurs(csel ? Math.max(2, +pref('vpr7.ecran', '2')) : 1); setPref('vpr7.joueurs', VUES.length); choix = false; msel = 5; SON.beep(660); }
   };
   // ---------- En ligne (reseau.js) ----------
   // Salon par code de 4 lettres, ou par le lien ?salon=CODE. L'hôte choisit la carte au menu principal et lance : tout le monde court en Course (3 tours), chacun sur son écran, sa voiture en J1.
@@ -952,7 +991,7 @@
   const rejoint = code => { joueurs(1); NET.rejoindre(code, onNet); enl = { sel: 1, saisie: NET.code, attente: true }; };
   const salonAct = (code, key) => {
     if (code === 'Escape') { quitteSalon(); enl = null; return; }
-    if (NET.role === 'hote') { if (code === 'Enter' || code === 'Space') { enl = null; choix = false; msel = 4; mode = 'course'; SON.beep(660); } return; } // au menu principal : l'hôte choisit la carte, DEMARRER lance
+    if (NET.role === 'hote') { if (code === 'Enter' || code === 'Space') { enl = null; choix = false; msel = 5; mode = 'course'; SON.beep(660); } return; } // au menu principal : l'hôte choisit la carte, DEMARRER lance
     if (enl.attente) return;
     if (enl.sel) { // saisie du code : la lettre tapée (e.key), pas la position de la touche
       if (code === 'Backspace') enl.saisie = enl.saisie.slice(0, -1);
@@ -965,7 +1004,6 @@
     else if (code === 'Enter' || code === 'Space') { joueurs(1); NET.heberger(onNet); mode = 'course'; SON.beep(660);
       try { navigator.clipboard.writeText(location.origin + location.pathname + '?salon=' + NET.code).then(() => padDit('LIEN DU SALON COPIE'), () => { }); } catch (e) { } }
   };
-  try { const m = sessionStorage.getItem('vpr.menu'); if (m) { msel = 0; sessionStorage.removeItem('vpr.menu'); entrer(); SON.reprendre(JSON.parse(m)); } } catch (e) { } // la musique de menu reprend où elle en était // on vient de changer de carte : on reste sur cette ligne, sans repasser par l'accueil (le navigateur garde en général le droit au son d'une page à l'autre ; sinon il revient à la touche suivante)
   for (const ev of ['mousedown', 'pointerup', 'touchend']) addEventListener(ev, e => { inactif = 0; if (demo) { if (!cible && ev !== 'mousedown') demoFin(); return; } if (performance.now() - demoSortie < 400) return; if (accueil) { if (ev === 'mousedown') return; if (e.isTrusted && !aMenu) PER.hidAuto(); SON.init(); const l = e.clientX < innerWidth / 2 ? 'fr' : 'en'; if (l === langue) accueilAct('ok'); else { aMenu = true; choisitLangue(l); } } else SON.init(); }); // à l'accueil : un clic à gauche choisit le français, à droite l'anglais ; un second clic du même côté part
   const fmt = t => `${t / 60 | 0}'${String(t % 60 | 0).padStart(2, '0')}"${String(t * 100 % 100 | 0).padStart(2, '0')}`;
   addEventListener('mousemove', e => { if (state !== 'race' && state !== 'count') return; const vu = VUES[0]; vu.lookA = clamp(vu.lookA + e.movementX * 0.006, -Math.PI, Math.PI); vu.lookP = clamp(vu.lookP + e.movementY * 0.03, -1, 5); vu.lookT = 2.5; }); // caméra libre à la souris : celle de la première vue (il n'y a qu'une souris)
@@ -1039,30 +1077,31 @@
   }
   // menu de pause : [ligne, action]. À deux, pas de boîte (chacun a la sienne, sur son périphérique)
   const pauseItems = () => [['REPRENDRE', () => { state = prev; }], ['RECOMMENCER', start], ...(deux() ? [] : [['BOITE : ' + (manual ? 'MANUELLE' : 'AUTO'), () => { manual = !manual; VUES[0].moi.manual = manual; }]]),
-    ['RADIO : ' + SON.nom, zap], ['MUSIQUE : ' + (SON.musicOn ? 'OUI' : 'NON'), () => SON.toggleMusic()], ['VIBRATIONS : ' + (vibreOn ? 'OUI' : 'NON'), () => { vibreOn = !vibreOn; setPref('vpr.vibre', vibreOn ? '1' : '0'); }], ['QUITTER', toMenu]];
-  let vibreOn = !/[?&]vibre=0\b/.test(location.search) && pref('vpr.vibre', '1') === '1'; // vibrations des manettes : préférence du menu de pause, ?vibre=0 les coupe
-  function toMenu() { if (NET.role === 'hote') NET.stop(); if (invite()) attente(); ses.toMenu(); state = 'title'; ins = false; race = null; const c = newCar(T); for (const vu of VUES) suit(vu, c); msel = 4; }
-  // menu principal : 0 carte, 1 joueurs, 2 mode, 3 boîte, 4 démarrer ; d = -1 / +1 (gauche / droite ; Entrée vaut +1)
-  let cible = null, cibleT = 0; // carte demandée au menu, pas encore construite
+    ['RADIO : ' + nomRadio(), zap], ['QUITTER', toMenu]];
+  function toMenu() { if (NET.role === 'hote') NET.stop(); if (invite()) attente(); ses.toMenu(); state = 'title'; ins = false; race = null; const c = newCar(T); for (const vu of VUES) suit(vu, c); msel = 5; }
+  // menu principal : 0 carte, 1 joueurs, 2 mode, 3 difficulté, 4 boîte, 5 démarrer ; d = -1 / +1 (gauche / droite ; Entrée vaut +1)
+  const cache = i => (i === 1 && !deux()) || (i === 3 && !enCourse()); // en solo pas de ligne JOUEURS ; DIFFICULTE seulement contre des IA
+  let cible = null, cibleT = 0; // carte demandée au menu, pas encore affichée
   function changeCarte() {
-    if (cible === M) { cible = null; return; }
-    setPref('vpr.carte', cible.id); try { sessionStorage.setItem('vpr.menu', 1); history.replaceState(null, '', location.pathname + '?carte=' + cible.id + (Q.has('joueurs') ? '&joueurs=' + VUES.length : '')); } catch (e) { } // le nombre de joueurs suit la préférence ; forcé par l'adresse (?joueurs=), il y reste d'une carte à l'autre
-    window.CARTE = cible; SON.carte(cible);
-    // ce fichier (décor, jeu) puis rythme.js s'il est là sont rejoués sur la nouvelle carte, sans recharger de script ; le renderer, ses shaders et le son restent.
-    // Après la pile en cours (comme l'ancien rechargement de balises) : l'instance qui appelle finit son image avant d'être arrêtée.
-    setTimeout(() => { lanceJeu(); if (window.lanceRythme) lanceRythme(); });
+    if (cible === M) { cible = null; window.__voulu = M.id; return; }
+    const c = cible; window.__voulu = c.id; // la dernière demandée : une construction finie entre-temps pour une autre carte ne s'affiche pas
+    construit(c).then(api => {
+      if (window.__voulu !== c.id || window.__g === api) return;
+      setPref('vpr.carte', c.id); try { sessionStorage.setItem('vpr.menu', 1); history.replaceState(null, '', location.pathname + '?carte=' + c.id + (Q.has('joueurs') ? '&joueurs=' + VUES.length : '')); } catch (e) { } // le nombre de joueurs suit la préférence ; forcé par l'adresse (?joueurs=), il y reste d'une carte à l'autre
+      SON.carte(c); api.reprend(); if (window.lanceRythme) lanceRythme();
+    });
   }
   function menuAct(d) {
-    if (cible && msel === 4) return; // une carte est en route : on ne démarre pas sur l'ancienne
-    if (msel === 0) { // changer de carte : le nom change tout de suite ; le décor suit dès qu'on cesse de faire défiler (0,15 s), sans recharger la page
+    if (cible && msel === 5) { try { sessionStorage.setItem('vpr.go', 2); } catch (e) { } clearTimeout(cibleT); changeCarte(); return; } // DEMARRER pendant qu'une carte arrive : la course part sur elle
+    if (msel === 0) { // changer de carte : le nom change tout de suite, la carte s'affiche dès qu'on cesse de faire défiler (0,15 s) ; déjà construite, aussitôt
       cible = CARTES[(CARTES.indexOf(cible || M) + d + CARTES.length) % CARTES.length];
       clearTimeout(cibleT); cibleT = setTimeout(changeCarte, 150);
     } else if (msel === 1) { // écran partagé seulement (la ligne n'existe pas en solo) : 2, 3 ou 4 joueurs, gardé dans les préférences
       joueurs(2 + (VUES.length - 2 + d + 3) % 3); setPref('vpr7.joueurs', VUES.length); setPref('vpr7.ecran', VUES.length); }
-    else if (msel === 2) { // les modes sans adversaire, puis la course et l'élimination à chaque difficulté ; à deux : Course, Élimination, Glisse en duel
-      const O = (deux() ? MODES2 : MODES).flatMap(m => AVEC_IA.includes(m) ? DIFF.map((_, i) => [m, i]) : [[m, diff]]);
-      [mode, diff] = O[(O.findIndex(([m, i]) => m === mode && i === diff) + d + O.length) % O.length]; setPref(cle('mode'), JSON.stringify(mode)); setPref(cle('diff'), diff); }
-    else if (msel === 3) { manual = !manual; VUES[0].moi.manual = manual; setPref('vpr.boite', manual ? 'm' : 'a'); }
+    else if (msel === 2) { // à un joueur MODES, à deux : Course, Élimination, Glisse en duel ; la difficulté a sa propre ligne
+      const O = deux() ? MODES2 : MODES; mode = O[(O.indexOf(mode) + d + O.length) % O.length]; setPref(cle('mode'), JSON.stringify(mode)); }
+    else if (msel === 3) { diff = (diff + d + DIFF.length) % DIFF.length; setPref(cle('diff'), diff); } // ligne DIFFICULTE : seulement pour les modes avec IA (voir cache)
+    else if (msel === 4) { manual = !manual; VUES[0].moi.manual = manual; setPref('vpr.boite', manual ? 'm' : 'a'); }
     else start();
   }
   // boîte et rapports, attribués au périphérique qui a appuyé (d : +1, -1, 0 = bascule manuelle / automatique) : ils vont à la voiture de la vue inscrite sous ce périphérique, sinon à celle du joueur 1
@@ -1105,11 +1144,11 @@
     if ((e.code === 'Escape' || key === 'p') && (state === 'race' || state === 'count')) { prev = state; state = 'pause'; psel = 0; return; }
     if (state === 'title') {
       const dx = (e.code === 'ArrowRight' || e.code === 'KeyD' ? 1 : 0) - (e.code === 'ArrowLeft' || e.code === 'KeyA' ? 1 : 0);
-      const pas = s => { msel = (msel + s + 5) % 5; if (msel === 1 && !deux()) msel = (msel + s + 5) % 5; }; // en solo, la ligne JOUEURS n'existe pas
+      const pas = s => { do msel = (msel + s + 6) % 6; while (cache(msel)); };
       if (e.code === 'ArrowUp' || e.code === 'KeyW') pas(-1);
       else if (e.code === 'ArrowDown' || e.code === 'KeyS') pas(1);
       else if (e.code === 'Enter' || e.code === 'Space') menuAct(1);
-      else if (dx && msel < 4) menuAct(dx);
+      else if (dx && msel < 5) menuAct(dx);
       else if (e.code === 'Escape') { choix = true; csel = deux() ? 1 : 0; if (enLigne()) { csel = 2; enl = { sel: 0, saisie: '' }; } }
       else if (key === 'i' && deux()) inscrit(); // à deux : rouvrir l'inscription pour changer de périphérique (les places prises ne sont plus redemandées au départ)
       return;
@@ -1148,9 +1187,10 @@
   // ---------- HUD pixel (canvas 2D à la résolution du jeu) ----------
   const PS = '"Press Start 2P", monospace', JP = 'DotGothic16, sans-serif', HU = TH.hud, Y = HU.y, C = HU.c, RD = HU.r; // couleurs et style d'interface de la carte
   document.fonts.load('8px ' + PS); document.fonts.load('16px ' + JP, 'スピード');
+  const fonte = f => { if (hg.f_ !== f) { hg.font = f; hg.f_ = f; } }; // reposer la police à chaque texte coûtait autant que de l'écrire ; la dernière posée est notée sur le contexte (une par vue)
   // texte pixel ; split = décalage rouge/cyan façon glitch
   function txt(s, x, y, size, col, align = 'left', split = 0, font = PS) {
-    s = tr(s); hg.font = size + 'px ' + font; hg.textAlign = align; hg.textBaseline = 'top'; x = Math.round(x);
+    s = tr(s); fonte(size + 'px ' + font); hg.textAlign = align; hg.textBaseline = 'top'; x = Math.round(x);
     if (split && HU.split) { hg.fillStyle = RD; hg.fillText(s, x - split, y); hg.fillStyle = C; hg.fillText(s, x + split, y); }
     hg.fillStyle = col; hg.fillText(s, x, y);
   }
@@ -1167,7 +1207,7 @@
     else { R(hg, C, x, y, w, 1); R(hg, C, x, y + h - 1, w, 1); } // deux traits
   };
   const coins = (x, y, w, h) => { for (const [a, b] of [[0, 0], [1, 0], [0, 1]]) for (const [u, v] of [[x + a, y + b], [x + w - 1 - a, y + b], [x + a, y + h - 1 - b], [x + w - 1 - a, y + h - 1 - b]]) hg.clearRect(u, v, 1, 1); }; // coins arrondis : trois pixels ôtés à chaque coin
-  const tag = (s, cx, y, bg) => { hg.font = '8px ' + PS; const w = hg.measureText(tr(s)).width + 12; R(hg, bg, Math.round(cx - w / 2), y, w, 14); txt(s, cx, y + 3, 8, '#08080c', 'center'); };
+  const tag = (s, cx, y, bg) => { fonte('8px ' + PS); const w = hg.measureText(tr(s)).width + 12; R(hg, bg, Math.round(cx - w / 2), y, w, 14); txt(s, cx, y + 3, 8, '#08080c', 'center'); };
   const EQN = 20, EQR = 10, fft = new Uint8Array(32);
   // minicarte : tracé dessiné une seule fois dans un canvas hors écran (x monde vers la droite, z vers le bas = vue de dessus non inversée)
   const MM = (() => {
@@ -1181,7 +1221,7 @@
     return { c, px, pz };
   })();
   // Écran d'accueil : la carte tourne derrière, assombrie ; le titre, puis un drapeau par langue, la langue choisie encadrée et son drapeau qui flotte
-  const TT = (s, x, y, size, col) => { hg.font = size + 'px ' + PS; hg.textAlign = 'center'; hg.textBaseline = 'top'; hg.fillStyle = col; hg.fillText(s, Math.round(x), Math.round(y)); }; // texte tel quel, sans tr()
+  const TT = (s, x, y, size, col) => { fonte(size + 'px ' + PS); hg.textAlign = 'center'; hg.textBaseline = 'top'; hg.fillStyle = col; hg.fillText(s, Math.round(x), Math.round(y)); }; // texte tel quel, sans tr()
   const drapeau = (l, x, y, w, h) => {
     if (l === 'fr') { R(hg, '#1f3fbf', x, y, w / 3 | 0, h); R(hg, '#f4f4f4', x + (w / 3 | 0), y, w / 3 | 0, h); R(hg, '#e0283a', x + (2 * w / 3 | 0), y, w - (2 * w / 3 | 0), h); return; }
     R(hg, '#1a2a7a', x, y, w, h); hg.save(); hg.beginPath(); hg.rect(x, y, w, h); hg.clip(); hg.lineCap = 'butt';
@@ -1250,18 +1290,24 @@
       const ti = titreCarte(M.id, HU.titre, langue); txt(ti[0], cx, 44, 24, Y, 'center', 2); txt(ti[1], cx, 70, 24, Y, 'center', 2);
       if (tFlash && performance.now() - tFlash < 400) R(hg, 'rgba(255,255,255,' + (1 - (performance.now() - tFlash) / 400).toFixed(2) + ')', 0, 0, HW, HH); // éclair blanc au sortir de l'accueil
       panel(cx - 160, 100, 320, 140);
-      [['CARTE', (cible || M).nom + '  ' + (CARTES.indexOf(cible || M) + 1) + '/' + CARTES.length], ['JOUEURS', d2 ? VUES.length + ' : ECRAN PARTAGE' : 'SOLO'], ['MODE', mode === 'tournee' ? 'TOURNEE : ' + DIFF[diff].nom : mode === 'course' ? 'COURSE : ' + DIFF[diff].nom : mode === 'elim' ? 'ELIMINATION : ' + DIFF[diff].nom : mode === 'glisse' ? d2 ? 'GLISSE EN DUEL' : 'GLISSE' : 'CONTRE-LA-MONTRE'], [d2 ? 'BOITE J1' : 'BOITE', manuel1() ? 'MANUELLE' : 'AUTO']].forEach(([l, v], i) => {
-        if (i === 1 && !d2) return; // en solo, pas de ligne JOUEURS : le choix est fait à l'écran d'avant
-        const on = msel === i, y = 105 + (i > 1 && !d2 ? i - 1 : i) * 12;
+      const L = [['CARTE', (cible || M).nom + '  ' + (CARTES.indexOf(cible || M) + 1) + '/' + CARTES.length], ['JOUEURS', d2 ? VUES.length + ' : ECRAN PARTAGE' : 'SOLO'], ['MODE', mode === 'tournee' ? 'TOURNEE' : mode === 'course' ? 'COURSE' : mode === 'elim' ? 'ELIMINATION' : mode === 'glisse' ? d2 ? 'GLISSE EN DUEL' : 'GLISSE' : 'CONTRE-LA-MONTRE'], ['DIFFICULTE', DIFF[diff].nom], [d2 ? 'BOITE J1' : 'BOITE', manuel1() ? 'MANUELLE' : 'AUTO']].map((r, i) => [...r, i]).filter(r => !cache(r[2]));
+      const serre = L.length > 4; // 5 lignes (à deux, contre des IA) : plus rapprochées, pour laisser DEMARRER au-dessus du tracé
+      L.forEach(([l, v, i], k) => {
+        const on = msel === i, y = (serre ? 104 : 105) + k * (serre ? 10 : 12);
         txt((on ? '> ' : '  ') + l, cx - 152, y, 8, on ? Y : '#e8e8e4'); txt(on ? '< ' + v + ' >' : v, cx + 152, y, 8, on ? Y : C, 'right');
       });
-      const go = mode === 'tournee' && tn() ? 'REPRENDRE' : 'DEMARRER'; if (msel === 4) { if (blink) tag('> ' + go + ' <', cx, 152, Y); } else txt(go, cx, 155, 8, '#e8e8e4', 'center');
+      const go = mode === 'tournee' && tn() ? 'REPRENDRE' : 'DEMARRER'; if (msel === 5) { if (blink) tag('> ' + go + ' <', cx, serre ? 154 : 152, Y); } else txt(go, cx, serre ? 157 : 155, 8, '#e8e8e4', 'center');
       hg.drawImage(MM.c, cx - 152, 170); // le tracé, puis la fiche de la carte
       [CARD.nom, (T.len / 1000).toFixed(1).replace('.', ',') + ' KM', mode === 'tournee' ? (tn() ? 'MANCHE ' + (tn().manche + 1) + '/' + SOIREE.length + ' · ' + SOIREE[tn().manche].heure + ' · ' + tn().pts[0] + ' PTS' : 'UNE NUIT, ' + SOIREE.length + ' MANCHES') : mode === 'course' ? d2 ? ['', '', '2 JOUEURS ET 2 RIVAUX', '3 JOUEURS ET 1 RIVAL', '4 JOUEURS, SANS IA'][VUES.length] : '3 TOURS CONTRE 3 IA' : mode === 'elim' ? 'LE DERNIER SORT' : d2 ? 'LE MEILLEUR SCORE GAGNE' : mode === 'glisse' ? 'RECORD ' + (ses.bestG ? ses.bestG + ' PTS' : '--') : 'RECORD ' + (ses.best ? fmt(ses.best) : '--')].forEach((l, i) => txt(l, cx - 58, 174 + i * 11, 8, i ? '#e8e8e4' : C));
       if (mode === 'tournee') { const r = trophee(); txt(r ? 'TROPHEE ' + MEDN[3 - r] : 'PAS ENCORE DE TROPHEE', cx - 58, 218, 8, r ? MEDC[3 - r] : '#e8e8e4'); } // le trophée de cette difficulté : or, argent ou bronze selon la meilleure place finale
       if (d2) txt("RIEN N'EST ENREGISTRE", cx - 58, 218, 8, '#e8e8e4'); // ni record, ni médaille, ni fantôme : rien à montrer non plus
       else if (!enCourse()) { const gl = mode === 'glisse', m = gl ? medG(ses.bestG) : medal(ses.best); if (m) txt(MEDN[m - 1], cx + 152, 196, 8, MEDC[m - 1], 'right'); if (m < 3) txt('VISE ' + MEDN[m] + ' ' + (gl ? GLM[m] + ' PTS' : fmt(REF * MED[m])), cx - 58, 218, 8, MEDC[m]); } // médaille acquise, et la prochaine à aller chercher
       txt('HAUT/BAS : CHOISIR  GAUCHE/DROITE : CHANGER', cx, 245, 8, '#e8e8e4', 'center'); txt(d2 ? 'I : INSCRIPTION (MANETTES, JOY-CON, CLAVIER)' : 'FLECHES / ZQSD   ESPACE : GLISSE   X : NITRO', cx, 257, 8, '#e8e8e4', 'center');
+      if (cible && !(window.__cartes || {})[cible.id]) { // carte choisie qui se construit encore (la première fois seulement) : son tracé à la place de la fiche
+        R(hg, '#08080c', cx - 156, 166, 312, 70); const P = cible.pts, xs = P.map(p => p[0]), zs = P.map(p => p[1]), x0 = Math.min(...xs), z0 = Math.min(...zs), k = Math.min(80 / (Math.max(...xs) - x0 || 1), 52 / (Math.max(...zs) - z0 || 1));
+        hg.strokeStyle = '#e8e8e4'; hg.lineWidth = 1; hg.beginPath(); P.forEach(p => hg.lineTo(cx - 150 + (p[0] - x0) * k, 172 + (p[1] - z0) * k)); hg.closePath(); hg.stroke();
+        txt(cible.nom, cx - 58, 174, 8, C); txt('CHARGEMENT...', cx - 58, 196, 8, blink ? Y : '#e8e8e4');
+      }
       if (enLigne()) tag('SALON ' + NET.code + ' · ' + NET.n + ' JOUEURS', cx, 25, Y); else if (defiErr) tag(defiErr, cx, 25, RD); else if (d2) { } else if (DEFI) tag('DEFI : ' + fmt(DEFI.t) + ' A BATTRE', cx, 25, FANTC[5]);; // à la place du sous-titre : plus bas, le bandeau mordait sur le titre
       return;
     }
@@ -1328,7 +1374,7 @@
       for (let j = 0; j < EQR; j++) R(hg, j >= rows ? '#1c1c2c' : !on ? '#2a4a5a' : j > 7 || fr > 0.88 ? RD : j > 4 ? Y : C, 12 + i * 6, HH - 14 - j * 4, 5, 3);
       R(hg, '#ffffff', 12 + i * 6, HH - 14 - Math.min(EQR - 1, Math.round(peak[i] * EQR)) * 4, 5, 1);
     }
-    if (radioT > 0 || state === 'count' || state === 'pause') { panel(HW - 126, 78, 120, 30); txt('RADIO ' + SON.fq, HW - 120, 83, 8, radioT > 0 && blink ? '#ffffff' : C); txt(SON.nom, HW - 120, 95, 8, Y); } // la radio : au départ, en pause et au changement de station seulement
+    if (radioT > 0 || state === 'count' || state === 'pause') { panel(HW - 126, 78, 120, 30); txt('RADIO ' + (SON.musicOn ? SON.fq : '--.-'), HW - 120, 83, 8, radioT > 0 && blink ? '#ffffff' : C); txt(nomRadio(), HW - 120, 95, 8, Y); } // la radio : au départ, en pause et au changement de station seulement
     if (state === 'race' || state === 'count') { // minicarte, sous la radio ; un point par voiture : dot(x, z, couleur)
       const mx = HW - 96, my = 12, dot = (x, z, c) => R(hg, c, mx + MM.px(x) - 1, my + MM.pz(z) - 1, 3, 3);
       panel(HW - 102, 6, 96, 68); hg.drawImage(MM.c, mx, my); // 96 de large : ne touche pas les bandeaux centraux même en 4:3 (HW = 360)
@@ -1404,7 +1450,7 @@
       else { txt('SUITE : ' + SOIREE[f.manche + 1].heure + ' · ' + SOIREE[f.manche + 1].nom, cx, 164, 8, '#e8e8e4', 'center'); txt('DEPART ' + ord(f.grille[0] + 1) + ' SUR LA GRILLE', cx, 180, 8, '#e8e8e4', 'center'); txt('ENTREE : SUITE   ECHAP : QUITTER', cx, 200, 8, C, 'center'); }
     }
     if (pique && state !== 'title' && (pique.T -= dt) > 0) { // la réplique d'un rival, façon radio : une ligne sans fond, contour noir, nom à sa couleur ; s'efface sur la dernière demi-seconde
-      hg.globalAlpha = Math.min(1, pique.T * 2); hg.font = '8px ' + PS; const n = tr(pique.n) + ' ', wn = hg.measureText(n).width, x = Math.round(cx - (wn + hg.measureText(tr(pique.s)).width) / 2);
+      hg.globalAlpha = Math.min(1, pique.T * 2); fonte('8px ' + PS); const n = tr(pique.n) + ' ', wn = hg.measureText(n).width, x = Math.round(cx - (wn + hg.measureText(tr(pique.s)).width) / 2);
       for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [1, 1]]) { txt(n, x + dx, 166 + dy, 8, '#000'); txt(pique.s, x + wn + dx, 166 + dy, 8, '#000'); } // contour noir : lisible sans fond
       txt(n, x, 166, 8, pique.c); txt(pique.s, x + wn, 166, 8, '#fff'); hg.globalAlpha = 1; }
     if ((piqueT -= dt) < 0) piqueT = 0;
@@ -1415,13 +1461,41 @@
     hudT.needsUpdate = true;
   }
 
-  // la lune suit la voiture, calée sur la grille de texels de l'ombre pour qu'elle ne fourmille pas
-  const LR = new V3().crossVectors(new V3(0, 1, 0), SD).normalize(), LU = new V3().crossVectors(SD, LR), TX = 600 * LOIN / 2048, tmp = new V3();
+  // la lune suit la voiture par pas de CEL (64 texels de l'ombre, 24 m) : entre deux pas, la carte d'ombre du décor fixe ne change pas (voir ombres)
+  const LR = new V3().crossVectors(new V3(0, 1, 0), SD).normalize(), LU = new V3().crossVectors(SD, LR), TX = 600 * LOIN / 2048, CEL = TX * 64, tmp = new V3();
   function sunFollow(car) {
     tmp.set(car.x, 0, car.z);
-    const a = Math.round(tmp.dot(LR) / TX) * TX, b = Math.round(tmp.dot(LU) / TX) * TX, c = tmp.dot(SD);
-    sun.target.position.set(0, 0, 0).addScaledVector(LR, a).addScaledVector(LU, b).addScaledVector(SD, c);
-    sun.position.copy(sun.target.position).addScaledVector(SD, 400);
+    const a = Math.round(tmp.dot(LR) / CEL), b = Math.round(tmp.dot(LU) / CEL), c = Math.round(tmp.dot(SD) / CEL);
+    sun.target.position.set(0, 0, 0).addScaledVector(LR, a * CEL).addScaledVector(LU, b * CEL).addScaledVector(SD, c * CEL);
+    sun.position.copy(sun.target.position).addScaledVector(SD, 400); return a + ':' + b + ':' + c;
+  }
+  // Ombres en deux temps. Le décor fixe (calque 0) n'est dessiné dans la carte d'ombre que quand la lune change de pas, puis gardé dans la cible de la vue (vu.ombre) ;
+  // chaque image, la carte reprend cette copie (profondeur comprise : OMB écrit gl_FragDepth) et seuls les objets mobiles qui portent une ombre (calque OMBD : voitures, débris, décor dyn) y sont redessinés.
+  // Avant : tout le décor à chaque image, 35 à 100 passes de dessin. Un objet qui bouge et porte une ombre doit être sur le calque OMBD (fait à la construction pour tout ce qui n'est pas fixe, voir « fusion »)
+  const OMB = new THREE.ShaderMaterial({ uniforms: { t: { value: null } }, vertexShader: post.vertexShader, depthFunc: THREE.AlwaysDepth, extensions: { fragDepth: true },
+      fragmentShader: '#include <packing>\nuniform sampler2D t; varying vec2 v; void main(){ vec4 c = texture2D(t, v); gl_FragColor = c; gl_FragDepthEXT = unpackRGBAToDepth(c); }' }),
+    ombScene = new THREE.Scene(), ombProf = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.BackSide }), ombProfI = ombProf.clone(), // une par calque : la même pour les deux faisait refaire à three la clé du programme à chaque passage de l'un à l'autre
+    ombNul = new THREE.WebGLRenderTarget(1, 1), ombFixe = new THREE.OrthographicCamera(-1e-6, 1e-6, 1e-6, -1e-6, 0, 1e-6); // ombFixe : ne voit rien (loin sous la carte, champ nul) et seulement le calque 0 : le rendu qui la prend ne fait que l'ombre du décor fixe (shadowMap.render ne s'appelle pas hors d'un rendu)
+  ombFixe.position.set(0, -1e7, 0); ombFixe.updateMatrixWorld();
+  { const q = new THREE.Mesh(quad.geometry, OMB); q.frustumCulled = false; ombScene.add(q); }
+  sun.shadow.camera.layers.set(OMBD); renderer.shadowMap.autoUpdate = false;
+  const copie = (src, dst) => { OMB.uniforms.t.value = src.texture; renderer.setRenderTarget(dst); renderer.autoClear = false; renderer.render(ombScene, postCam); renderer.autoClear = true; };
+  // Les ombres mobiles ne sont dessinées (et la copie reprise) que dans un carré de OMBR mètres autour de la voiture suivie : toute la carte à chaque image coûtait 1 à 2 ms de GPU.
+  // Plus loin, un objet mobile ne porte pas d'ombre ; le décor fixe garde les siennes partout. Le carré de l'image d'avant est repris aussi : il n'y reste aucune ombre périmée
+  const OMBR = 120;
+  function ombres(vu, cle, car, y) {
+    const S = sun.shadow, W = S.mapSize.x; sun.updateMatrixWorld(); sun.target.updateMatrixWorld();
+    if (!vu.ombre) vu.ombre = { C: new THREE.WebGLRenderTarget(W, S.mapSize.y, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false }), cle: null, b: null };
+    const O = vu.ombre, fixe = O.cle !== cle || !S.map;
+    if (fixe) { renderer.shadowMap.needsUpdate = true; renderer.setRenderTarget(ombNul); renderer.render(scene, ombFixe); copie(S.map, O.C); O.cle = cle; O.b = null; } // décor fixe seul, puis gardé
+    else S.updateMatrices(sun); // (la vue d'avant a pu laisser sa carte et ses matrices)
+    tmp.set(car.x, y, car.z).applyMatrix4(S.matrix); const r = OMBR / TX, b = [tmp.x * W - r, tmp.y * W - r, tmp.x * W + r, tmp.y * W + r].map(v => clamp(Math.round(v), 0, W)), p = O.b || b;
+    const bx = Math.min(b[0], p[0]), by = Math.min(b[1], p[1]); S.map.scissorTest = true;
+    if (!fixe) { S.map.scissor.set(bx, by, Math.max(b[2], p[2]) - bx, Math.max(b[3], p[3]) - by); copie(O.C, S.map); } // la copie : ce carré et celui de l'image d'avant
+    S.map.scissor.set(b[0], b[1], b[2] - b[0], b[3] - b[1]); O.b = b;
+    renderer.autoClear = false; renderer.setRenderTarget(S.map);
+    for (const [c, m] of [[OMBD, ombProf], [OMBI, ombProfI]]) { S.camera.layers.set(c); scene.overrideMaterial = m; renderer.render(scene, S.camera); }
+    renderer.autoClear = true; scene.overrideMaterial = null; S.map.scissorTest = false;
   }
 
   const ROUGE = new THREE.Color(0xff1828), ETIN = new THREE.Color(0xff8a20), BLEU = new THREE.Color(0x3a9cff), PHARE = new THREE.Color(0xfff2d0), NEONC = new THREE.Color(L.neon || 0), BOITE = new THREE.Matrix4().makeScale(ENCt.x / 2, ENCt.y / 2, ENCt.z / 2).setPosition(ENCc); // BOITE : englobe toute la caisse, pour l'ombre (un point dedans ou dessus n'est pas ombré)
@@ -1441,7 +1515,7 @@
     if (n > 1) { while (PLACES.length < n) PLACES.push(''); PLACES.length = n; } // une place par joueur ; celles des joueurs en trop sont rendues
     VUES.forEach((vu, i) => { vu.periph = n > 1 ? PLACES[i] : ''; });
     const Lm = n > 1 ? MODES2 : MODES; mode = DEFI && n < 2 ? 'solo' : Lm.find(m => pref(cle('mode'), '') === JSON.stringify(m)) || Lm[0]; diff = clamp(+pref(cle('diff'), 1) | 0, 0, DIFF.length - 1);
-    if (n > 1 && !COM) { const c = document.createElement('canvas'); renderer.domElement.after(c); COM = { c, g: c.getContext('2d') }; } // (la feuille de style de la page étire tout canvas sur l'écran, en pixels nets)
+    if (n > 1 && !COM) { const c = document.createElement('canvas'); renderer.domElement.after(c); COM = { c, g: c.getContext('2d') }; if (!actif) c.style.display = 'none'; } // (la feuille de style de la page étire tout canvas sur l'écran, en pixels nets)
     else if (n < 2 && COM) { COM.c.remove(); COM = null; }
     resize();
   };
@@ -1527,7 +1601,6 @@
     // son : moteur, boîte et pneus par joueur (SE.cars, une entrée par vue ; muette si la vue regarde une autre voiture que celle de son joueur, ou la voiture que la première vue fait déjà entendre : après une élimination, au menu à deux) ; la radio, le tunnel, la pluie et l'ambiance suivent l'humain le mieux placé encore en course (seul, hors course ou tous arrivés : le joueur 1). Les objets restent accrochés aux vues : rien n'est alloué par image
     const SE = J.son || (J.son = { cars: [] }); let Jm = J; if (race) for (const vu of VUES) if (!vu.fini && (Jm.fini || vu.car.pos < Jm.car.pos)) Jm = vu;
     SE.cars.length = 0; for (const vu of VUES) { const c = vu.car, o = vu.sj || (vu.sj = {}); o.muet = vu.spec || (vu !== J && !J.spec && J.car === c); o.car = c; o.sp = Math.hypot(c.vx, c.vz); o.r = Math.min(1, o.sp / TOP); o.gas = vu.gas; o.hit = vu.hit; o.bump = vu.bump; o.land = vu.land; o.up = vu.up > 0; o.down = vu.up < 0; o.rpm = vu.rpm; o.load = vu.load; o.spool = vu.spool; o.dg = dgNiv(c); SE.cars.push(o); }
-    for (const vu of VUES) { const c = vu.car; PER.vibre(vu.periph, vibreOn && state === 'race' && !vu.spec && !vu.fini && !demo && !AUTO ? { hit: vu.hit, land: vu.land, up: vu.up, rub: c.rub, air: c.air, roul: c.sol ? c.sol.roul : 0, r: vu.sj.r, palier: c.dd && c.driftT > 0.6 } : null, dt); } // chaque manette ne sent que sa voiture
     const cm = Jm.car, jm = Jm.sj; SE.state = state; SE.car = cm; SE.T = T; SE.tour = race ? Math.min(race.laps - 1, Math.max(0, Math.floor(cm.dist / N))) : 0; SE.tours = race ? race.laps : 0; SE.hot = hot(cm.idx, 50); SE.tun = Jm.lm; SE.amb = ambAt(cm.idx); SE.r = jm.r; SE.sp = jm.sp; SE.hit = jm.hit; SE.bump = jm.bump; SE.fini = ses.raceEnd; // fini : la radio s'efface derrière le tableau d'arrivée
     { const s = S[cm.idx], L = s.w - 1.1; SE.mur = Math.sign(cm.d) * clamp(1 - (L - Math.abs(cm.d)) / 5, 0, 1); } // le bord qu'on serre (+ à droite) : son écho répond plus fort
     { const fx = Math.cos(cm.th), fz = Math.sin(cm.th), veh = race ? race.cars.filter(c => c !== cm && !partie(c)) : M.trafic && state !== 'title' ? trafic(T, tTraf) : []; // les deux autres véhicules les plus proches, qu'on entend
@@ -1565,15 +1638,18 @@
     // la caméra suit le sol sous elle, sans tomber dans une fosse que la voiture survole (±2,5 m autour du sol de la voiture), monte avec la voiture en vol et penche avec elle sur une paroi
     const y0 = yAt(car), ySol = k => clamp(yAt(car, k), y0 - 2.5, y0 + 2.5) + air;
     const pc = s.y + paroi(s, (px - s.x) * nx + (pz - s.z) * nz) + 1.5; // au-dessus de la paroi là où est la caméra (voiture haut sur le mur, caméra écartée vers son sommet : elle passait dessous)
-    cam.position.set(px + vib() * shake + (Math.random() - 0.5) * choc, Math.max(pc, ySol(-3) + (M.camH || 3.2) + lookP - 0.5 * rc) + vib() * shake * 0.7 + (Math.random() - 0.5) * choc, pz);
-    cam.lookAt(car.x + cx * 10, ySol(5) + 1.1, car.z + cz * 10); cam.rotateZ(-0.6 * roll);
+    // hauteurs lissées : collée à la voiture, la caméra partait d'un coup au décollage et tombait sec à la réception ; plus mou en vol (~0,4 s) qu'au sol (~0,1 s, la pente reste suivie). Écart > 20 m (départ, replacement) : on recale net
+    const ky = Math.min(1, dt * (car.air ? 2.5 : 10)), lis = (k, t) => (vu[k] = Math.abs(t - vu[k]) < 20 ? vu[k] + (t - vu[k]) * ky : t);
+    const yc = Math.max(lis('cy', ySol(-3)), yAt(car, -3) + 0.8 - (M.camH || 3.2)), yl = lis('ly', ySol(5)); // jamais sous la route à l'endroit de la caméra
+    cam.position.set(px + vib() * shake + (Math.random() - 0.5) * choc, Math.max(pc, yc + (M.camH || 3.2) + lookP - 0.5 * rc) + vib() * shake * 0.7 + (Math.random() - 0.5) * choc, pz);
+    cam.lookAt(car.x + cx * 10, yl + 1.1, car.z + cz * 10); cam.rotateZ(-0.6 * roll);
     cam.rotateX(vib() * shake * 0.12); cam.rotateY(vib() * shake * 0.08); // l'image elle-même tressaute (≈ 0,4° à la pointe), sec et petit
     const nitE = vu.nit * vu.nit * (3 - 2 * vu.nit); // nitro : départ et arrivée en douceur (champ élargi et vignette)
     cam.fov = 62 + 20 * rc + 10 * rv * rv + 3 * car.slide + 6 * nitE; // + grand-angle en fin de course : l'effet tunnel
     const photo = window.__g.vue; // shortcut: debug console seulement, __g.vue = [angle° autour de la voiture, distance, hauteur] pour inspecter le modèle ; à remplacer par un vrai mode photo si on en veut un
     if (photo) { const a = car.th + photo[0] * Math.PI / 180; cam.position.set(car.x + Math.cos(a) * photo[1], carY + photo[2], car.z + Math.sin(a) * photo[1]); cam.lookAt(car.x, carY + 0.7, car.z); cam.fov = 45; }
     cam.updateProjectionMatrix();
-    sky.position.copy(cam.position); sunDisc.position.copy(cam.position).addScaledVector(SD, 2000); sunFollow(car);
+    sky.position.copy(cam.position); sunDisc.position.copy(cam.position).addScaledVector(SD, 2000); const pasL = sunFollow(car);
     // brouillard et ciel : nuit néon ↔ tunnel ; éclairs : flash double sur le ciel et l'éclairage (le tonnerre part de fxFrame)
     scene.fog.color.copy(FOG_OUT).lerp(FOG_IN, lm); scene.fog.near = lerp(TH.fogD[0] * LOIN, 15, lm); scene.fog.far = lerp(TH.fogD[1] * LOIN, 320, lm);
     skyMat.color.copy(WHITE).lerp(FOG_IN, lm);
@@ -1587,7 +1663,7 @@
     G.updateMatrixWorld(); LUX.uBox.value.copy(G.matrixWorld).multiply(BOITE).invert(); // G : le modèle de la voiture de la vue ; l'ombre portée sous les luminaires n'existe que pour elle
     LUX.uSunC.value.copy(SUNC).multiplyScalar(1 - lm); LUX.uSky.value.copy(scene.fog.color); LUX.uRes.value.set(TRB ? vu.rw / 2 / TRB : 0, RH / 2 / TRB);
     let nl = 0;
-    const put = (x, y, z, c, r, k) => { if (nl < NL) { LUX.uLP.value[nl].set(x, y, z, r); LUX.uLC.value[nl++].copy(c).multiplyScalar(k * LUM_GAIN); } };
+    const LP = LUX.uLP.value, LC = LUX.uLC.value, put = (x, y, z, c, r, k) => { if (nl < NL) { const m = k * LUM_GAIN; const o = nl * 4; LP[o] = x; LP[o + 1] = y; LP[o + 2] = z; LP[o + 3] = r; LC[nl * 3] = c.r * m; LC[nl * 3 + 1] = c.g * m; LC[nl * 3 + 2] = c.b * m; nl++; } };
     put(car.x - fx * 4.4, carY + 0.35, car.z - fz * 4.4, ROUGE, -9, NUIT * (inp.brake || car.frA ? 2.4 : 0.45) * (1 - (dg.fe[0] + dg.fe[1]) / 2)); // feux arrière (moins les cassés) : ils teintent ce qui suit, davantage au freinage
     if (L.neon) put(car.x, carY + 0.3, car.z, NEONC, -5.5, NUIT * (0.8 + 0.4 * pulse)); // néon de bas de caisse
     // éclats brefs, trois créneaux au plus pris sur les luminaires fixes : la gerbe d'étincelles contre un mur (orange, s'éteint en 0,2 s ; posée entre la caisse et le mur : dans la boîte d'ombre de la voiture elle n'éclairerait rien, derrière le mur elle tournerait le dos à sa face ; au-dessus du toit, la caisse ne cache pas la route), la flamme de nitro (bleue, vacille), l'éclair d'orage (tombe de haut, couvre tout)
@@ -1674,10 +1750,11 @@
       scene.traverse(o => { if (!o.visible) { caches.push(o); o.visible = true; } if (o.frustumCulled) { tri.push(o); o.frustumCulled = false; } });
       renderer.setRenderTarget(vu.rt); renderer.render(scene, cam);
       for (const o of caches) o.visible = false; for (const o of tri) o.frustumCulled = true;
-      if (avant && avant.libere) avant.libere(); avant = null; // l'ancienne carte peut maintenant rendre sa mémoire : la nouvelle tient les shaders communs (et on l'oublie, sinon chaque carte garderait toutes les précédentes)
     }
-    if (!vu.n) refFace();
-    renderer.setRenderTarget(vu.rt); renderer.render(scene, cam);
+    // les matrices de la scène une fois pour les trois rendus de la vue (reflets, ombres mobiles, scène) : chacun les recalculait toutes
+    rouesInst(); scene.updateMatrixWorld(); scene.autoUpdate = false; if (!vu.n) refFace();
+    ombres(vu, pasL, car, carY);
+    renderer.setRenderTarget(vu.rt); renderer.render(scene, cam); scene.autoUpdate = true;
     if (vu.rs) { const R = ssr.uniforms; R.t.value = vu.rt.texture; R.dz.value = vu.rt.depthTexture; R.P.value.copy(cam.projectionMatrix); R.Pi.value.copy(cam.projectionMatrixInverse); R.up.value.set(0, 1, 0).transformDirection(cam.matrixWorldInverse); R.px.value.set(1 / vu.rw, 1 / RH); renderer.setRenderTarget(vu.rs); renderer.render(ssrScene, postCam);
       REPLI.rDz.value = vu.rt.depthTexture; REPLI.rRes.value.set(vu.rw, RH); renderer.autoClear = false; renderer.render(repliScene, cam); renderer.autoClear = true; }
     { const vrai = Math.log(1 - (1 - TUN) * lm), cible = vrai - Math.log(T.tun && TH.tun.eclat || 1) * lm; // l'œil : vrai = log de la lumière vraie ; th.tun.eclat : l'œil se fait à un tunnel plus clair que sa peinture
@@ -1689,18 +1766,50 @@
   let chaud = false;
   let raf = 0;
   const loop = now => { raf = requestAnimationFrame(loop); frame(now); };
-  raf = requestAnimationFrame(loop);
   // arrêt (changement de carte) : plus de boucle ni d'écouteurs ; puis libere() rend au GPU tout ce que cette carte y avait mis (les shaders, eux, restent au renderer tant qu'une matière s'en sert)
   const fin = () => { cancelAnimationFrame(raf); arret.abort(); clearTimeout(padNoteT); padNote.remove(); if (COM) COM.c.remove(); };
   const libere = () => {
     for (const sc of [scene, repliScene]) sc.traverse(o => { if (o.geometry) o.geometry.dispose(); for (const m of [].concat(o.material || [])) { for (const k of ['map', 'emissiveMap', 'alphaMap', 'specularMap']) if (m[k]) m[k].dispose(); m.dispose(); } });
     VUES.forEach(rendVue); CUBE.dispose(); post.dispose(); ssr.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
   };
-  try { if (sessionStorage.getItem('vpr.go')) { sessionStorage.removeItem('vpr.go'); if (mode === 'tournee') start(); } } catch (e) { } // arrivée sur la carte d'une manche de Tournée : la course part tout de suite
-  try { const d = sessionStorage.getItem('vpr.demo'), f = sessionStorage.getItem('vpr.demoFin'); sessionStorage.removeItem('vpr.demo'); sessionStorage.removeItem('vpr.demoFin');
-    if (d) demoLance(JSON.parse(d)); else if (f === 'a') accueil = true; } catch (e) { } // démo : carte suivante de la nuit, ou retour sur la carte d'origine (à l'accueil si l'on en venait)
-  if (NET.role) { NET.ev = onNet; let g = null; try { g = sessionStorage.getItem('vpr.netgo'); sessionStorage.removeItem('vpr.netgo'); } catch (e) { } // carte changée en ligne : ce fichier vient d'être rejoué, le salon (reseau.js) est resté
-    if (g) { choix = false; start(true); } else if (invite()) attente(); }
-  window.__g = { get enl() { return enl; }, get demo() { return demo; }, get inactif() { return inactif; }, frame, start, fin, libere, joueurs, places: PLACES, get ins() { return ins; }, get com() { return COM; }, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return ses.tnFin; }, get defi() { return { DEFI, defiErr, dernier: ses.dernier }; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam: VUES[0].cam, vues: VUES, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return VUES[0].moi; }, get state() { return state; }, get t() { return ses.tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; }, degats: x => { const f = 2 + 25 * x / 1.5; for (const g of [carG, ...opps]) for (const [a, b] of [[1, 0], [-1, 0], [0, -1], [0, 1]]) dgChoc(g, a, b, f); } }; // prise de test ; degats(x) : chaque zone de chaque voiture abîmée à x (captures)
+  // arrivée sur cette carte (premier affichage ou retour) : ce que la carte d'avant a laissé dans sessionStorage
+  const arrivee = () => {
+    try { const m = sessionStorage.getItem('vpr.menu'); if (m) { msel = 0; sessionStorage.removeItem('vpr.menu'); entrer(); SON.reprendre(JSON.parse(m)); } } catch (e) { } // la musique de menu reprend où elle en était // on vient de changer de carte : on reste sur cette ligne, sans repasser par l'accueil (le navigateur garde en général le droit au son d'une page à l'autre ; sinon il revient à la touche suivante)
+    try { if (sessionStorage.getItem('vpr.go')) { const g = sessionStorage.getItem('vpr.go'); sessionStorage.removeItem('vpr.go'); if (mode === 'tournee' || g === '2') start(); } } catch (e) { } // arrivée sur la carte d'une manche de Tournée, ou par DEMARRER au menu : la course part tout de suite
+    try { const d = sessionStorage.getItem('vpr.demo'), f = sessionStorage.getItem('vpr.demoFin'); sessionStorage.removeItem('vpr.demo'); sessionStorage.removeItem('vpr.demoFin');
+      if (d) demoLance(JSON.parse(d)); else if (f === 'a') accueil = true; } catch (e) { } // démo : carte suivante de la nuit, ou retour sur la carte d'origine (à l'accueil si l'on en venait)
+    if (NET.role) { NET.ev = onNet; let g = null; try { g = sessionStorage.getItem('vpr.netgo'); sessionStorage.removeItem('vpr.netgo'); } catch (e) { } // carte changée en ligne : ce fichier vient d'être rejoué, le salon (reseau.js) est resté
+      if (g) { choix = false; start(true); } else if (invite()) attente(); }
+  };
+  // veille : la carte reste construite (scène, textures et shaders au GPU) mais ne dessine ni n'écoute plus ; reprend : elle revient au menu, dans l'état d'une carte neuve
+  const veille = () => { actif = false; cancelAnimationFrame(raf); padNote.style.display = 'none'; if (COM) COM.c.style.display = 'none'; for (const k in keys) keys[k] = 0; };
+  const reprend = () => {
+    const av = window.__g; if (av && av !== api) (av.veille || av.fin)();
+    actif = true; window.__g = api; window.CARTE = M;
+    if (state !== 'title') toMenu(); accueil = true; aMenu = false; choix = false; msel = 5; cible = null; demo = null; enl = null; ins = false; inactif = 0; // comme une carte neuve
+    langue = pref('vpr.langue', 'fr') === 'en' ? 'en' : 'fr'; appliqueLangue(); manual = pref('vpr.boite', 'a') === 'm'; VUES[0].moi.manual = manual; // les réglages ont pu changer sur une autre carte
+    { const n = +(Q.get('joueurs') || pref('vpr7.joueurs', '1')); joueurs(n > 1 && !DEFI && !NET.role ? n : 1); }
+    if (COM) COM.c.style.display = '';
+    arrivee(); resize(); cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
+    prepare();
+  };
+  // construit(c) : l'instance de la carte c, construite en fond la première fois (une promesse par carte, partagée par toutes les instances)
+  const construit = c => { const E = window.__enCours || (window.__enCours = {}); return E[c.id] || (E[c.id] = lanceJeu(c, true)); };
+  // prepare : une fois la page lancée, les autres cartes se construisent en fond, les voisines d'abord, une à la fois ; aux bancs et captures (?auto, ?perf, ?style) on ne construit que ce qui est demandé
+  const prepare = () => {
+    if (window.__prep || AUTO || ST || /[?&]perf\b/.test(location.search)) return;
+    const i0 = CARTES.indexOf(M), ordre = [...new Set(CARTES.flatMap((_, k) => [CARTES[(i0 + k) % CARTES.length], CARTES[(i0 - k + CARTES.length * 2) % CARTES.length]]))];
+    window.__prep = (async () => { for (const c of ordre) { await construit(c); await souffle(); } })();
+  };
+  const api = { veille, reprend, get enl() { return enl; }, get demo() { return demo; }, get inactif() { return inactif; }, frame, start, fin, libere, joueurs, places: PLACES, get ins() { return ins; }, get com() { return COM; }, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return ses.tnFin; }, get defi() { return { DEFI, defiErr, dernier: ses.dernier }; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam: VUES[0].cam, vues: VUES, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return VUES[0].moi; }, get state() { return state; }, get t() { return ses.tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; }, degats: x => { const f = 2 + 25 * x / 1.5; for (const g of [carG, ...opps]) for (const [a, b] of [[1, 0], [-1, 0], [0, -1], [0, 1]]) dgChoc(g, a, b, f); } }; // instance de la carte (et prise de test, en window.__g quand elle est affichée) ; degats(x) : chaque zone de chaque voiture abîmée à x (captures)
+  if (fond) { // première image de la carte d'avance, dans sa cible : shaders compilés et textures envoyées au GPU maintenant, pas au moment où elle s'affiche
+    await souffle(); const vu = VUES[0], caches = [], tri = [];
+    scene.traverse(o => { if (!o.visible) { caches.push(o); o.visible = true; } if (o.frustumCulled) { tri.push(o); o.frustumCulled = false; } });
+    renderer.setRenderTarget(vu.rt); renderer.render(scene, vu.cam); renderer.setRenderTarget(null);
+    for (const o of caches) o.visible = false; for (const o of tri) o.frustumCulled = true;
+  }
+  (window.__cartes || (window.__cartes = {}))[M.id] = api; (window.__enCours || (window.__enCours = {}))[M.id] = Promise.resolve(api);
+  if (!fond) reprend();
+  return api;
 })();
 if (/[?&]perf\b/.test(location.search)) import('./outils/perf.js').then(m => m.suite()); // banc de performance : voir outils/perf.js

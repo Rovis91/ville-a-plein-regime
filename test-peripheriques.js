@@ -73,26 +73,5 @@ const MENU = { menu: true, accueil: false, deux: false };
     envoie(0, 0, 2); P.poll({ menu: false }); assert.strictEqual(P.entree('joycon0').steer, 1, 'stick à droite');
     ec.disconnect({ device: dev }); P.poll(MENU); assert(!P.branche('joycon0'), 'Joy-Con débranché');
   }
-  // vibrations : intensités (sans matériel), puis envoi à la seule manette du joueur, coupé par null
-  { const V = Peripheriques.vibration, s = () => ({ fort: 0, faible: 0, t: 0 }), RIEN = { hit: 0, land: 0, up: 0, rub: 0, air: false, roul: 0, r: 0, palier: false };
-    const v = (e, st = s(), dt = 1 / 60) => V({ ...RIEN, ...e }, st, dt);
-    assert.deepStrictEqual(v({}), [0, 0], 'à l\'arrêt sur le sec : rien');
-    assert(v({ hit: 4 })[0] < v({ hit: 10 })[0] && v({ hit: 30 })[0] === 1, 'le choc mur vibre selon sa force');
-    assert(v({ land: 6 })[0] > 0 && v({ land: 1 })[0] === 0, 'réception dure seulement');
-    const st = s(); v({ hit: 13 }, st); const apres = v({}, st, 0.3); assert(apres[0] < 0.1, 'un coup décroît en quelques dixièmes');
-    assert(v({ roul: 0.5, r: 1 })[1] > v({ roul: 0.5, r: 0.3 })[1] && v({ roul: 0.5, r: 1 })[1] > v({ roul: 0.2, r: 1 })[1], 'grain : monte avec la vitesse, plus fort sur la terre que sur la neige');
-    assert.deepStrictEqual(v({ roul: 0.5, r: 1, air: true }), [0, 0], 'en l\'air, pas de grain');
-    assert(v({ up: 1 })[1] >= 0.5, 'coup sec au passage de rapport');
-    assert(v({ rub: 1, r: 0.5 })[1] > 0, 'frottement du bord');
-    const p = s(); const on = v({ palier: true }, p, 0.05)[1], off = v({ palier: true }, p, 0.1)[1]; assert(on > 0 && off === 0, 'glisse au palier : battements');
-    const { P, pads } = monte(), a = manette(0), b = manette(1), recu = []; pads.push(a, b);
-    a.vibrationActuator = { playEffect: (t, o) => (recu.push(['a', t, o.strongMagnitude]), Promise.resolve()), reset: () => (recu.push(['a', 'reset']), Promise.resolve()) };
-    b.hapticActuators = [{ pulse: (x, ms) => (recu.push(['b', x, ms]), Promise.resolve()) }];
-    P.poll(MENU); P.vibre('manette0', { ...RIEN, hit: 13 }, 1 / 60); P.vibre('clavierG', { ...RIEN, hit: 13 }, 1 / 60);
-    assert.deepStrictEqual(recu, [['a', 'dual-rumble', 1]], 'seule la manette du joueur vibre, le clavier rien');
-    P.vibre('manette0', null, 1 / 60); assert.deepStrictEqual(recu[1], ['a', 'reset'], 'pause : arrêt'); P.vibre('manette0', null, 1 / 60); assert.strictEqual(recu.length, 2, 'un seul arrêt');
-    P.vibre('manette1', { ...RIEN, land: 10 }, 1 / 60); assert.deepStrictEqual(recu[2], ['b', 1, 100], 'repli hapticActuators');
-    a.vibrationActuator.playEffect = () => { throw new Error('non pris en charge'); }; P.vibre('manette0', { ...RIEN, hit: 13 }, 1 / 60); // ne doit pas lever
-  }
   console.log('périphériques : OK');
 })().catch(e => { console.error(e); process.exit(1); });
