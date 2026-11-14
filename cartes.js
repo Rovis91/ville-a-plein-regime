@@ -299,8 +299,11 @@
         hud: { y: '#ffffff', c: '#ffd05a', r: '#ff6a5a', fond: 'rgba(24,44,110,.92)', style: 'plaque', jauge: 'aiguille', split: 0, jp: null, sur: [null, 'PARIS · 5 H 30'], titre: ['PREMIER', 'METRO'] } } },
 
     // Canal 6 : grand ovale à l'américaine au couchant, la piste serpente dans le lit du canal entre deux anneaux de tribunes pleines. Large, la carte de la glisse.
-    { id: 'canal', nom: 'CANAL 6', rivaux: ['DRE', 'ROSA', 'CAL'], med: [1.06, 0.98, 0.9], W: 14, kmh: 0.68, vit: [230, 250], grip: 15, sc: 1, tun: null, chaud: [1, 8], amb: [[12, 17]], sect: [7, 19], anticipe: 1,
-      pts: [[0, 0, -8], [250, -80, -8], [500, 90, -8], [750, -80, -8], [1000, 90, -8], [1250, -80, -8], [1500, 60, -8], [1720, 40, -8], [1825, 123, -5], [1828, 168, -3], [1803, 206, -1], [1760, 220, 2], [1500, 230, 4], [1300, 290, 4], [1100, 220, 4], [900, 290, 4], [700, 220, 4], [500, 290, 4], [300, 220, 4], [50, 240, 4], [-170, 230, 2], [-256, 156, -1], [-270, 110, -3], [-256, 64, -5], [-170, -10, -8]],
+    // L'aller (pts 1-6) et le retour (pts 13-18) ne se répondent plus : à l'aller, une glisse plus profonde aux pts 3-4, dont la corde élargie est de la boue du canal (elle coûte : le bitume paye) ;
+    // au retour, un slalom asymétrique et l'écluse (pt 16, au point d'inflexion) : sa rampe finit net, petit saut. Ancien tracé : 62,3 s au tour, l'IA s'y frottait en peloton dans le slalom régulier.
+    { id: 'canal', nom: 'CANAL 6', rivaux: ['DRE', 'ROSA', 'CAL'], med: [1.06, 0.98, 0.9], W: 14, kmh: 0.68, vit: [230, 250], grip: 15, sc: 1, tun: null, chaud: [1, 8], amb: [[12, 18]], sect: [7, 20], anticipe: 1,
+      large: [[3, 4, 20]], surf: { large: 'terre' }, sauts: [[16, 40, 1]], // boue au-delà du bitume entre les pts 3 et 4 (decors.js la dessine) ; la rampe de l'écluse
+      pts: [[0, 0, -8], [250, -80, -8], [500, 90, -8], [750, -110, -8], [1000, 60, -8], [1250, -80, -8], [1500, 60, -8], [1720, 40, -8], [1825, 123, -5], [1828, 168, -3], [1803, 206, -1], [1760, 220, 2], [1500, 230, 4], [1300, 290, 4], [1100, 220, 4], [900, 320, 4], [815, 270, 4], [720, 200, 4], [500, 290, 4], [300, 220, 4], [50, 240, 4], [-170, 230, 2], [-256, 156, -1], [-270, 110, -3], [-256, 64, -5], [-170, -10, -8]],
       // Dodge Viper GTS (1996) : V10 de 8,0 L, 450 ch à 5200 tr/min, 664 N·m à 3700, 1535 kg, propulsion, boîte T56 (rapports à vérifier sur fiche)
       car: car({ nom: 'SIDEWINDER GTS', ratios: [2.66, 1.78, 1.30, 1.00, 0.74, 0.50], final: 3.07, wheel: 0.333, mass: 1610, idle: 800, red: 6000, cd: 0.35, area: 1.9,
         tq: [0, 420, 560, 640, 664, 625, 540, 400, 0], son: 0.8, moteur: 'v10', look: { type: 'gts', col: 0x1848c8, l: 1.03, w: 1.05, h: 0.88, nez: 0.7, cab: [-0.95, 1.7, 0.46], aileron: 0, bandes: 0xf4f0e0 } }),
