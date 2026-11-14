@@ -140,7 +140,9 @@
     const surf = S.map((_, i) => route(i, 1)), surfSec = surf.map((q, i) => pluie[i] ? route(i, MO.sec) : q); // surfSec : la même route sur la ligne sèche (voir MO)
     // tun : la carte a un tunnel, de t0 à t1 ; h0-h1 : secteur « chaud » pour la musique ; sp : les deux temps intermédiaires (indices d'échantillons)
     KT.w0 *= CARD.grip || 1; KT.w1 *= CARD.grip || 1; // une voiture plus ou moins adhérente tourne plus ou moins fort (toutes à 1 aujourd'hui)
-    return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, surf, surfSec, surfL: SURF[sf.large], vert, carte: M, car: CARD, kt: KT,
+    // camion en double file : M.camion = [point, décalage en m] ; garé contre le trottoir, d'un côté aux tours impairs, de l'autre aux tours pairs (voir camion())
+    const cam = M.camion && { i: (at(M.camion[0]) + Math.round(M.camion[1] / 2) + n) % n, d: W - 1.6 };
+    return { S, n, W, len, tun: !!M.tun, t0, t1, cam, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, surf, surfSec, surfL: SURF[sf.large], vert, carte: M, car: CARD, kt: KT,
       trucks: Array.from({ length: M.trafic || 0 }, (_, i) => ({ lane: [-4.6, 0, 4.6][(i * 2) % 3], v: 25 + (i * 7 % 5) * 1.5, x: 0, y: 0, z: 0, th: 0, idx: 0, d: 0, vx: 0, vz: 0 })) }; // camions : voir trafic()
   }
 
@@ -277,6 +279,15 @@
     if (P && P.ile) { const qx = c.x - P.c[0], qz = c.z - P.c[1], r = Math.hypot(qx, qz), e = r - P.ile[0];
       if (Math.abs(e) < CR && Math.abs(qx * Math.cos(P.a) - qz * Math.sin(P.a)) > P.ile[1]) { const sg = e < 0 ? 1 : -1, Nx = sg * qx / r, Nz = sg * qz / r, t = c.vx * -Nz + c.vz * Nx > 0 ? 1 : -1;
         mur(c, Nx, Nz, CR - Math.abs(e), -Nz * t, Nx * t, -t, sg / P.ile[0], dt); } }
+    // le camion en double file (T.cam) : une boîte de 9 × 2,5 m dans le repère de la route, du côté que donne le tour de cette voiture
+    if (T.cam) { const o = camion(T, c), s0 = S[o.idx], ox = s0.x - s0.tz * o.d, oz = s0.z + s0.tx * o.d;
+      for (const j of [-CO, CO]) {
+        const qx = c.x + Math.cos(c.th) * j - ox, qz = c.z + Math.sin(c.th) * j - oz, lx = qx * s0.tx + qz * s0.tz, lz = -qx * s0.tz + qz * s0.tx; // le long, en travers
+        const ex = lx - clamp(lx, -4.5, 4.5), ez = lz - clamp(lz, -1.25, 1.25), d = Math.hypot(ex, ez);
+        if (d >= CR || d < 1e-6) continue;
+        const ax = -ex / d, az = -ez / d, Nx = ax * s0.tx - az * s0.tz, Nz = ax * s0.tz + az * s0.tx, t = c.vx * -Nz + c.vz * Nx > 0 ? 1 : -1;
+        mur(c, Nx, Nz, CR - d, -Nz * t, Nx * t, -t, 0, dt);
+      } }
     // relief : chute libre, sauf si le sol est là
     const g = sol(T, c);
     if (!T.vert) { c.y = g; return; }
@@ -320,10 +331,12 @@
     for (let j = D; j < 3 * D; j++) { const i = (idx + j) % n, Q = surf(T, i), g = 1.2 * (1 - Q.vir) * (1 - 0.8 * Math.max(0, Q.colle - 0.5)), v = vturn(g, Math.abs(S[i].kl) + 1e-4, T.kt); if (v < vmin) { vmin = v; sg = Math.sign(S[i].k); } }
     return vmin < sp * f ? sg : 0;
   }
+  // le camion en double file vu par la voiture c : échantillon et écart à l'axe (signé) ; il change de côté à chaque tour de c (objet réutilisé, à l'arrêt : sert d'obstacle au pilote automatique)
+  const CAM = { idx: 0, d: 0, vx: 0, vz: 0 }, camion = (T, c) => Object.assign(CAM, { idx: T.cam.i, d: (Math.floor(c.dist / T.n) & 1 ? 1 : -1) * T.cam.d });
   function autopilot(c, T, lvl = 1, others = []) {
     const S = T.S, n = T.n, sp = Math.hypot(c.vx, c.vz), look = 3 + Math.floor(sp * 0.1);
     let off = 0, vcap = 1e9, best = 1e9;
-    for (const o of others) {
+    for (const o of T.cam ? [...others, camion(T, c)] : others) {
       if (o === c) continue;
       const g = ((o.idx - c.idx + n + n / 2) % n) - n / 2, so = Math.hypot(o.vx, o.vz); // écart le long de la piste, en échantillons de 2 m
       if (g < -3 || g > 8 + sp * 0.7 || g >= best || (g > 3 && so >= sp)) continue;
