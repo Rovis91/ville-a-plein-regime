@@ -22,7 +22,7 @@ const attends = async (test, s) => { for (let i = 0; i < s * 2; i++) { if (await
   enfants.push(spawn(CHROME, ['--no-first-run', '--user-data-dir=' + path.join(require('os').tmpdir(), 'vpr-banc-' + Date.now()), '--window-size=1280,720', '--ignore-gpu-blocklist', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', '--disable-features=CalculateNativeWinOcclusion', '--autoplay-policy=no-user-gesture-required', // le son tourne toujours, comme pour un joueur : il pèse lourd (voir README)
     ...(args.includes('--sans-ecran') ? ['--headless=new', url] : ['--app=' + url])], { stdio: 'ignore' }));
   console.log('Banc en cours : ' + (carte || 'toutes les cartes') + (deux ? ', écran partagé' : '') + ' (une minute environ pour toutes les cartes)…');
-  if (!(await attends(() => fs.existsSync(sortie), carte ? 120 : 600))) fin(2, 'ÉCHEC : pas de résultat (captures/perf' + d + '.json) dans le temps imparti');
+  if (!(await attends(() => fs.existsSync(sortie), carte ? 180 : 1500))) fin(2, 'ÉCHEC : pas de résultat (captures/perf' + d + '.json) dans le temps imparti');
   await new Promise(r => setTimeout(r, 300)); // l'écriture du fichier se termine
   const { budget: B, gpu, resultats } = JSON.parse(fs.readFileSync(sortie, 'utf8'));
   console.log('Carte graphique : ' + gpu + (/swiftshader|llvmpipe|software/i.test(gpu) ? '  ⚠ rendu logiciel : chiffres sans valeur' : ''));

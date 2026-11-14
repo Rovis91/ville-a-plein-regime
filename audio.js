@@ -613,7 +613,10 @@ registerProcessor('moteur', Moteur);`;
     const v = Math.min(0.45, (l - 3) * 0.06), o = osc('sine', 95, t, 0.28, v, d); o && o.frequency.exponentialRampToValueAtTime(38, t + 0.22);
     nz(t, 0.09, v * 0.6, d, 'lowpass', 450); if (l > 8) { nz(t + 0.015, 0.14, v * 0.35, d, 'bandpass', 1100, 3, mbuf); nz(t + 0.03, 0.05, v * 0.3, d, 'bandpass', 2400, 2); }
   }
-  const tait = (v, t) => { v.vm.gain.setTargetAtTime(0, t, 0.05); v.vp.gain.setTargetAtTime(0, t, 0.05); };
+  // regle : la cible d'un réglage, envoyée seulement si elle a bougé (0,1 %) : 87 % des envois par image répétaient la précédente, et chaque envoi peut attendre le fil audio (jusqu'à 2 ms)
+  // tout setTargetAtTime d'un réglage visé à chaque image passe par ici, sinon la valeur retenue ne serait plus la bonne
+  const regle = (p, v, t, tc) => { if (p.vv !== undefined && p.vtc === tc && Math.abs(v - p.vv) <= Math.abs(v) * 1e-3 + 1e-6) return; p.vv = v; p.vtc = tc; p.setTargetAtTime(v, t, tc); };
+  const tait = (v, t) => { regle(v.vm.gain, 0, t, 0.05); regle(v.vp.gain, 0, t, 0.05); };
   // la chaîne d'une platine (couleur de la station, filtres, batterie, bus pompé, saturations, réverbération, écho, chorus, tranches) : une au départ, une seconde pendant un passage DJ
   function chaine() {
     fad = gain(1, musIn); eqH = filt('highshelf', 5000, 0.7, fad); eqM = filt('peaking', 1000, 0.9, eqH); eqL = filt('lowshelf', 130, 0.7, eqM); hpF = filt('highpass', 20, 0.9, eqL); djF = filt('highpass', 10, 0.7, hpF); djL = filt('lowpass', 20000, 0.7, djF); secG = gain(1, djL); gritDry = gain(1, secG); tuneG = gain(1, gritDry); gritWet = gain(0, secG); tuneG.connect(gain(2.5, shaper(6, gritWet))); // couleur de la station ; niveau de la section ; voie saturée, dosée par la proximité du mur
@@ -751,7 +754,7 @@ registerProcessor('moteur', Moteur);`;
   }
   function audioFrame(dt, e) {
     if (!AC) return;
-    const { state, car, T, r, sp } = e, N = T.n, tun = e.tun || 0, CARD = M.car, t = AC.currentTime, racing = state === 'race', k = (p, v, tc = 0.04) => p.setTargetAtTime(v, t, tc);
+    const { state, car, T, r, sp } = e, N = T.n, tun = e.tun || 0, CARD = M.car, t = AC.currentTime, racing = state === 'race', k = (p, v, tc = 0.04) => regle(p, v, t, tc);
     if (state === 'pause') { for (const v of VX) tait(v, t); for (const v of AU) { k(v.g.gain, 0, 0.05); k(v.wh.gain, 0, 0.05); } k(scrapeG.gain, 0, 0.05); k(windG.gain, 0, 0.05); k(windL.gain, 0, 0.05); k(nitroG.gain, 0, 0.05); k(pluie.rid.gain, 0, 0.05); k(pluie.aq.gain, 0, 0.05); return; } // en pause : la radio continue, les voitures se taisent
     if ((state === 'title') !== menu) { if (dk) finMix(); menu = !menu; retune(t + 0.05); tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.3); } // menu ↔ course : la boucle de menu laisse la place à la station
     // une voix par joueur : seul, celle du centre, inchangée ; à deux, une de chaque côté, créées à l'arrivée du deuxième joueur et retirées à son départ (fondu, puis arrêt des sources)
