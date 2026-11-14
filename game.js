@@ -112,21 +112,34 @@
   const retireVue = () => { const vu = VUES.pop(); vu.hu.tr.visible = false; rendVue(vu); resize(); }; // ses traînées ne sont plus tenues par aucune vue
   let COM = null; // couche plein écran commune aux deux vues : un canvas 2D posé sur celui du jeu, { c, g }. Elle n'existe qu'à deux joueurs (voir joueurs et couche, près de la boucle)
   let hg = null; // contexte 2D du HUD en cours de dessin (celui de la vue, ou de la couche commune), pour txt, panel, tag
+  // air devant l'objectif, commun aux deux passes finales : décalage de lecture de l'image (xy) et assombrissement (z)
+  // gt[i] = goutte sur l'objectif (centre, rayon en hauteur d'écran, allongement vertical) : elle montre l'image derrière elle retournée et rapetissée, bord sombre
+  // ch = échappement à l'écran (x, y, force) + force de la chaleur sur la route ; cr = point de la route au loin à l'écran (x, y), temps
+  const AIR = `uniform vec4 gt[8], ch, cr;
+      vec3 air(vec2 v, vec2 px){ vec3 o = vec3(0., 0., 1.); vec2 as = vec2(px.y / px.x, 1.);
+        for (int i = 0; i < 8; i++) { vec4 g = gt[i]; if (g.z <= 0.) continue; vec2 q = (v - g.xy) * as / g.z; q.y /= g.w; float r2 = dot(q, q);
+          if (r2 < 1.) { o.xy += -(v - g.xy) * (1.6 + .4 * r2); o.z *= 1. - .3 * r2 * r2; } }
+        if (ch.z > 0.) { vec2 e = (v - ch.xy) * as / vec2(.16, .1); e.y = max(e.y, 0.) * .5 + min(e.y, 0.) * 2.; float k = ch.z * exp(-dot(e, e)); // l'air chaud monte : la tache s'étire vers le haut
+          o.xy += k * vec2(sin(v.y * 190. + cr.z * 23.), sin(v.x * 140. - cr.z * 17.) * .6) * .004; }
+        if (ch.w > 0.) { float y = (cr.y - v.y) / .07, k = ch.w * step(0., y) * exp(-y * y) * exp(-pow((v.x - cr.x) * 2.2, 2.)); // juste sous le point de fuite de la route : le mirage
+          o.xy += k * vec2(sin(v.y * 420. + cr.z * 9.) * .004, sin(v.y * 260. - cr.z * 6.) * .0016); }
+        return o; }`;
   const post = new THREE.ShaderMaterial({
-    uniforms: { t: { value: null }, h: { value: null }, amt: { value: 0 }, ab: { value: 0 }, vig: { value: 0 }, res: { value: 270 }, bloom: { value: TH.bloom }, scan: { value: TH.scan }, px: { value: new THREE.Vector2(1 / 480, 1 / 270) } },
+    uniforms: { t: { value: null }, h: { value: null }, amt: { value: 0 }, ab: { value: 0 }, vig: { value: 0 }, res: { value: 270 }, bloom: { value: TH.bloom }, scan: { value: TH.scan }, px: { value: new THREE.Vector2(1 / 480, 1 / 270) },
+      gt: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, ch: { value: new THREE.Vector4() }, cr: { value: new THREE.Vector4() } },
     vertexShader: 'varying vec2 v; void main(){ v = uv; gl_Position = vec4(position.xy, 0., 1.); }',
-    fragmentShader: `uniform sampler2D t, h; uniform float amt, ab, vig, res, bloom, scan; uniform vec2 px; varying vec2 v;
+    fragmentShader: `uniform sampler2D t, h; uniform float amt, ab, vig, res, bloom, scan; uniform vec2 px; varying vec2 v; ${AIR}
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); } // matrice de Bayer 4×4, par récurrence
       void main(){
-        vec2 c0 = vec2(.5, .42), d = v - c0; float l = length(d); vec3 c = vec3(0.);
+        vec3 ai = air(v, px); vec2 w = v + ai.xy, c0 = vec2(.5, .42), d = w - c0; float l = length(d); vec3 c = vec3(0.);
         for (int i = 0; i < 8; i++) { // flou radial : nul au centre, fort sur les bords, proportionnel à la vitesse
           vec2 u = c0 + d * (1. - amt * l * float(i) * .026);
           c += vec3(texture2D(t, u + d * ab).r, texture2D(t, u).g, texture2D(t, u - d * ab).b); // + aberration chromatique
         }
         c /= 8.;
         vec3 bl = vec3(0.); // halo : on ajoute ce qui dépasse un seuil de luminosité, prélevé en couronne
-        for (int i = 0; i < 12; i++) { float a = float(i) * .5236, rr = 2. + 2.5 * mod(float(i), 3.); bl += max(texture2D(t, v + vec2(cos(a), sin(a)) * rr * px).rgb - .5, 0.); }
-        c += bl * bloom;
+        for (int i = 0; i < 12; i++) { float a = float(i) * .5236, rr = 2. + 2.5 * mod(float(i), 3.); bl += max(texture2D(t, w + vec2(cos(a), sin(a)) * rr * px).rgb - .5, 0.); }
+        c = (c + bl * bloom) * ai.z;
         ${QUANT ? `vec2 q = v / px; c = floor(c * ${QUANT}. + (b2(.5 * q) * .25 + b2(q) - .5) * ${TRAME.toFixed(2)} + .5) / ${QUANT}.; // couleurs réduites et tramées, sur la grille de pixels du jeu` : ''}
         vec4 hd = texture2D(h, v); c = mix(c, hd.rgb, hd.a);
         c *= 1. - scan * mod(floor(v.y * res), 2.); // scanlines calées sur la grille
@@ -138,7 +151,7 @@
   quad.frustumCulled = false; postScene.add(quad);
   if (ST) { // passe finale des styles : la scène telle quelle, l'effet du style, le HUD (toujours sur sa grille de 270 lignes), une vignette légère
     Object.assign(post.uniforms, { dz: { value: null }, ecr: { value: new THREE.Vector2(1, 1) }, pal: { value: PAL.map(c => new THREE.Color(c)) } });
-    post.fragmentShader = `uniform sampler2D t, h, dz; uniform float amt, vig; uniform vec2 px, ecr; uniform vec3 pal[5]; varying vec2 v;
+    post.fragmentShader = `uniform sampler2D t, h, dz; uniform float amt, vig; uniform vec2 px, ecr; uniform vec3 pal[5]; varying vec2 v; ${AIR}
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); }
       float bayer(vec2 q){ return b2(.5 * q) * .25 + b2(q) - .5; }
       float lum(vec3 c){ return dot(c, vec3(.3, .59, .11)); }
@@ -147,9 +160,9 @@
       float arete(vec2 u, vec2 e){ float w = W(u); // courbure de W : nulle sur une facette, forte à une silhouette ou à un pli
         return (abs(W(u + vec2(e.x, 0.)) + W(u - vec2(e.x, 0.)) - 2. * w) + abs(W(u + vec2(0., e.y)) + W(u - vec2(0., e.y)) - 2. * w)) / max(w, 1e-6); }
       void main(){
-        vec2 u = v; ${ST.pre || ''}
-        vec3 c = texture2D(t, u).rgb; ${ST.fx || ''}
-        vec4 hd = texture2D(h, u); c = mix(c, hd.rgb, hd.a); ${ST.fin || ''}
+        vec3 ai = air(v, px); vec2 u = v; ${ST.pre || ''} vec2 uh = u; u += ai.xy; // le HUD reste net : seule la scène passe à travers l'air
+        vec3 c = texture2D(t, u).rgb * ai.z; ${ST.fx || ''}
+        vec4 hd = texture2D(h, uh); c = mix(c, hd.rgb, hd.a); ${ST.fin || ''}
         ${ST.brut ? '' : 'vec2 d = v - vec2(.5, .42); c *= max(0., 1. - (.35 + .7 * vig) * dot(d, d));'}
         gl_FragColor = vec4(c, 1.);
       }`;
@@ -424,14 +437,16 @@
   }
 
   // ---------- décor de la carte : decors.js ----------
-  const beams = [], decorTick = window.DECORS[TH.decor]({ THREE, scene, T, S, N, W, M, TH, ribbon, rnd, across, zone, lum, geo, mat, tx, addMat, box, concrete, beams, pose, zones, habille, temps: () => race ? -1 : tTraf }); // pas de trafic en course : les adversaires ne savent pas l'éviter
+  const VAP = [], vapeur = (x, y, z) => VAP.push([x, y, z]); // bouches de vapeur déclarées par le décor (panaches : voir flou)
+  const beams = [], decorTick = window.DECORS[TH.decor]({ THREE, scene, T, S, N, W, M, TH, ribbon, rnd, across, zone, lum, geo, mat, tx, addMat, box, concrete, beams, pose, zones, habille, vapeur, temps: () => race ? -1 : tTraf }); // pas de trafic en course : les adversaires ne savent pas l'éviter
 
   // pluie : traînées nettes qui s'allongent et foncent vers la caméra avec la vitesse, penchées par le vent ; tête claire, queue qui s'éteint (mélange additif, aucun flou)
   // force 1 = 400 gouttes ; au-delà (averse, zones de pluie > 1), plus de gouttes, plus longues ; et des impacts qui rejaillissent sur la chaussée devant la voiture
   const RN = 2400, rainP = new Float32Array(RN * 3), rainGeo = new THREE.BufferGeometry(), rainV = new Float32Array(RN * 6), rainC = new Float32Array(RN * 6);
   const alea = (k => () => (k = k * 16807 % 2147483647) / 2147483647)(11); // hasard à part : la suite de rnd ne bouge pas (seules les 400 premières gouttes la tirent, comme avant)
   for (let i = 0; i < RN; i++) { const r = i < 400 ? rnd : alea; rainP.set([r() * 80 - 40, r() * 30, r() * 80 - 40], i * 3); }
-  for (let i = 0; i < RN; i++) { const b = 0.45 + 0.55 * alea(); rainC.set([0.62 * b, 0.8 * b, b, 0.08 * b, 0.12 * b, 0.2 * b], i * 6); } // proches et lointaines : des gouttes plus ou moins claires
+  const rainB = Float32Array.from({ length: RN }, () => 0.45 + 0.55 * alea()); // proches et lointaines : des gouttes plus ou moins claires ; la teinte est refaite à chaque image (pluie éclairée, voir vueFrame)
+  const RL = new Float32Array(8 * 7); // luminaires qui éclairent la pluie de la vue : position relative à la voiture, 1 / portée², couleur
   rainGeo.setAttribute('position', new THREE.BufferAttribute(rainV, 3)); rainGeo.setAttribute('color', new THREE.BufferAttribute(rainC, 3));
   const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false }));
   rain.frustumCulled = false; scene.add(rain);
@@ -481,16 +496,21 @@
   const parts = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 1.1, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false })); parts.frustumCulled = false; scene.add(parts);
   // nuages flous : des disques opaques qui grossissent en s'effaçant (en additif ils se lisaient en carrés clairs) ; la poussière des cartes en terre (th.poussiere = sa teinte) et la fumée des pneus
   const dEch = { value: 135 };
-  const flou = (N, col, op) => { const P = new Float32Array(N * 3), V = new Float32Array(N * 3), A = new Float32Array(N).fill(1), g = new THREE.BufferGeometry(); let i = 0;
+  const flou = (N, col, op, vie = 1.4) => { const P = new Float32Array(N * 3), V = new Float32Array(N * 3), A = new Float32Array(N).fill(1), g = new THREE.BufferGeometry(); let i = 0;
     g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('age', new THREE.BufferAttribute(A, 1));
     const d = new THREE.Points(g, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { col: { value: new THREE.Color(...col) }, ech: dEch, op: { value: op } },
       vertexShader: 'attribute float age; varying float a; uniform float ech; void main() { a = age; vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_PointSize = age < 1.0 ? ech * projectionMatrix[1][1] * (1.1 + 6.0 * age) / -p.z : 0.0; }',
       fragmentShader: 'varying float a; uniform vec3 col; uniform float op; void main() { float r = length(gl_PointCoord - 0.5) * 2.0; if (r > 1.0 || a >= 1.0) discard; gl_FragColor = vec4(col, (1.0 - r * r) * (1.0 - a) * min(1.0, 0.15 + a * 4.0) * op); }' })); d.frustumCulled = false; scene.add(d);
     return { emit(x, y, z, vx, vy, vz) { const k = i++ % N; P.set([x, y, z], k * 3); V.set([vx, vy, vz], k * 3); A[k] = 0; },
-      step(dt) { const fr = Math.exp(-3 * dt); for (let k = 0; k < N; k++) if (A[k] < 1) { const j = k * 3; A[k] += dt / 1.4; V[j] *= fr; V[j + 2] *= fr; P[j] += V[j] * dt; P[j + 1] += V[j + 1] * dt; P[j + 2] += V[j + 2] * dt; }
+      step(dt) { const fr = Math.exp(-3 * dt); for (let k = 0; k < N; k++) if (A[k] < 1) { const j = k * 3; A[k] += dt / vie; V[j] *= fr; V[j + 2] *= fr; P[j] += V[j] * dt; P[j + 1] += V[j + 1] * dt; P[j + 2] += V[j + 2] * dt; }
         g.attributes.position.needsUpdate = g.attributes.age.needsUpdate = true; } };
   };
   const POUS = TH.poussiere && flou(480, TH.poussiere, 0.5), FUM = flou(600, [0.68, 0.68, 0.72], 0.55), poussiere = (...a) => POUS.emit(...a);
+  // vapeur des bouches d'égout : un panache lent par bouche (4 s pour monter de 5 m), teinté par le luminaire le plus proche à moins de 30 m (les néons)
+  const VAPS = VAP.map(([x, y, z]) => { const c = new THREE.Color(0.2, 0.2, 0.23); let lb = null, db = 900;
+    for (const l of LUMS) { const d = (l.x - x) ** 2 + (l.z - z) ** 2; if (d < db) { db = d; lb = l; } }
+    if (lb) c.lerp(lb.c.clone().multiplyScalar(0.6 / Math.max(lb.c.r, lb.c.g, lb.c.b, 1e-3)), 0.7 * (1 - Math.sqrt(db) / 30));
+    return { f: flou(40, [c.r, c.g, c.b], 0.18, 4), x, y, z, t: 0 }; });
   // traits additifs, étirés le long de leur vitesse, tête vive et queue éteinte : étincelles du palier de glisse, lignes de vitesse de la nitro
   const VN = 400, VK = 11, vP = new Float32Array(VN * 6), vCo = new Float32Array(VN * 6), vS = new Float32Array(VN * VK), vGeo = new THREE.BufferGeometry(); let vi = 0;
   vGeo.setAttribute('position', new THREE.BufferAttribute(vP, 3)); vGeo.setAttribute('color', new THREE.BufferAttribute(vCo, 3));
@@ -548,6 +568,7 @@
         else if (q.roul > 0.25) for (let k = 0; k < 2; k++) poussiere(x + jit(0.6), c.y + 0.15, z + jit(0.6), c.vx * 0.7 + jit(2), 0.3 + Math.random() * 1.2, c.vz * 0.7 + jit(2)); }
       POUS.step(dt); }
     FUM.step(dt); dEch.value = RH / 2;
+    for (const p of VAPS) { for (p.t += dt; p.t > 0.12; p.t -= 0.12) p.f.emit(p.x + jit(0.6), p.y, p.z + jit(0.6), 0.3 + jit(0.4), 1 + Math.random() * 0.6, jit(0.4)); p.f.step(dt); } // vapeur : toujours, même loin (40 points par bouche)
     for (let i = 0; i < VN; i++) { const j = i * 6, s = i * VK; if (vS[s + 3] <= 0) { vCo.fill(0, j, j + 6); continue; }
       vS[s + 3] -= dt; vS[s + 1] -= vS[s + 5] * dt; const a = Math.max(0, vS[s + 3] / vS[s + 4]), k = vS[s + 6];
       for (let c = 0; c < 3; c++) vP[j + c] += vS[s + c] * dt; if (vP[j + 1] < vS[s + 7]) { vP[j + 1] = vS[s + 7]; vS[s + 1] *= -0.35; }
@@ -1347,13 +1368,21 @@
     // pluie : chaque goutte recule de la vitesse de la voiture, sa traînée s'étire d'autant
     const NG = TH.neige || 0, pl = (NG || pluieAt(car.idx)) * (1 - lm), gl = NG ? 0.2 : 1.9 * Math.max(1, 0.4 + 0.6 * pl), nr = Math.min(RN, Math.round(400 * pl ** 1.5)); rain.visible = pl > 0.02; splash.visible = !NG && rain.visible; // th.neige = force des flocons : les mêmes particules, qui tombent à 4 m/s, sans impact ni bruit de pluie
     rainGeo.setDrawRange(0, 2 * nr); rain.position.set(car.x, carY, car.z); rain.material.opacity = Math.min(1, 0.6 + 0.15 * pl);
+    // pluie éclairée : de nuit, un trait ne se voit vraiment que près d'un luminaire (les 8 plus proches le long de la piste) ou dans le faisceau des phares ; ailleurs il reste sombre
+    const amb = NG ? 1 : 1 - 0.75 * Math.min(1, NUIT), hph = 1.4 * Math.min(1, NUIT); let nlr = 0;
+    if (rain.visible) for (let k = 0; k < 8 && k < vu.lums.length; k++) { const l = vu.lums[k].l, x = l.x - car.x, z = l.z - car.z, R = l.r * 0.6; if (x * x + z * z > 2500) continue;
+      RL.set([x, l.y - carY, z, 1 / (R * R), l.c.r, l.c.g, l.c.b], nlr++ * 7); }
     for (let i = 0; i < nr; i++) {
       let x = rainP[i * 3] - car.vx * dt, y = rainP[i * 3 + 1] - (NG ? 4 : 55) * dt, z = rainP[i * 3 + 2] - car.vz * dt;
       x = ((x + 40) % 80 + 80) % 80 - 40; z = ((z + 40) % 80 + 80) % 80 - 40; if (y < 0) y += 30;
       rainP[i * 3] = x; rainP[i * 3 + 1] = y; rainP[i * 3 + 2] = z;
       const o = i * 6; rainV[o] = x; rainV[o + 1] = y; rainV[o + 2] = z; rainV[o + 3] = x + car.vx * 0.035 + gl * 0.12; rainV[o + 4] = y + gl; rainV[o + 5] = z + car.vz * 0.035 + gl * 0.05; // vent constant : la traînée penche un peu (écrit case par case : un tableau par goutte et par image faisait travailler le ramasse-miettes)
+      let r = 0.62 * amb, v = 0.8 * amb, b = amb; const f = x * fx + z * fz;
+      if (f > 1 && f < 40 && y < 3 && Math.abs(z * fx - x * fz) < 1.5 + f * 0.3) { const w = hph * (1 - f / 40); r += w; v += 0.95 * w; b += 0.82 * w; } // phares : cône devant la voiture, bas
+      for (let k = 0; k < nlr; k++) { const j = k * 7, dx = x - RL[j], dy = y - RL[j + 1], dz = z - RL[j + 2], w = 1 - (dx * dx + dy * dy + dz * dz) * RL[j + 3]; if (w > 0) { const w2 = 0.6 * w * w; r += RL[j + 4] * w2; v += RL[j + 5] * w2; b += RL[j + 6] * w2; } }
+      const q = rainB[i]; rainC[o] = r * q; rainC[o + 1] = v * q; rainC[o + 2] = b * q; rainC[o + 3] = 0.13 * r * q; rainC[o + 4] = 0.15 * v * q; rainC[o + 5] = 0.2 * b * q; // queue éteinte
     }
-    rainGeo.attributes.position.needsUpdate = true;
+    rainGeo.attributes.position.needsUpdate = rainGeo.attributes.color.needsUpdate = true;
     const ns2 = Math.min(SN, Math.round(SN * pl / 3)); splGeo.setDrawRange(0, ns2);
     for (let i = 0; i < ns2; i++) { // un impact vit 0,14 s sur la chaussée, de 4 à 40 m devant, puis renaît ailleurs ; il éclate clair et s'éteint
       if ((splA[i] += dt) > 0.14) { splA[i] -= 0.14; const j = 2 + Math.floor(alea() * 18), s = S[(car.idx + j) % N], l = (alea() * 2 - 1) * W; splP.set([s.x - s.tz * l, s.y + 0.06, s.z + s.tx * l], i * 3); splD[i] = 1 - j / 24; } // au loin, l'impact est plus pâle
@@ -1369,6 +1398,18 @@
     const U = post.uniforms; U.t.value = vu.rt.texture; U.h.value = vu.hudT; if (U.dz) U.dz.value = vu.rt.depthTexture; U.px.value.set(AA / vu.rw, AA / RH); post.uniforms.vig.value = 0.6 * nitE + 1.3 * rv * rv; // vignette resserrée par la vitesse et la nitro ; la passe finale est commune : ses entrées sont celles de la vue
     // flou de vitesse : rien sous 130 km/h, il monte ensuite jusqu'à la pointe ; l'aberration chromatique suit
     post.uniforms.amt.value = 1.1 * rv * rv; post.uniforms.ab.value = 0.002 + 0.016 * rv * rv + (stun > 0 ? stun * 0.04 : 0);
+    // gouttes sur l'objectif (voir AIR) : la pluie en dépose, pas la neige ; elles glissent, puis le vent de la course les remonte en les étirant, et au-delà de M.vit[0] il les chasse
+    const gt = vu.gt || (vu.gt = Array.from({ length: 8 }, () => ({ x: 0, y: 0, r: 0, a: 0, vie: 0 }))), ve = Math.min(1, sp / V0), chasse = clamp((sp - V0) / (V1 - V0), 0, 1), pg = NG ? 0 : pl;
+    for (let i = 0; i < 8; i++) { const g = gt[i], u = U.gt.value[i];
+      if (g.a >= g.vie) { u.z = 0; if (pg > 0.02 && i < 6 && Math.random() < dt * 0.9 * pg * (1 - 0.6 * chasse)) Object.assign(g, { x: Math.random(), y: 0.15 + 0.85 * Math.random(), r: 0.013 + 0.022 * Math.random(), a: 0, vie: 2 + 4 * Math.random() }); else continue; }
+      g.a += dt; g.y += dt * (-0.015 + 0.12 * ve * ve + 1.6 * chasse); if (g.y > 1.15 || g.y < -0.1) g.a = g.vie;
+      u.set(g.x, g.y, g.r * Math.min(1, (g.vie - g.a) * 2, g.a * 8), 1 + 1.5 * ve * ve + 1.5 * chasse); // apparaît vite, s'évapore en rapetissant
+    }
+    // chaleur (voir AIR) : derrière l'échappement à haut régime, pied au plancher ; et au loin sur la route des cartes chaudes (th.chaleur), en plein soleil, sans pluie
+    const ch = U.ch.value, cr = U.cr.value; cr.z = now / 1000 % 600;
+    tmp.set(ENC.min.x - 0.6, 0.5, 0).applyMatrix4(G.matrixWorld).project(cam);
+    ch.set(tmp.x / 2 + 0.5, tmp.y / 2 + 0.5, tmp.z < 1 ? clamp((vu.rpm - 0.7) / 0.3, 0, 1) * vu.load * (1 - Math.min(1, pg)) : 0, 0);
+    if (TH.chaleur) { const s = S[(car.idx + 80) % N]; tmp.set(s.x, s.y, s.z).project(cam); cr.x = tmp.x / 2 + 0.5; cr.y = tmp.y / 2 + 0.5; ch.w = tmp.z < 1 ? TH.chaleur * (1 - lm) * (1 - Math.min(1, pl)) : 0; }
     if (!chaud) { // première image : tout est dessiné une fois sans tri de visibilité, pour que shaders, géométries et textures partent au GPU maintenant et non au premier passage en course (à-coups de 40 ms)
       chaud = true; const caches = [], tri = [];
       scene.traverse(o => { if (!o.visible) { caches.push(o); o.visible = true; } if (o.frustumCulled) { tri.push(o); o.frustumCulled = false; } });
