@@ -267,6 +267,7 @@ Le pilotage (ZQSD, A/E) est lu en position physique des touches, donc WASD et Q/
 | `three.min.js` | three.js r128 |
 | `test.js` | tests de la physique |
 | `outils/perf.js` | banc de mesure : performances à une et à deux vues, mémoire sur un enchaînement de cartes (voir « Performances ») |
+| `outils/banc.js` | le banc en une commande : `node outils/banc.js [carte]`, SUCCÈS ou ÉCHEC par carte (voir « Performances ») |
 
 `game.js` est un seul fichier découpé en sections repérées par `// ----------` : rendu et passe finale, outils des trois entités du décor (`tx`, `mat`, `geo`, `pose`), piste, ville, horizon, voiture et effets, état de jeu et commandes, interface, boucle.
 
@@ -289,6 +290,8 @@ Le rendu, le HUD, les commandes et le son de l'écran partagé ne sont pas test�
 Dans le navigateur, `?auto` fait conduire le pilote automatique (les deux voitures à deux joueurs), et `window.__g` expose l'état du jeu pour le débogage.
 
 ## Performances
+
+**En une commande** : `node outils/banc.js` (toutes les cartes) ou `node outils/banc.js canal` (une carte), `--joueurs=2` pour l'écran partagé. Le serveur démarre tout seul (port 8851, ou `PORT=`), une fenêtre Chrome s'ouvre le temps de la mesure (ne pas la masquer), puis le terminal affiche par carte la moyenne et la pire image, et SUCCÈS ou ÉCHEC contre `BUDGET` (`ms` et `cpuMax`). Code de sortie : 0 tout passe, 1 une carte échoue, 2 le banc n'a pas tourné. Le son est forcé (`--autoplay-policy`) : la mesure est celle d'une partie avec le son, qui pèse lourd (relevé du 14/11/2026 sur le canal : 0,9 ms de calcul par image son coupé, 3,4 ms son actif, et les pires images viennent du son). `--sans-ecran` lance Chrome sans fenêtre, mais Windows le bride : chiffres 2 à 3 fois trop lents. Relevé du 14/11/2026 avec le son, sur la machine de mesure : seul le touge passe (1,6 ms, pire image 7,3 ms) ; les autres cartes vont de 2,3 à 3,9 ms de moyenne et de 9 à 16 ms pour la pire image.
 
 `index.html?perf&auto` mesure toutes les cartes à la suite (une minute en tout) : le pilote automatique fait un tour en course contre 3 adversaires, à pas fixe, sans rien afficher, et chaque image est chronométrée. Le tableau sort dans la console et dans `localStorage['vpr.perf']`. Le banc est dans `outils/perf.js`, avec la référence que **toute carte doit tenir** (`BUDGET`) :
 
