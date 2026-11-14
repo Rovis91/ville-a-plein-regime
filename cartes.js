@@ -254,7 +254,7 @@
         pluie: 1, orage: 1, alarme: 1, chev: 1, piles: -61, tubes: 1, reflets: '#004a54', pubs: 1, murH: 1.4,
         route: ['#2c2c3a', '#383848', '#fcee0a', '#d8d8e0', '#fcee0a', '#08080c', true], mur: ['#12121a', '#00f0ff', '#fcee0a', '#0a0a10'], depart: [0xfcee0a, 0x00f0ff, '#fcee0a'],
         tun: { sol: ['#101018', '#1a1a24', '#00f0ff', '#fcee0a', '#00f0ff', '#08080c'], murs: ['#ff003c', '#fcee0a'], paroi: ['#140406', '#3a0a10', '#5a1018', '#080203'], plafond: ['#0c0304', '#ff5a6a', '#ffd84a', '#3a0a10'],
-          fog: 0x2a0308, portail: 0xfcee0a, neons: [0xfcee0a, 0xff003c], reflets: ['#5a0016', '#4a4404'], coque: 80 }, // chaussée sombre et neutre, rives cyan, reflets éteints : la route se détache des parois rouges (elle se confondait avec elles)
+          fog: 0x2a0308, portail: 0xfcee0a, neons: [0xfcee0a, 0xff003c], reflets: ['#5a0016', '#4a4404'], coque: 80, eclat: 1.5 }, // eclat : le tunnel exposé ×1,5 (trop sombre à l'essai) ; // chaussée sombre et neutre, rives cyan, reflets éteints : la route se détache des parois rouges (elle se confondait avec elles)
         hud: { y: '#fcee0a', c: '#00f0ff', r: '#ff003c', fond: 'rgba(8,8,12,.82)', style: 'cyber', split: 1, jp: ['ラップ', 'スピード'], sur: ['夜間タイムアタック', 'CONTRE-LA-MONTRE NOCTURNE'], titre: ['VILLE À', 'PLEIN REGIME'] } } },
 
     // Touge : départ en descente, montée à 13 % (S rapide, épingle à droite, gauche en deux temps, crête désaxée), plateau du carrefour (supérette et station-service), puis quatre épingles empilées à 10 %. Adhérence de vraie route (2 g avec des pneus de course), route étroite.

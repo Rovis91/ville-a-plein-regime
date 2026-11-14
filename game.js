@@ -137,7 +137,7 @@
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); } // matrice de Bayer 4×4, par récurrence
       void main(){
         vec2 o = texture2D(oe, vec2(.5)).rg; // log de la luminosité à laquelle l'œil est fait (r) et de celle du dehors (g)
-        float e = clamp(exp(o.g - o.r), 1., 1.6) * dn; // exposition : l'œil fait au noir ouvre l'image (jusqu'à ×1,6), puis se referme ; dn : la lumière vraie du tunnel (voir OEIL) ; fait au dehors, ×1 : l'image d'avant
+        float e = clamp(exp(o.g - o.r), 1., max(1.6, 1.6 / dn)) * dn; // exposition : l'œil fait au noir ouvre l'image, puis se referme ; en tunnel jusqu'à 1,6 / dn (adapté, un tunnel plus sombre que le dehors s'éclaircit jusqu'à ×1,6 de sa clarté peinte), dehors l'éblouissement plafonne à ×1,6 ; dn : la lumière vraie du tunnel (voir OEIL) ; fait au dehors, ×1 : l'image d'avant
         vec3 ai = air(v, px); vec2 w = v + ai.xy, c0 = vec2(.5, .42), d = w - c0; float l = length(d); vec3 c = vec3(0.);
         for (int i = 0; i < 8; i++) { // flou radial : nul au centre, fort sur les bords, proportionnel à la vitesse
           vec2 u = c0 + d * (1. - amt * l * float(i) * .026);
@@ -201,7 +201,7 @@
   const ssrScene = new THREE.Scene(), ssrQuad = new THREE.Mesh(quad.geometry, ssr); ssrQuad.frustumCulled = false; ssrScene.add(ssrQuad);
   // adaptation de l'œil (sans style) : 96 points de la scène, moyenne des log de luminosité, rapprochée de la valeur de l'image d'avant ; tout reste sur le GPU, rien n'est relu
   // Les tunnels sont peints aussi clairs que le dehors, comme vus par un œil déjà fait au noir : la lumière « vraie » y est TUN fois plus faible (ld = son log). Une fois l'œil adapté, l'image est celle d'avant ;
-  // à l'entrée il fait d'abord sombre puis la rétine s'habitue, à la sortie le dehors éblouit puis l'œil se referme.
+  // à l'entrée il fait d'abord sombre puis la rétine s'habitue, à la sortie le dehors éblouit puis l'œil se referme ; l'un et l'autre en 1 à 2 s (constantes de temps 0,5 s vers le noir, 0,35 s vers le clair : kn, kc dans rendVue).
   const TUN = 0.4;
   const OEIL = new THREE.ShaderMaterial({ uniforms: { t: { value: null }, prev: { value: null }, ld: { value: 0 }, kc: { value: 0 }, kn: { value: 0 }, kd: { value: 0 } }, depthTest: false, depthWrite: false,
     vertexShader: post.vertexShader,
@@ -1672,7 +1672,7 @@
     renderer.setRenderTarget(vu.rt); renderer.render(scene, cam);
     if (vu.rs) { const R = ssr.uniforms; R.t.value = vu.rt.texture; R.dz.value = vu.rt.depthTexture; R.P.value.copy(cam.projectionMatrix); R.Pi.value.copy(cam.projectionMatrixInverse); R.up.value.set(0, 1, 0).transformDirection(cam.matrixWorldInverse); R.px.value.set(1 / vu.rw, 1 / RH); renderer.setRenderTarget(vu.rs); renderer.render(ssrScene, postCam);
       REPLI.rDz.value = vu.rt.depthTexture; REPLI.rRes.value.set(vu.rw, RH); renderer.autoClear = false; renderer.render(repliScene, cam); renderer.autoClear = true; }
-    if (vu.oeil) { const [a, b] = vu.oeil, O = OEIL.uniforms; O.t.value = vu.rt.texture; O.prev.value = a.texture; O.kc.value = 1 - Math.exp(-dt / 0.6); O.kn.value = 1 - Math.exp(-dt / 2.5); O.kd.value = (1 - Math.exp(-dt / 3)) * (1 - lm); U.dn.value = 1 - (1 - TUN) * lm; O.ld.value = Math.log(U.dn.value);
+    if (vu.oeil) { const [a, b] = vu.oeil, O = OEIL.uniforms; O.t.value = vu.rt.texture; O.prev.value = a.texture; O.kc.value = 1 - Math.exp(-dt / 0.35); O.kn.value = 1 - Math.exp(-dt / 0.5); O.kd.value = (1 - Math.exp(-dt / 1)) * (1 - lm); U.dn.value = 1 - (1 - TUN) * lm; O.ld.value = Math.log(U.dn.value) - Math.log(T.tun && TH.tun.eclat || 1) * lm; // th.tun.eclat : l'œil se fait à un tunnel plus clair que le dehors (le plafond de e, 1,6 / dn, le permet jusqu'à ×1,6)
       renderer.setRenderTarget(b); renderer.render(oeilScene, postCam); vu.oeil = [b, a]; U.oe.value = b.texture; }
     renderer.setRenderTarget(null);
     if (COM) { const [cols, rows] = grille(VUES.length), x = (vu.n % cols) * vu.w, y = (rows - 1 - (vu.n / cols | 0)) * HH; renderer.setViewport(x, y, vu.w, HH); renderer.setScissor(x, y, vu.w, HH); } // à deux : la passe finale de la vue dans sa bande (y compté du bas : le joueur 1 en haut) ; le shader ne change pas, son centre de flou et sa vignette sont relatifs à la bande
