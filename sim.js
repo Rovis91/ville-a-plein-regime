@@ -336,7 +336,9 @@
       vcap = g > 0 && Math.abs(want) > 5.5 ? so * 0.9 : g > 0 && Math.abs(c.d - o.d) < 2.4 && g * 2 - 7 < (sp * sp - so * so) / 28 ? so : 1e9;
     }
     const la = S[(c.idx + look) % n];
-    const e = wrap(Math.atan2(la.z + la.tx * (off || la.dl) - c.z, la.x - la.tz * (off || la.dl) - c.x) - c.th);
+    // au départ, garder sa file de la grille et ne rejoindre la trajectoire qu'en 300 m : sinon toutes les voitures plongent ensemble vers la même ligne (souvent contre un mur)
+    const tgt = off || (c.file ? la.dl + (c.file - la.dl) * clamp(1 - c.dist / 150, 0, 1) : la.dl);
+    const e = wrap(Math.atan2(la.z + la.tx * tgt - c.z, la.x - la.tz * tgt - c.x) - c.th);
     // sous le niveau 1, la pointe baisse aussi : sur une carte où la voiture tape le rupteur (Paris, l'arène), le niveau ne jouait que dans les virages et les rivaux se tenaient en procession
     const C = T.car, vg = T.vg || (T.vg = C.red / 60 * 2 * Math.PI * C.wheel / (C.ratios[C.ratios.length - 1] * C.final)); // vg : la pointe au rupteur, sur le dernier rapport
     const va = vAdmise(T, c.idx), vt = Math.min(vcap, va * lvl * (off ? 0.9 : 1), lvl < 1 ? vg * lvl : 1e9); // hors trajectoire, on passe moins vite
@@ -374,7 +376,7 @@
     const h = opt.humains || 1, N = h + lvls.length; // les humains d'abord (0 = joueur 1, 1 = joueur 2), en fond de grille : le joueur 1 dernier, comme en solo
     const cars = [...Array(h).fill(1), ...lvls].map((lvl, i) => {
       const c = newCar(T), k = opt.grille ? opt.grille[i] : i < h ? N - 1 - i : i - h, j = T.n - 8 - 4 * k, s = T.S[j], d = k % 2 ? 3 : -3; // grille en quinconce, 8 m entre deux places
-      return Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, y: s.y, th: Math.atan2(s.tz, s.tx), idx: j, dist: -8 - 4 * k, d, lvl, pos: k + 1, lap: 1, fin: 0, out: 0, bump: 0 });
+      return Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, y: s.y, th: Math.atan2(s.tz, s.tx), idx: j, dist: -8 - 4 * k, d, file: d, lvl, pos: k + 1, lap: 1, fin: 0, out: 0, bump: 0 });
     });
     const mo = T.pluie.some(p => p) ? new Float32Array(T.n * MO.nb).fill(1) : null; cars.forEach(c => { c.mo = mo; }); // mouillure de la course (voir MO), partagée par ses voitures
     return { T, cars, mo, laps: opt.elim ? cars.length : laps, el, elim: !!opt.elim, h, delai: opt.delai || 0, tete: 0, t: 0, done: false };

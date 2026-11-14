@@ -122,7 +122,7 @@ console.log(`OK  longueur ${T.len | 0} m, rayon mini ${rmin | 0} m, tour auto ${
 // ---------- course : collisions, pilotes IA, classement ----------
 const fin = c => [c.x, c.z, c.vx, c.vz, c.th].every(Number.isFinite);
 const sep = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
-const at = (c, i, d, v) => { const s = S[i]; Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, idx: i, dist: i, d, th: Math.atan2(s.tz, s.tx), vx: s.tx * v, vz: s.tz * v }); return c; };
+const at = (c, i, d, v) => { const s = S[i]; Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, idx: i, dist: i, d, file: 0, th: Math.atan2(s.tz, s.tx), vx: s.tx * v, vz: s.tz * v }); return c; };
 
 // choc par l'arrière à 240 km/h sur une voiture arrêtée : pas de traversée, la voiture percutée est poussée, celle qui percute ralentit
 let R = newRace(T), [a, b] = R.cars; R.cars.length = 2;
