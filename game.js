@@ -99,7 +99,7 @@
     const vu = { cam: new THREE.PerspectiveCamera(70, 1, 0.5, 3000), rt, hudC, hg: hudC.getContext('2d'), hudT, w: 480, rw: 480, // w : largeur de la grille du HUD ; rw : celle de la cible (la même sans style)
       moi: null, hu: HUM[VUES.length], car: null, cth: 0, carY: 0, pitch: 0, roll: 0, // voiture suivie ; cap de la caméra, hauteur, tangage et roulis lissés
       lookA: 0, lookP: 0, lookT: 0, // caméra libre à la souris : angle autour de la voiture, hauteur en plus, délai avant retour
-      hit: 0, bump: 0, land: 0, stun: 0, nit: 0, lm: 0, rv: 0, // chocs de la voiture suivie pendant l'image ; secousse, fondu de nitro, fondu de tunnel
+      hit: 0, bump: 0, land: 0, stun: 0, nit: 0, lm: 0, rv: 0, rc: 0, // chocs de la voiture suivie pendant l'image ; secousse, fondu de nitro, fondu de tunnel
       gear: 0, rpm: 0.3, load: 0, spool: 0, up: 0, peak: new Float32Array(EQN), // rapport et régime affichés (drivetrain), crêtes de la jauge
       result: null, splitMsg: null, // bandeaux du HUD : tour bouclé, écart au secteur
       n: VUES.length, periph: '', inp: null, gas: 0, // rang du joueur (0 = en haut) ; son périphérique ('' = le solo : tout le clavier et la manette retenue), son entrée de conduite de l'image
@@ -1286,23 +1286,26 @@
   }
   // Une vue : la caméra derrière sa voiture (plus basse, plus proche et plus grand-angle avec la vitesse), puis tout ce qui dans la scène dépend de qui regarde
   // (ciel, lune et son ombre, brouillard, lumière dynamique, feux lointains, pluie), son HUD, la scène dans sa cible et la passe finale.
+  const [V0, V1] = (M.vit || [130, 200]).map(v => v / 3.6 / (M.kmh || 1)); // plage des effets de vitesse de la carte, en m/s vrais
   function vueFrame(vu, dt, now) {
     const { cam, car, carY, pitch, roll, lm, cth, stun, lookA, lookP, rainP, splP, splA, splD, inp } = vu, pulse = SON.pulse, G = modele(car);
     const sp = Math.hypot(car.vx, car.vz), r = Math.min(1, sp / TOP), fx = Math.cos(car.th), fz = Math.sin(car.th), air = car.y - yAt(car); // air : hauteur au-dessus du sol
-    const cx = Math.cos(cth + lookA), cz = Math.sin(cth + lookA), back = 6.4 - 1 * r; // caméra basse et proche : le sol défile en proportion inverse de sa hauteur, c'est ce qui donne la sensation de vitesse
+    const rc = vu.rc += (Math.min(1, sp / V1) - vu.rc) * Math.min(1, dt * 3); // cadrage de la caméra (recul, hauteur, champ) : proportionnel à la vitesse dès l'arrêt, lissé sur ~0,3 s, sans seuil
+    const cx = Math.cos(cth + lookA), cz = Math.sin(cth + lookA), back = 6.4 - 1 * rc; // caméra basse et proche : le sol défile en proportion inverse de sa hauteur, c'est ce qui donne la sensation de vitesse
     let px = car.x - cx * back, pz = car.z - cz * back;
     const s = S[(car.idx - 4 + N) % N], nx = -s.tz, nz = s.tx, d = (px - s.x) * nx + (pz - s.z) * nz, o = Math.abs(d) - (s.w - 0.8);
     if (o > 0 && !dansPlace(T, px, pz)) { px -= nx * Math.sign(d) * o; pz -= nz * Math.sign(d) * o; } // la caméra reste entre les murs (sur une place où l'on roule partout, elle suit)
-    const V0 = 130 / 3.6 / (M.kmh || 1), rv0 = TOP > V0 ? clamp((sp - V0) / (TOP - V0), 0, 1) : 0; // effets de vitesse (tremblement, champ, vignette, flou, aberration) : rien sous 130 km/h affichés, pleins à la pointe
-    const rv = vu.rv += (rv0 - vu.rv) * Math.min(1, dt * 2.5); // lissé sur ~0,4 s : un choc ou un coup de frein ne fait plus sauter champ, vignette et flou d'une image à l'autre
-    const ts = now / 1000, ond = k => 0.6 * Math.sin(ts * 7.3 + k) + 0.4 * Math.sin(ts * 11.9 + 2.3 * k); // tremblement continu (deux sinus), au lieu d'un tirage au hasard à chaque image qui grésillait
-    const shake = 0.012 * rv + 0.05 * rv * rv * rv, choc = stun > 0 ? stun * 0.35 : 0; // vitesse : à peine en ville, net mais doux à la pointe ; choc : bref, nerveux
+    const rv0 = clamp((sp - V0) / (V1 - V0), 0, 1); // effets de vitesse (tremblement, champ, vignette, flou, aberration) : de M.vit[0] à M.vit[1] km/h affichés
+    const rv = vu.rv += (rv0 - vu.rv) * Math.min(1, dt * 5); // lissé sur ~0,2 s : un choc ou un coup de frein ne fait plus sauter champ, vignette et flou d'une image à l'autre
+    const vib = () => Math.random() * 2 - 1; // vibration tirée à chaque image : des sinus plus rapides que 30 Hz se replient à l'écran en roulis lent, et une secousse de position est gommée par le lookAt
+    const rs = clamp((rv - 0.4) / 0.6, 0, 1), shake = 0.03 * rs + 0.045 * rs * rs * rs, choc = stun > 0 ? stun * 0.35 : 0; // vitesse : rien sur les 40 % bas de la plage des effets (130 km/h → pointe), plein à la pointe ; choc : bref, nerveux
     // la caméra suit le sol sous elle, sans tomber dans une fosse que la voiture survole (±2,5 m autour du sol de la voiture), monte avec la voiture en vol et penche avec elle sur une paroi
     const y0 = yAt(car), ySol = k => clamp(yAt(car, k), y0 - 2.5, y0 + 2.5) + air;
-    cam.position.set(px + ond(0) * shake + (Math.random() - 0.5) * choc, ySol(-3) + (M.camH || 3.2) + lookP - 0.5 * r + ond(5) * shake * 0.7 + (Math.random() - 0.5) * choc, pz);
+    cam.position.set(px + vib() * shake + (Math.random() - 0.5) * choc, ySol(-3) + (M.camH || 3.2) + lookP - 0.5 * rc + vib() * shake * 0.7 + (Math.random() - 0.5) * choc, pz);
     cam.lookAt(car.x + cx * 10, ySol(5) + 1.1, car.z + cz * 10); cam.rotateZ(-0.6 * roll);
+    cam.rotateX(vib() * shake * 0.12); cam.rotateY(vib() * shake * 0.08); // l'image elle-même tressaute (≈ 0,4° à la pointe), sec et petit
     const nitE = vu.nit * vu.nit * (3 - 2 * vu.nit); // nitro : départ et arrivée en douceur (champ élargi et vignette)
-    cam.fov = 62 + 26 * rv +3 * car.slide + 6 * nitE;
+    cam.fov = 62 + 20 * rc + 10 * rv * rv + 3 * car.slide + 6 * nitE; // + grand-angle en fin de course : l'effet tunnel
     const photo = window.__g.vue; // shortcut: debug console seulement, __g.vue = [angle° autour de la voiture, distance, hauteur] pour inspecter le modèle ; à remplacer par un vrai mode photo si on en veut un
     if (photo) { const a = car.th + photo[0] * Math.PI / 180; cam.position.set(car.x + Math.cos(a) * photo[1], carY + photo[2], car.z + Math.sin(a) * photo[1]); cam.lookAt(car.x, carY + 0.7, car.z); cam.fov = 45; }
     cam.updateProjectionMatrix();
@@ -1361,9 +1364,9 @@
     // et la glace vive (T.surf, vir > 0,4) qui arrive entre 1,2 et 3,6 s devant, quand on n'y est pas encore : sans elle, une plaque était une surprise
     const glace = j => !!T.surf && T.surf[(car.idx + j) % N].vir > 0.4, D = Math.round(sp * 0.6); let surGlace = false; if (state === 'race' && sp > 15 && !glace(0)) for (let j = D; j < 3 * D && !surGlace; j++) surGlace = glace(j);
     drawHUD(vu, dt, sp, state === 'race' ? alerteVirage(T, car.idx, sp) || (surGlace ? 2 : 0) : 0);
-    const U = post.uniforms; U.t.value = vu.rt.texture; U.h.value = vu.hudT; if (U.dz) U.dz.value = vu.rt.depthTexture; U.px.value.set(AA / vu.rw, AA / RH); post.uniforms.vig.value = 0.6 * nitE + 0.45 * rv * rv; // vignette resserrée par la vitesse et la nitro ; la passe finale est commune : ses entrées sont celles de la vue
+    const U = post.uniforms; U.t.value = vu.rt.texture; U.h.value = vu.hudT; if (U.dz) U.dz.value = vu.rt.depthTexture; U.px.value.set(AA / vu.rw, AA / RH); post.uniforms.vig.value = 0.6 * nitE + 1.3 * rv * rv; // vignette resserrée par la vitesse et la nitro ; la passe finale est commune : ses entrées sont celles de la vue
     // flou de vitesse : rien sous 130 km/h, il monte ensuite jusqu'à la pointe ; l'aberration chromatique suit
-    post.uniforms.amt.value = 0.4 * rv * rv; post.uniforms.ab.value = 0.002 + 0.007 * rv * rv + (stun > 0 ? stun * 0.04 : 0);
+    post.uniforms.amt.value = 1.1 * rv * rv; post.uniforms.ab.value = 0.002 + 0.016 * rv * rv + (stun > 0 ? stun * 0.04 : 0);
     if (!chaud) { // première image : tout est dessiné une fois sans tri de visibilité, pour que shaders, géométries et textures partent au GPU maintenant et non au premier passage en course (à-coups de 40 ms)
       chaud = true; const caches = [], tri = [];
       scene.traverse(o => { if (!o.visible) { caches.push(o); o.visible = true; } if (o.frustumCulled) { tri.push(o); o.frustumCulled = false; } });
