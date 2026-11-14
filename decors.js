@@ -30,7 +30,7 @@
 
   // Terrain : un champ de hauteur qui passe par la route. Chaque sommet prend l'altitude des portions de route voisines (moyenne pondérée par
   // la distance) : la route se retrouve posée sur une pente, les lacets empilés deviennent des terrasses, un canal se creuse entre deux voies.
-  // o = { pas, marge, mat, loin, chute (au-delà de `loin` mètres de la route, le sol descend de `chute` m par mètre), creux(x, z),
+  // o = { pas, marge, mat, loin, chute (au-delà de `loin` mètres de la route, le sol descend de `chute` m par mètre), creux(x, z, y) = m à retirer au sol (y = sa hauteur calculée),
   //       sol(s) = altitude du sol sous l'échantillon s quand la route n'est pas posée dessus (viaduc, pont),
   //       sous = pente (touge seul) : plafonne chaque sommet sous toute la route proche, puis remonte de `sous` m par mètre ; les triangles ne passent plus sur une chaussée en contrebas (lacets) }
   // Renvoie hAt(x, z) = altitude du sol et dAt(x, z) = distance à la route, pour y poser le décor.
@@ -52,7 +52,7 @@
       if (o.sous && d < RC) for (let cz = -1; cz <= 1; cz++) for (let cx = -1; cx <= 1; cx++) for (const s of cases.get((Math.floor(x / RC) + cx) * 1e4 + Math.floor(z / RC) + cz) || []) {
         const e = Math.hypot(s.x - x, s.z - z); if (e < RC) y = Math.min(y, s.y - 0.3 + Math.max(0, e - R) * o.sous); // au-delà de RC la remontée dépasse tout dénivelé de la carte
       }
-      if (o.creux) y -= o.creux(x, z); // après le plafond des lacets : un ravin (touge) peut passer sous la chaussée
+      if (o.creux) y -= o.creux(x, z, y); // après le plafond des lacets : un ravin (touge) peut passer sous la chaussée
       Y[k] = y; D[k] = d; pos.set([x, y, z], k * 3); uv.set(o.sous ? [(x + y) / 10, (z + y) / 10] : [x / 10, z / 10], k * 2); // touge : la texture suit aussi la hauteur, sans s'étirer sur les parois raides
       if (ix < nx - 1 && iz < nz - 1) idx.push(k, k + nx, k + 1, k + 1, k + nx, k + nx + 1);
     }
@@ -713,9 +713,13 @@
       // le torrent du bas de la montée (pt 2) : un ravin de 7 m qui serpente en travers de la route, sous un pont de pierre
       const sp = S[pt(h, 2)], ravin = (x, z) => { const dx = x - sp.x, dz = z - sp.z, v = dz * sp.tx - dx * sp.tz, u = dx * sp.tx + dz * sp.tz - 6 * Math.sin(v / 25);
         return Math.abs(v) > 90 || Math.abs(u) > 9 ? 0 : 7 * (1 - (u / 9) ** 2) * Math.min(1, (90 - Math.abs(v)) / 20); };
-      const g = terrain(h, { pas: 7, sous: 6, marge: 320, loin: 60, chute: 1.1, creux: ravin, mat: h.mat('bruit', {}, '#0c1a14', ['#12261e', '#081410', '#16302a']) });
-      // le carrefour : sur le plateau du sommet, côté extérieur. Une route de traverse y part, barrée.
-      const ic = pt(h, 11), sc = S[ic], sd = g.dAt(...bord(sc, 1, 60)) > g.dAt(...bord(sc, -1, 60)) ? 1 : -1, [cx, cz] = bord(sc, sd, W + 22);
+      // le carrefour : sur le plateau du sommet, côté extérieur (le plus loin des autres routes). Le sol y est mis au niveau de la route : depuis la nouvelle montée il passait 2 à 4 m dessous
+      const ic = pt(h, 11), sc = S[ic], loin = (x, z) => { let d = 1e18; for (let i = 0; i < N; i += 3) if (Math.abs(i - ic) > 40) d = Math.min(d, (S[i].x - x) ** 2 + (S[i].z - z) ** 2); return d; };
+      const sd = loin(...bord(sc, 1, 60)) > loin(...bord(sc, -1, 60)) ? 1 : -1, [cx, cz] = bord(sc, sd, W + 22);
+      const plateau = (x, z, y) => { const r = Math.hypot(x - cx, z - cz); if (r > 55) return 0; let d = 1e18; for (let i = ic - 60; i < ic + 60; i++) { const q = S[(i + N) % N]; d = Math.min(d, (q.x - x) ** 2 + (q.z - z) ** 2); }
+        return (y - (sc.y - 0.35)) * Math.min(1, (55 - r) / 17, Math.max(0, (Math.sqrt(d) - W - 6) / 10)); }; // jamais sur la chaussée ni à ses bords : la route monte encore à l'approche
+      const g = terrain(h, { pas: 7, sous: 6, marge: 320, loin: 60, chute: 1.1, creux: (x, z, y) => ravin(x, z) + plateau(x, z, y), mat: h.mat('bruit', {}, '#0c1a14', ['#12261e', '#081410', '#16302a']) });
+      // une route de traverse part du carrefour, barrée
       // cèdres : une rangée serrée le long de la route (le tunnel d'arbres), puis la forêt ; rien sur le carrefour.
       // Dans les lacets, rien côté vallée (ouest) et des cèdres plus petits côté amont, dont la cime reste sous le regard du lacet du dessus ; de jeunes plants sur la pente en contrebas : on voit la ville par-dessus
       const arbres = [], lacets = (x, z) => x > 372 && x < 552 && z > 300 && z < 576, plants = (x, z) => x > 100 && x < 552 && z > 260 && z < 640, libre0 = (x, z) => (x - cx) ** 2 + (z - cz) ** 2 > 72 * 72 && ravin(x, z) < 1;
@@ -756,6 +760,10 @@
       const rayures = h.mat('rayures', LUM), cligno = h.mat('clignotant', LUM), cone = h.mat('cone', LUM);
       for (const dz of [-15, -12, -9]) h.pose('barriere', { rayures, clignotant: cligno }, gr, [X(43), 0, dz]);
       for (const dz of [-16.5, -13.5, -10.5, -7.5]) h.pose('cone', cone, gr, [X(41.5), 0.5, dz]);
+      for (const o of h.scene.children) if (o.isInstancedMesh && o.geometry.parameters && o.geometry.parameters.width === 5 && o.geometry.parameters.height === 2.5) { // chevrons (forme chevron, 5 × 2,5 m)
+        const M4 = new THREE.Matrix4(), v = new THREE.Vector3(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
+        for (let k = 0; k < o.count; k++) { o.getMatrixAt(k, M4); v.setFromMatrixPosition(M4); if ((v.x - cx) ** 2 + (v.z - cz) ** 2 < 62 * 62) o.setMatrixAt(k, zero); }
+        o.instanceMatrix.needsUpdate = true; }
       gr.updateMatrixWorld(); // la vitrine et l'auvent éclairent l'esplanade, la route et les voitures qui passent
       for (const [lx, lz, col, d] of [[27, -8, 0xdfefff, 46], [15, 15, 0xffe0a0, 34], [3, 0, 0xdfefff, 22]]) { const p = gr.localToWorld(new THREE.Vector3(X(lx), 4.5, lz)); h.lum(ic, p.x, p.y, p.z, col, d, 3); }
 
@@ -775,8 +783,9 @@
       for (let v = -86; v <= 86; v += 8) { const [x, z] = lit(v); flots.push([x, g.hAt(x, z) + 0.6, z, h.across(sp)]); } // le torrent descend en marches : des cascades
       (inst(h, h.geo('boite', 8.6, 0.3, 3.5), eau, flots));
       for (let k = 0; k < 14; k++) { const [x, z] = lit((rnd() - 0.5) * 150); nappes.push([x, g.hAt(x, z) + 2 + rnd() * 3, z, rnd() * 6, 26 + rnd() * 20, 1, 18 + rnd() * 10]); }
-      for (let i = i1; i < i3; i += 12) for (const c of [-1, 0, 1]) { const [x, z] = c ? bord(S[i], c, W + 8 + rnd() * 14) : [S[i].x, S[i].z]; nappes.push([x, S[i].y + (c ? -0.8 + rnd() : 0.5), z, rnd() * 6, 24 + rnd() * 20, 1, 24 + rnd() * 20]); }
-      const brume = inst(h, brumeG, h.mat('brume', { lum: 1, c: 0x6a8088, transparent: true, opacity: 0.45, depthWrite: false }), nappes); brume.castShadow = brume.receiveShadow = false; (brume);
+      for (let i = i1; i < i3; i += 12) for (const c of [-1, 1]) { const [x, z] = bord(S[i], c, W + 20 + rnd() * 10); nappes.push([x, S[i].y - 0.8 + rnd(), z, rnd() * 6, 16 + rnd() * 8, 1, 16 + rnd() * 8]); } // à 20 m et plus du bord : elles ne couvrent jamais la chaussée
+      // additive : les plans de brume en mélange normal recevaient les phares (eclaire, game.js) et éblouissaient sur toute la route
+      const brume = inst(h, brumeG, h.mat('brume', { lum: 1, c: 0x3a4a50, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }), nappes); brume.castShadow = brume.receiveShadow = false; (brume);
       const retro = { lum: 1, retro: 1.2 }; // les panneaux s'allument dans les phares, comme les catadioptres
       h.pose('panneauPente', { poteau: acier, plaque: h.mat('losange', { ...retro, alphaTest: 0.5 }, '13%'), sous: h.mat('ecrit', retro, 48, 20, '#f4f4f0', '#101010', '上り急勾配', 10) }, repere(h, S[i1 + 12]), [W + 1.5, 0, 0]);
       // pts 3-5 : sanctuaire dans la pente (torii vermillon, escalier de pierre, tōrō allumés, oratoire), et des cerfs sika au bord de la route
@@ -799,9 +808,9 @@
         q.updateMatrixWorld();
         (insts(h, 'passant', { ombre: vitre }, [[W + 8.6, -7, 1], [W + 8.9, -6.2, 0.92], [W + 9, 3, 1.04], [W + 3, 4.5, 0.98]].map(([px, pz, t]) => { const p = V(px, pz); return [p.x, p.y, p.z, q.rotation.y, t]; })));
         allume(q, i, W + 11, 1, 0xfff0d0, 16, 2); }
-      // pts 10-12 : des pylônes à haute tension sur la crête, feux rouges clignotants (sans câbles : ils traversaient talus et arbres)
+      // pts 10-12 : deux pylônes à haute tension de part et d'autre de la crête, feux rouges clignotants (sans câbles : ils traversaient talus et arbres ; un troisième tombait sur les épingles)
       const feuPylone = h.mat('feuRouge', LUM);
-      { const i = at(i10, ic, 0.4), s = S[i]; (insts(h, 'pyloneHT', { acier: gris, feu: feuPylone }, (sd > 0 ? [-260, -70, 75] : [-75, 70, 260]).map(o => { const p = site(i, Math.sign(o), Math.abs(o), 60); h.scene.remove(p); return [p.position.x, p.position.y, p.position.z, h.across(s) + Math.PI / 2]; }))); }
+      { const i = at(i10, ic, 0.4), s = S[i]; (insts(h, 'pyloneHT', { acier: gris, feu: feuPylone }, (sd > 0 ? [-70, 75] : [-75, 70]).map(o => { const p = site(i, Math.sign(o), Math.abs(o), 60); h.scene.remove(p); return [p.position.x, p.position.y, p.position.z, h.across(s) + Math.PI / 2]; }))); }
       // le retour (pts 41-48) : des jizō à bavoir rouge et leur bougie, puis une cabine téléphonique allumée
       { const i = pt(h, 43), p = site(i, ext(i), W + 2.6, 0.4); h.pose('jizos', { socle: beton, pierre, bavoir: h.mat('laque', { c: 0xc8102e }), bois, toit: gris, feu: feuDoux }, p); allume(p, i, -0.6, 0.4, 0xffa040, 6, 1.2); }
       { const i = pt(h, 46), p = site(i, ext(i), W + 2.8, 0.4); h.pose('cabine', { socle: beton, verre: h.mat('vitrine', { lum: 1, c: 0xd8ffe0 }), cadre: blanc }, p); allume(p, i, 0, 2, 0xe0ffe8, 12, 2); }
