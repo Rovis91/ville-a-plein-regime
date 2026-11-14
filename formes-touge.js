@@ -39,5 +39,17 @@
       ...paire(sd => ['bois', 0.1, 1.5, 0.1, -0.5, 0.85, sd * 1.05]), ...paire(sd => ['bois', 0.1, 1.5, 0.1, 0.5, 0.85, sd * 1.05]), ['toit', 1.4, 0.12, 2.6, 0, 1.65, 0, [0, 0, 0.25]], ['feu', 0.06, 0.12, 0.06, -0.45, 0.2, 0.32]],
     // cabine téléphonique éclairée de l'intérieur (verre teinté vert), face vers -X
     cabine: () => [['socle', 1.6, 2, 1.6, 0, -0.9, 0], ['verre', 0.95, 2.1, 0.95, 0, 1.15, 0], ['cadre', 1.05, 0.2, 1.05, 0, 2.3, 0], ['cadre', 1.05, 0.12, 1.05, 0, 0.16, 0]],
+    // temple du sommet (X = en s'éloignant de la route, origine au bord de la route, au niveau de la chaussée) : grand torii vermillon, allée dallée bordée de tōrō allumés,
+    // escalier de pierre vers une terrasse de 3 m, pavillon de bois sombre à façade de shōji éclairés, toit de tuiles incurvé (trois pans de pente décroissante de chaque côté), lanternes rouges sous l'avant-toit
+    temple: () => { const y0 = 3, r = [['gravier', 50, 2, 30, 25, -1, 0],
+        ...paire(sd => ['vermillon', 0.7, 7.4, 0.7, 4, 3.7, sd * 3.4]), ...paire(sd => ['noir', 0.9, 0.6, 0.9, 4, 0.3, sd * 3.4]), ['vermillon', 0.45, 0.5, 8.4, 4, 6, 0], ['vermillon', 0.35, 1, 0.4, 4, 6.8, 0],
+        ['vermillon', 0.7, 0.45, 9.4, 4, 7.45, 0], ['noir', 0.85, 0.4, 10.2, 4, 7.85, 0], ...paire(sd => ['noir', 0.85, 0.4, 1.4, 4, 8, sd * 5.4, [sd * 0.25, 0, 0]]), ['pierre', 20, 0.12, 3.2, 14, 0.06, 0]];
+      for (const x of [8.5, 13.5, 18.5]) for (const sd of [-1, 1]) { const z = sd * 3.6; r.push(['pierre', 0.8, 0.35, 0.8, x, 0.18, z], ['pierre', 0.28, 1, 0.28, x, 0.85, z], ['pierre', 0.7, 0.18, 0.7, x, 1.44, z], ['feu', 0.46, 0.44, 0.46, x, 1.75, z], ['pierre', 0.95, 0.22, 0.95, x, 2.08, z]); }
+      for (let k = 0; k < 10; k++) r.push(['pierre', 0.65, 0.3 * (k + 1) + 1, 7, 24.3 + k * 0.6, (0.3 * (k + 1) + 1) / 2 - 1, 0]);
+      r.push(['pierre', 20, 4, 24, 40, 1, 0], ['bois', 2.4, 0.3, 17, 34.2, y0 + 0.15, 0], ['bois', 11, 4.6, 15, 40.5, y0 + 2.3, 0], ['shoji', 0.1, 3.2, 12, 34.95, y0 + 1.9, 0], ['noir', 13.5, 0.4, 17.5, 40.5, y0 + 4.8, 0],
+        ...[-7.2, -2.5, 2.5, 7.2].map(z => ['vermillon', 0.5, 4.8, 0.5, 34.6, y0 + 2.4, z]), ...paire(sd => ['chochin', 0.7, 1, 0.7, 33.4, y0 + 3.4, sd * 4.8]), ['corde', 0.5, 0.45, 10, 34.4, y0 + 4.25, 0], ['bois', 1.2, 0.9, 2.5, 33.6, y0 + 0.75, 0]);
+      for (const sg of [-1, 1]) { let x = 40.5, y = y0 + 9; for (const [l, a] of [[3.4, 0.72], [3, 0.48], [2.8, 0.22]]) { const dx = sg * l * Math.cos(a), dy = -l * Math.sin(a); r.push(['toit', l + 0.2, 0.35, 19, x + dx / 2, y + dy / 2, 0, [0, 0, -sg * a], 1]); x += dx; y += dy; } }
+      for (const [w, y] of [[10, y0 + 5.6], [7.4, y0 + 6.6], [4.8, y0 + 7.6], [2.2, y0 + 8.4]]) r.push(...paire(sd => ['bois', w, 1.05, 0.3, 40.5, y, sd * 7.4])); // pignons fermés
+      r.push(['noir', 0.8, 0.6, 19.5, 40.5, y0 + 9.2, 0], ...paire(sd => ['noir', 0.9, 1.3, 0.6, 40.5, y0 + 9.6, sd * 9.7])); return r; },
   });
 })();

@@ -698,12 +698,21 @@
       // le torrent du bas de la montée (pt 2) : un ravin de 7 m qui serpente en travers de la route, sous un pont de pierre
       const sp = S[pt(h, 2)], ravin = (x, z) => { const dx = x - sp.x, dz = z - sp.z, v = dz * sp.tx - dx * sp.tz, u = dx * sp.tx + dz * sp.tz - 6 * Math.sin(v / 25);
         return Math.abs(v) > 90 || Math.abs(u) > 9 ? 0 : 7 * (1 - (u / 9) ** 2) * Math.min(1, (90 - Math.abs(v)) / 20); };
-      // le carrefour : sur le plateau du sommet, côté extérieur (le plus loin des autres routes). Le sol y est mis au niveau de la route : depuis la nouvelle montée il passait 2 à 4 m dessous
-      const ic = pt(h, 11), sc = S[ic], loin = (x, z) => { let d = 1e18; for (let i = 0; i < N; i += 3) if (Math.abs(i - ic) > 40) d = Math.min(d, (S[i].x - x) ** 2 + (S[i].z - z) ** 2); return d; };
-      const sd = loin(...bord(sc, 1, 60)) > loin(...bord(sc, -1, 60)) ? 1 : -1, [cx, cz] = bord(sc, sd, W + 22);
-      const plateau = (x, z, y) => { const r = Math.hypot(x - cx, z - cz); if (r > 55) return 0; let d = 1e18; for (let i = ic - 60; i < ic + 60; i++) { const q = S[(i + N) % N]; d = Math.min(d, (q.x - x) ** 2 + (q.z - z) ** 2); }
-        return (y - (sc.y - 0.35)) * Math.min(1, (55 - r) / 17, Math.max(0, (Math.sqrt(d) - W - 6) / 10)); }; // jamais sur la chaussée ni à ses bords : la route monte encore à l'approche
-      const g = terrain(h, { pas: 7, sous: 6, marge: 320, loin: 60, chute: 1.1, creux: (x, z, y) => ravin(x, z) + plateau(x, z, y), mat: h.mat('bruit', {}, '#0c1a14', ['#12261e', '#081410', '#16302a']) });
+      // deux lieux, chacun du côté extérieur (le plus loin des autres routes), le sol mis au niveau de la route sous eux, jamais sur la chaussée ni à ses bords :
+      // le temple au carrefour du sommet (pt 11), la supérette et la station-service dans le dernier virage, celui qui ramène à la ligne (pt 47)
+      const lieu = (i, off) => { const s = S[i], loin = (x, z) => { let d = 1e18; for (let j = 0; j < N; j += 3) if (Math.abs(((j - i + N + N / 2) % N) - N / 2) > 40) d = Math.min(d, (S[j].x - x) ** 2 + (S[j].z - z) ** 2); return d; };
+        const sd = loin(...bord(s, 1, 60)) > loin(...bord(s, -1, 60)) ? 1 : -1, [x, z] = bord(s, sd, W + off);
+        const plat = (px, pz, y) => { const r = Math.hypot(px - x, pz - z); if (r > 55) return 0; let d = 1e18; for (let j = i - 60; j < i + 60; j++) { const q = S[(j + N) % N]; d = Math.min(d, (q.x - px) ** 2 + (q.z - pz) ** 2); }
+          return (y - (s.y - 0.35)) * Math.min(1, (55 - r) / 17, Math.max(0, (Math.sqrt(d) - W - 6) / 10)); };
+        // dégagé : le lieu lui-même (r0) et, côté approche (Z local > 0), jusqu'à 75 m pour qu'on le voie venir
+        const degage = (px, pz, r0) => { const r = Math.hypot(px - x, pz - z); return r < r0 || (r < 75 && (px - s.x) * s.tx + (pz - s.z) * s.tz < 0); };
+        // colline : derrière le lieu, le sol remonte (0,35 m par m) au lieu de plonger vers la vallée : les cèdres du fond dépassent le toit du temple. Jamais près d'une autre route
+        const colline = (px, pz, y) => { const dx = px - s.x, dz = pz - s.z, X = (dz * s.tx - dx * s.tz) * sd, Z = -(dx * s.tx + dz * s.tz); if (X < W + 40 || X > W + 130 || Math.abs(Z) > 70) return 0;
+          let d = 1e18; for (let j = 0; j < N; j += 3) d = Math.min(d, (S[j].x - px) ** 2 + (S[j].z - pz) ** 2);
+          return (y - (s.y - 0.35 + (X - W - 40) * 0.35)) * Math.min(1, (X - W - 40) / 10, (W + 130 - X) / 20, (70 - Math.abs(Z)) / 20, Math.max(0, (Math.sqrt(d) - W - 30) / 15)); };
+        return { i, s, sd, x, z, plat, degage, colline }; };
+      const haut = lieu(pt(h, 11), 26), bas = lieu(pt(h, 47) + 6, 22), ic = haut.i, sc = haut.s, sd = haut.sd, cx = haut.x, cz = haut.z;
+      const g = terrain(h, { pas: 7, sous: 6, marge: 320, loin: 60, chute: 1.1, creux: (x, z, y) => ravin(x, z) + haut.plat(x, z, y) + haut.colline(x, z, y) + bas.plat(x, z, y), mat: h.mat('bruit', {}, '#0c1a14', ['#12261e', '#081410', '#16302a']) });
       // ---------- la ligne à haute tension de la crête (entre les pts 10 et 11), placée par calcul ----------
       // Quatre pylônes alignés en travers de la route, deux de chaque côté, et au-delà de chaque bout un ancrage hors de vue (câbles des deux côtés de chaque pylône).
       // On essaie plusieurs emplacements et portées et on garde le premier où : chaque pylône est à plus de W + 15 m de toute route et hors du carrefour ; le câble le plus bas,
@@ -722,9 +731,9 @@
       const sousLigne = (x, z) => { if (!ligne) return null; let b = null; for (let k = 0; k < 5; k++) { const A = ligne.P[k], B = ligne.P[k + 1], ux = B[0] - A[0], uz = B[2] - A[2], l2 = ux * ux + uz * uz,
         t = Math.max(0, Math.min(1, ((x - A[0]) * ux + (z - A[2]) * uz) / l2)), d = Math.hypot(A[0] + ux * t - x, A[2] + uz * t - z); if (!b || d < b.d) b = { d, y: cable([A[0], A[1] + BAS * ligne.k, A[2]], [B[0], B[1] + BAS * ligne.k, B[2]], t)[1] }; } return b; }; // distance au couloir, hauteur du câble bas
       // une route de traverse part du carrefour, barrée
-      // cèdres : une rangée serrée le long de la route (le tunnel d'arbres), puis la forêt ; rien sur le carrefour.
+      // cèdres : une rangée serrée le long de la route (le tunnel d'arbres), puis la forêt ; rien sur le temple ni sur la supérette, ni devant eux à l'approche.
       // Dans les lacets, rien côté vallée (ouest) et des cèdres plus petits côté amont, dont la cime reste sous le regard du lacet du dessus ; de jeunes plants sur la pente en contrebas : on voit la ville par-dessus
-      const arbres = [], lacets = (x, z) => x > 372 && x < 552 && z > 300 && z < 576, plants = (x, z) => x > 100 && x < 552 && z > 260 && z < 640, libre0 = (x, z) => (x - cx) ** 2 + (z - cz) ** 2 > 72 * 72 && ravin(x, z) < 1 && !(sousLigne(x, z)?.d < 14);
+      const arbres = [], lacets = (x, z) => x > 372 && x < 552 && z > 300 && z < 576, plants = (x, z) => x > 100 && x < 552 && z > 260 && z < 640, libre0 = (x, z) => !haut.degage(x, z, 34) && !bas.degage(x, z, 60) && ravin(x, z) < 1 && !(sousLigne(x, z)?.d < 14);
       // la trouée côté vallée (droite) entre les pts 7 et 9 : aucun arbre là où cette portion est la route la plus proche, la ville et la lune apparaissent
       const i7 = pt(h, 7), i9 = pt(h, 9), trouee = (x, z) => { let b = null, bd = 1e18; for (let i = i7; i <= i9; i += 3) { const d = (S[i].x - x) ** 2 + (S[i].z - z) ** 2; if (d < bd) { bd = d; b = S[i]; } }
         return bd < 160 * 160 && Math.sqrt(bd) < g.dAt(x, z) + 4 && (z - b.z) * b.tx - (x - b.x) * b.tz > 0; }, libre = (x, z) => libre0(x, z) && !trouee(x, z);
@@ -736,9 +745,9 @@
         const x = g.box[0] + rnd() * (g.box[2] - g.box[0]), z = g.box[1] + rnd() * (g.box[3] - g.box[1]), d = g.dAt(x, z);
         if (d > W + 6 && d < 230 && libre(x, z) && (!lacets(x, z) || (d < 17 && g.dAt(x - 2, z) < d))) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, (0.9 + rnd() * 0.9) * (lacets(x, z) ? 0.75 : plants(x, z) || (x > -100 && x < 552 && z > 200 && z < 700) ? 0.4 : 1)]);
       }
-      // derrière la supérette, un rideau de cèdres : on ne voit plus le vide. Rien côté approche (ils sont au-delà de l'esplanade, X > W + 48), ni sur la route de traverse (Z ≈ -12)
-      for (let k = 0; k < 70; k++) { const X = W + 48 + rnd() * 45, Z = -45 + rnd() * 80, x = sc.x - sc.tz * sd * X - sc.tx * Z, z = sc.z + sc.tx * sd * X - sc.tz * Z;
-        if (Math.abs(Z + 12) > 9 && !(sousLigne(x, z)?.d < 14)) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, 1.1 + rnd() * 0.6]); }
+      // derrière le temple et derrière la supérette, un rideau de cèdres : on ne voit plus le vide. Rien côté approche, ni sur la route de traverse du sommet (Z ≈ -22)
+      for (const [P, X0, trav] of [[haut, 54, 1], [bas, 48, 0]]) for (let k = 0; k < 70; k++) { const X = W + X0 + rnd() * 45, Z = -45 + rnd() * 80, q = P.s, x = q.x - q.tz * P.sd * X - q.tx * Z, z = q.z + q.tx * P.sd * X - q.tz * Z;
+        if (!(trav && Math.abs(Z + 22) < 9) && !(sousLigne(x, z)?.d < 14)) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, 1.1 + rnd() * 0.6]); }
       for (let k = arbres.length - 1; k >= 0; k--) { const p = arbres[k], c = sousLigne(p[0], p[2]); if (c && c.d < 3.6 * p[4] + 10 && p[1] - 6 + 18.5 * p[4] > c.y - 3) arbres.splice(k, 1); } // cime (houppier de 15 m sur fût de 11 m) à 3 m au moins sous le câble
       const fûts = arbres.map(p => { const y0 = p[1] - 6; p[1] = y0 + 11 * p[4]; return [p[0], y0 + 2.6 * p[4], p[2], 0, p[4]]; }); // le houppier monte sur un fût nu, comme un vrai cèdre du Japon
       inst(h, h.geo('cedre'), h.mat('cedre'), arbres); inst(h, h.geo('tronc'), h.mat('tronc'), fûts);
@@ -747,31 +756,36 @@
       for (let i = 0; i < N; i += 6) for (const side of [-1, 1]) { const [x, z] = bord(S[i], side, W + 0.15); cata.push([x, S[i].y + 0.85, z]); }
       inst(h, h.geo('catadioptre'), h.mat('catadioptre', { lum: 1, retro: 2.5 }), cata); // éteints, ils s'allument dans le faisceau des phares
 
-      // --- le carrefour : tout est posé dans le repère de la route, X vers l'extérieur ---
-      const gr = repere(h, sc), X = v => sd * (W + v), bitume = h.mat('bitume'), acier = h.mat('acier');
-      h.pose('esplanade', { bitume }, gr, [X(21), 0, 0]); h.pose('traverse', { bitume }, gr, [X(70), 0, -12]); // la route de traverse s'enfonce dans la forêt
-      // supérette : vitrine éclairée, bandeau à enseigne originale (bleu et jaune), distributeurs devant la vitrine
-      h.pose('superette', { mur: h.mat('crepi'), porte: h.mat('vitreSombre'), toit: h.mat('matGris'), clim: acier, vitrine: h.mat('vitrine', LUM), enseigne: h.mat('ecrit', LUM, 128, 12, '#1d4ac8', '#ffd84a', 'カラスマート  KARASU MART  24H', 9), distributeur: h.mat('distributeur', LUM) }, gr, [X(34), 0, -8], sd);
-      // station-service : auvent éclairé par-dessous, deux pompes, totem de prix (marque inventée)
-      h.pose('station', { acier, ilot: h.mat('beton'), lampe: h.mat('lampe', LUM), enseigne: h.mat('ecrit', LUM, 96, 8, '#c8102e', '#ffffff', 'TOGE OIL  峠石油', 7), pompe: h.mat('pompeEssence', LUM) }, gr, [X(15), 0, 15]);
-      h.pose('enseigneHaute', { acier, enseigne: h.mat('ecrit', LUM, 96, 64, '#1d4ac8', '#ffd84a', 'カラスマート 24H', 13) }, gr, [X(3), 0, 34]); // vue de loin, avant le carrefour
-      h.pose('totem', { acier, prix: h.mat('ecrit', LUM, 32, 32, '#101418', '#ffd84a', '168', 14) }, gr, [X(4.5), 0, 25]);
-      // voitures garées : silhouettes de sportives génériques, feux allumés, certaines tournées vers la route
-      const vitre = h.mat('vitreSombre'), feuRouge = h.mat('feuRouge', LUM), feuBlanc = h.mat('lampe', LUM);
-      [[7, -19, 0.3, 0xf4f0e0], [7.5, -13, -0.2, 0xc8102e], [8, -7, 0.15, 0x2a5ac8], [22, -21, 1.57, 0x14161c], [22, 2, 1.4, 0xffc04a], [10, 6, -0.4, 0x9aa0a8], [16, 26, 1.57, 0x1f8f5a]].forEach(([vx, vz, a, col]) => {
-        const v = new THREE.Group(); v.position.set(X(vx), 0, vz); v.rotation.y = a; gr.add(v);
-        h.pose('voitureGaree', { caisse: h.mat('laque', { c: col }), vitre, feuRouge, feuBlanc, chassis: h.mat('matGris'), roue: h.mat('roue'), pneu: h.mat('pneu') }, v);
-      });
-      // la route de traverse est barrée : barrières rayées, cônes, feux orange qui clignotent
-      const rayures = h.mat('rayures', LUM), cligno = h.mat('clignotant', LUM), cone = h.mat('cone', LUM);
-      for (const dz of [-15, -12, -9]) h.pose('barriere', { rayures, clignotant: cligno }, gr, [X(43), 0, dz]);
-      for (const dz of [-16.5, -13.5, -10.5, -7.5]) h.pose('cone', cone, gr, [X(41.5), 0.5, dz]);
+      // --- le temple du sommet : posé au bord de la route, X local en s'éloignant d'elle ; la route de traverse part à côté, barrée ---
+      const bitume = h.mat('bitume'), acier = h.mat('acier'), vitre = h.mat('vitreSombre'), feuRouge = h.mat('feuRouge', LUM), feuBlanc = h.mat('lampe', LUM);
+      const gr = repere(h, sc), X = v => sd * (W + v), gT = new THREE.Group(), [tx0, tz0] = bord(sc, sd, W + 1); gT.position.set(tx0, sc.y, tz0); gT.rotation.y = h.across(sc) + (sd > 0 ? 0 : Math.PI); h.scene.add(gT);
+      const lanterne = h.mat('lanterne', LUM);
+      h.pose('temple', { gravier: h.mat('gravier'), vermillon: h.mat('vermillon'), noir: vitre, pierre: h.mat('pierreMousse'), feu: lanterne, bois: h.mat('boisTemple'), shoji: h.mat('shoji', LUM),
+        chochin: h.mat('peinture', { lum: 1, c: 0xff4a28 }), corde: h.mat('laque', { c: 0xd8c88a }), toit: h.mat('tuileTemple') }, gT);
+      h.pose('traverse', { bitume }, gr, [X(70), 0, -22]); // la route de traverse s'enfonce dans la forêt, à côté du temple
+      const rayures = h.mat('rayures', LUM), cligno = h.mat('clignotant', LUM), cone = h.mat('cone', LUM); // barrée : barrières rayées, cônes, feux orange qui clignotent
+      for (const dz of [-25, -22, -19]) h.pose('barriere', { rayures, clignotant: cligno }, gr, [X(43), 0, dz]);
+      for (const dz of [-26.5, -23.5, -20.5, -17.5]) h.pose('cone', cone, gr, [X(41.5), 0.5, dz]);
+      gT.updateMatrixWorld(); // lanternes du torii et de l'allée, façade du pavillon : lumière chaude
+      for (const [lx, ly, d, f] of [[4, 5, 18, 1.4], [13.5, 2, 16, 1.6], [33, 6.5, 30, 2.4]]) { const p = gT.localToWorld(new THREE.Vector3(lx, ly, 0)); h.lum(ic, p.x, p.y, p.z, 0xffb060, d, f); }
+      // --- la supérette, la station-service et leur esplanade : dans le dernier virage, face à qui arrive (repère de la route, X vers l'extérieur) ---
+      { const gb = repere(h, bas.s), XB = v => bas.sd * (W + v);
+        h.pose('esplanade', { bitume }, gb, [XB(21), 0, 0]); h.pose('boite', h.mat('beton'), gb, [XB(21), -1.3, 0], 39.6, 1.9, 51.6); // jupe sous la dalle : près de la route le sol est plus bas
+        h.pose('superette', { mur: h.mat('crepi'), porte: vitre, toit: h.mat('matGris'), clim: acier, vitrine: h.mat('vitrine', LUM), enseigne: h.mat('ecrit', LUM, 128, 12, '#1d4ac8', '#ffd84a', 'カラスマート  KARASU MART  24H', 9), distributeur: h.mat('distributeur', LUM) }, gb, [XB(34), 0, -8], bas.sd);
+        h.pose('station', { acier, ilot: h.mat('beton'), lampe: h.mat('lampe', LUM), enseigne: h.mat('ecrit', LUM, 96, 8, '#c8102e', '#ffffff', 'TOGE OIL  峠石油', 7), pompe: h.mat('pompeEssence', LUM) }, gb, [XB(15), 0, 15]);
+        h.pose('enseigneHaute', { acier, enseigne: h.mat('ecrit', LUM, 96, 64, '#1d4ac8', '#ffd84a', 'カラスマート 24H', 13) }, gb, [XB(3), 0, 34]); // vue de loin, avant le virage
+        h.pose('totem', { acier, prix: h.mat('ecrit', LUM, 32, 32, '#101418', '#ffd84a', '168', 14) }, gb, [XB(4.5), 0, 25]);
+        // voitures garées : silhouettes de sportives génériques, feux allumés, certaines tournées vers la route
+        [[7, -19, 0.3, 0xf4f0e0], [7.5, -13, -0.2, 0xc8102e], [8, -7, 0.15, 0x2a5ac8], [22, -21, 1.57, 0x14161c], [22, 2, 1.4, 0xffc04a], [10, 6, -0.4, 0x9aa0a8], [16, 26, 1.57, 0x1f8f5a]].forEach(([vx, vz, a, col]) => {
+          const v = new THREE.Group(); v.position.set(XB(vx), 0, vz); v.rotation.y = a; gb.add(v);
+          h.pose('voitureGaree', { caisse: h.mat('laque', { c: col }), vitre, feuRouge, feuBlanc, chassis: h.mat('matGris'), roue: h.mat('roue'), pneu: h.mat('pneu') }, v); });
+        gb.updateMatrixWorld(); // la vitrine et l'auvent éclairent l'esplanade, la route et les voitures qui passent
+        for (const [lx, lz, col, d] of [[27, -8, 0xdfefff, 46], [15, 15, 0xffe0a0, 34], [3, 0, 0xdfefff, 22]]) { const p = gb.localToWorld(new THREE.Vector3(XB(lx), 4.5, lz)); h.lum(bas.i, p.x, p.y, p.z, col, d, 3); } }
+      // les chevrons des deux virages (posés par game.js avant le décor) cachaient le temple et la supérette : retirés devant eux
       for (const o of h.scene.children) if (o.isInstancedMesh && o.geometry.parameters && o.geometry.parameters.width === 5 && o.geometry.parameters.height === 2.5) { // chevrons (forme chevron, 5 × 2,5 m)
         const M4 = new THREE.Matrix4(), v = new THREE.Vector3(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
-        for (let k = 0; k < o.count; k++) { o.getMatrixAt(k, M4); v.setFromMatrixPosition(M4); if ((v.x - cx) ** 2 + (v.z - cz) ** 2 < 62 * 62) o.setMatrixAt(k, zero); }
+        for (let k = 0; k < o.count; k++) { o.getMatrixAt(k, M4); v.setFromMatrixPosition(M4); if ([haut, bas].some(P => (v.x - P.x) ** 2 + (v.z - P.z) ** 2 < 62 * 62)) o.setMatrixAt(k, zero); }
         o.instanceMatrix.needsUpdate = true; }
-      gr.updateMatrixWorld(); // la vitrine et l'auvent éclairent l'esplanade, la route et les voitures qui passent
-      for (const [lx, lz, col, d] of [[27, -8, 0xdfefff, 46], [15, 15, 0xffe0a0, 34], [3, 0, 0xdfefff, 22]]) { const p = gr.localToWorld(new THREE.Vector3(X(lx), 4.5, lz)); h.lum(ic, p.x, p.y, p.z, col, d, 3); }
 
       // les cases fondues ne sont dessinées qu'à moins de 180 m d'une caméra (le sol, toujours dessiné, relève la position de chaque vue à chaque image)
       const proches = [], vues = [], sol0 = g.mesh; sol0.onBeforeRender = (r, sc, cam) => vues.push(cam.position.clone());
