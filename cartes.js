@@ -342,7 +342,7 @@
       radio: RADIO.givre,
       th: { decor: 'givre', neige: 1.6, fog: 0x8a9cc0, fogD: [70, 1100], sky: [[0, '#070c24'], [0.3, '#16224a'], [0.4, '#3a4a80'], [0.46, '#b07a98'], [0.49, '#f0b890'], [0.5, '#8a9cc0'], [1, '#8a9cc0']], stars: 90,
         astre: { dir: [-0.55, 0.3, 0.5], col: '#f4f8ff', ombre: '#aab8d8', taille: 150 }, hemi: [0x8aa4e0, 0xc8d4f0, 0.8], sun: [0xc0d0ff, 0.45], phares: 0.35, bloom: 0.08, scan: 0.06, // phares faibles (comme les autres cartes à l'aube) et neige tassée grise : sur une route blanche, un faisceau plein noie la piste et les plaques de glace
-        chev: 0, murH: 1.4, route: ['#7e8ca6', '#93a1b9', '#f4f8ff', '#7e8ca6', '#f4f8ff', '#dfe8f6', false], mur: ['#dfe8f6', '#f8fbff', '#c4d0e4', '#b4c2da'], depart: [0xe8482a, 0x1c2a4a, '#f4f8ff'],
+        chev: 0, murH: 0, route: ['#7e8ca6', '#93a1b9', '#f4f8ff', '#7e8ca6', '#f4f8ff', '#dfe8f6', false], mur: ['#dfe8f6', '#f8fbff', '#c4d0e4', '#b4c2da'], depart: [0xe8482a, 0x1c2a4a, '#f4f8ff'],
         hud: { y: '#ffffff', c: '#8fd0ff', r: '#ff5a4a', fond: 'rgba(14,24,52,.9)', style: 'givre', jauge: 'aiguille', split: 0, jp: null, sur: [null, 'COL FERME · -14 °C · AUBE'], titre: ['NUIT', 'BLANCHE'] } } },
     // Spéciale des Ocres : une spéciale de rallye sur terre battue, en fin de journée, entre les pins et les falaises d'ocre. Route large (18 m) et bosselée, tout en courbes à prendre en travers :
     // la crête de la ligne de départ, l'enfilade du vallon, le gué au creux du parcours, l'épingle du belvédère, la grande crête du plateau, puis la traversée du hameau sur son bout de bitume et la descente vers la ligne.

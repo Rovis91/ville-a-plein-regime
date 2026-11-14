@@ -347,6 +347,11 @@
       // la gorge : une entaille que la route franchit par un pont, entre les points 22 et 23 ; elle s'ouvre vers l'aval
       const xG = (S[pt(h, 22)].x + S[pt(h, 23)].x) / 2, gorge = (x, z) => 30 * Math.max(0, 1 - ((x - xG) / 50) ** 2) * Math.min(1, Math.max(0, (z - 330) / 70));
       const g = terrain(h, { pas: 8, marge: 420, loin: 80, chute: -0.25, creux: gorge, mat: neige });
+      // bord dessiné = mur réel : le jeu dessine chaussée et glissière à ±W constant (cartes sans relief), alors que les murs sont à la demi-largeur variable s.w (M.large :
+      // lac, hameau, champ de neige, col). th.murH = 0 enterre sa glissière ; ce décor repose la chaussée et la glissière à ±s.w, mêmes matières et mêmes coordonnées de texture
+      // (un seul ruban depuis T.t1, comme celui du jeu : les tirets ne sautent pas), la chaussée un peu au-dessus de celle du jeu, la glace encore au-dessus
+      h.ribbon(T.t1, N, s => -s.w, 0, s => s.w, 0, h.mat('chaussee', { side: THREE.DoubleSide, gloss: 0.08, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }, ...h.TH.route), 32);
+      const glis = h.mat('glissiere', { side: THREE.DoubleSide }, h.TH.mur); for (const sd of [-1, 1]) h.ribbon(T.t1, N, s => sd * s.w, 1.4, s => sd * s.w, -2, glis);
       const iG = S.findIndex(s => gorge(s.x, s.z) > 1), nG = S.filter(s => gorge(s.x, s.z) > 1).length;
       h.ribbon(iG, nG, s => -s.w, -2, s => s.w, -2, beton, 8); // le tablier (ses flancs sont les murets de la route), sur deux piles
       inst(h, h.geo('pileViaduc'), beton, [1, 2].map(k => { const s = S[iG + Math.round(nG * k / 3)], y0 = g.hAt(s.x, s.z) - 2; return [s.x, (s.y - 2 + y0) / 2, s.z, h.across(s), 1, s.y - 2 - y0, 0.5]; }));
