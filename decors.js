@@ -1014,9 +1014,33 @@
         cargaison: h.mat('cargaison'), cale: h.mat('metalClair', { c: 0x8a3a2a }), grueBord: structure, defense: h.mat('defense'), vitre });
       const baies = (L, f) => Array.from({ length: Math.floor((L - 50) / 24) }, () => Math.max(1, Math.min(6, Math.round(f + (rnd() - 0.5) * 3))));
       const feuxNav = [], navire = (L, type, coque, chem, x, z, ry, f = 4) => { const p = new THREE.Group(); p.userData.dyn = 1; p.position.set(x, -3, z); p.rotation.y = ry; h.scene.add(p); h.pose('navire', nav(L, type, coque, chem), p, [0, 0, 0], L, type, type === 'vrac' ? [] : baies(L, f)); return p; };
-      for (const [L, x, coque, chem, f] of [[250, -40, 0x1a2a4a, 0xc8442c, 4.5], [200, 690, 0x2a3a2a, 0xe8e4dc, 3]]) { navire(L, 'conteneurs', coque, chem, x, CH1 - 16, 0, f); feuxNav.push(x + L / 2 - 6, 19, CH1 - 16, x - L / 2 + 14, 36, CH1 - 16); }
+      for (const [L, x, coque, chem, f] of [[250, -40, 0x1a2a4a, 0xc8442c, 4.5]]) { navire(L, 'conteneurs', coque, chem, x, CH1 - 16, 0, f); feuxNav.push(x + L / 2 - 6, 19, CH1 - 16, x - L / 2 + 14, 36, CH1 - 16); }
+      // ---------- le caboteur qui avance d'un tour à l'autre (cycle de 3 tours) : à quai au tour 1, il passe sous le pont à haubans au tour 2 (vu de la route, à l'approche et sur le pont),
+      // au large au tour 3 ; revenu à quai pendant le tunnel du tour 3, où personne ne le voit. Sa position ne dépend que des tours de la voiture que suit la vue (tick.vue, plus bas) :
+      // rien ne change pour la physique ni pour le fantôme. Il reste dans le chenal, sous le pont entre deux piles (z = 342 : piles à 312 et 372) ----------
+      const cabo = new THREE.Group(); cabo.userData.dyn = 1; h.scene.add(cabo); cabo.position.y = -3;
+      h.pose('caboteur', nav(170, 'conteneurs', 0x2a3a2a, 0xe8e4dc), cabo, [0, 0, 0], 170, baies(170, 3).map(n => Math.min(4, n)));
+      { const lp = [79, 16, 0, -73, 25.5, 0, -85, 9, 0]; for (let x = -60; x <= 70; x += 6) lp.push(x, 8.2, -12.2, x, 8.2, 12.2); // feux de mât et de poupe, rampes du pont : le caboteur se voit de nuit, de loin
+        const fc = new THREE.BufferGeometry(); fc.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+        const pc = new THREE.Points(fc, new THREE.PointsMaterial({ color: 0xfff2d0, size: 2.5, sizeAttenuation: false, fog: false })); pc.frustumCulled = false; cabo.add(pc);
+        const fv = new THREE.BufferGeometry(); fv.setAttribute('position', new THREE.Float32BufferAttribute([-82, 17, 12.5, -82, 17, -12.5], 3)); fv.setAttribute('color', new THREE.Float32BufferAttribute([1, 0.1, 0.1, 0.1, 1, 0.3], 3)); // bâbord rouge, tribord vert
+        const pv = new THREE.Points(fv, new THREE.PointsMaterial({ size: 4, sizeAttenuation: false, vertexColors: true, fog: false })); pv.frustumCulled = false; cabo.add(pv); }
+      const CHEM = [[690, CH1 - 16], [1050, 490], [1250, 420], [1405, 342], [1700, 330], [2300, 300], [2600, 290]], CL = [0];
+      for (let k = 1; k < CHEM.length; k++) CL.push(CL[k - 1] + Math.hypot(CHEM[k][0] - CHEM[k - 1][0], CHEM[k][1] - CHEM[k - 1][1]));
+      const surChemin = d => { d = Math.max(0, Math.min(CL[CL.length - 1], d)); let k = 1; while (k < CL.length - 1 && CL[k] < d) k++; const f = (d - CL[k - 1]) / (CL[k] - CL[k - 1]), a = CHEM[k - 1], b = CHEM[k]; return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]; };
+      const sP = CL[3], sL = CL[5], sF = CL[6], lisse = t => t * t * (3 - 2 * t), entre = (u, a, b) => Math.max(0, Math.min(1, (u - a) / (b - a)));
+      const parcours = u => { const f = ((u % 3) + 3) % 3; // u : tours de la voiture, au fil du tour (1,5 = mi-tour 2) → distance parcourue sur le chemin
+        if (f < 0.75 || f >= 2.85) return 0; // à quai (tour 1, et de retour à la sortie du tunnel du tour 3)
+        if (f < 1.1) return lisse(entre(f, 0.75, 1.1)) * (sP - 100); // il appareille pendant le tunnel et la ville : vu de loin, il glisse
+        if (f < 1.45) return sP - 100 + (f - 1.1) / 0.35 * 320; // le passage sous le pont, à allure de navire (9 m/s) : la voiture approche du pont vers 1,15 et le franchit vers 1,25
+        if (f < 2) return sP + 220 + lisse(entre(f, 1.45, 2)) * (sL - sP - 220); // il gagne le large pendant que la voiture est dans le port et le tunnel
+        return sL + (f - 2) / 0.85 * (sF - sL); }; // au large, il s'éloigne lentement
+      const tours = new WeakMap(), placeCabo = car => { // compte les tours de chaque voiture : en course, dist cumule ; en solo, la session la ramène à 0 à chaque tour
+        let e = tours.get(car); if (!e) tours.set(car, e = { n: 0, prev: car.dist }); if (car.dist < e.prev - N / 2) e.n++; e.prev = car.dist;
+        const d = parcours(Math.max(0, e.n + car.dist / N)), [x, z] = surChemin(d), [x2, z2] = surChemin(d + 30), [x1, z1] = surChemin(d - 30);
+        cabo.position.x = x; cabo.position.z = z; cabo.rotation.y = d > 0 ? Math.atan2(-(z2 - z1), x2 - x1) : 0; };
       const remorqueur = (x, z, ry) => { const p = new THREE.Group(); p.userData.dyn = 1; p.position.set(x, -3, z); p.rotation.y = ry; h.scene.add(p); h.pose('remorqueur', nav(30, '', 0xc8302c, 0x1a1a20), p); return p; };
-      remorqueur(830, CH1 - 22, 0.3); remorqueur(860, CH1 - 40, -0.2);
+      remorqueur(330, CH1 - 22, 0.3); remorqueur(360, CH1 - 40, -0.2); // à l'écart du chemin du caboteur (plus bas)
       for (let k = 0; k < 7; k++) { // au mouillage, au sud de l'île : l'avant face au courant, feux de mouillage
         const L = 160 + rnd() * 110, x = -900 + k * 420 + rnd() * 150, z = ILE[2] + 260 + rnd() * 900, ry = 0.6 + (rnd() - 0.5) * 0.3;
         navire(L, k % 3 ? 'vrac' : 'conteneurs', [0x2a1a1a, 0x1a2a4a, 0x3a3a40][k % 3], [0xe8e4dc, 0xc8442c, 0x2c6ab8][k % 3], x, z, ry, 2.5);
@@ -1254,7 +1278,7 @@
       }
       const vus = [...tracteursC, ...remorques.flat()];
       for (const m of vus) if (m.instanceColor) m.instanceColor.needsUpdate = true;
-      return (dt, now) => {
+      const tick = (dt, now) => {
         fete.forEach((p, k) => { p.visible = ((now / 469 | 0) + k) % 3 !== 0; }); // les guirlandes du yacht au tempo (128 bpm)
         feuPhare.rotation.y = now * 0.0009; grueC.rotation.y = Math.sin(now * 0.00007) * 0.8; // un tour de phare toutes les 7 s ; la grue pivote lentement
         { const u = iPm + N + Math.sin(now * 0.00025) * 10, j = Math.floor(u), f = u - j, a = S[j % N], b = S[(j + 1) % N]; // ±20 m le long de la route, un aller-retour en 25 s
@@ -1271,6 +1295,7 @@
         });
         for (const m of vus) m.instanceMatrix.needsUpdate = true;
       };
+      tick.vue = placeCabo; return tick;
     },
 
     // ---------- Premier métro : la largeur de chaussée est la même partout (sim.js), mais la rue change de taille : grand boulevard à contre-allées

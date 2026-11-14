@@ -1546,6 +1546,7 @@
   const [V0, V1] = (M.vit || [130, 200]).map(v => v / 3.6 / (M.kmh || 1)); // plage des effets de vitesse de la carte, en m/s vrais
   function vueFrame(vu, dt, now) {
     const { cam, car, carY, pitch, roll, lm, cth, stun, lookA, lookP, rainP, splP, splA, splD, inp } = vu, pulse = SON.pulse, G = modele(car);
+    if (decorTick && decorTick.vue) decorTick.vue(car); // le décor qui dépend de la voiture suivie (wangan : le caboteur avance d'un tour à l'autre), réglé pour chaque vue avant son rendu
     const sp = Math.hypot(car.vx, car.vz), r = Math.min(1, sp / TOP), fx = Math.cos(car.th), fz = Math.sin(car.th), air = car.y - yAt(car); // air : hauteur au-dessus du sol
     const rc = vu.rc += (Math.min(1, sp / V1) - vu.rc) * Math.min(1, dt * 3); // cadrage de la caméra (recul, hauteur, champ) : proportionnel à la vitesse dès l'arrêt, lissé sur ~0,3 s, sans seuil
     const cx = Math.cos(cth + lookA), cz = Math.sin(cth + lookA), back = 6.4 - 1 * rc; // caméra basse et proche : le sol défile en proportion inverse de sa hauteur, c'est ce qui donne la sensation de vitesse

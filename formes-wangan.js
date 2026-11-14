@@ -33,6 +33,12 @@
       ['blanc', 24, 2.6, 7.2, 2, 3.6, 0], ['hublots', 24.2, 1.2, 7.3, 2, 3.7, 0], ['blanc', 18, 2.4, 6.4, 0, 6.1, 0], ['hublots', 18.2, 1.1, 6.5, 0, 6.2, 0],
       ['pont', 22, 0.15, 7, -3, 7.4, 0], ['blanc', 7, 1.2, 1.2, 4, 8.1, 0], ['blanc', 0.4, 4, 0.4, 2, 9.4, 0], ['blanc', 2.6, 0.3, 0.3, 2, 10.6, 0],
       ...paire(sz => ['blanc', 14, 0.9, 0.12, -11, 2.85, sz * 3.9]), ...paire(sz => ['blanc', 10, 0.9, 0.12, -7, 7.9, sz * 3.4])],
+    // caboteur porte-conteneurs, bas sur l'eau pour passer sous le pont à haubans (25 m au-dessus de la ligne de flottaison au plus haut, le tablier est à 32 m de l'eau),
+    // origine à la flottaison au milieu, X vers l'avant : carène, coque, étrave, baies de conteneurs (4 de haut au plus), château arrière et passerelle, mât, cheminée basse
+    caboteur: (L, baies = []) => [['carene', L, 4, 24, 0, -1.5, 0], ['coque', L, 7, 24, 0, 4, 0], ['carene', 16, 4, 16, L / 2, -1.5, 0, [0, 0.785, 0]], ['coque', 16, 7, 16, L / 2, 4, 0, [0, 0.785, 0]],
+      ...baies.map((n, k) => ['cargaison', 22, 2.6 * n, 23, -L / 2 + 40 + k * 24, 7.5 + 1.3 * n, 0]),
+      ['blanc', 12, 9, 22, -L / 2 + 12, 12, 0], ['hublots', 12.4, 6, 22.4, -L / 2 + 12, 12.5, 0], ['blanc', 6, 2.6, 26, -L / 2 + 14, 17.8, 0], ['hublots', 6.2, 1.2, 26.2, -L / 2 + 14, 18, 0],
+      ['blanc', 0.6, 6, 0.6, -L / 2 + 12, 22, 0], ['cheminee', 5, 5, 5, -L / 2 + 5, 19, 0], ['blanc', 1, 9, 1, L / 2 - 4, 11.5, 0]],
     // fêtard : une silhouette sombre debout (corps, tête), 1,75 m
     fetard: () => [['corps', 0.5, 1.4, 0.32, 0, 0.7, 0], ['corps', 0.24, 0.26, 0.24, 0, 1.57, 0]],
     // borne lumineuse de quai, 1,1 m : fût et tête éclairée
