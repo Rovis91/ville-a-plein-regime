@@ -1179,7 +1179,8 @@
       // le choix de la place : la chaussée du tour (bitume, sim.js : sec) en fait le grand tour ; couper par l'arche, entre les piles, c'est plus court mais sur les pavés (surf.large).
       // La chaussée du jeu (même texture, mêmes marquages, en phase avec ses tirets de 32 m) est reposée par-dessus les pavés, de l'avenue d'arrivée à celle de départ : aucun raccord visible
       { const dans = S.map((s, i) => i).filter(i => S[i].w > W + 0.05 || (S[i].x - C[0]) ** 2 + (S[i].z - C[1]) ** 2 < (RT + 20) ** 2), a = dans[0] - ((dans[0] - h.T.t1 + 16 * N) % 16);
-        h.ribbon(a, dans[dans.length - 1] - a + 16, -W, 0.02, W, 0.02, h.mat('chaussee', { side: THREE.DoubleSide, gloss: 0.08, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }, ...M.th.route), 32); }
+        const y = s => Math.max(0.07, 0.07 - s.y); // au moins 5 cm au-dessus des pavés, qui sont à plat (0,02) alors que la route plonge jusqu'à -0,13 m vers la sortie : le croisement rasant des deux plans faisait glisser le raccord avec la caméra
+        h.ribbon(a, dans[dans.length - 1] - a + 16, -W, y, W, y, h.mat('chaussee', { side: THREE.DoubleSide, gloss: 0.08 }, ...M.th.route), 32); }
       // le sol de la place en cases de 2 m : pavés partout dans le cercle où l'on roule, trottoir étroit au pied des façades, sauf où partent les avenues
       { const pres = S.filter(s => (s.x - C[0]) ** 2 + (s.z - C[1]) ** 2 < 260 ** 2), loin = (x, z) => { let m = 1e9; for (const s of pres) m = Math.min(m, Math.hypot(s.x - x, s.z - z) - s.w); return m; }; // distance au bord de la chaussée
         const roule = [[], [], []], pied = [[], [], []];
