@@ -140,13 +140,9 @@
     const surf = S.map((_, i) => route(i, 1)), surfSec = surf.map((q, i) => pluie[i] ? route(i, MO.sec) : q); // surfSec : la même route sur la ligne sèche (voir MO)
     // tun : la carte a un tunnel, de t0 à t1 ; h0-h1 : secteur « chaud » pour la musique ; sp : les deux temps intermédiaires (indices d'échantillons)
     KT.w0 *= CARD.grip || 1; KT.w1 *= CARD.grip || 1; // une voiture plus ou moins adhérente tourne plus ou moins fort (toutes à 1 aujourd'hui)
-<<<<<<< HEAD
-    return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, surf, surfSec, surfL: SURF[sf.large], vert, corde: M.corde && M.corde.map(at), carte: M, car: CARD, kt: KT,
-=======
     // bouchon [pt a, pt b, f] : entre ces points, les camions roulent à f fois leur vitesse, donc s'y entassent (1/f fois plus serrés). tau[j] = temps cumulé (en échantillons à vitesse 1) jusqu'à j
     let tau = null; if (M.bouchon) { const [a, b, f] = M.bouchon, z = span(at(a), at(b), 10); tau = new Float64Array(n + 1); for (let j = 0; j < n; j++) tau[j + 1] = tau[j] + 1 / (1 - (1 - f) * z(j)); }
-    return { S, n, W, len, tun: !!M.tun, t0, t1, tau, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, surf, surfSec, surfL: SURF[sf.large], vert, carte: M, car: CARD, kt: KT,
->>>>>>> refs/heads/claude/carte-wangan-291c7a
+    return { S, n, W, len, tun: !!M.tun, t0, t1, tau, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, surf, surfSec, surfL: SURF[sf.large], vert, corde: M.corde && M.corde.map(at), carte: M, car: CARD, kt: KT,
       trucks: Array.from({ length: M.trafic || 0 }, (_, i) => ({ lane: [-4.6, 0, 4.6][(i * 2) % 3], v: 25 + (i * 7 % 5) * 1.5, x: 0, y: 0, z: 0, th: 0, idx: 0, d: 0, vx: 0, vz: 0 })) }; // camions : voir trafic()
   }
 
