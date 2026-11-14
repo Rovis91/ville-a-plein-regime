@@ -259,6 +259,9 @@
     }
     `;
   const LU_H = `#define NL ${NL}
+    #ifdef MOUILLE
+      uniform sampler2D uMo; varying vec2 vMo;
+    #endif
     uniform vec4 uLP[NL]; uniform vec3 uLC[NL]; uniform vec3 uHP, uHD, uHC, uSunD, uSunC, uSky, uCam; uniform mat4 uBox; uniform float uGloss, uRetro; uniform int uN; varying vec3 vLw;
     float luOmbre(vec3 p, vec3 d) { // 0 si la boîte de la voiture coupe le segment p → p + d ; un point dans la boîte ou à sa surface n'est pas ombré
       vec3 o = (uBox * vec4(p, 1.)).xyz, iv = 1. / (mat3(uBox) * d + 1e-5), t0 = (-1. - o) * iv, t1 = (1. - o) * iv, mn = min(t0, t1), mx = max(t0, t1);
@@ -270,6 +273,10 @@
       vec3 n = normalize(cross(dFdx(vLw), dFdy(vLw))), v = normalize(uCam - vLw); // uCam et non cameraPosition : three r128 ne le renseigne pas pour les matériaux Basic et Lambert (il reste à l'origine du monde)
       if (dot(n, v) < 0.) n = -n;
       float g = uGloss + (1. - diffuseColor.a) * 2., plat = step(.8, n.y);
+      #ifdef MOUILLE
+        vec4 mo = texture2D(uMo, vec2(vMo.x, fract(vMo.y))); mo.r = smoothstep(.15, .85, mo.r); // r = mouillure de la course, g = pluie (voir MOT) ; à moitié sèche, elle se voit déjà
+        g = mix(g, mix(0., max(g, .25), mo.r), mo.g); // sous la pluie : la ligne sèche est mate, le reste brille
+      #endif
       vec3 dif = vec3(0.), spe = vec3(0.); vec2 rh = normalize(reflect(-v, n).xz + 1e-4);
       for (int i = 0; i < NL; i++) {
         if (i >= uN) break; // seulement les luminaires allumés
@@ -289,6 +296,9 @@
       }
       if (uRetro > 0.) gl_FragColor.rgb *= .3;
       gl_FragColor.rgb *= .55 + .45 * diffuseColor.a; // l'eau fonce le sol
+      #ifdef MOUILLE
+        gl_FragColor.rgb *= 1. - .35 * mo.g * (1. - mo.r); // et la ligne sèche, gomme et poussière, plus sombre encore
+      #endif
       gl_FragColor.rgb += 1. - exp(-1.3 * (diffuseColor.rgb + .07) * dif) + spe * (g * (.12 + pow(1. - max(dot(n, v), 0.), 3.))); // même l'asphalte sombre répond ; les teintes claires saturent en douceur
     }
     `;
@@ -298,12 +308,17 @@
     const lit = m.fog !== false && m.blending === THREE.NormalBlending; // le ciel et les plans additifs ne reçoivent rien, mais tremblent avec le reste
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, LUX, { uGloss: { value: m.userData.gloss || 0 }, uRetro: { value: m.userData.retro || 0 } });
+      if (m.userData.mo) { // la route à ciel ouvert : vMo = (travers, échantillon) dans MOT ; uv.y = échantillon / 16 depuis T.t1 (ribbon, vLen 32)
+        Object.assign(sh.uniforms, { uMo: { value: MOT }, uMoN: { value: new THREE.Vector2(T.t1 + 0.5, N) } });
+        sh.vertexShader = '#define MOUILLE\nuniform vec2 uMoN; varying vec2 vMo;\n' + sh.vertexShader.replace('#include <fog_vertex>', 'vMo = vec2(uv.x, (uv.y * 16. + uMoN.x) / uMoN.y);\n#include <fog_vertex>');
+      }
       sh.vertexShader = 'varying vec3 vLw, vAf; uniform vec2 uRes;\n' + sh.vertexShader.replace('#include <fog_vertex>', LU_V + '#include <fog_vertex>');
       if (lit) sh.fragmentShader = LU_H + sh.fragmentShader.replace('#include <fog_fragment>', LU_F + '#include <fog_fragment>');
       // textures sans correction de perspective : vAf = uv × w, interpolé puis divisé par w interpolé, redonne l'interpolation affine à l'écran
       if (ST && ST.affine) sh.fragmentShader = 'varying vec3 vAf;\n' + sh.fragmentShader.replace('#include <map_fragment>', THREE.ShaderChunk.map_fragment.replace('vUv', `mix(vUv, vAf.xy / vAf.z, ${ST.affine.toFixed(3)})`));
+      if (m.userData.mo) sh.fragmentShader = '#define MOUILLE\n' + sh.fragmentShader; // en tête, avant LU_H qui s'en sert
     };
-    m.customProgramCacheKey = () => 'lu' + lit;
+    m.customProgramCacheKey = () => 'lu' + lit + (m.userData.mo ? 'mo' : '');
   };
   const gloss = (m, g) => { m.userData.gloss = g; return m; }, retro = (m, r = 1.5) => { m.userData.retro = r; return m; };
 
@@ -324,12 +339,17 @@
     g.setIndex(idx); g.computeVertexNormals();
     const m = new THREE.Mesh(g, mat); m.receiveShadow = true; scene.add(m); return m;
   }
+  // mouillure pour le dessin : texture MO.nb × N (bandes en travers de -W à W × échantillons), rouge = mouillure de la course (R.mo, voir MO dans sim.js ; 1 hors course), vert = pluie de l'échantillon (0 à 1)
+  // Un shader qui veut savoir si la route est mouillée lit MOT : mouillure = rouge × vert. Remise à jour à chaque image (moMaj).
+  const MOI = new Uint8Array(N * MO.nb * 4).fill(255), MOT = new THREE.DataTexture(MOI, MO.nb, N, THREE.RGBAFormat); MOT.magFilter = MOT.minFilter = THREE.LinearFilter;
+  for (let k = 0; k < N * MO.nb; k++) MOI[k * 4 + 1] = Math.min(1, T.pluie[k / MO.nb | 0]) * 255; MOT.needsUpdate = true;
+  const moMaj = () => { const mo = race && race.mo; if (!mo && !MOT.sale) return; for (let k = 0; k < N * MO.nb; k++) MOI[k * 4] = mo ? mo[k] * 255 : 255; MOT.sale = !!mo; MOT.needsUpdate = true; };
   const across = s => Math.atan2(-s.tx, -s.tz); // rotation Y qui met l'axe X local en travers de la route
   const box = (w, h, d, mat, x, y, z, parent = scene) => { const m = new THREE.Mesh(habille(geo('boite', w, h, d), mat), mat); m.position.set(x, y, z); parent.add(m); return m; };
 
   const cT = T.t1 - T.t0, cO = N - cT; // sans tunnel : cT = 0, la route à ciel ouvert fait tout le tour
   // route : mouillée, elle renvoie en reflets étirés les phares, les néons, la lune ou le soleil (lumière dynamique)
-  ribbon(T.t1, cO, -W, 0, W, 0, mat('chaussee', { side: THREE.DoubleSide, gloss: TH.route[6] ? 0.2 : 0.08 }, ...TH.route), 32);
+  ribbon(T.t1, cO, -W, 0, W, 0, mat('chaussee', { side: THREE.DoubleSide, gloss: TH.route[6] ? 0.2 : 0.08 }, ...TH.route), 32).material.userData.mo = 1;
   const barrier = mat('glissiere', { lum: TH.tubes, side: THREE.DoubleSide }, TH.mur); // ville : liseré néon, lumineux par lui-même ; ailleurs la glissière prend la lumière
   if (!T.vert) { ribbon(T.t1, cO, -W, TH.murH, -W, -2, barrier); ribbon(T.t1, cO, W, TH.murH, W, -2, barrier); }
   else { // carte à relief : la glissière suit le haut des murs roulables, et chaque paroi est un quart de tube en 6 facettes, du pied du plat au mur
@@ -1219,9 +1239,10 @@
       vu.gas = state === 'count' ? k.gas : vu.inp.gas; vu.hit = vu.bump = vu.land = 0;
     }
     const J = VUES[0], inp = J.inp, car = J.moi; // le joueur 1 : sa hauteur et sa lumière lissées servent aux effets de la scène ; sa voiture est celle du jeu hors course
+    moMaj(); // (l'état de l'image d'avant : une image de retard, invisible)
     for (acc += dt; acc >= H; acc -= H) {
       // en course, sim.js fait avancer tout le monde, avec une entrée par humain ; entrée nulle : l'IA conduit la voiture de ce joueur (?auto, ou une fois arrivé)
-      if (race && state === 'race') { if (invite()) NET.applique(race); else { for (let i = 0; i < race.h; i++) INS[i] = enLigne() && i ? NET.ins[i] : AUTO || demo || VUES[i].fini ? null : VUES[i].inp; stepRace(race, INS, H); } } else { step(car, inp, T, H); if (M.trafic && state === 'race') hitTrafic(car, T, tTraf); }
+      if (race && state === 'race') { if (invite()) { NET.applique(race); seche(race, H); } else { for (let i = 0; i < race.h; i++) INS[i] = enLigne() && i ? NET.ins[i] : AUTO || demo || VUES[i].fini ? null : VUES[i].inp; stepRace(race, INS, H); } } else { step(car, inp, T, H); if (M.trafic && state === 'race') hitTrafic(car, T, tTraf); }
       for (const vu of VUES) { const c = vu.car; vu.land = Math.max(vu.land, c.land); vu.bump = Math.max(vu.bump, c.bump || 0); vu.hit = Math.max(vu.hit, c.hit, vu.bump); } // chocs de l'image, par vue (sa secousse) ; shortcut: un choc entre voitures réutilise les effets du choc mur (étincelles côté mur), à séparer si ça se voit
       if (state === 'race' && !ses.raceEnd) { // fin de course, tour bouclé, Glisse finie : la session décide, on montre et on fait entendre
         tTraf += H; const ev = ses.pas(car, H);
