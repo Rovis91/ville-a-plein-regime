@@ -20,10 +20,6 @@
     // Scène de 49 × 6 m à l'est, bandeau lumineux sur ses deux faces ; mur à chevrons de 25 m à l'ouest ; entre les deux, un portique de 37 m de portée, enseigne suspendue, 8 m de passage dessous
     sceneArene: () => [['beton', 49, 4, 6, 34.5, 2, 0], ['ecran', 46, 3, 0.3, 34.5, 2.2, 3.1], ['ecran', 46, 3, 0.3, 34.5, 2.2, -3.1], ['bande', 49.4, 0.5, 6.4, 34.5, 4.25, 0],
       ['chevrons', 25, 2.6, 2, -35.5, 1.3, 0], ['acier', 1.6, 11, 1.6, -24, 5.5, 0], ['acier', 1.6, 7, 1.6, 11, 7.5, 0], ['acier', 37, 1.4, 1.8, -6.5, 11.3, 0], ['enseigne', 26, 2.2, 0.4, -6.5, 9.4, 0]],
-    // module de la tribune qui enjambe le vomitoire, de L m, origine sur la coque du tunnel au-dessus de son bord intérieur (mêmes axes que gradinArene) :
-    // façade à banderole au-dessus du portail, un anneau de foule qui monte sur 30 m vers le pourtour, le mur du fond
-    tribuneVomitoire: (L = 14) => [['beton', L, 3, 1.4, 0, 1.5, 0.7], ['banderole', L, 1.3, 0.2, 0, 1.6, -0.08],
-      ['foule', L, 0.6, 30, 0, 10.5, 14, [-A1, 0, 0], 1], ['beton', L, 22, 1.5, 0, 11, 27.5, null, 1]],
     // monster truck garé, origine au sol sous son milieu, X = l'avant : quatre roues de 2,2 m (deux boîtes croisées chacune), châssis tubulaire haut perché,
     // caisse de pick-up à flammes peintes, cabine vitrée, rampe de phares sur le toit
     monsterTruck: () => [...[-1.9, 1.9].flatMap(x => [-1.55, 1.55].flatMap(z => [['pneu', 2.2, 2.2, 1.1, x, 1.1, z], ['pneu', 2.2, 2.2, 1.1, x, 1.1, z, [0, 0, 0.785]], ['acier', 0.25, 1.6, 0.25, x, 2, z * 0.6, [z > 0 ? 0.5 : -0.5, 0, 0]]])),
