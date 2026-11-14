@@ -12,5 +12,14 @@
       R(g, '#d8a820', 88, 0, 2, 128); // voie de circulation
       for (let y = 4; y < 128; y += 32) { R(g, '#c8c8c0', 100, y, 26, 1); R(g, '#c8c8c0', 100, y + 12, 26, 1); R(g, '#c8c8c0', 100, y, 1, 12); } // cases de stockage
     }, 32],
+    // rues de la ville, une tuile de 58 m calée sur la grille des tours : la rue (16 m) sur les bords de la tuile, ligne axiale pointillée, passages piétons aux carrefours,
+    // trottoirs de 4 m autour de l'îlot, cour de l'îlot en béton (sous la tour)
+    rueVille: () => [128, 128, (g, { R, alea }) => {
+      R(g, '#2a2c30', 0, 0, 128, 128);
+      for (let i = 0; i < 40; i++) R(g, alea() < 0.5 ? '#26282c' : '#303236', alea() * 128 | 0, alea() * 128 | 0, 2 + alea() * 6 | 0, 1 + alea() * 3 | 0); // rapiéçages
+      R(g, '#8a8a86', 18, 18, 92, 92); R(g, '#5a5a5c', 27, 27, 74, 74); // trottoir et cour
+      for (let x = 22; x < 106; x += 8) { R(g, '#cfc8a8', x, 0, 4, 1); R(g, '#cfc8a8', x, 127, 4, 1); R(g, '#cfc8a8', 0, x, 1, 4); R(g, '#cfc8a8', 127, x, 1, 4); } // ligne axiale
+      for (let k = 0; k < 6; k++) for (const [x, y, w, h] of [[2 + k * 3, 19, 2, 8], [2 + k * 3, 101, 2, 8], [19, 2 + k * 3, 8, 2], [101, 2 + k * 3, 8, 2]]) { R(g, '#d8d8d0', x, y, w, h); R(g, '#d8d8d0', 127 - x - w + 1, y, w, h); R(g, '#d8d8d0', x, 127 - y - h + 1, w, h); } // passages piétons
+    }, 58],
   });
 })();
