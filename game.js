@@ -100,7 +100,7 @@
     const rs = SSR ? new THREE.WebGLRenderTarget(1, 1, { minFilter: rt.texture.minFilter, magFilter: rt.texture.magFilter, depthBuffer: false, type: rt.texture.type }) : null; // la scène + ses reflets calculés à l'écran (voir ssr)
     const hudC = document.createElement('canvas'), hudT = new THREE.CanvasTexture(hudC);
     hudT.minFilter = hudT.magFilter = THREE.NearestFilter;
-    const vu = { cam: new THREE.PerspectiveCamera(70, 1, 0.5, 3000), rt, rs, oeil, hudC, hg: hudC.getContext('2d'), hudT, w: 480, rw: 480, // w : largeur de la grille du HUD ; rw : celle de la cible (la même sans style)
+    const vu = { cam: Object.assign(new THREE.PerspectiveCamera(70, 1, 0.5, 3000), { layers: Object.assign(new THREE.Layers(), { mask: 1 | 1 << 2 | 1 << 3 }) }), rt, rs, oeil, hudC, hg: hudC.getContext('2d'), hudT, w: 480, rw: 480, // w : largeur de la grille du HUD ; rw : celle de la cible (la même sans style)
       moi: null, hu: HUM[VUES.length], car: null, cth: 0, carY: 0, pitch: 0, roll: 0, // voiture suivie ; cap de la caméra, hauteur, tangage et roulis lissés
       lookA: 0, lookP: 0, lookT: 0, // caméra libre à la souris : angle autour de la voiture, hauteur en plus, délai avant retour
       hit: 0, bump: 0, land: 0, stun: 0, nit: 0, lm: 0, rv: 0, rc: 0, // chocs de la voiture suivie pendant l'image ; secousse, fondu de nitro, fondu de tunnel
@@ -139,11 +139,14 @@
         vec2 o = texture2D(oe, vec2(.5)).rg; // log de la luminosité à laquelle l'œil est fait (r) et de celle du dehors (g)
         float e = clamp(exp(o.g - o.r), 1., 1.6) * dn; // exposition : l'œil fait au noir ouvre l'image (jusqu'à ×1,6), puis se referme ; dn : la lumière vraie du tunnel (voir OEIL) ; fait au dehors, ×1 : l'image d'avant
         vec3 ai = air(v, px); vec2 w = v + ai.xy, c0 = vec2(.5, .42), d = w - c0; float l = length(d); vec3 c = vec3(0.);
-        for (int i = 0; i < 8; i++) { // flou radial : nul au centre, fort sur les bords, proportionnel à la vitesse
-          vec2 u = c0 + d * (1. - amt * l * float(i) * .026);
+        // flou radial : nul au centre, fort sur les bords, proportionnel à la vitesse ; autant d'échantillons que de texels traversés (8 au plus) : un flou de moins d'un pixel
+        // (au centre, sous 130 km/h) relisait 8 fois le même texel, un tiers du coût de la passe
+        float nf = clamp(ceil(length(d * amt * l * .182 / px)) + 1., 1., 8.), pas = nf > 1. ? amt * l * .182 / (nf - 1.) : 0.;
+        for (int i = 0; i < 8; i++) { if (float(i) >= nf) break;
+          vec2 u = c0 + d * (1. - pas * float(i));
           c += min(vec3(texture2D(t, u + d * ab).r, texture2D(t, u).g, texture2D(t, u - d * ab).b) * e, 1.); // + aberration chromatique ; exposé et écrêté au blanc, échantillon par échantillon comme l'ancienne cible 8 bits
         }
-        c /= 8.;
+        c /= nf;
         vec3 bl = vec3(0.); // halo : on ajoute ce qui dépasse un seuil de luminosité, prélevé en couronne
         for (int i = 0; i < 12; i++) { float a = float(i) * .5236, rr = 2. + 2.5 * mod(float(i), 3.); bl += max(min(texture2D(t, w + vec2(cos(a), sin(a)) * rr * px).rgb * e, 1.) - .5, 0.); }
         c += bl * bloom;
@@ -164,54 +167,54 @@
   });
   const postScene = new THREE.Scene(), postCam = new THREE.Camera(), quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post);
   quad.frustumCulled = false; postScene.add(quad);
-  // reflets de la route mouillée calculés à l'écran : entre la scène et la passe finale. La route écrit dans l'alpha de la cible combien elle est mouillée
-  // (1 = sèche, 0,5 = détrempée, voir eclaire) ; de chacun de ses pixels on suit le rayon réfléchi dans la profondeur de la vue, et on ajoute la couleur qu'il rencontre :
-  // voitures, néons, feux arrière. Ce que le rayon ne trouve pas à l'écran (le ciel, ce qui est hors champ) reste aux rubans et aux reflets étirés de la lumière dynamique.
-  const ssr = new THREE.ShaderMaterial({
-    uniforms: { t: { value: null }, dz: { value: null }, P: { value: new THREE.Matrix4() }, Pi: { value: new THREE.Matrix4() }, up: { value: new V3() }, px: { value: new THREE.Vector2() } },
-    vertexShader: post.vertexShader,
-    fragmentShader: `uniform sampler2D t, dz; uniform mat4 P, Pi; uniform vec3 up; uniform vec2 px; varying vec2 v;
-      vec3 vpos(vec2 u){ vec4 p = Pi * vec4(u * 2. - 1., texture2D(dz, u).x * 2. - 1., 1.); return p.xyz / p.w; } // position dans le repère de la caméra
-      vec2 ecran(vec3 q){ vec4 c = P * vec4(q, 1.); return c.xy / c.w * .5 + .5; }
-      void main(){
-        vec4 c = texture2D(t, v); float w = c.a > ${(0.95 - EAU).toFixed(2)} && c.a < .99 ? (1. - c.a) / ${EAU.toFixed(2)} : 0., trouve = 0.;
-        if (w > 0.) {
-          vec3 p = vpos(v), e = normalize(p), r = reflect(e, up), q = p; float s = .4, a = 0., b = 0.; vec2 h = vec2(-1.);
-          for (int i = 0; i < 22; i++) { // pas qui s'allongent : 0,4 m au départ, plus de 300 m au bout
-            b = a; a += s; s *= 1.28; q = p + r * a; vec2 u = ecran(q);
-            if (q.z > -.5 || u.x < 0. || u.x > 1. || u.y < 0. || u.y > 1.) break;
-            float z = vpos(u).z;
-            if (q.z < z && q.z > z - max(1.2, s * 2.)) { // le rayon vient de passer derrière une surface, à moins d'une épaisseur : on resserre entre les deux derniers pas
-              for (int j = 0; j < 5; j++) { float m = (a + b) * .5; vec2 um = ecran(p + r * m); if (p.z + r.z * m < vpos(um).z) a = m; else b = m; }
-              h = ecran(p + r * a); break;
-            }
-          }
-          if (h.x >= 0.) {
-            vec3 f = vec3(0.); for (int k = -2; k < 2; k++) f += texture2D(t, h + vec2(0., (float(k) + .5) * 2. * px.y)).rgb; // étiré à la verticale, comme un reflet sur l'eau
-            vec2 bd = min(h, 1. - h); trouve = smoothstep(0., .08, min(bd.x, bd.y)) * (1. - smoothstep(60., 320., a)); // s'éteint au bord de l'image et au loin
-            float fr = .25 + .75 * pow(1. - max(dot(-e, up), 0.), 3.); // Fresnel : vu en rasant, la route est un miroir
-            c.rgb += f * .12 * w * fr * trouve;
-          }
-        }
-        gl_FragColor = vec4(c.rgb, 1. - trouve); // alpha : 0 là où le reflet est trouvé, les rubans de repli n'y ajoutent rien (voir repli)
-      }`,
-  });
-  // rubans de repli : dessinés après ssr dans la même cible, pondérés par son alpha, cachés par ce qui est devant eux dans la profondeur de la scène
-  const REPLI = { rDz: { value: null }, rRes: { value: new THREE.Vector2() } }, repliScene = new THREE.Scene();
+  // reflets de la route mouillée calculés à l'écran : entre la scène et la passe finale. La route écrit dans l'alpha de la cible combien elle est mouillée
+  // (1 = sèche, 0,5 = détrempée, voir eclaire) ; de chacun de ses pixels on suit le rayon réfléchi dans la profondeur de la vue, et on ajoute la couleur qu'il rencontre :
+  // voitures, néons, feux arrière. Ce que le rayon ne trouve pas à l'écran (le ciel, ce qui est hors champ) reste aux rubans et aux reflets étirés de la lumière dynamique.
+  const ssr = new THREE.ShaderMaterial({
+    uniforms: { t: { value: null }, dz: { value: null }, P: { value: new THREE.Matrix4() }, Pi: { value: new THREE.Matrix4() }, up: { value: new V3() }, px: { value: new THREE.Vector2() } },
+    vertexShader: post.vertexShader,
+    fragmentShader: `uniform sampler2D t, dz; uniform mat4 P, Pi; uniform vec3 up; uniform vec2 px; varying vec2 v;
+      vec3 vpos(vec2 u){ vec4 p = Pi * vec4(u * 2. - 1., texture2D(dz, u).x * 2. - 1., 1.); return p.xyz / p.w; } // position dans le repère de la caméra
+      vec2 ecran(vec3 q){ vec4 c = P * vec4(q, 1.); return c.xy / c.w * .5 + .5; }
+      void main(){
+        vec4 c = texture2D(t, v); float w = c.a > ${(0.95 - EAU).toFixed(2)} && c.a < .99 ? (1. - c.a) / ${EAU.toFixed(2)} : 0., trouve = 0.;
+        if (w > 0.) {
+          vec3 p = vpos(v), e = normalize(p), r = reflect(e, up), q = p; float s = .4, a = 0., b = 0.; vec2 h = vec2(-1.);
+          for (int i = 0; i < 22; i++) { // pas qui s'allongent : 0,4 m au départ, plus de 300 m au bout
+            b = a; a += s; s *= 1.28; q = p + r * a; vec2 u = ecran(q);
+            if (q.z > -.5 || u.x < 0. || u.x > 1. || u.y < 0. || u.y > 1.) break;
+            float z = vpos(u).z;
+            if (q.z < z && q.z > z - max(1.2, s * 2.)) { // le rayon vient de passer derrière une surface, à moins d'une épaisseur : on resserre entre les deux derniers pas
+              for (int j = 0; j < 5; j++) { float m = (a + b) * .5; vec2 um = ecran(p + r * m); if (p.z + r.z * m < vpos(um).z) a = m; else b = m; }
+              h = ecran(p + r * a); break;
+            }
+          }
+          if (h.x >= 0.) {
+            vec3 f = vec3(0.); for (int k = -2; k < 2; k++) f += texture2D(t, h + vec2(0., (float(k) + .5) * 2. * px.y)).rgb; // étiré à la verticale, comme un reflet sur l'eau
+            vec2 bd = min(h, 1. - h); trouve = smoothstep(0., .08, min(bd.x, bd.y)) * (1. - smoothstep(60., 320., a)); // s'éteint au bord de l'image et au loin
+            float fr = .25 + .75 * pow(1. - max(dot(-e, up), 0.), 3.); // Fresnel : vu en rasant, la route est un miroir
+            c.rgb += f * .12 * w * fr * trouve;
+          }
+        }
+        gl_FragColor = vec4(c.rgb, 1. - trouve); // alpha : 0 là où le reflet est trouvé, les rubans de repli n'y ajoutent rien (voir repli)
+      }`,
+  });
+  // rubans de repli : dessinés après ssr dans la même cible, pondérés par son alpha, cachés par ce qui est devant eux dans la profondeur de la scène
+  const REPLI = { rDz: { value: null }, rRes: { value: new THREE.Vector2() } }, repliScene = new THREE.Scene();
   const ssrScene = new THREE.Scene(), ssrQuad = new THREE.Mesh(quad.geometry, ssr); ssrQuad.frustumCulled = false; ssrScene.add(ssrQuad);
-  // adaptation de l'œil (sans style) : 96 points de la scène, moyenne des log de luminosité, rapprochée de la valeur de l'image d'avant ; tout reste sur le GPU, rien n'est relu
-  // Les tunnels sont peints aussi clairs que le dehors, comme vus par un œil déjà fait au noir : la lumière « vraie » y est TUN fois plus faible (ld = son log). Une fois l'œil adapté, l'image est celle d'avant ;
-  // à l'entrée il fait d'abord sombre puis la rétine s'habitue, à la sortie le dehors éblouit puis l'œil se referme.
-  const TUN = 0.4;
-  const OEIL = new THREE.ShaderMaterial({ uniforms: { t: { value: null }, prev: { value: null }, ld: { value: 0 }, kc: { value: 0 }, kn: { value: 0 }, kd: { value: 0 } }, depthTest: false, depthWrite: false,
-    vertexShader: post.vertexShader,
-    fragmentShader: `uniform sampler2D t, prev; uniform float ld, kc, kn, kd;
-      void main(){
-        float s = 0.; for (int i = 0; i < 12; i++) for (int j = 0; j < 8; j++) s += log(dot(texture2D(t, (vec2(i, j) + .5) / vec2(12., 8.)).rgb, vec3(.3, .59, .11)) + .002);
-        float L = s / 96., A = L + ld; vec4 p = texture2D(prev, vec2(.5));
-        if (p.a < .5) p = vec4(A, L, 0., 1.); // première image : l'œil est déjà fait à la scène
-        gl_FragColor = vec4(mix(p.r, A, A > p.r ? kc : kn), mix(p.g, L, kd), 0., 1.); // r : l'œil, vite vers le clair, lentement vers le noir ; g : la référence du dehors, suivie plus lentement encore, figée en tunnel
-      }` });
+  // adaptation de l'œil (sans style) : 96 points de la scène, moyenne des log de luminosité, rapprochée de la valeur de l'image d'avant ; tout reste sur le GPU, rien n'est relu
+  // Les tunnels sont peints aussi clairs que le dehors, comme vus par un œil déjà fait au noir : la lumière « vraie » y est TUN fois plus faible (ld = son log). Une fois l'œil adapté, l'image est celle d'avant ;
+  // à l'entrée il fait d'abord sombre puis la rétine s'habitue, à la sortie le dehors éblouit puis l'œil se referme.
+  const TUN = 0.4;
+  const OEIL = new THREE.ShaderMaterial({ uniforms: { t: { value: null }, prev: { value: null }, ld: { value: 0 }, kc: { value: 0 }, kn: { value: 0 }, kd: { value: 0 } }, depthTest: false, depthWrite: false,
+    vertexShader: post.vertexShader,
+    fragmentShader: `uniform sampler2D t, prev; uniform float ld, kc, kn, kd;
+      void main(){
+        float s = 0.; for (int i = 0; i < 12; i++) for (int j = 0; j < 8; j++) s += log(dot(texture2D(t, (vec2(i, j) + .5) / vec2(12., 8.)).rgb, vec3(.3, .59, .11)) + .002);
+        float L = s / 96., A = L + ld; vec4 p = texture2D(prev, vec2(.5));
+        if (p.a < .5) p = vec4(A, L, 0., 1.); // première image : l'œil est déjà fait à la scène
+        gl_FragColor = vec4(mix(p.r, A, A > p.r ? kc : kn), mix(p.g, L, kd), 0., 1.); // r : l'œil, vite vers le clair, lentement vers le noir ; g : la référence du dehors, suivie plus lentement encore, figée en tunnel
+      }` });
   const oeilScene = new THREE.Scene(), oeilQ = new THREE.Mesh(quad.geometry, OEIL); oeilQ.frustumCulled = false; oeilScene.add(oeilQ);
   if (ST) { // passe finale des styles : la scène telle quelle, l'effet du style, le HUD (toujours sur sa grille de 270 lignes), une vignette légère
     Object.assign(post.uniforms, { dz: { value: null }, ecr: { value: new THREE.Vector2(1, 1) }, pal: { value: PAL.map(c => new THREE.Color(c)) } });
@@ -238,11 +241,11 @@
     const [cols, rows] = grille(n);
     for (const vu of VUES) { // chaque vue prend une case de la grille (à 2 : bandes superposées ; à 3 ou 4 : 2 × 2) : sa largeur de grille suit le rapport de cette case, dans les bornes du solo, la haute multipliée par l'allongement de la case (une bande est n fois plus allongée que l'écran : bornée à 960, elle s'étirait dès que l'écran dépassait le 16/9)
       vu.w = clamp(Math.round(HH * rows / cols * innerWidth / (innerHeight || 1)), 360, 960 * rows / cols); vu.rw = Math.round(vu.w * k);
-      vu.rt.setSize(vu.rw, RH); if (vu.rs) vu.rs.setSize(vu.rw, RH); vu.hudC.width = vu.w; vu.hudC.height = HH; vu.cam.aspect = vu.w / HH; vu.cam.updateProjectionMatrix();
+      vu.rt.setSize(vu.rw, RH); if (vu.rs) vu.rs.setSize(vu.rw, RH); vu.hudC.width = vu.w; vu.hudC.height = HH; vu.hg.f_ = null; vu.cam.aspect = vu.w / HH; vu.cam.updateProjectionMatrix();
     }
     if (ST) { renderer.setSize(OW, OH, false); post.uniforms.ecr.value.set(OW, OH); } else if (n) renderer.setSize(VUES[0].w * cols, HH * rows, false);
     renderer.setScissorTest(n > 1); // à deux, la passe finale de chaque vue ne touche que sa bande (voir vueFrame)
-    if (COM) { COM.c.width = clamp(Math.round(HH * innerWidth / (innerHeight || 1)), 360, 960); COM.c.height = HH; } // la couche commune garde la grille du solo, étirée sur tout l'écran : menu et pause y sont dessinés comme en solo
+    if (COM) { COM.c.width = clamp(Math.round(HH * innerWidth / (innerHeight || 1)), 360, 960); COM.c.height = HH; COM.g.f_ = null; } // la couche commune garde la grille du solo, étirée sur tout l'écran : menu et pause y sont dessinés comme en solo
   };
   addEventListener('resize', resize);
 
@@ -308,7 +311,7 @@
   sunDisc.scale.set(TH.astre.taille, TH.astre.taille, 1); scene.add(sunDisc);
 
   const hemi = new THREE.HemisphereLight(...TH.hemi); scene.add(hemi); // bleu d'en haut, rebond magenta de la ville
-  const sun = new THREE.DirectionalLight(...TH.sun); sun.castShadow = true; // clair de lune
+  const sun = new THREE.DirectionalLight(...TH.sun); sun.castShadow = true; const OMBD = 2, OMBI = 3; // clair de lune ; OMBD, OMBI : calques des objets mobiles qui portent une ombre, simples et instanciés (voir ombres)
   sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0015; sun.shadow.normalBias = 0.5;
   Object.assign(sun.shadow.camera, { left: -300 * LOIN, right: 300 * LOIN, top: 300 * LOIN, bottom: -300 * LOIN, near: 10, far: 800 * LOIN });
   scene.add(sun, sun.target);
@@ -321,7 +324,8 @@
   const LUMS = [], lum = (i, x, y, z, col, r, k = 1, tun = 0) => LUMS.push({ i, x, y, z, c: new THREE.Color(col).multiplyScalar(k), r, tun });
   const NUIT = TH.phares / 2.6; // force des feux de voiture : pleine de nuit, faible à l'aube et au couchant
   const SUNC = new THREE.Color(TH.sun[0]).multiplyScalar(TH.sun[1]);
-  const LUX = { uLP: { value: Array.from({ length: NL }, () => new THREE.Vector4(0, 0, 0, 1)) }, uLC: { value: Array.from({ length: NL }, () => new THREE.Color(0)) },
+  const LUX = { uLP: { value: Float32Array.from({ length: NL * 4 }, (_, i) => i % 4 === 3 ? 1 : 0) }, uLC: { value: new Float32Array(NL * 3) }, // à plat : three envoie le tableau tel quel au lieu de recopier 20 vecteurs à chaque passe de dessin
+   
     uHP: { value: new V3() }, uHD: { value: new V3(1, 0, 0) }, uHC: { value: new THREE.Color(0xfff2d0).multiplyScalar(TH.phares * 1.1 * LUM_GAIN) }, uBox: { value: new THREE.Matrix4() },
     uSunD: { value: SD }, uCam: { value: new V3() }, uSunC: { value: new THREE.Color() }, uSky: { value: new THREE.Color() }, uN: { value: 0 }, uRes: { value: new THREE.Vector2() } };
   const LU_V = `{ vec4 lw = vec4(transformed, 1.);
@@ -432,10 +436,10 @@
     const m = new THREE.Mesh(g, mat); m.receiveShadow = true; scene.add(m); return m;
   }
   // mouillure pour le dessin : texture MO.nb × N (bandes en travers de -W à W × échantillons), rouge = mouillure de la course (R.mo, voir MO dans sim.js ; 1 hors course), vert = pluie de l'échantillon (0 à 1)
-  // Un shader qui veut savoir si la route est mouillée lit MOT : mouillure = rouge × vert. Remise à jour à chaque image (moMaj).
-  const MOI = new Uint8Array(N * MO.nb * 4).fill(255), MOT = new THREE.DataTexture(MOI, MO.nb, N, THREE.RGBAFormat); MOT.magFilter = MOT.minFilter = THREE.LinearFilter;
+  // Un shader qui veut savoir si la route est mouillée lit MOT : mouillure = rouge × vert. Remise à jour toutes les 8 images (moMaj).
+  const MOI = new Uint8Array(N * MO.nb * 4).fill(255), MOT = new THREE.DataTexture(MOI, MO.nb, N, THREE.RGBAFormat); MOT.magFilter = MOT.minFilter = THREE.LinearFilter; MOT.k = 0;
   for (let k = 0; k < N * MO.nb; k++) MOI[k * 4 + 1] = Math.min(1, T.pluie[k / MO.nb | 0]) * 255; MOT.needsUpdate = true;
-  const moMaj = () => { const mo = race && race.mo; if (!mo && !MOT.sale) return; for (let k = 0; k < N * MO.nb; k++) MOI[k * 4] = mo ? mo[k] * 255 : 255; MOT.sale = !!mo; MOT.needsUpdate = true; };
+  const moMaj = () => { const mo = race && race.mo; if (!mo && !MOT.sale || ++MOT.k & 7) return; for (let k = 0; k < N * MO.nb; k++) MOI[k * 4] = mo ? mo[k] * 255 : 255; MOT.sale = !!mo; MOT.needsUpdate = true; }; // toutes les 8 images : la route sèche lentement, et chaque envoi est toute la texture
   const across = s => Math.atan2(-s.tx, -s.tz); // rotation Y qui met l'axe X local en travers de la route
   const box = (w, h, d, mat, x, y, z, parent = scene) => { const m = new THREE.Mesh(habille(geo('boite', w, h, d), mat), mat); m.position.set(x, y, z); parent.add(m); return m; };
 
@@ -569,20 +573,20 @@
     part(wheelGeo, roueMat, 0, 0, 0, st);
   }
   carG.traverse(o => { o.castShadow = true; });
-  // reflets : le vrai décor vu depuis la voiture du joueur 1, dans une cube map de 32 px par face, une face toutes les deux images (refFace, avant le rendu de la vue 1) ;
+  // reflets : le vrai décor vu depuis la voiture du joueur 1, dans une cube map de 32 px par face, une face toutes les six images (refFace, chacune près de 100 passes de dessin : toutes les deux, elle coûtait 0,25 à 0,5 ms de GPU par image en moyenne ; le cube entier est refait en 0,3 s à 120 images/s, avant le rendu de la vue 1) ;
   // vue à 300 m seulement (à 3° le pixel, plus loin ne fait presque rien et coûte des passes de dessin) : le ciel et l'astre y sont ramenés au dixième, en deçà ;
   // la caisse l'ajoute à sa couleur (envMap), dosée pixel par pixel par un masque tiré de la livrée : vitrage (sombre, bleuté) fort, peinture modérée, joints et cadres presque rien.
   // Les rivaux et les autres joueurs partagent la même cube map : prise à la voiture du joueur 1, elle ne leur est pas exacte, mais à leur taille à l'écran on ne le voit pas
-  const CUBE = new THREE.WebGLCubeRenderTarget(32, { generateMipmaps: false, minFilter: THREE.LinearFilter }), refCam = new THREE.CubeCamera(0.5, 300, CUBE);
+  const CUBE = new THREE.WebGLCubeRenderTarget(32, { generateMipmaps: false, minFilter: THREE.LinearFilter }), refCam = new THREE.CubeCamera(0.5, 300, CUBE); refCam.children.forEach(c => { c.layers.enable(OMBD); c.layers.enable(OMBI); }); // les objets mobiles qui portent une ombre
   let refF = 0;
   const refFace = () => { // la voiture du joueur 1 ne se voit pas dans sa propre cube map ; l'ombre du soleil n'est pas recalculée pour si peu
-    if (refF++ & 1) return; const f = (refF >> 1) % 6, P = refCam.position, sp = sky.position.clone(), dp = sunDisc.position.clone(), ds = sunDisc.scale.x;
+    if (refF++ % 6) return; const f = (refF / 6 | 0) % 6, P = refCam.position, sp = sky.position.clone(), dp = sunDisc.position.clone(), ds = sunDisc.scale.x;
     P.set(carG.position.x, carG.position.y + 0.9, carG.position.z); refCam.updateMatrixWorld(true);
-    sky.position.copy(P); sky.scale.setScalar(0.1); sunDisc.position.copy(P).addScaledVector(SD, 200); sunDisc.scale.setScalar(ds / 10);
-    const vis = carG.visible, rt = renderer.getRenderTarget(); carG.visible = false; renderer.shadowMap.autoUpdate = false;
+    sky.position.copy(P); sky.scale.setScalar(0.1); sunDisc.position.copy(P).addScaledVector(SD, 200); sunDisc.scale.setScalar(ds / 10); sky.updateMatrixWorld(); sunDisc.updateMatrixWorld();
+    const vis = carG.visible, rt = renderer.getRenderTarget(); carG.visible = false;
     renderer.setRenderTarget(CUBE, f); renderer.render(scene, refCam.children[f]);
-    renderer.shadowMap.autoUpdate = true; carG.visible = vis; renderer.setRenderTarget(rt);
-    sky.position.copy(sp); sky.scale.setScalar(1); sunDisc.position.copy(dp); sunDisc.scale.set(ds, ds, 1);
+    carG.visible = vis; renderer.setRenderTarget(rt);
+    sky.position.copy(sp); sky.scale.setScalar(1); sunDisc.position.copy(dp); sunDisc.scale.set(ds, ds, 1); sky.updateMatrixWorld(); sunDisc.updateMatrixWorld();
   };
   const reflete = m => { // le masque : rouge = part du reflet (specularMap de three)
     const src = m.map.image.getContext('2d').getImageData(0, 0, 128, 128).data;
@@ -742,6 +746,10 @@
   // les voitures humaines, une par place de joueur (vu.hu de la vue de rang n : HUM[n]) : modèle, caisse (roulis), roues, feu stop, flammes de nitro et traînées. Une copie de carG a les mêmes enfants dans le même ordre : caisse, quatre roues, deux flammes.
   // Le joueur 2 a donc toute l'animation du joueur 1, alors que les adversaires gardent leurs roues fixes
   const HUM = [[carG, brakeMat], ...opps.slice(3).map(g => [g, g.userData.feu])].map(([g, feu]) => ({ g, feu, body: g.children[0], roues: g.children.slice(1, 5), fl: g.children.slice(5, 7), ...trainee() }));
+  // les quatre roues d'une voiture en une passe de dessin (et une dans l'ombre) au lieu de quatre : les groupes de roue (enfants 1 à 4) restent et tournent comme avant, leurs maillages sont cachés,
+  // et rouesInst recopie leur pose dans l'instance, ajoutée en dernier enfant (l'ordre des autres ne change pas)
+  const RI = [carG, ...opps].map(g => { const w = g.children[1].children[0], m = new THREE.InstancedMesh(w.geometry, w.material, 4); m.castShadow = true; g.add(m); for (let r = 1; r < 5; r++) g.children[r].children[0].visible = false; return [g, m]; }), mRI = new THREE.Matrix4();
+  const rouesInst = () => { for (const [g, m] of RI) if (g.visible) { for (let r = 1; r < 5; r++) { const st = g.children[r], w = st.children[0]; st.updateMatrix(); w.updateMatrix(); m.setMatrixAt(r - 1, mRI.multiplyMatrices(st.matrix, w.matrix)); } m.instanceMatrix.needsUpdate = true; } };
 
   // ---------- dégâts : purement visuels et sonores (la conduite et les temps n'en savent rien : fantômes, médailles et réseau intacts), remis à zéro à chaque départ ----------
   // Par modèle (g.userData.dg) : z = usure des zones [avant, arrière, flanc z < 0, flanc z > 0] de 0 à 1 ; la caisse s'enfonce autour de chaque impact (au plus DG_MAX mètres par sommet) ;
@@ -762,6 +770,7 @@
       if (zn === 'noir') { cherche('av', 0, (x, y) => x > nez - 0.3 && y < 0.5, [1, 0]); cherche('ar', 1, (x, y) => x < cul + 0.3 && y < 0.5, [-1, 0]); }
       if (zn === 'caisse') for (const s of [-1, 1]) cherche('retro', s < 0 ? 2 : 3, (x, y, z, i) => uni(i) && z * s > VO.plan.wc / 2 && x > cab0 - 0.5 && x < cab0 + 0.3, [0, s]);
     });
+    if (D.liv) { const im = D.liv.map.image; D.fis0 = im.getContext('2d').getImageData(0, 0, im.width, im.height); } // la livrée intacte, lue au chargement : la relire au premier choc (fissure) bloquait jusqu'à ce que le GPU rende le canvas, de 50 ms à près d'une seconde
     return g.userData.dg = D;
   });
   const dgEcrit = (D, me) => { const ge = me.o.geometry, P = ge.attributes.position.array; for (let i = 0; i < P.length; i++) P[i] = me.P0[i] + me.d[i];
@@ -799,14 +808,14 @@
     tri.forEach((i, k) => { for (let j = 0; j < 9; j++) A[k * 9 + j] = me.P0[i + j] + me.d[i + j]; U.set(uv.subarray(i / 3 * 2, i / 3 * 2 + 6), k * 6); });
     ge.setAttribute('position', new THREE.BufferAttribute(A, 3)); ge.setAttribute('uv', new THREE.BufferAttribute(U, 2));
     ge.computeBoundingBox(); ge.boundingBox.getCenter(c); ge.translate(-c.x, -c.y, -c.z); ge.computeVertexNormals();
-    const m = new THREE.Mesh(ge, me.o.material); m.castShadow = true; m.userData.dyn = 1; g.updateMatrixWorld(true);
+    const m = new THREE.Mesh(ge, me.o.material); m.castShadow = true; m.userData.dyn = 1; m.layers.set(OMBD); g.updateMatrixWorld(true);
     m.position.copy(c).applyMatrix4(me.o.matrixWorld); m.quaternion.setFromRotationMatrix(me.o.matrixWorld); scene.add(m);
     const fx = Math.cos(g.rotation.y), fz = -Math.sin(g.rotation.y), ox = fx * sg[0] - fz * sg[1], oz = fz * sg[0] + fx * sg[1]; // g.rotation.y = -cap
     DEB.push({ m, v: new V3(vx * 0.8 + ox * 3, 2 + Math.random() * 2, vz * 0.8 + oz * 3), w: new V3(jit(10), jit(10), jit(10)), y0: g.position.y, t: 20 });
   }
   function fissure(D, lx) { // choc violent : une étoile de fêlures sur le pare-brise (la lunette si le choc vient de l'arrière), peinte sur la livrée de ce modèle ; dgRaz rend l'image d'origine
     const lv = D.liv.map, g = lv.image.getContext('2d'), p = VO.plan, [[x0], [x1], [x2], [x3]] = p.cab, hw = p.wc / 2 - 0.16, av = lx > -0.4, xa = av ? x0 : x3, xb = av ? x1 : x2;
-    D.fis = g.getImageData(0, 0, lv.image.width, lv.image.height);
+    D.fis = D.fis0;
     const [ax, ay] = p.dessus(xa, -hw), [bx, by] = p.dessus(xb, hw), [cx, cy] = p.dessus(xa + (xb - xa) * (0.3 + Math.random() * 0.4), (Math.random() * 2 - 1) * hw * 0.6);
     g.save(); g.beginPath(); g.rect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)); g.clip();
     g.strokeStyle = 'rgba(225,238,255,0.9)'; g.lineWidth = 1; g.beginPath();
@@ -840,7 +849,18 @@
     const PAVE = 500, GROS = 30000, lots = new Map(), NM = new THREE.Matrix3(), v = new V3(), cand = [];
     const fixe = o => { for (let p = o; p; p = p.parent) if (p.userData.dyn || !p.visible) return false; return true; };
     scene.updateMatrixWorld(true);
-    scene.traverse(o => { const m = o.material, g = o.geometry; if (o.isMesh && !o.isInstancedMesh && !Array.isArray(m) && !m.transparent && g.drawRange.count === Infinity && !Object.keys(g.morphAttributes).length && fixe(o)) cand.push(o); });
+    const simple = o => { const m = o.material, g = o.geometry; return !Array.isArray(m) && !m.transparent && g.drawRange.count === Infinity && !Object.keys(g.morphAttributes).length && fixe(o); };
+    scene.traverse(o => { if (o.isMesh && !o.isInstancedMesh && simple(o)) cand.push(o); });
+    // le décor posé en nombre (InstancedMesh immobile) y passe aussi : chaque exemplaire devient une pièce, fondue avec tout ce qui a sa matière (une passe de dessin en moins par forme et par zone, ombres et reflets compris) ;
+    // sa teinte par exemplaire passe dans une couleur de sommet, sur une copie de la matière. Au-delà de INST sommets, l'instance reste : ce serait trop de mémoire. Ses pièces ne sont pas découpées en pavés (elle était dessinée entière, en une passe), sauf au-delà de 100 000 sommets : les 15 500 blocs du canal (560 000 sommets) coûtaient 1,5 ms de GPU par image, entiers dans la vue et dans chaque face du cube des reflets
+    const INST = 600000, inst = [], vc = new Map(), ni = new Map(), uni = g => ni.get(g) || ni.set(g, g.index ? g.toNonIndexed() : g).get(g);
+    scene.traverse(o => { if (o.isInstancedMesh && o.count > 0 && simple(o) && (o.geometry.index || o.geometry.attributes.position).count * o.count <= INST) inst.push(o); });
+    for (const o of inst) {
+      let g = o.geometry, mat = o.material; if (!g.boundingSphere) g.computeBoundingSphere();
+      if (o.instanceColor) { g = g.clone(); g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(1), 3)); mat = vc.get(mat) || vc.set(mat, Object.assign(mat.clone(), { vertexColors: true })).get(mat); }
+      for (let i = 0; i < o.count; i++) { const mw = new THREE.Matrix4(); o.getMatrixAt(i, mw); mw.premultiply(o.matrixWorld); const s = mw.getMaxScaleOnAxis();
+        cand.push({ virt: o, enorme: (o.geometry.index || o.geometry.attributes.position).count * o.count > 100000, geometry: g, material: mat, matrixWorld: mw, scale: { x: s, y: s, z: s }, col: o.instanceColor && new THREE.Color().fromArray(o.instanceColor.array, i * 3), castShadow: o.castShadow, receiveShadow: o.receiveShadow, frustumCulled: true, renderOrder: o.renderOrder, layers: o.layers, userData: {}, children: [] }); }
+    }
     for (const o of cand) {
       const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere();
       const k = [o.material.uuid, +o.castShadow, +o.receiveShadow, +o.frustumCulled, o.renderOrder, o.layers.mask, Object.keys(g.attributes).sort().map(n => n + g.attributes[n].itemSize).join()].join('|');
@@ -852,19 +872,24 @@
       if (l.reduce((s, o) => s + (o.geometry.index || o.geometry.attributes.position).count, 0) < GROS) continue;
       lots.delete(k);
       for (const o of l) { const g = o.geometry, r = g.boundingSphere.radius * o.matrixWorld.getMaxScaleOnAxis(); v.copy(g.boundingSphere.center).applyMatrix4(o.matrixWorld);
-        const kp = k + '|' + (r < PAVE / 2 ? Math.floor(v.x / PAVE) + ':' + Math.floor(v.z / PAVE) : 'grand'); if (!lots.has(kp)) lots.set(kp, []); lots.get(kp).push(o); }
+        const kp = k + '|' + (r < PAVE / 2 && (!o.virt || o.enorme) ? Math.floor(v.x / PAVE) + ':' + Math.floor(v.z / PAVE) : 'grand'); if (!lots.has(kp)) lots.set(kp, []); lots.get(kp).push(o); }
     }
     for (const l of lots.values()) {
-      if (l.length < 2) continue;
-      const src = l.map(o => o.geometry.index ? o.geometry.toNonIndexed() : o.geometry), n = src.reduce((s, g) => s + g.attributes.position.count, 0), G = new THREE.BufferGeometry();
+      if (l.length < 2 && !l[0].virt) continue; // un exemplaire seul est fondu quand même : son instance disparaît entière
+      // indexé si toutes les pièces le sont : un sommet partagé n'est calculé qu'une fois par le GPU (une boîte : 24 sommets au lieu de 36), et la scène est surtout limitée par ses sommets
+      const ix = l.every(o => o.geometry.index), src = l.map(o => ix ? o.geometry : uni(o.geometry)), n = src.reduce((s, g) => s + g.attributes.position.count, 0), G = new THREE.BufferGeometry();
+      if (ix) { const I = new (n > 65535 ? Uint32Array : Uint16Array)(src.reduce((s, g) => s + g.index.count, 0)); let b = 0, p = 0;
+        l.forEach((o, i) => { const x = src[i].index, miroir = o.matrixWorld.determinant() < 0; for (let j = 0; j < x.count; j++) I[p + j] = b + x.getX(miroir ? j - j % 3 + [0, 2, 1][j % 3] : j); p += x.count; b += src[i].attributes.position.count; });
+        G.setIndex(new THREE.BufferAttribute(I, 1)); }
       for (const nom in src[0].attributes) {
         const sz = src[0].attributes[nom].itemSize, A = new Float32Array(n * sz); let base = 0;
         l.forEach((o, i) => {
           const a = src[i].attributes[nom], mw = o.matrixWorld, miroir = mw.determinant() < 0; if (nom === 'normal') NM.getNormalMatrix(mw);
           for (let j = 0; j < a.count; j++) {
-            const d = (base + (miroir ? j - j % 3 + [0, 2, 1][j % 3] : j)) * sz; // échelle négative : on retourne chaque triangle pour qu'il garde sa face
+            const d = (base + (miroir && !ix ? j - j % 3 + [0, 2, 1][j % 3] : j)) * sz; // échelle négative : on retourne chaque triangle pour qu'il garde sa face (indexé : dans l'index)
             if (nom === 'position') { v.fromBufferAttribute(a, j).applyMatrix4(mw); A[d] = v.x; A[d + 1] = v.y; A[d + 2] = v.z; }
             else if (nom === 'normal') { v.fromBufferAttribute(a, j).applyMatrix3(NM).normalize(); A[d] = v.x; A[d + 1] = v.y; A[d + 2] = v.z; }
+            else if (nom === 'color' && o.col) { A[d] = a.getX(j) * o.col.r; A[d + 1] = a.getY(j) * o.col.g; A[d + 2] = a.getZ(j) * o.col.b; }
             else { A[d] = a.getX(j); if (sz > 1) A[d + 1] = a.getY(j); if (sz > 2) A[d + 2] = a.getZ(j); if (sz > 3) A[d + 3] = a.getW(j); }
           }
           base += a.count;
@@ -875,8 +900,11 @@
       m.matrixAutoUpdate = false; m.userData.petit = l.some(o => o.userData.petit); scene.add(m);
       for (const o of l) o.userData.fondu = 1;
     }
-    for (const o of cand.reverse()) if (o.userData.fondu) { if (o.children.length) o.layers.set(31); else o.parent.remove(o); } // les enfants d'abord ; un parent qui en garde reste dans l'arbre sans être dessiné (calque 31)
+    for (const o of inst) o.parent.remove(o); // toutes ses pièces sont fondues (même seules dans leur lot)
+    for (const o of cand.reverse()) if (o.userData.fondu && !o.virt) { if (o.children.length) o.layers.set(31); else o.parent.remove(o); } // les enfants d'abord ; un parent qui en garde reste dans l'arbre sans être dessiné (calque 31)
   }
+  { const fixe = o => { for (let p = o; p; p = p.parent) if (p.userData.dyn || !p.visible) return false; return true; }; // les ombres mobiles (voir ombres) : tout ce qui porte une ombre sans être fixe
+    scene.traverse(o => { if (o.isLight) { o.layers.enable(OMBD); o.layers.enable(OMBI); } else if (o.castShadow && !fixe(o)) o.layers.set(o.isInstancedMesh ? OMBI : OMBD); }); } // les lumières aussi : sans elles, la passe des ombres mobiles changeait l'éclairage de three, qui recompilait alors la clé de chaque matière à chaque image
   scene.traverse(o => { if (o.isInstancedMesh) o.frustumCulled = false; if (o.material) eclaire(o.material); }); // r128 calcule le culling sur la géométrie de base, pas sur les instances
 
   // ---------- audio : voir audio.js (window.SON) ; ici seulement ce que le jeu et le HUD lisent ----------
@@ -1140,9 +1168,10 @@
   // ---------- HUD pixel (canvas 2D à la résolution du jeu) ----------
   const PS = '"Press Start 2P", monospace', JP = 'DotGothic16, sans-serif', HU = TH.hud, Y = HU.y, C = HU.c, RD = HU.r; // couleurs et style d'interface de la carte
   document.fonts.load('8px ' + PS); document.fonts.load('16px ' + JP, 'スピード');
+  const fonte = f => { if (hg.f_ !== f) { hg.font = f; hg.f_ = f; } }; // reposer la police à chaque texte coûtait autant que de l'écrire ; la dernière posée est notée sur le contexte (une par vue)
   // texte pixel ; split = décalage rouge/cyan façon glitch
   function txt(s, x, y, size, col, align = 'left', split = 0, font = PS) {
-    s = tr(s); hg.font = size + 'px ' + font; hg.textAlign = align; hg.textBaseline = 'top'; x = Math.round(x);
+    s = tr(s); fonte(size + 'px ' + font); hg.textAlign = align; hg.textBaseline = 'top'; x = Math.round(x);
     if (split && HU.split) { hg.fillStyle = RD; hg.fillText(s, x - split, y); hg.fillStyle = C; hg.fillText(s, x + split, y); }
     hg.fillStyle = col; hg.fillText(s, x, y);
   }
@@ -1159,7 +1188,7 @@
     else { R(hg, C, x, y, w, 1); R(hg, C, x, y + h - 1, w, 1); } // deux traits
   };
   const coins = (x, y, w, h) => { for (const [a, b] of [[0, 0], [1, 0], [0, 1]]) for (const [u, v] of [[x + a, y + b], [x + w - 1 - a, y + b], [x + a, y + h - 1 - b], [x + w - 1 - a, y + h - 1 - b]]) hg.clearRect(u, v, 1, 1); }; // coins arrondis : trois pixels ôtés à chaque coin
-  const tag = (s, cx, y, bg) => { hg.font = '8px ' + PS; const w = hg.measureText(tr(s)).width + 12; R(hg, bg, Math.round(cx - w / 2), y, w, 14); txt(s, cx, y + 3, 8, '#08080c', 'center'); };
+  const tag = (s, cx, y, bg) => { fonte('8px ' + PS); const w = hg.measureText(tr(s)).width + 12; R(hg, bg, Math.round(cx - w / 2), y, w, 14); txt(s, cx, y + 3, 8, '#08080c', 'center'); };
   const EQN = 20, EQR = 10, fft = new Uint8Array(32);
   // minicarte : tracé dessiné une seule fois dans un canvas hors écran (x monde vers la droite, z vers le bas = vue de dessus non inversée)
   const MM = (() => {
@@ -1173,7 +1202,7 @@
     return { c, px, pz };
   })();
   // Écran d'accueil : la carte tourne derrière, assombrie ; le titre, puis un drapeau par langue, la langue choisie encadrée et son drapeau qui flotte
-  const TT = (s, x, y, size, col) => { hg.font = size + 'px ' + PS; hg.textAlign = 'center'; hg.textBaseline = 'top'; hg.fillStyle = col; hg.fillText(s, Math.round(x), Math.round(y)); }; // texte tel quel, sans tr()
+  const TT = (s, x, y, size, col) => { fonte(size + 'px ' + PS); hg.textAlign = 'center'; hg.textBaseline = 'top'; hg.fillStyle = col; hg.fillText(s, Math.round(x), Math.round(y)); }; // texte tel quel, sans tr()
   const drapeau = (l, x, y, w, h) => {
     if (l === 'fr') { R(hg, '#1f3fbf', x, y, w / 3 | 0, h); R(hg, '#f4f4f4', x + (w / 3 | 0), y, w / 3 | 0, h); R(hg, '#e0283a', x + (2 * w / 3 | 0), y, w - (2 * w / 3 | 0), h); return; }
     R(hg, '#1a2a7a', x, y, w, h); hg.save(); hg.beginPath(); hg.rect(x, y, w, h); hg.clip(); hg.lineCap = 'butt';
@@ -1392,7 +1421,7 @@
       else { txt('SUITE : ' + SOIREE[f.manche + 1].heure + ' · ' + SOIREE[f.manche + 1].nom, cx, 164, 8, '#e8e8e4', 'center'); txt('DEPART ' + ord(f.grille[0] + 1) + ' SUR LA GRILLE', cx, 180, 8, '#e8e8e4', 'center'); txt('ENTREE : SUITE   ECHAP : QUITTER', cx, 200, 8, C, 'center'); }
     }
     if (pique && state !== 'title' && (pique.T -= dt) > 0) { // la réplique d'un rival, façon radio : une ligne sans fond, contour noir, nom à sa couleur ; s'efface sur la dernière demi-seconde
-      hg.globalAlpha = Math.min(1, pique.T * 2); hg.font = '8px ' + PS; const n = tr(pique.n) + ' ', wn = hg.measureText(n).width, x = Math.round(cx - (wn + hg.measureText(tr(pique.s)).width) / 2);
+      hg.globalAlpha = Math.min(1, pique.T * 2); fonte('8px ' + PS); const n = tr(pique.n) + ' ', wn = hg.measureText(n).width, x = Math.round(cx - (wn + hg.measureText(tr(pique.s)).width) / 2);
       for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [1, 1]]) { txt(n, x + dx, 166 + dy, 8, '#000'); txt(pique.s, x + wn + dx, 166 + dy, 8, '#000'); } // contour noir : lisible sans fond
       txt(n, x, 166, 8, pique.c); txt(pique.s, x + wn, 166, 8, '#fff'); hg.globalAlpha = 1; }
     if ((piqueT -= dt) < 0) piqueT = 0;
@@ -1403,13 +1432,41 @@
     hudT.needsUpdate = true;
   }
 
-  // la lune suit la voiture, calée sur la grille de texels de l'ombre pour qu'elle ne fourmille pas
-  const LR = new V3().crossVectors(new V3(0, 1, 0), SD).normalize(), LU = new V3().crossVectors(SD, LR), TX = 600 * LOIN / 2048, tmp = new V3();
+  // la lune suit la voiture par pas de CEL (64 texels de l'ombre, 24 m) : entre deux pas, la carte d'ombre du décor fixe ne change pas (voir ombres)
+  const LR = new V3().crossVectors(new V3(0, 1, 0), SD).normalize(), LU = new V3().crossVectors(SD, LR), TX = 600 * LOIN / 2048, CEL = TX * 64, tmp = new V3();
   function sunFollow(car) {
     tmp.set(car.x, 0, car.z);
-    const a = Math.round(tmp.dot(LR) / TX) * TX, b = Math.round(tmp.dot(LU) / TX) * TX, c = tmp.dot(SD);
-    sun.target.position.set(0, 0, 0).addScaledVector(LR, a).addScaledVector(LU, b).addScaledVector(SD, c);
-    sun.position.copy(sun.target.position).addScaledVector(SD, 400);
+    const a = Math.round(tmp.dot(LR) / CEL), b = Math.round(tmp.dot(LU) / CEL), c = Math.round(tmp.dot(SD) / CEL);
+    sun.target.position.set(0, 0, 0).addScaledVector(LR, a * CEL).addScaledVector(LU, b * CEL).addScaledVector(SD, c * CEL);
+    sun.position.copy(sun.target.position).addScaledVector(SD, 400); return a + ':' + b + ':' + c;
+  }
+  // Ombres en deux temps. Le décor fixe (calque 0) n'est dessiné dans la carte d'ombre que quand la lune change de pas, puis gardé dans la cible de la vue (vu.ombre) ;
+  // chaque image, la carte reprend cette copie (profondeur comprise : OMB écrit gl_FragDepth) et seuls les objets mobiles qui portent une ombre (calque OMBD : voitures, débris, décor dyn) y sont redessinés.
+  // Avant : tout le décor à chaque image, 35 à 100 passes de dessin. Un objet qui bouge et porte une ombre doit être sur le calque OMBD (fait à la construction pour tout ce qui n'est pas fixe, voir « fusion »)
+  const OMB = new THREE.ShaderMaterial({ uniforms: { t: { value: null } }, vertexShader: post.vertexShader, depthFunc: THREE.AlwaysDepth, extensions: { fragDepth: true },
+      fragmentShader: '#include <packing>\nuniform sampler2D t; varying vec2 v; void main(){ vec4 c = texture2D(t, v); gl_FragColor = c; gl_FragDepthEXT = unpackRGBAToDepth(c); }' }),
+    ombScene = new THREE.Scene(), ombProf = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, side: THREE.BackSide }), ombProfI = ombProf.clone(), // une par calque : la même pour les deux faisait refaire à three la clé du programme à chaque passage de l'un à l'autre
+    ombNul = new THREE.WebGLRenderTarget(1, 1), ombFixe = new THREE.OrthographicCamera(-1e-6, 1e-6, 1e-6, -1e-6, 0, 1e-6); // ombFixe : ne voit rien (loin sous la carte, champ nul) et seulement le calque 0 : le rendu qui la prend ne fait que l'ombre du décor fixe (shadowMap.render ne s'appelle pas hors d'un rendu)
+  ombFixe.position.set(0, -1e7, 0); ombFixe.updateMatrixWorld();
+  { const q = new THREE.Mesh(quad.geometry, OMB); q.frustumCulled = false; ombScene.add(q); }
+  sun.shadow.camera.layers.set(OMBD); renderer.shadowMap.autoUpdate = false;
+  const copie = (src, dst) => { OMB.uniforms.t.value = src.texture; renderer.setRenderTarget(dst); renderer.autoClear = false; renderer.render(ombScene, postCam); renderer.autoClear = true; };
+  // Les ombres mobiles ne sont dessinées (et la copie reprise) que dans un carré de OMBR mètres autour de la voiture suivie : toute la carte à chaque image coûtait 1 à 2 ms de GPU.
+  // Plus loin, un objet mobile ne porte pas d'ombre ; le décor fixe garde les siennes partout. Le carré de l'image d'avant est repris aussi : il n'y reste aucune ombre périmée
+  const OMBR = 120;
+  function ombres(vu, cle, car, y) {
+    const S = sun.shadow, W = S.mapSize.x; sun.updateMatrixWorld(); sun.target.updateMatrixWorld();
+    if (!vu.ombre) vu.ombre = { C: new THREE.WebGLRenderTarget(W, S.mapSize.y, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: false }), cle: null, b: null };
+    const O = vu.ombre, fixe = O.cle !== cle || !S.map;
+    if (fixe) { renderer.shadowMap.needsUpdate = true; renderer.setRenderTarget(ombNul); renderer.render(scene, ombFixe); copie(S.map, O.C); O.cle = cle; O.b = null; } // décor fixe seul, puis gardé
+    else S.updateMatrices(sun); // (la vue d'avant a pu laisser sa carte et ses matrices)
+    tmp.set(car.x, y, car.z).applyMatrix4(S.matrix); const r = OMBR / TX, b = [tmp.x * W - r, tmp.y * W - r, tmp.x * W + r, tmp.y * W + r].map(v => clamp(Math.round(v), 0, W)), p = O.b || b;
+    const bx = Math.min(b[0], p[0]), by = Math.min(b[1], p[1]); S.map.scissorTest = true;
+    if (!fixe) { S.map.scissor.set(bx, by, Math.max(b[2], p[2]) - bx, Math.max(b[3], p[3]) - by); copie(O.C, S.map); } // la copie : ce carré et celui de l'image d'avant
+    S.map.scissor.set(b[0], b[1], b[2] - b[0], b[3] - b[1]); O.b = b;
+    renderer.autoClear = false; renderer.setRenderTarget(S.map);
+    for (const [c, m] of [[OMBD, ombProf], [OMBI, ombProfI]]) { S.camera.layers.set(c); scene.overrideMaterial = m; renderer.render(scene, S.camera); }
+    renderer.autoClear = true; scene.overrideMaterial = null; S.map.scissorTest = false;
   }
 
   const ROUGE = new THREE.Color(0xff1828), ETIN = new THREE.Color(0xff8a20), BLEU = new THREE.Color(0x3a9cff), PHARE = new THREE.Color(0xfff2d0), NEONC = new THREE.Color(L.neon || 0), BOITE = new THREE.Matrix4().makeScale(ENCt.x / 2, ENCt.y / 2, ENCt.z / 2).setPosition(ENCc); // BOITE : englobe toute la caisse, pour l'ombre (un point dedans ou dessus n'est pas ombré)
@@ -1557,7 +1614,7 @@
     const photo = window.__g.vue; // shortcut: debug console seulement, __g.vue = [angle° autour de la voiture, distance, hauteur] pour inspecter le modèle ; à remplacer par un vrai mode photo si on en veut un
     if (photo) { const a = car.th + photo[0] * Math.PI / 180; cam.position.set(car.x + Math.cos(a) * photo[1], carY + photo[2], car.z + Math.sin(a) * photo[1]); cam.lookAt(car.x, carY + 0.7, car.z); cam.fov = 45; }
     cam.updateProjectionMatrix();
-    sky.position.copy(cam.position); sunDisc.position.copy(cam.position).addScaledVector(SD, 2000); sunFollow(car);
+    sky.position.copy(cam.position); sunDisc.position.copy(cam.position).addScaledVector(SD, 2000); const pasL = sunFollow(car);
     // brouillard et ciel : nuit néon ↔ tunnel ; éclairs : flash double sur le ciel et l'éclairage (le tonnerre part de fxFrame)
     scene.fog.color.copy(FOG_OUT).lerp(FOG_IN, lm); scene.fog.near = lerp(TH.fogD[0] * LOIN, 15, lm); scene.fog.far = lerp(TH.fogD[1] * LOIN, 320, lm);
     skyMat.color.copy(WHITE).lerp(FOG_IN, lm);
@@ -1571,7 +1628,7 @@
     G.updateMatrixWorld(); LUX.uBox.value.copy(G.matrixWorld).multiply(BOITE).invert(); // G : le modèle de la voiture de la vue ; l'ombre portée sous les luminaires n'existe que pour elle
     LUX.uSunC.value.copy(SUNC).multiplyScalar(1 - lm); LUX.uSky.value.copy(scene.fog.color); LUX.uRes.value.set(TRB ? vu.rw / 2 / TRB : 0, RH / 2 / TRB);
     let nl = 0;
-    const put = (x, y, z, c, r, k) => { if (nl < NL) { LUX.uLP.value[nl].set(x, y, z, r); LUX.uLC.value[nl++].copy(c).multiplyScalar(k * LUM_GAIN); } };
+    const LP = LUX.uLP.value, LC = LUX.uLC.value, put = (x, y, z, c, r, k) => { if (nl < NL) { const m = k * LUM_GAIN; const o = nl * 4; LP[o] = x; LP[o + 1] = y; LP[o + 2] = z; LP[o + 3] = r; LC[nl * 3] = c.r * m; LC[nl * 3 + 1] = c.g * m; LC[nl * 3 + 2] = c.b * m; nl++; } };
     put(car.x - fx * 4.4, carY + 0.35, car.z - fz * 4.4, ROUGE, 9, NUIT * (inp.brake || car.frA ? 2.4 : 0.45) * (1 - (dg.fe[0] + dg.fe[1]) / 2)); // feux arrière (moins les cassés) : ils teintent ce qui suit, davantage au freinage
     if (L.neon) put(car.x, carY + 0.3, car.z, NEONC, 5.5, NUIT * (0.8 + 0.4 * pulse)); // néon de bas de caisse
     // éclats brefs, trois créneaux au plus pris sur les luminaires fixes : la gerbe d'étincelles contre un mur (orange, s'éteint en 0,2 s ; posée entre la caisse et le mur : dans la boîte d'ombre de la voiture elle n'éclairerait rien, derrière le mur elle tournerait le dos à sa face ; au-dessus du toit, la caisse ne cache pas la route), la flamme de nitro (bleue, vacille), l'éclair d'orage (tombe de haut, couvre tout)
@@ -1660,8 +1717,10 @@
       for (const o of caches) o.visible = false; for (const o of tri) o.frustumCulled = true;
       if (avant && avant.libere) avant.libere(); avant = null; // l'ancienne carte peut maintenant rendre sa mémoire : la nouvelle tient les shaders communs (et on l'oublie, sinon chaque carte garderait toutes les précédentes)
     }
-    if (!vu.n) refFace();
-    renderer.setRenderTarget(vu.rt); renderer.render(scene, cam);
+    // les matrices de la scène une fois pour les trois rendus de la vue (reflets, ombres mobiles, scène) : chacun les recalculait toutes
+    rouesInst(); scene.updateMatrixWorld(); scene.autoUpdate = false; if (!vu.n) refFace();
+    ombres(vu, pasL, car, carY);
+    renderer.setRenderTarget(vu.rt); renderer.render(scene, cam); scene.autoUpdate = true;
     if (vu.rs) { const R = ssr.uniforms; R.t.value = vu.rt.texture; R.dz.value = vu.rt.depthTexture; R.P.value.copy(cam.projectionMatrix); R.Pi.value.copy(cam.projectionMatrixInverse); R.up.value.set(0, 1, 0).transformDirection(cam.matrixWorldInverse); R.px.value.set(1 / vu.rw, 1 / RH); renderer.setRenderTarget(vu.rs); renderer.render(ssrScene, postCam);
       REPLI.rDz.value = vu.rt.depthTexture; REPLI.rRes.value.set(vu.rw, RH); renderer.autoClear = false; renderer.render(repliScene, cam); renderer.autoClear = true; }
     if (vu.oeil) { const [a, b] = vu.oeil, O = OEIL.uniforms; O.t.value = vu.rt.texture; O.prev.value = a.texture; O.kc.value = 1 - Math.exp(-dt / 0.6); O.kn.value = 1 - Math.exp(-dt / 2.5); O.kd.value = (1 - Math.exp(-dt / 3)) * (1 - lm); U.dn.value = 1 - (1 - TUN) * lm; O.ld.value = Math.log(U.dn.value);

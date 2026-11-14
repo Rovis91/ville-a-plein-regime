@@ -60,6 +60,24 @@
     if (vol < 0.002) return;
     const o = AC.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); o.detune.value = det; o.connect(env(dest, t, dur, vol)); o.start(t); o.stop(t + dur + 0.05); return o;
   }
+  // une rafale de n bruits (le i-e au volume vol(i), tous les pas secondes, chacun comme nz : attaque a, puis chute à -80 dB en dur) : écrite une fois dans un tampon, au chargement de la carte (buildAmb),
+  // puis jouée par une seule source. 110 appels à nz d'un coup (l'hélicoptère du canal) faisaient 1 100 appels audio dans une image, 7 à 17 ms d'attente
+  const RAF = new WeakMap(), HELICO = { n: 110, pas: 0.075, dur: 0.06, vol: i => 0.2 * Math.sin(Math.PI * i / 110), a: 0.005 };
+  function rafaleBuf(R) {
+    const c = RAF.get(R); if (c && c.ac === AC) return c.buf;
+    const sr = AC.sampleRate, L = Math.ceil((R.n * R.pas + R.dur) * sr), buf = AC.createBuffer(1, L, sr), x = buf.getChannelData(0), b = nbuf.getChannelData(0);
+    for (let i = 0; i < R.n; i++) { const v = R.vol(i), k0 = Math.round(i * R.pas * sr), o = Math.random() * b.length | 0; if (v < 0.002) continue;
+      for (let k = 0; k < R.dur * sr && k0 + k < L; k++) { const t = k / sr; x[k0 + k] = b[(o + k) % b.length] * (t < R.a ? v * t / R.a : v * Math.pow(0.0001 / v, (t - R.a) / (R.dur - R.a))); } }
+    RAF.set(R, { ac: AC, buf }); return buf;
+  }
+  // coups brefs écrits dans un tampon : coup(x, t0, dur, vol, a, f) ajoute à x, à t0 s, un coup comme osc (f : sinus de f Hz) ou nz (f nul : bruit blanc) — attaque a, chute à -80 dB en dur
+  const coup = (x, t0, dur, vol, a, f) => { const sr = AC.sampleRate, k0 = Math.round(t0 * sr), b = nbuf.getChannelData(0), o = Math.random() * b.length | 0, w = 2 * Math.PI * f / sr;
+    for (let k = 0; k < dur * sr && k0 + k < x.length; k++) { const t = k / sr; x[k0 + k] += (f ? Math.sin(w * k) : b[(o + k) % b.length]) * (t < a ? vol * t / a : vol * Math.pow(0.0001 / vol, (t - a) / (dur - a))); } };
+  const tampon = (dur, ecrit) => { const buf = AC.createBuffer(1, Math.ceil(dur * AC.sampleRate), AC.sampleRate); ecrit(buf.getChannelData(0)); return buf; };
+  const joue = (buf, t, dest) => { const s = AC.createBufferSource(); s.buffer = buf; s.connect(dest); s.start(t); };
+  // grelots du traîneau (givre) : quatre tirages écrits au chargement, au lieu de 28 oscillateurs par passage
+  let GREL = null; const grelots = () => Array.from({ length: 4 }, () => tampon(1.8, x => { const f = 2300 + Math.random() * 400; for (let i = 0; i < 14; i++) { const d = i * 0.11 + Math.random() * 0.03; coup(x, d, 0.12, 0.012, 0.005, f); coup(x, d, 0.08, 0.006, 0.005, f * 1.51); } }));
+  const rafale = (R, t, dest, type, f, q = 1) => { const s = AC.createBufferSource(); s.buffer = rafaleBuf(R); s.connect(filt(type, f, q, dest)); s.start(t); };
   function nz(t, dur, vol, dest, type, f, q = 1, buf = nbuf, a = 0.005) { // buf : bruit blanc, ou mbuf (métal des cymbales)
     if (vol < 0.002) return;
     const s = AC.createBufferSource(), fl = filt(type, f, q, env(dest, t, dur, vol, a)); s.buffer = buf; s.loop = true; s.connect(fl); s.start(t, Math.random()); s.stop(t + dur + 0.05); return fl;
@@ -417,6 +435,7 @@
   }
   carte(M);
   function buildAmb() {
+    if (M.id === 'canal') rafaleBuf(HELICO); if (M.id === 'givre' && !(GREL && GREL.ac === AC)) GREL = Object.assign(grelots(), { ac: AC }); // l'hélicoptère, écrit maintenant plutôt qu'en course
     if (esp) { const P = ESP[M.id] || ESP.essai, n = Math.round(AC.sampleRate * P.dur), ir = AC.createBuffer(2, n, AC.sampleRate); // la salle du lieu
       for (let c = 0; c < 2; c++) { const x = ir.getChannelData(c); for (let i = 0; i < n; i++) x[i] = (Math.random() * 2 - 1) * Math.exp(-i / AC.sampleRate / (P.dur / 6.9)); } // -60 dB au bout de dur
       esp.conv.buffer = ir; esp.lp.frequency.value = P.lp; }
@@ -433,12 +452,12 @@
     if (id === 'paris') { for (let i = 0, n = 2 + Math.random() * 4 | 0, f = rnd(2600, 3800); i < n; i++) { const o = osc('sine', f, t + i * 0.11, 0.08, 0.04, ambBed); o && o.frequency.exponentialRampToValueAtTime(f * rnd(0.8, 1.4), t + i * 0.11 + 0.07); } return rnd(1.5, 5); } // oiseaux
     if (id === 'wangan') { for (const [type, f] of [['sawtooth', 98], ['square', 147]]) { const o = AC.createOscillator(), g = AC.createGain(); o.type = type; o.frequency.value = f; o.connect(filt('lowpass', 420, 0.7, g)); g.connect(ambBed);
       g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05, t + 0.4); g.gain.setValueAtTime(0.05, t + 2.2); g.gain.linearRampToValueAtTime(0, t + 3); o.start(t); o.stop(t + 3.1); } return rnd(25, 45); } // corne de navire
-    if (id === 'canal') { for (let i = 0; i < 110; i++) nz(t + i * 0.075, 0.06, 0.2 * Math.sin(Math.PI * i / 110), ambBed, 'lowpass', 260); return rnd(30, 50); } // hélicoptère qui passe au loin
+    if (id === 'canal') { rafale(HELICO, t, ambBed, 'lowpass', 260); return rnd(30, 50); } // hélicoptère qui passe au loin
     if (id === 'ville') { const o = AC.createOscillator(), g = AC.createGain(); o.frequency.setValueAtTime(620, t); for (let i = 0; i < 4; i++) { o.frequency.linearRampToValueAtTime(840, t + i + 0.5); o.frequency.linearRampToValueAtTime(620, t + i + 1); }
       o.connect(filt('lowpass', 1200, 0.7, g)); g.connect(ambBed); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.03, t + 1.5); g.gain.linearRampToValueAtTime(0, t + 4); o.start(t); o.stop(t + 4.1); return rnd(25, 50); } // sirène lointaine
     if (id === 'stade') { const c = nz(t, 2.6, 0.22, ambBed, 'bandpass', 900, 0.6, nbuf, 0.5); c && c.frequency.linearRampToValueAtTime(1300, t + 0.8); // clameur qui monte et retombe
       for (let i = 0; i < 3; i++) { const f = rnd(1800, 2600), o = osc('sine', f, t + rnd(0.3, 1.5), 0.35, 0.025, ambBed); o && o.frequency.linearRampToValueAtTime(f * 1.25, t + 2); } return rnd(6, 12); } // + quelques sifflets
-    if (id === 'givre') { for (let i = 0, f = rnd(2300, 2700); i < 14; i++) { const d = t + i * 0.11 + Math.random() * 0.03; osc('sine', f, d, 0.12, 0.012, ambBed); osc('sine', f * 1.51, d, 0.08, 0.006, ambBed); } return rnd(20, 40); } // grelots d'un traîneau, au loin
+    if (id === 'givre') { joue((GREL && GREL.ac === AC ? GREL : GREL = Object.assign(grelots(), { ac: AC }))[Math.random() * 4 | 0], t, ambBed); return rnd(20, 40); } // grelots d'un traîneau, au loin
     return 10;
   }
   // ---------- passage DJ (piste MULTI-PISTE) : deux platines, comme un DJ qui enchaîne deux disques ----------
@@ -528,13 +547,13 @@ class WG { // guide d'onde : deux lignes à retard (aller, retour) ; a, b : réf
 const mix = (v, o, c) => c + (o - c) * v, TAU = 2 * Math.PI, PB = 1.5; // PB : poids des bouffées d'échappement directes
 class Moteur extends AudioWorkletProcessor {
   static get parameterDescriptors() { return [{ name: 'rpm', defaultValue: 900, minValue: 0, maxValue: 15000 }, { name: 'load', defaultValue: 0, minValue: 0, maxValue: 1 }, { name: 'dg', defaultValue: 0, minValue: 0, maxValue: 1 }]; } // dg : dégâts de la voiture (game.js), qui dérèglent l'allumage
-  constructor() { super(); this.rev = 0; this.jit = 0; this.bl = 0; this.pf = 0; this.dx = 0; this.dy = 0; this.vit = true; this.port.onmessage = e => { if (e.data) this.cfg(e.data); else this.vit = false; }; }
+  constructor() { super(); this.rev = 0; this.jit = 0; this.bl = 0; this.pf = 0; this.dx = 0; this.dy = 0; this.vit = true; this.port.onmessage = e => { if (e.data && e.data.dort !== undefined) this.dort = e.data.dort; else if (e.data) this.cfg(e.data); else this.vit = false; }; } // dort : véhicule inaudible, rien n'est calculé (la sortie reste à zéro)
   cfg(P) { const k = sampleRate / 44100, L = x => Math.max(2, Math.round(x * k));
     this.ign = P.ign; this.irr = P.irr; this.off = P.off || Array.from({ length: P.n }, (_, i) => i / P.n);
     this.C = this.off.map(() => ({ k: 1 + P.irr * (Math.random() * 2 - 1), f: 1, x0: 1, cy: new WG(L(10), 0.75, 0.75), in: new WG(L(P.int), 0.01, 0.95), ex: new WG(L(P.exh), 0.95, 0.01), xt: new WG(L(P.ext), 0.01, 0.01) }));
     this.st = new WG(L(P.str), 0.01, 0.01); this.mu = P.muf.map(x => new WG(L(x), 0.01, 0.01)); this.ou = new WG(L(P.out), 0.01, 0.01); }
   process(_, outs, par) {
-    if (!this.C) return this.vit; // pas encore de configuration
+    if (!this.C || this.dort) return this.vit; // pas encore de configuration, ou endormi
     const o = outs[0][0], R = par.rpm, LD = par.load, dg = par.dg[0], C = this.C, n = C.length, m = this.mu.length, kb = 1 - Math.exp(-TAU * 125 / sampleRate), kp = 1 - Math.exp(-TAU * 4000 / sampleRate);
     for (let s = 0; s < o.length; s++) {
       const rpm = R.length > 1 ? R[s] : R[0], ld = LD.length > 1 ? LD[s] : LD[0], ig = 5 * (0.2 + 0.8 * ld);
@@ -616,6 +635,8 @@ registerProcessor('moteur', Moteur);`;
   // regle : la cible d'un réglage, envoyée seulement si elle a bougé (0,1 %) : 87 % des envois par image répétaient la précédente, et chaque envoi peut attendre le fil audio (jusqu'à 2 ms)
   // tout setTargetAtTime d'un réglage visé à chaque image passe par ici, sinon la valeur retenue ne serait plus la bonne
   const regle = (p, v, t, tc) => { if (p.vv !== undefined && p.vtc === tc && Math.abs(v - p.vv) <= Math.abs(v) * 1e-3 + 1e-6) return; p.vv = v; p.vtc = tc; p.setTargetAtTime(v, t, tc); };
+  // un moteur physique coûte 2 à 4 % du fil audio, même muet : celui d'un véhicule qu'on n'entend pas dort
+  const dors = (v, x) => { x = !!x; if (v.node && v.dort !== x) { v.dort = x; v.node.port.postMessage({ dort: x }); } };
   const tait = (v, t) => { regle(v.vm.gain, 0, t, 0.05); regle(v.vp.gain, 0, t, 0.05); };
   // la chaîne d'une platine (couleur de la station, filtres, batterie, bus pompé, saturations, réverbération, écho, chorus, tranches) : une au départ, une seconde pendant un passage DJ
   function chaine() {
@@ -735,7 +756,7 @@ registerProcessor('moteur', Moteur);`;
     const f = nz(t, 0.22, v, sat, 'bandpass', 1400, 0.8); f && f.frequency.exponentialRampToValueAtTime(300, t + 0.2);
     nz(t, 0.5 + v, v * 0.5, V.choc, 'bandpass', 2400 + Math.random() * 1200, 4, mbuf, 0.002);
     const b = 280 + Math.random() * 200; for (const [m, a] of [[1, 0.25], [2.32, 0.15], [4.1, 0.08]]) osc('sine', b * m, t, 0.45, v * a * 0.6, V.choc); // partiels inharmoniques d'une tôle
-    for (let i = 0; i < 9; i++) { const d = t + 0.12 + Math.random() * 0.6; nz(d, 0.015, v * (0.1 + Math.random() * 0.2), V.choc, 'highpass', 3000); if (i % 3 === 0) osc('sine', 3500 + Math.random() * 3000, d, 0.06, v * 0.06, V.choc); }
+    joue(tampon(0.8, x => { for (let i = 0; i < 9; i++) { const d = 0.12 + Math.random() * 0.6; coup(x, d, 0.015, v * (0.1 + Math.random() * 0.2), 0.005, 0); if (i % 3 === 0) coup(x, d, 0.06, v * 0.06, 0.005, 3500 + Math.random() * 3000); } }), t, filt('highpass', 3000, 1, V.choc)); // débris et éclats : un tampon, une source (12 avant)
   }
   function boostFx(t = AC.currentTime) { // départ de la nitro : purge sifflante, puis la flamme qui s'ouvre et un coup dans le grave
     nz(t, 0.35, 0.05, V.choc, 'highpass', 2500, 0.7, nbuf, 0.003);
@@ -833,9 +854,10 @@ registerProcessor('moteur', Moteur);`;
     // les autres véhicules (e.autres, du plus proche au plus lointain : lat (+ à droite), fwd en m, dist, vr = vitesse de rapprochement, vrel = vitesse relative, rpm, camion, occ = 0..1 hors de vue directe),
     // relatifs à la voiture qu'on entend : l'auditeur reste à l'origine, regard vers -z, et chaque voix est placée en (lat, 0, -fwd)
     for (let i = 0; i < AU.length; i++) { const o = e.autres && e.autres[i], v = AU[i];
-      if (!o || state === 'title') { k(v.g.gain, 0, 0.15); k(v.wh.gain, 0, 0.15); continue; }
+      if (!o || state === 'title') { k(v.g.gain, 0, 0.15); k(v.wh.gain, 0, 0.15); dors(v, 1); continue; }
       const P = o.camion ? CAMION : MOT[CARD.moteur] || MOT.l6, d = Math.max(3, o.dist), dop = clamp(343 / (343 - clamp(o.vr, -150, 150)), 0.7, 1.5), a = 1 - Math.exp(-dt / 0.12);
       v.dop = v.dop ? v.dop + (dop - v.dop) * a : dop; v.oc = (v.oc || 0) + ((o.occ || 0) * (0.4 + 0.6 * (ESP[M.id] || ESP.essai).mur) - (v.oc || 0)) * (1 - Math.exp(-dt / 0.25)); // Doppler et occlusion lissés (la vitesse de rapprochement saute d'une image à l'autre) ; en terrain ouvert, rien ne masque vraiment
+      dors(v, (o.camion ? 0.12 : 0.09) / d < 6e-4); // au-delà de 150 à 200 m, -64 dB sous la musique : le moteur physique s'arrête de calculer
       if (v.node) { if (v.typ !== P) { v.node.port.postMessage(P); v.typ = P; } k(v.node.parameters.get('rpm'), o.rpm * v.dop, 0.04); k(v.node.parameters.get('load'), o.camion ? 0.6 : 0.85, 0.1); }
       k(v.g.gain, (o.camion ? 0.12 : 0.09) / d * (1 - 0.55 * v.oc), 0.05); k(v.lp.frequency, 9000 / (1 + d / 25) * (1 - 0.88 * v.oc), 0.1);
       if (v.pan.positionX) { k(v.pan.positionX, o.lat, 0.05); k(v.pan.positionZ, -o.fwd, 0.05); } else v.pan.setPosition(o.lat, 0, -o.fwd);
@@ -843,6 +865,12 @@ registerProcessor('moteur', Moteur);`;
       if (o.camion && racing) { if (v.pf > 0 && o.fwd <= 0 && Math.abs(o.lat) < 8 && t - (AU.kt || 0) > 4) { AU.kt = t; klaxon(t + 0.12, gain(clamp(10 / d, 0.4, 1), v.pan)); } v.pf = o.fwd; } else v.pf = 0; } // on vient de doubler un camion : il klaxonne
   }
 
+  // Les sons ponctuels (choc, rapport, pétarade, réception…) créent chacun 20 à 100 nœuds ; en course, ils sont créés juste après l'image, dans la tâche suivante, au lieu de dans l'image :
+  // chaque création peut attendre le fil audio, et un choc au départ ajoutait jusqu'à 10 ms à l'image. Le son part quelques millisecondes plus tard (son temps de départ, déjà passé, joue tout de suite).
+  // Hors ligne (banc d'écoute), ils restent immédiats : le rendu n'attend pas la tâche suivante
+  const FILE = [], MC = new MessageChannel(); MC.port1.onmessage = () => { for (const f of FILE.splice(0)) f(); };
+  const differe = f => function () { const a = arguments; if (!live) return f.apply(null, a); FILE.push(() => f.apply(null, a)); if (FILE.length === 1) MC.port2.postMessage(0); };
+  choc = differe(choc); clac = differe(clac); levier = differe(levier); petarade = differe(petarade); pschitt = differe(pschitt); boostFx = differe(boostFx); reception = differe(reception); klaxon = differe(klaxon); coupMusique = differe(coupMusique);
   document.addEventListener('visibilitychange', () => { if (AC && live) document.hidden ? AC.suspend() : AC.resume(); }); // pas de musique hachée ni de moteur figé en arrière-plan
   window.SON = {
     init: initAudio, frame: audioFrame, setStation, carte, pump, mix: mixer, dj: djSt, beep, radio, stinger, arrivee, quitter, reprendre,

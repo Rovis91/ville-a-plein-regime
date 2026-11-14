@@ -314,7 +314,7 @@
       for (let k = 0; k < 6; k++) feux.push([CX - 20 + k * 5.4, 12, CZ, 0, 2, 4.5]);
       for (let k = 0; k < 5; k++) feux.push([CX + 14 + k * 10, 4.5, CZ, 0, 2.4, 5]);
       const gf = new THREE.PlaneGeometry(1, 1); gf.translate(0, 0.5, 0);
-      const mf = new THREE.InstancedMesh(gf, h.mat('flamme', AD), feux.length), o3 = new THREE.Object3D(); mf.frustumCulled = false; h.scene.add(mf);
+      const mf = new THREE.InstancedMesh(gf, h.mat('flamme', AD), feux.length), o3 = new THREE.Object3D(); mf.frustumCulled = false; mf.userData.dyn = 1; h.scene.add(mf);
       // deux éventails de lasers sous le cube, quatre faisceaux de poursuite qui balaient la piste, et les flashs des appareils photo dans les gradins
       const lasers = [0x30ff70, 0xff30c0].map(c => h.pose('eventailLaser', { rayon: h.mat('peinture', { ...AD, c }) }, h.scene, [CX, HT - 38, CZ])[0]);
       const gc = new THREE.ConeGeometry(9, 56, 10, 1, true); gc.translate(0, -28, 0); const mc = h.mat('faisceau', AD);
@@ -778,7 +778,7 @@
 
       // ---------- camions : un tracteur à cabine avancée et une remorque (conteneur, citerne ou plateau à bobines), qui suivent le trafic de sim.js ----------
       const nt = h.M.trafic, dc = new THREE.Object3D(), types = ['remorqueConteneur', 'remorqueCiterne', 'remorquePlateau'];
-      const flotte = (nom, peau, n) => Object.entries(h.zones(nom, peau)).map(([zn, geo]) => { const m = new THREE.InstancedMesh(geo, peau[zn], Math.max(1, n)); m.count = n; m.frustumCulled = false; h.scene.add(m); return m; });
+      const flotte = (nom, peau, n) => Object.entries(h.zones(nom, peau)).map(([zn, geo]) => { const m = new THREE.InstancedMesh(geo, peau[zn], Math.max(1, n)); m.count = n; m.frustumCulled = false; m.userData.dyn = 1; h.scene.add(m); return m; });
       const cabineC = h.mat('metalClair'), caisseC = h.mat('tole');
       const tracteursC = flotte('tracteur', { chassis, pneu, cabine: cabineC, vitre, calandre: h.mat('calandre'), phare: lampe, feuOrange: clign, roue }, nt);
       const remorques = types.map((nom, t) => flotte(nom, { chassis, roue, pneu, feu: feuRouge, caisse: caisseC, cuve: h.mat('inox'), plateau: h.mat('planches'), bobine: h.mat('bobine'), sangle: h.mat('sangle') }, Math.ceil((nt - t) / 3)));
