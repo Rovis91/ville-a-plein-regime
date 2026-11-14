@@ -581,12 +581,12 @@
       const occ = [], vide = (x, z, r) => occ.every(o => (o[0] - x) ** 2 + (o[1] - z) ** 2 > (o[2] + r) ** 2), prend = (x, z, r) => vide(x, z, r) && (occ.push([x, z, r]), true); // ce qui est déjà posé : rien ne se chevauche
       const sol = (x, z, dy = 0) => g.hAt(x, z) + dy, hasard = () => [g.box[0] + rnd() * (g.box[2] - g.box[0]), g.box[1] + rnd() * (g.box[3] - g.box[1])];
       // le gué : le ruisseau traverse la route au creux du parcours. Sur toute la zone mouillée de la carte (sim.js : surf.zones, là où la voiture chasse), de la boue sombre et des ornières pleines d'eau, fondues dans la terre sèche aux deux bouts ;
-      // au milieu, 36 m d'eau brun vert, brillante (reflets du soleil et des phares), avec une ligne d'écume à l'entrée et à la sortie ; de part et d'autre, le lit du ruisseau, ses galets et ses roseaux
+      // au milieu, sur toute la zone mouillée pleine (54 m), de l'eau brun vert, brillante (reflets du soleil et des phares), avec une ligne d'écume à l'entrée et à la sortie ; de part et d'autre, le lit du ruisseau, ses galets et ses roseaux
       const iG0 = pt(h, g0), nG = (pt(h, g1) - iG0 + N) % N, verre = { transparent: true, depthWrite: false, side: THREE.DoubleSide };
       const eau = h.mat('eauGue', { ...verre, opacity: 0.92, gloss: 0.1, rep: [4, 1] }), eauR = h.mat('eauGue', { ...verre, opacity: 0.92, gloss: 0.3, rep: [18, 1] }), ecume = h.mat('ecume', { ...verre, rep: [6, 1] });
       h.ribbon((iG0 - 9 + N) % N, nG + 18, s => -s.w, 0.025, s => s.w, 0.025, h.mat('boueGue', { ...verre, gloss: 0.5 }), 2 * (nG + 18)).renderOrder = 1; // v de 0 à 1 sur toute la longueur : la texture s'efface aux deux bouts
-      h.ribbon((iG - 9 + N) % N, 18, s => -s.w - 0.5, 0.07, s => s.w + 0.5, 0.07, eau, 8).renderOrder = 2;
-      for (const i of [iG - 10, iG + 8]) h.ribbon((i + N) % N, 2, s => -s.w - 0.5, 0.08, s => s.w + 0.5, 0.08, ecume, 4).renderOrder = 3;
+      h.ribbon(iG0, nG, s => -s.w - 0.5, 0.07, s => s.w + 0.5, 0.07, eau, 8).renderOrder = 2; // la nappe couvre la zone mouillée pleine : là où game.js fait partir la gerbe
+      for (const i of [iG0 - 1, iG0 + nG - 1]) h.ribbon((i + N) % N, 2, s => -s.w - 0.5, 0.08, s => s.w + 0.5, 0.08, ecume, 4).renderOrder = 3;
       h.pose('boite', eauR, repere(h, S[iG]), [0, -0.2, 0], 90, 0.3, 12); // le lit, 12 m de large, sous la nappe de la route
       const lit = (sd, off, a) => { const s = S[iG], [x, z] = bord(s, sd, off); return [x + s.tx * a, z + s.tz * a]; }, galets = [], roseaux = [];
       for (let k = 0; k < 70; k++) { const sd = k & 1 ? 1 : -1, [x, z] = lit(sd, S[iG].w + 1.5 + rnd() * 34, (rnd() < 0.5 ? -1 : 1) * (5.5 + rnd() * 2)), l = 0.5 + rnd() * 0.8; galets.push([x, sol(x, z, -0.25 * l), z, rnd() * 6, l, l * 0.6, l]); }

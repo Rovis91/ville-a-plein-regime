@@ -1,6 +1,6 @@
 // Textures propres à « terre » (Spéciale des Ocres) : complète le catalogue de textures.js, mêmes conventions. Voir METHODE-DECOR.md.
 (() => {
-  const texte = (g, txt, x, y, px, col) => { g.fillStyle = col; g.font = 'bold ' + px + 'px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, x, y); };
+  const texte = (g, txt, x, y, px, col, larg = Infinity) => { g.fillStyle = col; g.font = 'bold ' + px + 'px sans-serif'; const w = g.measureText(txt).width; if (w > larg) g.font = 'bold ' + (px * larg / w).toFixed(1) + 'px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, x, y); }; // larg : le texte rétrécit pour tenir dans cette largeur (la police varie d'un système à l'autre)
   Object.assign(TEXTURES, {
     // sol de la garrigue : terre d'ocre, cailloux clairs, plaques plus rouges, touffes d'herbe sèche et de thym
     terreOcre: () => [64, 64, (g, o) => {
@@ -71,7 +71,7 @@
     // banderoles de la spéciale : deux annonceurs inventés par texture, k = le premier
     banderoleRallye: k => [192, 20, (g, o) => {
       const l = [['RALLYE DES OCRES', '#e8482a', '#f4f0e0'], ['HUILES MISTRAL', '#f4c020', '#1c2a5a'], ['PNEUS CIGALE', '#1c2a5a', '#f4f0e0'], ['RADIO CAILLOU 88.8', '#f4f0e0', '#e8482a'], ['GARRIGUE SPORT', '#2a62c8', '#f4c020'], ['SIROPS DU VALLON', '#3a7a3a', '#f4f0e0']];
-      for (let j = 0; j < 2; j++) { const [t, f, c] = l[(k + j) % l.length], x = j * 96; o.R(g, f, x, 0, 96, 20); o.R(g, '#08080c', x, 0, 1, 20); texte(g, t, x + 48, 10.5, 10, c); }
+      for (let j = 0; j < 2; j++) { const [t, f, c] = l[(k + j) % l.length], x = j * 96; o.R(g, f, x, 0, 96, 20); o.R(g, '#08080c', x, 0, 1, 20); texte(g, t, x + 48, 10.5, 10, c, 88); } // 4 px de marge de chaque côté : un nom long (RADIO CAILLOU 88.8) ne déborde plus sur l'annonceur voisin
     }],
   });
   // la piste en terre : th.route[7] = 'terre' repeint la chaussée commune en terre battue (ni rapiéçages, ni joints, ni bordures en damier).
