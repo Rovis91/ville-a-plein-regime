@@ -91,10 +91,6 @@
     camionLivraison: () => [['caisse', 6.2, 2.9, 2.5, -1.3, 2.05, 0, null, 1], ['chassis', 8.8, 0.4, 2.2, 0, 0.75, 0], ['cabine', 2.4, 2.3, 2.4, 3.2, 1.95, 0], ['vitre', 0.1, 0.9, 2.1, 4.42, 2.45, 0],
       ...paire(sz => ['vitre', 1.2, 0.8, 0.06, 3.4, 2.5, sz * 1.21]), ...[-3.2, 0.2, 3.2].flatMap(x => paire(sz => ['pneu', 1, 1, 0.3, x, 0.5, sz * 1.05])),
       ...paire(sz => ['orange', 0.1, 0.2, 0.3, 4.45, 1.2, sz * 1.05]), ...paire(sz => ['orange', 0.1, 0.25, 0.25, -4.42, 1.3, sz * 1.0]), ...paire(sz => ['rouge', 0.1, 0.3, 0.3, -4.42, 0.9, sz * 1.0])],
-    // feu tricolore en haut de la butte, dans le repère de la route (X en travers, Z vers l'arrière) : origine au pied du mât, potence de l m vers +X (l signé : vers la chaussée),
-    // un boîtier en bout de potence au-dessus de la voie, un au mât ; les feux regardent vers +Z, vers qui arrive
-    feuTricolore: l => { const boitier = (x, y) => [['boitier', 0.75, 2.1, 0.45, x, y, 0], ['rouge', 0.5, 0.5, 0.06, x, y + 0.65, 0.25], ['orange', 0.5, 0.5, 0.06, x, y, 0.25], ['vert', 0.5, 0.5, 0.06, x, y - 0.65, 0.25]];
-      return [['fer', 0.18, 6.2, 0.18, 0, 3.1, 0], ['fer', Math.abs(l), 0.14, 0.14, l / 2, 6.0, 0], ...boitier(l, 5.1), ...boitier(0, 2.8)]; },
     // livreur de journaux à vélo, origine au sol, roule vers +X : deux roues fines, cadre, cycliste (jambes, torse, tête à casquette), sacoche de journaux sur le porte-bagages
     livreur: () => [...paire(sx => ['pneu', 0.7, 0.7, 0.05, sx * 0.55, 0.35, 0]), ['cadre', 1.1, 0.05, 0.05, 0, 0.6, 0], ['cadre', 0.05, 0.5, 0.05, -0.15, 0.75, 0], ['cadre', 0.05, 0.05, 0.5, 0.45, 1.0, 0],
       ['tenue', 0.15, 0.6, 0.3, -0.1, 0.85, 0], ['tenue', 0.35, 0.6, 0.4, 0.0, 1.4, 0, [0, 0, -0.35]], ['peau', 0.22, 0.24, 0.22, 0.12, 1.85, 0], ['tenue', 0.3, 0.06, 0.26, 0.17, 1.98, 0],

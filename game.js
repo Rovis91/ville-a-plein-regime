@@ -1650,7 +1650,7 @@
     // chaleur (voir AIR) : derrière l'échappement à haut régime, pied au plancher ; et au loin sur la route des cartes chaudes (th.chaleur), en plein soleil, sans pluie
     const ch = U.ch.value, cr = U.cr.value; cr.z = now / 1000 % 600;
     tmp.set(ENC.min.x - 0.6, 0.5, 0).applyMatrix4(G.matrixWorld).project(cam);
-    ch.set(tmp.x / 2 + 0.5, tmp.y / 2 + 0.5, tmp.z < 1 ? clamp((vu.rpm - 0.7) / 0.3, 0, 1) * vu.load * (1 - Math.min(1, pg)) : 0, 0);
+    ch.set(tmp.x / 2 + 0.5, tmp.y / 2 + 0.5, tmp.z < 1 ? clamp((vu.rpm - 0.7) / 0.3, 0, 1) * vu.load * (1 - Math.min(1, pg)) * (TH.echap ?? 1) : 0, 0); // th.echap = 0 : la carte s'en passe
     if (TH.chaleur) { const s = S[(car.idx + 80) % N]; tmp.set(s.x, s.y, s.z).project(cam); cr.x = tmp.x / 2 + 0.5; cr.y = tmp.y / 2 + 0.5; ch.w = tmp.z < 1 ? TH.chaleur * (1 - lm) * (1 - Math.min(1, pl)) : 0; }
     if (!chaud) { // première image : tout est dessiné une fois sans tri de visibilité, pour que shaders, géométries et textures partent au GPU maintenant et non au premier passage en course (à-coups de 40 ms)
       chaud = true; const caches = [], tri = [];
