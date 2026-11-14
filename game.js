@@ -881,7 +881,10 @@
 
   // ---------- audio : voir audio.js (window.SON) ; ici seulement ce que le jeu et le HUD lisent ----------
   let radioT = 0;
-  const zap = () => { SON.setStation(SON.station + 1); radioT = 2.5; };
+  const zap = () => { // après la dernière station : SILENCE (musique coupée), puis retour à la première
+    if (!SON.musicOn) { SON.toggleMusic(); SON.setStation(0); } else if (SON.station === SON.stations.length - 1) SON.toggleMusic(); else SON.setStation(SON.station + 1);
+    radioT = 2.5; };
+  const nomRadio = () => SON.musicOn ? SON.nom : 'SILENCE';
   // boîte et régime : calculés même sans audio, la jauge du HUD s'en sert
   function drivetrain(vu, dt, gas) { // rapport et régime viennent de la physique (sim.js) ; ici on les lisse, par vue, pour le son et la jauge
     const car = vu.car, up = Math.sign(car.gear - vu.gear); vu.gear = car.gear; // +1 rapport monté, -1 descendu
@@ -1029,7 +1032,7 @@
   }
   // menu de pause : [ligne, action]. À deux, pas de boîte (chacun a la sienne, sur son périphérique)
   const pauseItems = () => [['REPRENDRE', () => { state = prev; }], ['RECOMMENCER', start], ...(deux() ? [] : [['BOITE : ' + (manual ? 'MANUELLE' : 'AUTO'), () => { manual = !manual; VUES[0].moi.manual = manual; }]]),
-    ['RADIO : ' + SON.nom, zap], ['MUSIQUE : ' + (SON.musicOn ? 'OUI' : 'NON'), () => SON.toggleMusic()], ['QUITTER', toMenu]];
+    ['RADIO : ' + nomRadio(), zap], ['QUITTER', toMenu]];
   function toMenu() { if (NET.role === 'hote') NET.stop(); if (invite()) attente(); ses.toMenu(); state = 'title'; ins = false; race = null; const c = newCar(T); for (const vu of VUES) suit(vu, c); msel = 4; }
   // menu principal : 0 carte, 1 joueurs, 2 mode, 3 boîte, 4 démarrer ; d = -1 / +1 (gauche / droite ; Entrée vaut +1)
   let cible = null, cibleT = 0; // carte demandée au menu, pas encore construite
@@ -1316,7 +1319,7 @@
       for (let j = 0; j < EQR; j++) R(hg, j >= rows ? '#1c1c2c' : !on ? '#2a4a5a' : j > 7 || fr > 0.88 ? RD : j > 4 ? Y : C, 12 + i * 6, HH - 14 - j * 4, 5, 3);
       R(hg, '#ffffff', 12 + i * 6, HH - 14 - Math.min(EQR - 1, Math.round(peak[i] * EQR)) * 4, 5, 1);
     }
-    if (radioT > 0 || state === 'count' || state === 'pause') { panel(HW - 126, 78, 120, 30); txt('RADIO ' + SON.fq, HW - 120, 83, 8, radioT > 0 && blink ? '#ffffff' : C); txt(SON.nom, HW - 120, 95, 8, Y); } // la radio : au départ, en pause et au changement de station seulement
+    if (radioT > 0 || state === 'count' || state === 'pause') { panel(HW - 126, 78, 120, 30); txt('RADIO ' + (SON.musicOn ? SON.fq : '--.-'), HW - 120, 83, 8, radioT > 0 && blink ? '#ffffff' : C); txt(nomRadio(), HW - 120, 95, 8, Y); } // la radio : au départ, en pause et au changement de station seulement
     if (state === 'race' || state === 'count') { // minicarte, sous la radio ; un point par voiture : dot(x, z, couleur)
       const mx = HW - 96, my = 12, dot = (x, z, c) => R(hg, c, mx + MM.px(x) - 1, my + MM.pz(z) - 1, 3, 3);
       panel(HW - 102, 6, 96, 68); hg.drawImage(MM.c, mx, my); // 96 de large : ne touche pas les bandeaux centraux même en 4:3 (HW = 360)
