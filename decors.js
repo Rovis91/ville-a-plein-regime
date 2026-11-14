@@ -703,7 +703,7 @@
             const hh = 2 + (al() * 4 | 0), dom = al() * cols.length | 0;
             for (let k = 0; k < hh; k++) piles[al() < 0.6 ? dom : al() * cols.length | 0].push([x, g.hAt(x, z) + 1.3 + k * 2.6, z, h.across(s) + Math.PI / 2 + (al() - 0.5) * 0.04]); }
         }
-        for (let j = 140; j < n - 40; j += 280) { const i = (i0 + j) % N, s = S[i]; grues.push([s.x, s.y, s.z, h.across(s)]); } // les portiques, à la place laissée dans le mur
+        for (let j = 420; j < n - 40; j += 280) { const i = (i0 + j) % N, s = S[i]; grues.push([s.x, s.y, s.z, h.across(s)]); } // les portiques, à la place laissée dans le mur ; celui de j = 140 roule (portique mobile, plus bas)
         insts(h, 'grueParc', { structure: h.mat('metalClair', { c: 0xe0b020 }), cabine: h.mat('metalClair', { c: 0xe8e8e4 }), vitre: h.mat('vitreSombre'), roue: h.mat('roue'), machinerie: h.mat('metalClair', { c: 0x8a8e96 }) }, grues, { a: [32] });
         for (let j = 18; j < n; j += 36) { const i = (i0 + j) % N, s = S[i], sd = (j / 36) & 1 ? 1 : -1, [x, z] = bord(s, sd, W + 3.5); // un projecteur tous les 72 m, d'un côté puis de l'autre
           mats35.push([x, g.hAt(x, z), z]); h.lum(i, x - s.tz * sd * -4, s.y + 20, z + s.tx * sd * -4, 0xe8f0ff, 48, 2.2); } }
@@ -743,7 +743,7 @@
       const tm = [tour(['#ffb85a', '#ffd27a']), tour(['#f4f1e0', '#9fd0ff']), tour(['#ffb85a', '#f4f1e0', '#ff7a5a'])], tl = tm.map(() => []);
       for (let gx = g.box[0] + 30; gx < g.box[2] - 30; gx += 58) for (let gz = g.box[1] + 30; gz < CH0 - 60; gz += 58) {
         const x = gx + rnd() * 16, z = gz + rnd() * 16, d = g.dAt(x, z);
-        if (d < W + 26 || g.hAt(x, z) < -1.5) continue;
+        if (d < W + 26 || g.hAt(x, z) < -1.5 || Math.hypot(x - 860, z + 70) < 70) continue; // la place du chantier de la grue (plus bas)
         const hh = 26 + rnd() * 40 + Math.min(120, d * 0.35) * rnd(), w = 26 + rnd() * 16; tl[rnd() * 3 | 0].push([x, hh / 2 - 1, z, 0, w, hh, w]);
       }
       tl.forEach((l, i) => inst(h, h.geo('bloc'), tm[i], l));
@@ -776,6 +776,43 @@
       const NN = 24, nacelles = new THREE.InstancedMesh(h.geo('nacelle'), h.mat('nacelle', LUM, '#e8e8e8'), NN), dn = new THREE.Object3D(); nacelles.frustumCulled = false; roueG.add(nacelles);
       for (let k = 0; k < NN; k++) nacelles.setColorAt(k, new THREE.Color([0xff4a8a, 0x4ac8ff, 0xffd84a, 0x6aff8a][k % 4]));
 
+      // ---------- la longue droite du front de mer (points 0 à 3) : un phare rouge et blanc au bout d'une digue côté chenal, au faisceau qui tourne ; en face, côté ville, une grue de chantier illuminée ----------
+      const blancP = h.mat('metalClair', { c: 0xf2f0ea }), rougeP = h.mat('metalClair', { c: 0xc8202a }), PH = [330, 150]; // pied du phare : 150 m au large de la route
+      boite(h, beton, 9, 3, PH[1] - 14, PH[0], -1, (PH[1] + 14) / 2); boite(h, beton, 16, 3, 16, PH[0], -1, PH[1]); // la digue et son musoir
+      h.pose('phare', { beton, rouge: rougeP, blanc: blancP, acier: gris, lampe: h.mat('lampe', LUM) }, h.scene, [PH[0], 0.5, PH[1]]);
+      const feuPhare = new THREE.Group(); feuPhare.userData.dyn = 1; feuPhare.position.set(PH[0], 28.3, PH[1]); h.scene.add(feuPhare);
+      const mFais = h.addMat(h.tx('degrade', '#fff2c0', true), { opacity: 0.32 });
+      for (const rx of [0, Math.PI / 2]) for (const sd of [-1, 1]) { const b = new THREE.Mesh(h.geo('faisceau'), mFais); b.rotation.set(rx, 0, sd * Math.PI / 2, 'XZY'); b.scale.set(0.35, 0.5, 1); feuPhare.add(b); } // deux pinceaux opposés, chacun en croix pour avoir du volume
+      const CG = [880, -60], grueC = new THREE.Group(); grueC.userData.dyn = 1; grueC.position.set(CG[0], g.hAt(CG[0], CG[1]), CG[1]); h.scene.add(grueC);
+      const jaune = h.mat('metalClair', { c: 0xe8b020 });
+      h.pose('grueTour', { beton, treillis: h.mat('treillis', { alphaTest: 0.5, side: THREE.DoubleSide }, '#e8b020'), acier: jaune, cabine, vitre }, grueC);
+      boite(h, beton, 30, 34, 30, CG[0] - 34, g.hAt(CG[0], CG[1]) + 17, CG[1] - 10); // la tour en chantier : un noyau de béton, pas encore de façade
+      { const lp = [], lc = []; // guirlande de lampes le long du mât et de la flèche (blanc), lampes rouges en pointe et en bout de flèche
+        for (let y = 3; y < 60; y += 2.5) lp.push(1, y, 1), lc.push(1, 0.95, 0.85);
+        for (let x = -16; x <= 50; x += 2) lp.push(x, 62, 0), lc.push(1, 0.95, 0.85);
+        for (const p of [[0, 69, 0], [50, 62.5, 0], [-17, 62.5, 0]]) lp.push(...p), lc.push(1, 0.1, 0.15);
+        const lg2 = new THREE.BufferGeometry(); lg2.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3)); lg2.setAttribute('color', new THREE.Float32BufferAttribute(lc, 3));
+        const pg = new THREE.Points(lg2, new THREE.PointsMaterial({ size: 3, sizeAttenuation: false, vertexColors: true, fog: false })); pg.frustumCulled = false; grueC.add(pg); }
+
+      // ---------- le portique mobile de l'enfilade : un des portiques de parc roule au-dessus de la route, d'avant en arrière (voir l'enfilade, plus haut) ----------
+      const iPm = (pt(h, 10) + 142) % N, portM = new THREE.Group(); portM.userData.dyn = 1; h.scene.add(portM);
+      h.pose('grueParc', { structure: h.mat('metalClair', { c: 0xe0b020 }), cabine, vitre, roue, machinerie }, portM, [0, 0, 0], 36);
+      { const s = S[iPm], [x, z] = bord(s, 1, 18); h.lum(iPm, x, s.y + 22, z, 0xffc040, 40, 1.4); } // gyrophare et éclairage du portique
+
+      // ---------- le péage abandonné (points 30 à 31) : gare sur dalle de part et d'autre du viaduc, guérites éteintes mais vitres au sodium, auvent sur toute la largeur ----------
+      { const s = S[near(h, -450, -245)], r = repere(h, s), dalle = h.mat('bitume'), L = 2 * W + 44;
+        h.pose('auventPeage', { toit: h.mat('betonGris'), lampe: h.mat('sodium', LUM), acier: gris, enseigne: h.mat('ecrit', LUM, 128, 16, '#3a2a10', '#ffb040', '料金所  TOLL  閉鎖 CLOSED', 11) }, r, [0, 0, 0], L);
+        for (const sd of [-1, 1]) { h.pose('boite', dalle, r, [sd * (W + 11.5), -0.6, 0], 21, 1, 36); // la dalle des voies fermées, au niveau de la chaussée
+          for (const sz of [-12, 12]) h.pose('boite', beton, r, [sd * (W + 11.5), -s.y / 2 - 1, sz], 3, s.y, 3); // ses piles
+          for (const e of [5, 11, 17]) h.pose('guerite', { beton, nez: h.mat('rayures', LUM), cabine: blancP, vitre: h.mat('sodium', LUM) }, r, [sd * (W + e), 0, 0]); }
+        h.lum(near(h, -450, -245), s.x, s.y + 7, s.z, 0xffa040, 36, 2.6); }
+
+      // ---------- l'enseigne de love hotel (point 32) : la première lumière rose de la ville, sur un mât au bord du viaduc, devant l'hôtel ----------
+      { const i = near(h, -175, -95), s = S[i], [x, z] = bord(s, -1, W + 9), r = repere(h, s); r.position.set(x, s.y - 2, z);
+        h.pose('enseigneHotel', { acier: gris, enseigne: h.mat('ecrit', LUM, 128, 52, '#2a0418', '#ff4ab0', 'HOTEL ♥ LOVE', 30), coeur: h.mat('lampe', { lum: 1, c: 0xff3a8a }), vacant: h.mat('ecrit', LUM, 64, 14, '#08200e', '#5aff8a', '空室 VACANT', 10) }, r);
+        const [hx, hz] = bord(s, -1, W + 40); boite(h, tour(['#ff4ab0', '#ffb0d8', '#b05aff']), 26, 30, 22, hx, g.hAt(hx, hz) + 14, hz);
+        h.lum(i, x, s.y + 14, z, 0xff4ab0, 30, 1.8); }
+
       // ---------- camions : un tracteur à cabine avancée et une remorque (conteneur, citerne ou plateau à bobines), qui suivent le trafic de sim.js ----------
       const nt = h.M.trafic, dc = new THREE.Object3D(), types = ['remorqueConteneur', 'remorqueCiterne', 'remorquePlateau'];
       const flotte = (nom, peau, n) => Object.entries(h.zones(nom, peau)).map(([zn, geo]) => { const m = new THREE.InstancedMesh(geo, peau[zn], Math.max(1, n)); m.count = n; m.frustumCulled = false; h.scene.add(m); return m; });
@@ -790,6 +827,9 @@
       const vus = [...tracteursC, ...remorques.flat()];
       for (const m of vus) if (m.instanceColor) m.instanceColor.needsUpdate = true;
       return (dt, now) => {
+        feuPhare.rotation.y = now * 0.0009; grueC.rotation.y = Math.sin(now * 0.00007) * 0.8; // un tour de phare toutes les 7 s ; la grue pivote lentement
+        { const u = iPm + N + Math.sin(now * 0.00025) * 10, j = Math.floor(u), f = u - j, a = S[j % N], b = S[(j + 1) % N]; // ±20 m le long de la route, un aller-retour en 25 s
+          portM.position.set(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, a.z + (b.z - a.z) * f); portM.rotation.y = h.across(a); }
         rotor.rotation.z = now * 0.00012; bp.visible = (now / 700 & 1) === 1; ptsBouees.visible = (now / 1100 & 3) === 0;
         for (let k = 0; k < NN; k++) { const a = k / NN * 6.2832 + rotor.rotation.z; dn.position.set(Math.cos(a) * RR, Math.sin(a) * RR - 2.2, 0); dn.updateMatrix(); nacelles.setMatrixAt(k, dn.matrix); } // la nacelle pend sous la jante, toujours d'aplomb
         nacelles.instanceMatrix.needsUpdate = true;
