@@ -822,7 +822,7 @@
       const CH0 = 62, CH1 = 520, ILE = [-880, 1650, 1045], PH = [1568, 958]; // chenal entre z = CH0 et CH1 ; l'île va de x = ILE[0] à ILE[1], jusqu'à z = ILE[2] ; PH : le phare, au bout de l'île, dans l'épingle (points 11 à 16)
       const mer = (x, z) => (z > CH0 && z < CH1) || (z >= CH1 && (x < ILE[0] || x > ILE[1] || z > ILE[2]));
       const tun = i => h.zone(i, 0) === 1;
-      const MQ = 22, bassin = (x, z) => z > MQ && z <= CH0 && x > 30 && x < 1040 && Math.abs(x - 620) > 80; // bassin de la marina, creusé entre la route du départ et le chenal (la grande roue garde sa terre, en x = 620) : vu de la route, les bateaux sont à 20 m, pas cachés derrière le quai du chenal
+      const CG0 = [880, -60], MQ = 22, bassin = (x, z) => z > MQ && z <= CH0 && x > 30 && x < 1040 && Math.abs(x - 620) > 80; // bassin de la marina, creusé entre la route du départ et le chenal (la grande roue garde sa terre, en x = 620) : vu de la route, les bateaux sont à 20 m, pas cachés derrière le quai du chenal
       // au-dessus du tunnel, le sol reste au niveau du quai : le tube passe dessous ; dans les tranchées d'accès, il suit la route qui descend
       const g = terrain(h, { pas: 16, marge: 330, sol: s => tun(S.indexOf(s)) ? 0 : Math.min(s.y, 0), creux: (x, z) => mer(x, z) || bassin(x, z) ? 13 : 0, mat: h.mat('bruit', {}, '#1a1c22', ['#22252c', '#14161a', '#2a2622']) });
       { // un sol en grille de 16 m ne peut pas épouser le tube (fond du chenal, rampes) : on retire les triangles qui entrent dans le tube ou passent au-dessus de la chaussée des tranchées ; de dehors, on voit la coque
@@ -846,10 +846,11 @@
       // la terre continue au nord, au-delà du terrain modelé
       const plaine = h.mat('plaine');
       boite(h, plaine, 16000, 1, 8000, 0, -1, g.box[1] - 4000); boite(h, plaine, 8000, 1, CH0 - g.box[1], g.box[0] - 4000, -1, (CH0 + g.box[1]) / 2); boite(h, plaine, 8000, 1, CH0 - g.box[1], g.box[2] + 4000, -1, (CH0 + g.box[1]) / 2);
-      // lampadaires : un tous les 40 m, des deux côtés ; leur défilement régulier donne la vitesse sans aucun flou
-      const mats = [], tetes = [];
+      // lampadaires : un tous les 40 m, des deux côtés ; leur défilement régulier donne la vitesse sans aucun flou.
+      // Pas dans la marina (points 0 à 3 : des bornes basses le long du quai) ni dans le port (points 9 à 29 : les mâts de projecteurs du port, une course sauvage, pas une autoroute)
+      const mats = [], tetes = [], sansLampe = i => i < pt(h, 3) || (i >= pt(h, 9) && i < pt(h, 29));
       for (let i = 0; i < N; i += 20) {
-        if (h.zone(i, 0) === 1) continue;
+        if (h.zone(i, 0) === 1 || sansLampe(i)) continue;
         const s = S[i], ry = h.across(s);
         for (const sd of [-1, 1]) { const [x, z] = bord(s, sd, W + 0.8), [tx, tz] = bord(s, sd, W - 0.7); mats.push([x, s.y + 5, z, ry]); tetes.push([tx, s.y + 10, tz, ry]); }
         { const [lx, lz] = bord(s, (i / 20) & 1 ? 1 : -1, W - 0.7); h.lum(i, lx, s.y + 9.6, lz, 0xffa040, 31, 3.2); } // sodium : une plage orange par lampadaire, d'un côté puis de l'autre
@@ -895,27 +896,36 @@
       const ptsBouees = new THREE.Points(fb, new THREE.PointsMaterial({ color: 0xffc81a, size: 3, sizeAttenuation: false })); ptsBouees.frustumCulled = false; h.scene.add(ptsBouees);
 
       // ---------- l'île du port : quai, parcs à conteneurs en blocs inégaux, engins, mâts d'éclairage ----------
+      // places gardées libres (x, z, rayon) : sous les portiques qui enjambent la route (points 18 à 28 ; celui de j = 140 roule de ±20 m)
+      const i0E = pt(h, 18), nE = (pt(h, 28) - i0E + N) % N, jGrues = [], iPm = (i0E + 142) % N, trous = [[S[iPm].x, S[iPm].z, 38]];
+      for (let j = 420; j < nE - 40; j += 280) { jGrues.push(j); const q = S[(i0E + j) % N]; trous.push([q.x, q.z, 24]); }
       const axe = S[near(h, -615, 560)].x, libre = (x, z, m = 14) => g.dAt(x, z) > W + m && (z > 700 || Math.abs(x - axe) > 90) && Math.hypot(x - PH[0], z - PH[1]) > 30 && // rien dans l'axe du tunnel : de la tranchée, on voit le chenal ; rien contre le phare
-         g.hAt(x, z) > -1.5 && z > CH1 + 4 && z < ILE[2] - 12 && x > ILE[0] + 10 && x < ILE[1] - 10;
-      boite(h, h.mat('parc'), ILE[1] - ILE[0] - 40, 0.3, 74, (ILE[0] + ILE[1]) / 2, -0.2, CH1 + 37); // terre-plein du quai, marqué
+         g.hAt(x, z) > -1.5 && z > CH1 + 4 && z < ILE[2] - 12 && x > ILE[0] + 10 && x < ILE[1] - 10 && trous.every(([tx, tz, r]) => Math.hypot(x - tx, z - tz) > r);
+      // le sol du port : dalles de béton, rails noyés, voie jaune, cases de stockage, flaques (textures-wangan.js) ; à l'ouest de la tranchée du tunnel, l'ancien terre-plein du quai
+      boite(h, h.mat('solPort'), ILE[1] + 500, 0.3, ILE[2] - CH1 - 2, (ILE[1] - 500) / 2, -0.2, (CH1 + 2 + ILE[2]) / 2);
+      boite(h, h.mat('parc'), 360, 0.3, 74, ILE[0] + 200, -0.2, CH1 + 37);
       const cols = [0xb8442c, 0x2c6ab8, 0xc9a02c, 0x3a8a5a, 0xd8d4cc, 0x7a3a6a, 0x1a4a5a], piles = cols.map(() => []), cavaliers = [], portiques = [];
       // un bloc = des travées de conteneurs (le long de X) sur plusieurs files (Z) ; chaque bloc a sa compagnie dominante, son remplissage, ses trous
-      const bloc = (x0, z0, C, R, fill) => {
+      const blocs = [], bloc = (x0, z0, C, R, fill) => { blocs.push([x0 - 1, z0 - 1, x0 + C * 12.8 + 1, z0 + R * 2.9 + 1]);
         const dom = rnd() * cols.length | 0;
         const H = [], hAt = (c, r) => (H[c] && H[c][r]) || 0;
-        for (let c = 0; c < C; c++) { H[c] = []; for (let r = 0; r < R; r++) { const bordure = Math.min(c, C - 1 - c, r, R - 1 - r) === 0 ? 1 : 0; H[c][r] = libre(x0 + c * 12.8 + 6, z0 + r * 2.9 + 1.25) ? Math.max(0, Math.min(5, Math.round(fill - bordure + (rnd() - 0.5) * 2.6))) : 0; } }
+        for (let c = 0; c < C; c++) { H[c] = []; for (let r = 0; r < R; r++) { const bordure = Math.min(c, C - 1 - c, r, R - 1 - r) === 0 ? 1 : 0; H[c][r] = Math.max(1, Math.min(5, Math.round(fill - bordure + (rnd() - 0.5) * 2.6))); } } // le bloc arrive déjà taillé à la route : pas de trou
         for (let c = 0; c < C; c++) for (let r = 0; r < R; r++) {
           const x = x0 + c * 12.8 + 6, z = z0 + r * 2.9 + 1.25, n = H[c][r], vu = Math.min(hAt(c - 1, r), hAt(c + 1, r), hAt(c, r - 1), hAt(c, r + 1)); // sous ce niveau, le conteneur est enfoui entre ses voisins : on ne le dessine pas
           for (let k = Math.max(0, Math.min(vu, n - 1)); k < n; k++) { const haut = k === n - 1, col = rnd() < 0.55 ? dom : rnd() * cols.length | 0; piles[col].push([x + (haut ? (rnd() - 0.5) * 0.5 : 0), g.hAt(x, z) + 1.3 + k * 2.6, z, haut ? (rnd() - 0.5) * 0.05 : 0, rnd() < 0.15 ? 0.5 : 1, 1, 1]); }
         }
         if (rnd() < 0.5 && R <= 7 && libre(x0 + C * 6.4, z0 + R * 1.45, 6)) portiques.push([x0 + (0.2 + rnd() * 0.6) * C * 12.8, g.hAt(x0, z0), z0 + R * 1.45, Math.PI / 2]);
       };
-      for (const z0 of [606, 638, 826, 858, 892, 950, 984]) for (let x0 = ILE[0] + 20 + rnd() * 30; x0 < ILE[1] - 60;) {
-        const C = 5 + (rnd() * 6 | 0), R = 4 + (rnd() * 4 | 0), t = rnd(), L = C * 12.8;
-        if (t < 0.2) { // zone vide : quelques conteneurs posés de travers, un cavalier qui attend
+      // des rangées de blocs sur toute l'île, de l'arrière des portiques de quai au bord sud ; un bloc s'arrête net à 4 m derrière le muret (ses colonnes dont un conteneur toucherait la route sont retirées)
+      const colLibre = (x0, z0, c, R) => { for (let r = 0; r < R; r++) for (const dx of [-6.4, 6.4]) for (const dz of [-1.45, 1.45]) if (!libre(x0 + c * 12.8 + 6 + dx, z0 + r * 2.9 + 1.25 + dz, 4)) return false; return true; };
+      for (let z0 = 580; z0 < ILE[2] - 34; z0 += 40 + (rnd() * 10 | 0)) for (let x0 = ILE[0] + 20 + rnd() * 30; x0 < ILE[1] - 40;) {
+        const C0 = 4 + (rnd() * 7 | 0), R = 4 + (rnd() * 4 | 0), t = rnd(), L = C0 * 12.8;
+        let c0 = 0; while (c0 < C0 && !colLibre(x0, z0, c0, R)) c0++; let c1 = c0; while (c1 < C0 && colLibre(x0, z0, c1, R)) c1++;
+        const C = c1 - c0; if (C < 2) { x0 += L + 14; continue; } // bloc mangé par la route : le bas-côté reste vide, garni plus bas (engins, palettes)
+        if (t < 0.15) { // zone vide : quelques conteneurs posés de travers, un cavalier qui attend
           for (let k = rnd() * 4 | 0; k > 0; k--) { const x = x0 + rnd() * L, z = z0 + rnd() * 20; if (libre(x, z)) piles[rnd() * cols.length | 0].push([x, g.hAt(x, z) + 1.3, z, rnd() * 3.14]); }
           const x = x0 + rnd() * L, z = z0 + 10; if (libre(x, z, 18)) cavaliers.push([x, g.hAt(x, z), z, rnd() < 0.5 ? 0 : 0.2]);
-        } else bloc(x0, z0, C, R, t < 0.4 ? 1.5 : t < 0.85 ? 3 : 4.2);
+        } else bloc(x0 + c0 * 12.8, z0, C, R, t < 0.4 ? 1.5 : t < 0.85 ? 3 : 4.2);
         const allee = 14 + rnd() * 22, x = x0 + L + allee / 2, z = z0 + 9; // l'allée qui suit : un cavalier y passe parfois
         if (rnd() < 0.45 && libre(x, z, 18)) cavaliers.push([x, g.hAt(x, z), z, Math.PI / 2 + (rnd() - 0.5) * 0.2]);
         x0 += L + allee;
@@ -928,6 +938,18 @@
       for (const cx of [-150, -40, 70, 620, 740, 930]) { h.pose('grue', { structure: minium, treillis, tirant: gris, machinerie: cabine, cabine, vitre, roue }, h.scene, [cx, 0, CH1]); balises.push(cx, 69, CH1 + 41); }
       const tracteurs = [];
       for (let k = 0; k < 16; k++) { const x = -260 + rnd() * 1250, z = CH1 + 8 + rnd() * 14; if (Math.abs(x - 280) > 180) tracteurs.push([x, 0, z, (rnd() < 0.5 ? 0 : Math.PI) + (rnd() - 0.5) * 0.3]); }
+      // ---------- les bas-côtés du port (points 9 à 29), entre le muret et les blocs : le port travaille, la course passe au milieu. Camions garés, chariots élévateurs, palettes, barrières de chantier ----------
+      { const horsBloc = (x, z) => !blocs.some(b => x > b[0] && x < b[2] && z > b[1] && z < b[3]), chariots = [], pal = [[], []], barr = []; let hz = 11; const al = () => (hz = hz * 16807 % 2147483647) / 2147483647; // hasard propre
+        const i09 = pt(h, 9), n9 = (pt(h, 29) - i09 + N) % N;
+        for (let j = 4; j < n9; j += 5) { const s = S[(i09 + j) % N], ry = h.across(s) + Math.PI / 2;
+          for (const sd of [-1, 1]) { const u = al(), [x, z] = bord(s, sd, W + 4 + al() * 14); if (!libre(x, z, 3) || !horsBloc(x, z)) continue;
+            if (u < 0.1) { const [x2, z2] = bord(s, sd, W + 6); if (libre(x2, z2, 5) && horsBloc(x2 + s.tx * 10, z2 + s.tz * 10) && horsBloc(x2 - s.tx * 10, z2 - s.tz * 10)) tracteurs.push([x2, 0, z2, ry + (sd > 0 ? 0 : Math.PI)]); } // un camion garé le long, en attente
+            else if (u < 0.2) chariots.push([x, 0, z, al() * 6.3]);
+            else if (u < 0.48) { const n = 1 + (al() * 4 | 0); for (let k = 0; k < n; k++) { const f = al() < 0.5 ? 1 : 0; pal[f].push([x + (al() - 0.5) * 3, 0, z + (al() - 0.5) * 3, al() * 0.4, 1, f ? 1 : 1 + (al() * 6 | 0), 1]); } } // piles de palettes vides (étirées en hauteur) ou filmées
+            else if (u < 0.56) for (let k = -1; k <= 1; k++) barr.push([x + s.tx * k * 2.7, 0, z + s.tz * k * 2.7, h.across(s)]); } }
+        insts(h, 'chariot', { caisse: h.mat('metalClair', { c: 0xe0a020 }), contrepoids: h.mat('matGris'), acier: h.mat('acier'), roue: h.mat('roue') }, chariots);
+        insts(h, 'palettes', { bois: h.mat('planches', { c: 0xc8a878 }) }, pal[0], { a: [1, false] }); insts(h, 'palettes', { bois: h.mat('planches', { c: 0xc8a878 }), film: h.mat('metalClair', { c: 0xc8d4dc }) }, pal[1], { a: [1, true] });
+        insts(h, 'barriere', { rayures: h.mat('rayures', LUM), clignotant: h.mat('clignotant', LUM) }, barr); }
       const chassis = h.mat('matGris'), lampe = h.mat('lampe', LUM), feuRouge = h.mat('feuRouge', LUM), clign = h.mat('clignotant', LUM);
       insts(h, 'tracteur', { chassis, pneu, cabine: h.mat('metalClair', { c: 0xe0b020 }), vitre, calandre: h.mat('calandre'), phare: lampe, feuOrange: clign, roue }, tracteurs);
       insts(h, 'remorqueConteneur', { chassis, caisse: h.mat('tole', { c: 0x5a5e66 }), roue, pneu, feu: feuRouge }, tracteurs.filter((p, k) => k % 3));
@@ -937,20 +959,12 @@
         const xx = x + (z % 3) * 20; if (!libre(xx, z, 6)) continue; mats35.push([xx, g.hAt(xx, z), z]);
         if (g.dAt(xx, z) < 60) h.lum(near(h, xx, z), xx, 33, z, 0xe8f0ff, 70, 1.6);
       }
-      // ---------- l'enfilade du port (points 18 à 28) : le port vient jusqu'à la route. Vu de la chaussée, les parcs étaient à 40 m et plus, derrière le muret et le brouillard :
-      // un mur de conteneurs de chaque côté, juste derrière le muret, de 2 à 5 de haut avec des brèches sur les parcs ; des projecteurs blancs bas (le blanc dur des quais contre l'orange du sodium) ;
-      // et deux portiques de parc qui enjambent la route
-      { const i0 = pt(h, 18), n = (pt(h, 28) - i0 + N) % N, grues = []; let gr = 7; const al = () => (gr = gr * 16807 % 2147483647) / 2147483647; // hasard propre : ne décale pas rnd, donc rien du reste du décor
-        for (const sd of [-1, 1]) { let br = 0; // br : colonnes qui restent à sauter (une brèche)
-          for (let j = 0; j < n; j += 7) { const i = (i0 + j) % N, s = S[i], [x, z] = bord(s, sd, W + 6.5);
-            if (j % 140 < 14 || mer(x, z) || g.hAt(x, z) < -1.5 || z < CH1 + 4) continue; // de la place sous les deux portiques (j = 0, 140, 280…), pas dans l'eau
-            if (br > 0) { br--; continue; } if (al() < 0.08) { br = 2 + (al() * 3 | 0); continue; }
-            const hh = 2 + (al() * 4 | 0), dom = al() * cols.length | 0;
-            for (let k = 0; k < hh; k++) piles[al() < 0.6 ? dom : al() * cols.length | 0].push([x, g.hAt(x, z) + 1.3 + k * 2.6, z, h.across(s) + Math.PI / 2 + (al() - 0.5) * 0.04]); }
-        }
-        for (let j = 420; j < n - 40; j += 280) { const i = (i0 + j) % N, s = S[i]; grues.push([s.x, s.y, s.z, h.across(s)]); } // les portiques, à la place laissée dans le mur ; celui de j = 140 roule (portique mobile, plus bas)
+      // ---------- la traversée du port (points 9 à 29) : pas de murs de conteneurs le long de la route, les blocs du parc s'arrêtent net derrière le muret ;
+      // deux portiques de parc enjambent la route (un troisième roule, plus bas), des mâts de projecteurs blancs bas (le blanc dur des quais contre l'orange du sodium)
+      { const grues = jGrues.map(j => { const s = S[(i0E + j) % N]; return [s.x, s.y, s.z, h.across(s)]; });
         insts(h, 'grueParc', { structure: h.mat('metalClair', { c: 0xe0b020 }), cabine: h.mat('metalClair', { c: 0xe8e8e4 }), vitre: h.mat('vitreSombre'), roue: h.mat('roue'), machinerie: h.mat('metalClair', { c: 0x8a8e96 }) }, grues, { a: [32] });
-        for (let j = 18; j < n; j += 36) { const i = (i0 + j) % N, s = S[i], sd = (j / 36) & 1 ? 1 : -1, [x, z] = bord(s, sd, W + 3.5); // un projecteur tous les 72 m, d'un côté puis de l'autre
+        const i09 = pt(h, 9), n9 = (pt(h, 29) - i09 + N) % N;
+        for (let j = 18; j < n9; j += 36) { const i = (i09 + j) % N, s = S[i], sd = (j / 36) & 1 ? 1 : -1, [x, z] = bord(s, sd, W + 2.5); // un projecteur tous les 72 m, d'un côté puis de l'autre
           mats35.push([x, g.hAt(x, z), z]); h.lum(i, x - s.tz * sd * -4, s.y + 20, z + s.tx * sd * -4, 0xe8f0ff, 48, 2.2); } }
       piles.forEach((l, i) => inst(h, h.geo('conteneur'), h.mat('tole', { c: cols[i] }), l));
       insts(h, 'matEclairage', { acier: h.mat('acier'), lampe }, mats35);
@@ -992,6 +1006,23 @@
         const hh = 26 + rnd() * 40 + Math.min(120, d * 0.35) * rnd(), w = 26 + rnd() * 16; tl[rnd() * 3 | 0].push([x, hh / 2 - 1, z, 0, w, hh, w]);
       }
       tl.forEach((l, i) => inst(h, h.geo('bloc'), tm[i], l));
+      // ---------- au sol entre les tours, maintenant que la route y est (points 36 à 3 : retour du tunnel et ligne droite) : trottoirs à bordure, voitures garées, palettes, chariots, barrières de chantier ----------
+      { const i0 = pt(h, 36), n = (pt(h, 3) - i0 + N) % N, trot = h.mat('trottoir');
+        for (const sd of [-1, 1]) { h.ribbon(i0, n, sd * (W + 0.6), 0.15, sd * (W + 5), 0.15, trot, 8); h.ribbon(i0, n, sd * (W + 5), 0.15, sd * (W + 5), -2, beton, 8); } // le trottoir et sa bordure, jusqu'au sol
+        const dansTour = (x, z, m) => tl.some(l => l.some(t => Math.abs(x - t[0]) < t[4] / 2 + m && Math.abs(z - t[2]) < t[6] / 2 + m)),
+          evite = [[-450, -245, 45], [-175, -95, 30], [CG0[0] - 20, CG0[1], 50]], // péage, enseigne de l'hôtel, chantier de la grue
+          ok = (x, z, m) => z < -2 && g.hAt(x, z) > -1.5 && !dansTour(x, z, m) && evite.every(([ex, ez, r]) => Math.hypot(x - ex, z - ez) > r);
+        const autos = [], chariots = [], pal = [], barr = [], teintes = [0xe8e4dc, 0x1a1a20, 0x8a8e96, 0xc8302c, 0x2c4a8a, 0xd8d4cc, 0x3a3a40, 0x9a8a6a]; let hz = 23; const al = () => (hz = hz * 16807 % 2147483647) / 2147483647;
+        for (let k = 0; k < n; k += 3) { const s = S[(i0 + k) % N], ry = h.across(s) + Math.PI / 2;
+          for (const sd of [-1, 1]) { const u = al(), [x, z] = bord(s, sd, W + 7.2); if (!ok(x, z, 2.5)) continue;
+            if (u < 0.5) autos.push([x, g.hAt(x, z), z, ry + (al() < 0.5 ? 0 : Math.PI) + (al() - 0.5) * 0.06, 1, 1, 1, teintes[al() * teintes.length | 0]]); // garées le long, en file
+            else if (u < 0.56) { const [x2, z2] = bord(s, sd, W + 11 + al() * 6); if (ok(x2, z2, 1.5)) { const nb = 1 + (al() * 3 | 0); for (let q = 0; q < nb; q++) pal.push([x2 + (al() - 0.5) * 3, g.hAt(x2, z2), z2 + (al() - 0.5) * 3, al() * 0.5, 1, 1 + (al() * 5 | 0), 1]); } } // devant les entrepôts
+            else if (u < 0.58) { const [x2, z2] = bord(s, sd, W + 12); if (ok(x2, z2, 3)) chariots.push([x2, g.hAt(x2, z2), z2, al() * 6.3]); }
+            else if (u < 0.62) for (let q = -1; q <= 1; q++) barr.push([x + s.tx * q * 2.7, g.hAt(x, z), z + s.tz * q * 2.7, h.across(s)]); } } // un trou dans le trottoir, barré
+        insts(h, 'voitureGaree', { caisse: h.mat('peinture', { c: 0xffffff }), vitre: h.mat('vitreSombre'), feuRouge: h.mat('feuRouge'), feuBlanc: h.mat('matGris'), chassis: h.mat('matGris'), roue: h.mat('roue'), pneu: h.mat('pneu') }, autos, { teinte: 'caisse' });
+        insts(h, 'palettes', { bois: h.mat('planches', { c: 0xc8a878 }) }, pal, { a: [1, false] });
+        insts(h, 'chariot', { caisse: h.mat('metalClair', { c: 0xe0a020 }), contrepoids: h.mat('matGris'), acier: h.mat('acier'), roue: h.mat('roue') }, chariots);
+        insts(h, 'barriere', { rayures: h.mat('rayures', LUM), clignotant: h.mat('clignotant', LUM) }, barr); }
       // au loin, hors brouillard : la ville derrière, une côte en face de l'autre côté de la baie, la zone industrielle à l'est, un grand pont suspendu à l'ouest
       const loins = [['#0a1020', ['#ffb85a', '#f4f1e0', '#ffd27a'], 90], ['#0c0e18', ['#9fd0ff', '#f4f1e0'], 60], ['#140c10', ['#ff9a5a', '#ffd27a'], 40]].map(([f, c, n]) => h.mat('tourLoin', { lum: 1, fog: false }, f, c, n)), ll = loins.map(() => []);
       const amas = (cx, cz, n, rx, rz, hmin, hmax, wmin) => { for (let i = 0; i < n; i++) { const hh = hmin + rnd() * rnd() * (hmax - hmin), w = wmin + rnd() * wmin; ll[i % 3].push([cx + (rnd() - 0.5) * rx, hh / 2 - 4, cz + (rnd() - 0.5) * rz, 0, w, hh, w]); } };
@@ -1029,22 +1060,42 @@
       for (const sd of [-1, 1]) { const b = new THREE.Mesh(h.geo('faisceau'), mFais); b.rotation.z = sd * Math.PI / 2; b.scale.set(0.1, 0.15, 1); feuPhare.add(b); } // deux pinceaux opposés de 135 m, un plan vertical chacun : en croix, ils couvraient l'écran en passant au-dessus de l'épingle (banc : pires images à 60 ms)
       h.lum(near(h, PH[0], PH[1]), PH[0], yPH + 6, PH[1], 0xfff2d0, 40, 1.2); // le pied du phare éclairé : on le voit dans l'épingle
 
-      // ---------- la marina, le long de la ligne droite du départ (points 0 à 3, au ras de l'eau) : quai, pontons en peigne, voiliers et vedettes amarrés, lampes de ponton ----------
-      { for (const [x0, x1] of [[30, 540], [700, 1040]]) { boite(h, eau, x1 - x0, 1, CH0 - MQ, (x0 + x1) / 2, -3.5, (MQ + CH0) / 2); boite(h, beton, x1 - x0, 4, 3, (x0 + x1) / 2, -2, MQ); } // l'eau du bassin et son quai
-        const ponton = h.mat('planches'), coques = [], cabines = [], mats = [], feuxM = [];
-        for (let x = 40; x < 1040; x += 52) { if (Math.abs(x - 620) < 70) continue; // la grande roue
-          boite(h, ponton, 3, 0.5, 78, x, -2.9, MQ + 40); feuxM.push(x, -1.2, MQ + 79);
-          for (let k = 0; k < 6; k++) for (const sd of [-1, 1]) { if (rnd() < 0.2) continue; const L = 8 + rnd() * 9, z = MQ + 8 + k * 12 + rnd() * 2, bx = x + sd * (3 + L * 0.17), voile = rnd() < 0.6;
-            coques.push([bx, -3.1, z, Math.PI / 2 + (rnd() - 0.5) * 0.06, L * 0.33, 1, L]); cabines.push([bx, -1.9, z + (voile ? 0 : L * 0.1), Math.PI / 2, L * 0.25, voile ? 0.9 : 1.6, L * 0.35]);
-            if (voile) { mats.push([bx, L * 0.65 - 2.4, z, 0, 0.18, L * 1.3, 0.18]); feuxM.push(bx, L * 1.95 - 2.4, z); } }
-        }
-        inst(h, h.geo('bloc'), h.mat('metalClair', { c: 0xf2f0ea }), coques); inst(h, h.geo('bloc'), h.mat('tourFenetres', LUM, ['#ffd27a', '#f4f1e0']), cabines); inst(h, h.geo('bloc'), gris, mats);
-        const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.Float32BufferAttribute(feuxM, 3));
-        const pm = new THREE.Points(mg, new THREE.PointsMaterial({ color: 0xfff2d0, size: 2, sizeAttenuation: false })); pm.frustumCulled = false; h.scene.add(pm);
-        for (let x = 60; x < 1040; x += 160) h.lum(near(h, x, 0), x, 5, MQ - 4, 0xfff2d0, 30, 1); } // réverbères du quai
+      // ---------- la marina, le long de la ligne droite du départ (points 0 à 3, au ras de l'eau) : promenade, quai à bornes lumineuses basses (pas de lampadaires),
+      // ponton principal le long du quai et pontons en peigne, voiliers et vedettes à leur place, et un yacht à quai en bout de bassin, où la fête bat son plein ----------
+      const fete = []; // groupes de guirlandes du yacht, que tick fait clignoter tour à tour
+      { const bords = [[30, 540], [700, 1040]], blancB = h.mat('metalClair', { c: 0xf2f0ea }), hub = h.mat('tourFenetres', LUM, ['#ffd27a', '#f4f1e0']), planches = h.mat('planches', { c: 0xb89a70 });
+        for (const [x0, x1] of bords) { boite(h, eau, x1 - x0, 1, CH0 - MQ, (x0 + x1) / 2, -3.5, (MQ + CH0) / 2); boite(h, beton, x1 - x0, 4, 3, (x0 + x1) / 2, -2, MQ); // l'eau du bassin et son quai
+          boite(h, h.mat('trottoir'), x1 - x0, 0.3, MQ - W - 6.5, (x0 + x1) / 2, -0.1, (MQ - 1.5 + W + 5) / 2); } // la promenade, de la route au quai
+        const bornes = [], feux = [], pontons = [], voiliers = [], vedettes = [];
+        for (const [x0, x1] of bords) {
+          for (let x = x0 + 6; x < x1; x += 15) { bornes.push([x, 0, MQ - 2]); feux.push(x, 1.05, MQ - 2); if ((x - x0) % 30 < 15) h.lum(near(h, x, 0), x, 3, MQ + 4, 0xffe0a8, 36, 2.2); } // bornes de quai ; une sur trois éclaire (jusqu'à la route)
+          pontons.push([(x0 + x1) / 2, -3.55, MQ + 3.5, 0, x1 - x0 - 4, 1, 1]); // le ponton principal, le long du quai
+          for (let fx = x0 + 8; fx < x1 - 6; fx += 24) { if (fx > 410 && fx < 540) continue; // la place du yacht
+            pontons.push([fx, -3.55, MQ + 30, Math.PI / 2, 50, 1, 1]); feux.push(fx, -2.4, MQ + 55); // un ponton en peigne, sa lampe en bout
+            if (fx + 24 >= x1 - 6) continue;
+            for (const dx of [5, 12, 19]) { if (rnd() < 0.12) continue; const L = 9 + rnd() * 8, v = rnd() < 0.55, bx = fx + dx, bz = MQ + 7 + L / 2; // l'étrave vers le quai
+              (v ? voiliers : vedettes).push([bx, -3.45, bz, -Math.PI / 2 + (rnd() - 0.5) * 0.05, L, L, L]); if (v) feux.push(bx, -3.45 + L * 1.33, bz + L * 0.1); } } }
+        insts(h, 'borneQuai', { fut: h.mat('matGris'), lampe: h.mat('lampe', LUM) }, bornes);
+        insts(h, 'ponton', { planches, flotteur: h.mat('matGris') }, pontons, { a: [1] }); // ponton de 1 m étiré à sa longueur (les planches suivent)
+        const peauB = { coque: blancB, pont: planches, hublots: hub, mat: h.mat('acier') };
+        insts(h, 'voilier', peauB, voiliers); insts(h, 'vedette', { ...peauB, coque: h.mat('metalClair', { c: 0xe8e4dc }) }, vedettes);
+        // le yacht de la fête : à quai au bout du ponton principal ouest, parallèle au quai ; fêtards sur le pont arrière et sur le fly, guirlandes qui clignotent, lumière rose et cyan
+        const YX = 470, YZ = MQ + 14, yacht = new THREE.Group(); yacht.position.set(YX, -2.7, YZ); yacht.rotation.y = Math.PI; h.scene.add(yacht);
+        h.pose('yacht', { coque: blancB, pont: planches, blanc: blancB, hublots: h.mat('tourFenetres', LUM, ['#ffb0e0', '#ffe8c0', '#a0e8ff']) }, yacht);
+        const gens = []; for (let k = 0; k < 34; k++) { const fly = k > 20, x = fly ? -12 + rnd() * 16 : -20 + rnd() * 10, z = (rnd() - 0.5) * (fly ? 5.6 : 6.8); gens.push([x, fly ? 7.48 : 2.38, z, rnd() * 6.3, 0.9 + rnd() * 0.2]); }
+        { const mC = h.mat('vitreSombre'), d = new THREE.Object3D(), mF = new THREE.InstancedMesh(h.zones('fetard', { corps: mC }).corps, mC, gens.length); mF.frustumCulled = false; // dans le repère du yacht
+          gens.forEach((p, k) => { d.position.set(p[0], p[1], p[2]); d.rotation.set(0, p[3], 0); d.scale.setScalar(p[4]); d.updateMatrix(); mF.setMatrixAt(k, d.matrix); }); yacht.add(mF); }
+        for (const [cols2, y, x0, x1, zz] of [[[1, 0.2, 0.7], 3.3, -21, -1, 4], [[0.2, 0.9, 1], 8.4, -14, 8, 3.5], [[1, 0.85, 0.2], 3.3, -21, -1, -4], [[1, 0.2, 0.7], 8.4, -14, 8, -3.5]]) { // guirlandes le long des garde-corps
+          const lp = []; for (let x = x0; x <= x1; x += 0.8) lp.push(x, y + Math.sin(x * 0.7) * 0.15, zz);
+          const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+          const pg = new THREE.Points(gg, new THREE.PointsMaterial({ color: new THREE.Color(...cols2), size: 3, sizeAttenuation: false })); pg.frustumCulled = false; yacht.add(pg); fete.push(pg); }
+        yacht.userData.dyn = 1;
+        h.lum(near(h, YX, 0), YX - 6, 8, YZ, 0xff3ab0, 40, 3.2); h.lum(near(h, YX + 20, 0), YX + 12, 11, YZ, 0x3ad0ff, 36, 2.4);
+        const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.Float32BufferAttribute(feux, 3));
+        const pm = new THREE.Points(mg, new THREE.PointsMaterial({ color: 0xffe8c0, size: 2, sizeAttenuation: false })); pm.frustumCulled = false; h.scene.add(pm); }
 
       // ---------- en face de la marina, côté ville : une grue de chantier illuminée ----------
-      const CG = [880, -60], grueC = new THREE.Group(); grueC.userData.dyn = 1; grueC.position.set(CG[0], g.hAt(CG[0], CG[1]), CG[1]); h.scene.add(grueC);
+      const CG = CG0, grueC = new THREE.Group(); grueC.userData.dyn = 1; grueC.position.set(CG[0], g.hAt(CG[0], CG[1]), CG[1]); h.scene.add(grueC);
       const jaune = h.mat('metalClair', { c: 0xe8b020 });
       h.pose('grueTour', { beton, treillis: h.mat('treillis', { alphaTest: 0.5, side: THREE.DoubleSide }, '#e8b020'), acier: jaune, cabine, vitre }, grueC);
       boite(h, beton, 30, 34, 30, CG[0] - 34, g.hAt(CG[0], CG[1]) + 17, CG[1] - 10); // la tour en chantier : un noyau de béton, pas encore de façade
@@ -1056,7 +1107,7 @@
         const pg = new THREE.Points(lg2, new THREE.PointsMaterial({ size: 3, sizeAttenuation: false, vertexColors: true, fog: false })); pg.frustumCulled = false; grueC.add(pg); }
 
       // ---------- le portique mobile de l'enfilade : un des portiques de parc roule au-dessus de la route, d'avant en arrière (voir l'enfilade, plus haut) ----------
-      const iPm = (pt(h, 18) + 142) % N, portM = new THREE.Group(); portM.userData.dyn = 1; h.scene.add(portM);
+      const portM = new THREE.Group(); portM.userData.dyn = 1; h.scene.add(portM);
       h.pose('grueParc', { structure: h.mat('metalClair', { c: 0xe0b020 }), cabine, vitre, roue, machinerie }, portM, [0, 0, 0], 36);
       { const s = S[iPm], [x, z] = bord(s, 1, 18); h.lum(iPm, x, s.y + 22, z, 0xffc040, 40, 1.4); } // gyrophare et éclairage du portique
 
@@ -1088,6 +1139,7 @@
       const vus = [...tracteursC, ...remorques.flat()];
       for (const m of vus) if (m.instanceColor) m.instanceColor.needsUpdate = true;
       return (dt, now) => {
+        fete.forEach((p, k) => { p.visible = ((now / 469 | 0) + k) % 3 !== 0; }); // les guirlandes du yacht au tempo (128 bpm)
         feuPhare.rotation.y = now * 0.0009; grueC.rotation.y = Math.sin(now * 0.00007) * 0.8; // un tour de phare toutes les 7 s ; la grue pivote lentement
         { const u = iPm + N + Math.sin(now * 0.00025) * 10, j = Math.floor(u), f = u - j, a = S[j % N], b = S[(j + 1) % N]; // ±20 m le long de la route, un aller-retour en 25 s
           portM.position.set(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, a.z + (b.z - a.z) * f); portM.rotation.y = h.across(a); }

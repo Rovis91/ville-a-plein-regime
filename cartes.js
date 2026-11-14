@@ -278,7 +278,7 @@
       radio: RADIO.wangan,
       th: { decor: 'wangan', pluie: [[9, 31, 3]], fog: 0x0c1424, fogD: [90, 1300], sky: [[0, '#02030a'], [0.38, '#0a1024'], [0.47, '#4a2c18'], [0.5, '#0c1424'], [1, '#0c1424']], stars: 40,
         astre: { dir: [0.5, 0.7, -0.4], col: '#e8e0d0', ombre: '#b8b0a0', taille: 120 }, hemi: [0x4a5a8a, 0xff9a2e, 0.55], sun: [0x8fa0d0, 0.25], phares: 2.4, bloom: 0.1, scan: 0.1,
-        chev: 1, piles: -14, murH: 1.4, route: ['#24262e', '#30323c', '#f4f1e0', '#f4f1e0', '#24262e', '#24262e', false], mur: ['#3a3e46', '#c9ced6', '#ff9a2e', '#16181e'], depart: [0x1f8f5a, 0xc9ced6, '#f4f1e0'],
+        chev: 1, piles: -14, murH: 0.8, route: ['#24262e', '#30323c', '#f4f1e0', '#f4f1e0', '#24262e', '#24262e', false], mur: ['#3a3e46', '#c9ced6', '#ff9a2e', '#16181e'], depart: [0x1f8f5a, 0xc9ced6, '#f4f1e0'],
         tun: { sol: ['#3e3426', '#524432', '#f4f1e0', '#f4f1e0', '#3e3426', '#3e3426'], murs: ['#ffc878', '#ffc878'], paroi: ['#6a5434', '#a8844a', '#c8a464', '#2a2010'], plafond: ['#3a2e1c', '#ffc878', '#ffc878', '#5a4a34'], // éclairci après essai : on n'y voyait pas les parois
           fog: 0x5a3c18, portail: 0x1f8f5a, neons: [0xffb050, 0xffb050], coque: 80 },
         hud: { y: '#ffffff', c: '#ffb85a', r: '#ff2a3a', fond: 'rgba(10,84,52,.92)', style: 'panneau', split: 0, jp: ['周回', '速度'], sur: ['湾岸九号線', 'LIGNE DE BAIE'], titre: ['WAN-9', 'BAYSHORE'] } } },
