@@ -311,21 +311,27 @@
         hud: { y: '#ffc04a', c: '#ff7a3d', r: '#e83f8c', fond: 'rgba(40,24,56,.9)', style: 'bloc', jauge: 'led', mph: 1, split: 0, jp: null, sur: [null, 'SPEEDWAY · HEURE DOREE'], titre: ['CANAL', 'SIX'] } } },
 
     // Grand Vacarme : une arène couverte, pleine à craquer. Trois lignes droites en épi sous la charpente, chacune avec son tremplin : la table de la ligne de départ,
-    // le saut par-dessus la fosse (trop lent, on tombe dedans et on en ressort par sa rampe), la grande bosse du fond. Deux demi-tours relevés côté est, une épingle à plat au milieu,
-    // et le grand virage relevé de la tribune ouest qui ramène à la ligne (le mur y est plus rapide que la corde).
-    { id: 'stade', nom: 'GRAND VACARME', rivaux: ['NOUR', 'ENZO', 'JADE'], med: [1.08, 1, 0.94], W: 9, kmh: 0.75, vit: [148, 165], grip: 20, sc: 1, tun: null, chaud: [23, 29], amb: [[0, 4], [23, 29]], sect: [9, 23], anticipe: 1,
+    // le saut par-dessus la fosse (trop lent, on tombe dedans et on en ressort par sa rampe), la grande bosse du fond. Deux demi-tours relevés côté est, le premier large, le second serré ;
+    // au milieu, une chicane à la réception du deuxième tremplin (à la limite : ne pas la creuser) puis une épingle à plat de 20 m de rayon, décalée vers l'ouest ;
+    // à l'ouest, le vomitoire passe sous la tribune (points 25 à 26) et débouche sur le grand virage relevé, posé sur un talus de 4 m qui comprime la voiture en descendant (le mur y est plus rapide que la corde).
+    { id: 'stade', nom: 'GRAND VACARME', rivaux: ['NOUR', 'ENZO', 'JADE'], med: [1.08, 1, 0.94], W: 9, kmh: 0.75, vit: [148, 165], grip: 20, sc: 1, tun: [25, 26], chaud: [23, 29], amb: [[0, 4], [23, 29]], sect: [9, 23], anticipe: 1,
       // lignes droites du départ et du fond élargies ; au centre, l'aire ouverte : on y roule partout, on coupe l'épingle par l'arche de feu (et l'on saute alors la butte de sortie)
-      large: [[0, 3, 18], [22, 24, 16]], surf: { large: 'terre' }, place: { c: [150, 160], r: 59, a: 0, piles: [[34.5, 0, 24.5, 3], [-35.5, 0, 12.5, 1]] },
-      // cinq tremplins (le quatrième par-dessus la fosse), trois hauteurs de mur roulable : 5, 7 et 10 m
-      sauts: [[2, 40, 1.5], [9, 30, 1.7], [16, 24, 1.4], [22, 60, 2, 40, 5], [24, 30, 1.5]], cuv: [[4, 8, 6, 6], [17, 21, 10, 9], [25, 29, 13, 12]],
-      pts: [[0, 0, 0], [80, 0, 0], [150, 0, 0], [230, 0, 0], [300, 0, 0], [339, 16, 0], [355, 55, 0], [339, 94, 0], [300, 110, 0], [255, 110, 0], [150, 110, 0], [80, 110, 0], [45, 125, 0], [30, 160, 0], [45, 195, 0], [80, 210, 0], [126, 210, 0], [300, 210, 0], [339, 226, 0], [355, 265, 0], [339, 304, 0], [300, 320, 0], [190, 320, 0], [100, 320, 0], [0, 320, 0], [-60, 320, 0], [-173, 273, 0], [-220, 160, 0], [-173, 47, 0], [-60, 0, 0]],
-      // voiture inventée : un pick-up de stade à châssis tubulaire, V8 atmosphérique de 6 L, 600 ch, 1300 kg, propulsion, grands débattements
-      car: car({ nom: 'MASTIFF V8 ARENA', ratios: [2.9, 1.95, 1.45, 1.15, 0.95], final: 3.7, wheel: 0.36, mass: 1375, idle: 900, red: 7200, cd: 0.45, area: 2.3,
+      // l'aire s'ouvre sur la sortie de la chicane (d'où l'on file vers l'arche) et sur la ligne du fond ; centre 3 m plus au sud qu'avant la chicane, sinon elle ne touche plus la droite du milieu
+      large: [[0, 3, 18], [22, 24, 16]], surf: { large: 'terre' }, place: { c: [150, 157], r: 59, a: 0, piles: [[34.5, 0, 24.5, 3], [-35.5, 0, 12.5, 1]] },
+      // cinq tremplins (le quatrième par-dessus la fosse), trois hauteurs de mur roulable : 5, 6 et 10 m ; le deuxième tremplin est bas (1 m), sinon on vole dans le mur de la chicane ; le deuxième demi-tour, serré, a un tube de 8 m de rayon qui monte vite (le dernier part de la sortie du vomitoire, le tunnel a ses parois droites à W ; 14 m de large pour que la paroi prise en cours de virage ne mène pas au mur du haut)
+      sauts: [[2, 40, 1.5], [9, 30, 1], [16, 24, 1.4], [22, 60, 2, 40, 5], [24, 30, 1.5]], cuv: [[4, 8, 6, 6], [17, 21, 10, 8], [26, 29, 14, 12]],
+      pts: [[0, 0, 0], [80, 0, 0], [150, 0, 1], [230, 0, 0], [300, 0, 0], [348, 18, 0], [368, 60, 0], [348, 102, 0], [300, 118, 0], [250, 118, 0], [165, 92, 0], [100, 118, 0], [64, 128, 0], [42, 160, 0], [58, 192, 0], [96, 206, 0], [140, 212, 0], [290, 208, 0], [338, 220, 0], [356, 260, 0], [343, 300, 0], [305, 322, 0], [190, 320, 0], [100, 320, 0], [0, 320, 0], [-70, 324, 1], [-175, 286, 3], [-228, 182, 4], [-208, 78, 2], [-110, 6, 0]],
+      // voiture inventée : un pick-up de stade à châssis tubulaire, V8 atmosphérique de 6 L, 600 ch, 1300 kg, propulsion, grands débattements ;
+      // 5e courte (pointe 234 km/h au rupteur) : la salle est petite, et c'est ce plafond qui laisse le niveau des rivaux jouer en ligne droite (test-cartes : un rival à 0,95 perd 2,5 %)
+      car: car({ nom: 'MASTIFF V8 ARENA', ratios: [2.9, 1.95, 1.48, 1.22, 1.13], final: 3.7, wheel: 0.36, mass: 1375, idle: 900, red: 7200, cd: 0.45, area: 2.3,
         tq: [0, 380, 500, 580, 640, 660, 640, 590, 480], son: 0.85, moteur: 'v8', look: { col: 0xffc21a, l: 0.9, w: 1.04, h: 1.2, nez: 0.45, cab: [-0.1, 1.9, 0.62], aileron: 2, bandes: 0x16161c } }),
       radio: RADIO.stade,
       th: { decor: 'stade', fog: 0x0e0c18, fogD: [120, 900], sky: [[0, '#05050a'], [1, '#05050a']], stars: 0,
         astre: { dir: [0.2, 0.95, 0.25], col: '#05050a', ombre: '#05050a', taille: 1 }, hemi: [0xe6ecff, 0x3c3c48, 0.85], sun: [0xffffff, 0.5], phares: 0.3, bloom: 0.1, scan: 0.08, ciel: 'SOUS LE TOIT',
         murH: 0, paroi: 'paroiArene', route: ['#3e3a40', '#4c464c', '#f4f0e0', '#ff8a1a', '#e8362a', '#f4f0e0', false], mur: ['#f4f0e0', '#e8362a', '#1c3fa8', '#c8c4b8'], depart: [0xe8362a, 0x20242c, '#f4f0e0'],
+        // le vomitoire : couloir de béton brut sous la tribune ouest, néons de service orangés, portails rouges de la salle
+        tun: { sol: ['#2e2a30', '#3a363c', '#f4f0e0', '#ff8a1a', '#2e2a30', '#2e2a30'], murs: ['#ffc21a', '#ffc21a'], paroi: ['#3a3a42', '#55555e', '#6a6a72', '#1a1a20'], plafond: ['#141418', '#ffd27a', '#ffd27a', '#2a2a30'],
+          fog: 0x1a1410, portail: 0xe8362a, neons: [0xffb060, 0xffb060], coque: 12 },
         hud: { y: '#ffffff', c: '#ffc21a', r: '#e8362a', fond: 'rgba(16,14,28,.9)', style: 'tableau', jauge: 'led', split: 0, jp: null, sur: [null, 'ARENE COUVERTE · COMPLET'], titre: ['GRAND', 'VACARME'] } } },
     // Nuit Blanche : la route d'un col fermé pour l'hiver, à l'aube. Neige tassée partout, glace vive là où le soleil ne vient jamais (elle luit, sombre, sur la route claire) :
     // le pied de la falaise après le départ, le replat entre les deux lacets, la crête du col balayée par le vent, le pont sur la gorge, le bois de mélèzes du retour.
