@@ -330,8 +330,8 @@
         tq: [0, 380, 500, 580, 640, 660, 640, 590, 480], son: 0.85, moteur: 'v8', look: { col: 0xffc21a, l: 0.9, w: 1.04, h: 1.2, nez: 0.45, cab: [-0.1, 1.9, 0.62], aileron: 2, bandes: 0x16161c } }),
       radio: RADIO.stade,
       th: { decor: 'stade', fog: 0x0e0c18, fogD: [120, 900], sky: [[0, '#05050a'], [1, '#05050a']], stars: 0,
-        astre: { dir: [0.2, 0.95, 0.25], col: '#05050a', ombre: '#05050a', taille: 1 }, hemi: [0xe6ecff, 0x3c3c48, 0.85], sun: [0xffffff, 0.5], phares: 0.3, bloom: 0.1, scan: 0.08, ciel: 'SOUS LE TOIT',
-        murH: 0, paroi: 'paroiArene', route: ['#3e3a40', '#4c464c', '#f4f0e0', '#ff8a1a', '#e8362a', '#f4f0e0', false], mur: ['#f4f0e0', '#e8362a', '#1c3fa8', '#c8c4b8'], depart: [0xe8362a, 0x20242c, '#f4f0e0'],
+        astre: { dir: [0.2, 0.95, 0.25], col: '#05050a', ombre: '#05050a', taille: 1 }, hemi: [0xe6ecff, 0x3c3c48, 0.85], sun: [0xffffff, 0.5], phares: 0.3, bloom: 0.1, scan: 0.08, ciel: 'SOUS LE TOIT', // glis : 0 = le décor pose les glissières (game.js n'en double pas une, qui transparaissait au ras du sol de l'aire) ; echap : 0 = pas d'air chaud d'échappement à l'écran (au rupteur l'image ondulait)
+        murH: 0, glis: 0, echap: 0, paroi: 'paroiArene', route: ['#3e3a40', '#4c464c', '#f4f0e0', '#ff8a1a', '#e8362a', '#f4f0e0', false], mur: ['#f4f0e0', '#e8362a', '#1c3fa8', '#c8c4b8'], depart: [0xe8362a, 0x20242c, '#f4f0e0'],
         hud: { y: '#ffffff', c: '#ffc21a', r: '#e8362a', fond: 'rgba(16,14,28,.9)', style: 'tableau', jauge: 'led', split: 0, jp: null, sur: [null, 'ARENE COUVERTE · COMPLET'], titre: ['GRAND', 'VACARME'] } } },
     // Nuit Blanche : la route d'un col fermé pour l'hiver, à l'aube. Neige tassée partout, glace vive là où le soleil ne vient jamais (elle luit, sombre, sur la route claire) :
     // le pied de la falaise après le départ, le replat entre les deux lacets, la crête du col balayée par le vent, le pont sur la gorge, le bois de mélèzes du retour.
