@@ -551,7 +551,8 @@
     { grille: ['MES MAINS TREMBLENT...', 'MA PREMIERE COURSE DE NUIT...'], double: ['VAS-Y, JE NE BOUGE PAS !', 'BIEN VU. JE PRENDS DES NOTES.'], passe: ['OH ! PARDON ! ENFIN... NON.', "J'AI DOUBLE QUELQU'UN ?!"] },
   ];
   let pique = null, piqueT = 0; // pique = { s : texte, c : couleur, T : temps restant à l'écran } ; piqueT : délai avant la suivante
-  const pic = (c, ev) => { if (c.k < 0 || c.k > 2 || piqueT > 0) return; const L = PIQUES[c.k][ev]; pique = { s: OPP[c.k][0] + ' : ' + L[Math.random() * L.length | 0], c: OPP[c.k][1], T: 3 }; piqueT = 7; };
+  const VOIX = [[110, 7], [160, 10], [240, 8]]; // voix radio de chaque rival (SON.radio) : hauteur en Hz et syllabes par seconde — grave et posé, nerveux, jeune
+  const pic = (c, ev) => { if (c.k < 0 || c.k > 2 || piqueT > 0) return; const L = PIQUES[c.k][ev], l = L[Math.random() * L.length | 0]; pique = { n: OPP[c.k][0], s: l, c: OPP[c.k][1], T: 3 }; piqueT = 7; SON.radio(Math.min(10, Math.ceil(l.split(' ').length * 1.6)), ...VOIX[c.k]); };
   const J1 = ['J1', TH.hud.y], pil = c => c.k >= 0 ? OPP[c.k] : J1, modele = c => c.k >= 0 ? opps[c.k] : carG;
   // les voitures humaines, une par place de joueur (vu.hu de la vue de rang n : HUM[n]) : modèle, caisse (roulis), roues, feu stop, flammes de nitro et traînées. Une copie de carG a les mêmes enfants dans le même ordre : caisse, quatre roues, deux flammes.
   // Le joueur 2 a donc toute l'animation du joueur 1, alors que les adversaires gardent leurs roues fixes
@@ -1118,7 +1119,10 @@
       if (f.fini) { txt(f.rang <= 3 ? 'TROPHEE ' + MEDN[3 - f.rang] : 'PAS DE TROPHEE', cx, 164, 8, f.rang <= 3 ? MEDC[3 - f.rang] : RD, 'center'); txt('NIVEAU ' + DIFF[diff].nom, cx, 180, 8, '#e8e8e4', 'center'); txt('ENTREE : MENU', cx, 200, 8, C, 'center'); }
       else { txt('SUITE : ' + SOIREE[f.manche + 1].heure + ' · ' + SOIREE[f.manche + 1].nom, cx, 164, 8, '#e8e8e4', 'center'); txt('DEPART ' + ord(f.grille[0] + 1) + ' SUR LA GRILLE', cx, 180, 8, '#e8e8e4', 'center'); txt('ENTREE : SUITE   ECHAP : QUITTER', cx, 200, 8, C, 'center'); }
     }
-    if (pique && state !== 'title' && (pique.T -= dt) > 0) { hg.font = '8px ' + PS; const w = hg.measureText(tr(pique.s)).width + 12; R(hg, 'rgba(8,8,12,.85)', Math.round(cx - w / 2), 160, w, 14); R(hg, pique.c, Math.round(cx - w / 2), 160, 2, 14); txt(pique.s, cx, 163, 8, pique.c, 'center'); } // la réplique d'un rival, à sa couleur (au-dessus des bandeaux NITRO et ASPIRATION)
+    if (pique && state !== 'title' && (pique.T -= dt) > 0) { // la réplique d'un rival, façon radio : une ligne sans fond, contour noir, nom à sa couleur ; s'efface sur la dernière demi-seconde
+      hg.globalAlpha = Math.min(1, pique.T * 2); hg.font = '8px ' + PS; const n = tr(pique.n) + ' ', wn = hg.measureText(n).width, x = Math.round(cx - (wn + hg.measureText(tr(pique.s)).width) / 2);
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [1, 1]]) { txt(n, x + dx, 166 + dy, 8, '#000'); txt(pique.s, x + wn + dx, 166 + dy, 8, '#000'); } // contour noir : lisible sans fond
+      txt(n, x, 166, 8, pique.c); txt(pique.s, x + wn, 166, 8, '#fff'); hg.globalAlpha = 1; }
     if ((piqueT -= dt) < 0) piqueT = 0;
     if (demo) { // mode démo : l'heure et la carte, et l'invitation à reprendre la main
       R(hg, 'rgba(8,8,12,.7)', 0, 132, HW, 34); txt('DEMO · ' + M.heure + ' · ' + M.nom, cx, 137, 8, C, 'center'); if ((performance.now() / 500 | 0) % 2) txt('APPUIE SUR UNE TOUCHE', cx, 151, 8, Y, 'center');

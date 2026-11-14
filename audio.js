@@ -1,6 +1,6 @@
 // Ville à plein régime — audio : tout est synthétisé (bande-son originale et adaptative). Stations de chaque carte : RADIO dans cartes.js.
 // Interface (window.SON) : init() au premier geste · frame(dt, e) à chaque image · quitter() / reprendre(m) autour d'un changement de carte au menu · setStation(i), toggleMusic(), carte(M), volume(famille, v) ·
-// beep(f), crash(), stinger(rec), tonnerre() · éditeur de musique : ecoute, recale(), note(partie, n), fond, pas, timbres, kits · lus par le jeu : station, nom, fq, genre, musicOn, beat, pulse, ana · banc d'écoute et mesure :
+// beep(f), radio(syllabes, hauteur, débit), crash(), stinger(rec), tonnerre() · éditeur de musique : ecoute, recale(), note(partie, n), fond, pas, timbres, kits · lus par le jeu : station, nom, fq, genre, musicOn, beat, pulse, ana · banc d'écoute et mesure :
 // init(contexte hors ligne), pump(), pret, live, vol, stations, evenement(), moniteur(gain), vu, et les bruitages ponctuels clac(), levier(), choc(v), pschitt(),
 // boost(), petarade() · prises de test : ac, out, smp.
 // Chaîne : timbres (PATCH) → tranche de la partie → (batterie (KIT) | bus pompé → filtre balayé → saturation de bus) → coupure de station →
@@ -636,6 +636,16 @@ registerProcessor('moteur', Moteur);`;
     if (live) { AC.resume(); timer = timer || setInterval(() => live && pump(), 30); }
   }
   const beep = f => AC && osc('square', f, AC.currentTime, 0.25, 0.2, V.ui);
+  const VOY = [[730, 1090], [270, 2290], [300, 870], [530, 1840], [570, 840]]; // formants des voyelles a, i, ou, è, o
+  function radio(n, f0, vit) { // réplique d'un rival à la radio : grésillement d'ouverture, n syllabes de babil (dents de scie dans deux formants de voyelle, filtré talkie-walkie), clic de fin ; f0 : hauteur, vit : syllabes par seconde
+    if (!AC) return; let t = AC.currentTime + 0.05; const d = 1 / vit, t0 = t, out = shaper(3, filt('highpass', 450, 0.7, filt('lowpass', 2800, 0.7, gain(0.5, V.ui))));
+    nz(t, 0.12, 0.3, V.ui, 'bandpass', 2500, 0.8); t += 0.1;
+    for (let i = 0; i < n; i++, t += d * (0.8 + Math.random() * 0.5)) {
+      const [F1, F2] = VOY[Math.random() * 5 | 0], g = env(out, t, d * 0.9, 0.5, 0.02), o = AC.createOscillator(), f = f0 * (0.85 + Math.random() * 0.3) * (i === n - 1 ? 0.8 : 1);
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(f, t); o.frequency.linearRampToValueAtTime(f * 0.9, t + d); o.connect(filt('bandpass', F1, 6, g)); o.connect(filt('bandpass', F2, 8, g)); o.start(t); o.stop(t + d + 0.05);
+    }
+    nz(t0, t - t0, 0.03, V.ui, 'highpass', 3000); nz(t, 0.08, 0.25, V.ui, 'bandpass', 2500, 0.8); osc('square', 1800, t + 0.06, 0.03, 0.08, V.ui); // souffle de la liaison, puis on relâche le bouton
+  }
   // bruitages ponctuels : appelés par audioFrame, et un par un par le banc d'écoute
   function touche(t) { // bouton de radio : deux claquements secs dans le médium
     nz(t, 0.018, CLAC, V.ui, 'bandpass', 1900, 2.5); osc('triangle', 150, t, 0.05, CLAC * 0.25, V.ui);
@@ -758,7 +768,7 @@ registerProcessor('moteur', Moteur);`;
 
   document.addEventListener('visibilitychange', () => { if (AC && live) document.hidden ? AC.suspend() : AC.resume(); }); // pas de musique hachée ni de moteur figé en arrière-plan
   window.SON = {
-    init: initAudio, frame: audioFrame, setStation, carte, pump, mix: mixer, dj: djSt, beep, stinger, arrivee, quitter, reprendre,
+    init: initAudio, frame: audioFrame, setStation, carte, pump, mix: mixer, dj: djSt, beep, radio, stinger, arrivee, quitter, reprendre,
     crash: () => AC && crash(),
     tonnerre: () => { if (!AC) return; const t = AC.currentTime + 0.4; nz(t, 2.4, 0.5, V.amb, 'lowpass', 140); nz(t, 1.2, 0.12, V.amb, 'bandpass', 600, 0.6); }, // grondement + craquement dans le médium
     toggleMusic() { musicOn = !musicOn; if (AC) musicG.gain.value = musicOn ? 1 : 0; },
