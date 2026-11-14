@@ -62,7 +62,7 @@
       const fx = Math.max(0, Math.min(nx - 1.001, (x - x0) / pas)), fz = Math.max(0, Math.min(nz - 1.001, (z - z0) / pas)), ix = fx | 0, iz = fz | 0, a = fx - ix, b = fz - iz, k = iz * nx + ix;
       return (A[k] * (1 - a) + A[k + 1] * a) * (1 - b) + (A[k + nx] * (1 - a) + A[k + nx + 1] * a) * b;
     };
-    return { hAt: lire(Y), dAt: lire(D), box: [x0, z0, x1, z1] };
+    return { hAt: lire(Y), dAt: lire(D), box: [x0, z0, x1, z1], mesh };
   }
 
   // La mégapole de nuit tout autour du massif du touge, de 800 à 2 350 m du milieu des lacets, 110 à 240 m sous eux, hors brouillard. Le ciel est une sphère de 2 500 m
@@ -718,7 +718,7 @@
       const ic = pt(h, 11), sc = S[ic], sd = g.dAt(...bord(sc, 1, 60)) > g.dAt(...bord(sc, -1, 60)) ? 1 : -1, [cx, cz] = bord(sc, sd, W + 22);
       // cèdres : une rangée serrée le long de la route (le tunnel d'arbres), puis la forêt ; rien sur le carrefour.
       // Dans les lacets, rien côté vallée (ouest) et des cèdres plus petits côté amont, dont la cime reste sous le regard du lacet du dessus ; de jeunes plants sur la pente en contrebas : on voit la ville par-dessus
-      const arbres = [], lacets = (x, z) => x > 372 && x < 552 && z > 300 && z < 576, plants = (x, z) => x > 100 && x < 552 && z > 260 && z < 640, libre0 = (x, z) => (x - cx) ** 2 + (z - cz) ** 2 > 46 * 46 && ravin(x, z) < 1;
+      const arbres = [], lacets = (x, z) => x > 372 && x < 552 && z > 300 && z < 576, plants = (x, z) => x > 100 && x < 552 && z > 260 && z < 640, libre0 = (x, z) => (x - cx) ** 2 + (z - cz) ** 2 > 72 * 72 && ravin(x, z) < 1;
       // la trouée côté vallée (droite) entre les pts 7 et 9 : aucun arbre là où cette portion est la route la plus proche, la ville et la lune apparaissent
       const i7 = pt(h, 7), i9 = pt(h, 9), trouee = (x, z) => { let b = null, bd = 1e18; for (let i = i7; i <= i9; i += 3) { const d = (S[i].x - x) ** 2 + (S[i].z - z) ** 2; if (d < bd) { bd = d; b = S[i]; } }
         return bd < 160 * 160 && Math.sqrt(bd) < g.dAt(x, z) + 4 && (z - b.z) * b.tx - (x - b.x) * b.tz > 0; }, libre = (x, z) => libre0(x, z) && !trouee(x, z);
@@ -744,6 +744,7 @@
       h.pose('superette', { mur: h.mat('crepi'), porte: h.mat('vitreSombre'), toit: h.mat('matGris'), clim: acier, vitrine: h.mat('vitrine', LUM), enseigne: h.mat('ecrit', LUM, 128, 12, '#1d4ac8', '#ffd84a', 'カラスマート  KARASU MART  24H', 9), distributeur: h.mat('distributeur', LUM) }, gr, [X(34), 0, -8], sd);
       // station-service : auvent éclairé par-dessous, deux pompes, totem de prix (marque inventée)
       h.pose('station', { acier, ilot: h.mat('beton'), lampe: h.mat('lampe', LUM), enseigne: h.mat('ecrit', LUM, 96, 8, '#c8102e', '#ffffff', 'TOGE OIL  峠石油', 7), pompe: h.mat('pompeEssence', LUM) }, gr, [X(15), 0, 15]);
+      h.pose('enseigneHaute', { acier, enseigne: h.mat('ecrit', LUM, 96, 64, '#1d4ac8', '#ffd84a', 'カラスマート 24H', 13) }, gr, [X(3), 0, 34]); // vue de loin, avant le carrefour
       h.pose('totem', { acier, prix: h.mat('ecrit', LUM, 32, 32, '#101418', '#ffd84a', '168', 14) }, gr, [X(4.5), 0, 25]);
       // voitures garées : silhouettes de sportives génériques, feux allumés, certaines tournées vers la route
       const vitre = h.mat('vitreSombre'), feuRouge = h.mat('feuRouge', LUM), feuBlanc = h.mat('lampe', LUM);
@@ -758,59 +759,66 @@
       gr.updateMatrixWorld(); // la vitrine et l'auvent éclairent l'esplanade, la route et les voitures qui passent
       for (const [lx, lz, col, d] of [[27, -8, 0xdfefff, 46], [15, 15, 0xffe0a0, 34], [3, 0, 0xdfefff, 22]]) { const p = gr.localToWorld(new THREE.Vector3(X(lx), 4.5, lz)); h.lum(ic, p.x, p.y, p.z, col, d, 3); }
 
+      // les cases fondues ne sont dessinées qu'à moins de 180 m d'une caméra (le sol, toujours dessiné, relève la position de chaque vue à chaque image)
+      const proches = [], vues = [], sol0 = g.mesh; sol0.onBeforeRender = (r, sc, cam) => vues.push(cam.position.clone());
+      const n0 = h.scene.children.length; // tout ce qui suit, sauf les instances, est fondu par matière à la fin (passes de dessin)
       // ---------- la montée (pts 1 à 12) : un repère par portion, pour qu'elle ne soit plus seulement de grandes courbes dans les cèdres ----------
       const ext = i => g.dAt(...bord(S[i], 1, 30)) > g.dAt(...bord(S[i], -1, 30)) ? 1 : -1; // le côté qui s'éloigne des autres routes
       // un groupe posé au sol à côté de la route, X local = en s'éloignant d'elle ; jamais plus de `bas` m sous la chaussée (les socles descendent dans la pente)
       const site = (i, cote, off, bas = 9) => { const s = S[i], [x, z] = bord(s, cote, off), p = new THREE.Group(); p.position.set(x, Math.max(g.hAt(x, z), s.y - bas), z); p.rotation.y = h.across(s) + (cote > 0 ? 0 : Math.PI); h.scene.add(p); return p; };
       const at = (i0, i1, f) => Math.round(i0 + (i1 - i0) * f), allume = (p, i, lx, ly, col, d, f) => { p.updateMatrixWorld(); const q = p.localToWorld(new THREE.Vector3(lx, ly, 0)); h.lum(i, q.x, q.y, q.z, col, d, f); };
-      const pierre = h.mat('pierreMousse'), feuDoux = h.mat('lanterne', LUM), beton = h.mat('beton'), bois = h.mat('tronc'), [i1, i3, i4, i5, i10] = [1, 3, 4, 5, 10].map(k => pt(h, k));
+      const pierre = h.mat('pierreMousse'), gris = h.mat('matGris'), roue = h.mat('roue'), blanc = h.mat('laque', { c: 0xe8ecf0 }), pneu = h.mat('pneu'), feuDoux = h.mat('lanterne', LUM), beton = h.mat('beton'), bois = h.mat('tronc'), [i1, i3, i4, i5, i10] = [1, 3, 4, 5, 10].map(k => pt(h, k));
       // pts 1-3 : pont de pierre sur le torrent, brume basse qui monte du ravin et traîne sur la route, panneau « 13 % »
       h.pose('pontPierre', { pierre }, repere(h, sp), [0, 0, 0], W);
       const eau = h.mat('eauVive', { lum: 1, c: 0x2a5058 }), flots = [], nappes = [], brumeG = new THREE.PlaneGeometry(1, 1); brumeG.rotateX(-Math.PI / 2);
       const lit = v => { const u = 6 * Math.sin(v / 25); return [sp.x - sp.tz * v + sp.tx * u, sp.z + sp.tx * v + sp.tz * u]; }; // le fond du ravin, comme ravin()
       for (let v = -86; v <= 86; v += 8) { const [x, z] = lit(v); flots.push([x, g.hAt(x, z) + 0.6, z, h.across(sp)]); } // le torrent descend en marches : des cascades
-      inst(h, h.geo('boite', 8.6, 0.3, 3.5), eau, flots);
+      (inst(h, h.geo('boite', 8.6, 0.3, 3.5), eau, flots));
       for (let k = 0; k < 14; k++) { const [x, z] = lit((rnd() - 0.5) * 150); nappes.push([x, g.hAt(x, z) + 2 + rnd() * 3, z, rnd() * 6, 26 + rnd() * 20, 1, 18 + rnd() * 10]); }
       for (let i = i1; i < i3; i += 12) for (const c of [-1, 0, 1]) { const [x, z] = c ? bord(S[i], c, W + 8 + rnd() * 14) : [S[i].x, S[i].z]; nappes.push([x, S[i].y + (c ? -0.8 + rnd() : 0.5), z, rnd() * 6, 24 + rnd() * 20, 1, 24 + rnd() * 20]); }
-      const brume = inst(h, brumeG, h.mat('brume', { lum: 1, c: 0x6a8088, transparent: true, opacity: 0.45, depthWrite: false }), nappes); brume.castShadow = brume.receiveShadow = false;
+      const brume = inst(h, brumeG, h.mat('brume', { lum: 1, c: 0x6a8088, transparent: true, opacity: 0.45, depthWrite: false }), nappes); brume.castShadow = brume.receiveShadow = false; (brume);
       const retro = { lum: 1, retro: 1.2 }; // les panneaux s'allument dans les phares, comme les catadioptres
       h.pose('panneauPente', { poteau: acier, plaque: h.mat('losange', { ...retro, alphaTest: 0.5 }, '13%'), sous: h.mat('ecrit', retro, 48, 20, '#f4f4f0', '#101010', '上り急勾配', 10) }, repere(h, S[i1 + 12]), [W + 1.5, 0, 0]);
       // pts 3-5 : sanctuaire dans la pente (torii vermillon, escalier de pierre, tōrō allumés, oratoire), et des cerfs sika au bord de la route
       { const i = at(i3, i4, 0.8), p = site(i, -ext(i), W + 4.5);
-        h.pose('sanctuaire', { vermillon: h.mat('vermillon'), noir: h.mat('vitreSombre'), marche: pierre, feu: feuDoux, bois, toit: h.mat('matGris') }, p);
+        h.pose('sanctuaire', { vermillon: h.mat('vermillon'), noir: vitre, marche: pierre, feu: feuDoux, bois, toit: gris }, p);
         allume(p, i, 2.5, 1.9, 0xffb050, 14, 1.6); allume(p, i, 9, 4.6, 0xffb050, 10, 1.2); }
-      const peauCerf = { poil: h.mat('pelage'), patte: h.mat('pelage'), croupe: h.mat('craie'), bois, yeux: h.mat('peinture', { lum: 1, retro: 4, c: 0xc8ffb0 }) }; // les yeux : même technique que les catadioptres
-      for (const [f, c, off, t] of [[0.15, 1, 3.4, 1], [0.2, 1, 6.5, 0.8], [0.62, -1, 3.2, 1.05], [0.7, -1, 7, 0.85], [0.74, -1, 5, 0.9]]) {
-        const p = site(at(i3, i5, f), c, W + off); p.rotation.y += -c * 2.36 + (rnd() - 0.5) * 0.6; p.scale.setScalar(t); h.pose('cerf', peauCerf, p); } // tournés vers la route et la voiture qui arrive
-      // pts 5-7 : mur de soutènement moussu à l'intérieur de l'épingle, filet pare-pierres au-dessus ; dehors, un distributeur de boissons allumé, seul
-      const murs = [], filets = [], poteaux = [];
-      for (let i = i5 + 8; i < i7; i += 2) { const s = S[i], [x, z] = bord(s, 1, W + 1.7), ry = h.across(s); murs.push([x, s.y + 1.75, z, ry]); filets.push([x, s.y + 5.7, z, ry]); if (i % 4 === 0) poteaux.push([x, s.y + 5.9, z, ry]); }
-      inst(h, h.geo('murSout'), h.mat('murMousse'), murs); inst(h, h.geo('filetPierres'), h.mat('filet', { alphaTest: 0.5, side: THREE.DoubleSide }), filets); inst(h, h.geo('poteauFilet'), acier, poteaux);
+      const peauCerf = { poil: h.mat('pelage'), croupe: pierre, bois, yeux: h.mat('peinture', { lum: 1, retro: 4, c: 0xc8ffb0 }) }; // les yeux : même technique que les catadioptres
+      (insts(h, 'cerf', peauCerf, [[0.15, 1, 3.4, 1], [0.2, 1, 6.5, 0.8], [0.62, -1, 3.2, 1.05], [0.7, -1, 7, 0.85], [0.74, -1, 5, 0.9]].map(([f, c, off, t]) => { // tournés vers la route et la voiture qui arrive
+        const p = site(at(i3, i5, f), c, W + off); h.scene.remove(p); return [p.position.x, p.position.y, p.position.z, p.rotation.y - c * 2.36 + (rnd() - 0.5) * 0.6, t]; })));
+      // pts 5-7 : l'intérieur de l'épingle reste ouvert (mur et filet retirés : ils bouchaient la vue) ; dehors, un distributeur de boissons allumé, seul
       { const i = at(i5, i7, 0.55), p = site(i, -1, W + 3.2, 0.4); p.rotation.y += (rnd() - 0.5) * 0.3;
-        h.pose('distribIsole', { socle: beton, caisse: h.mat('laque', { c: 0xe8ecf0 }), face: h.mat('distributeur', LUM), bac: h.mat('laque', { c: 0x2a5ac8 }) }, p); allume(p, i, -1.2, 1.6, 0xe8f4ff, 11, 2.2); }
+        h.pose('distribIsole', { socle: beton, caisse: blanc, face: h.mat('distributeur', LUM), bac: blanc }, p); allume(p, i, -1.2, 1.6, 0xe8f4ff, 11, 2.2); }
       // pts 7-9 : la trouée côté vallée (les arbres y sont retirés plus haut), annoncée par un panneau de point de vue
       h.pose('panneauVue', { poteau: acier, plaque: h.mat('ecrit', retro, 64, 24, '#5a3420', '#f4f0e0', '展望  VIEW', 14) }, repere(h, S[i7 + 6]), [W + 1.6, 0, 0]);
       // pts 9-10 : trois voitures garées face à la vue, feux allumés, et leurs pilotes debout devant
-      { const i = at(i9, i10, 0.35), q = repere(h, S[i]), peau = col => ({ caisse: h.mat('laque', { c: col }), vitre, feuRouge, feuBlanc, chassis: h.mat('matGris'), roue: h.mat('roue'), pneu: h.mat('pneu') });
+      { const i = at(i9, i10, 0.35), q = repere(h, S[i]), V = (x, z) => q.localToWorld(new THREE.Vector3(x, 0, z));
         h.pose('boite', bitume, q, [W + 6, -0.35, 0], 10, 0.6, 34);
-        [[-11, 0.25, 0xd8d8d0], [-2, -0.1, 0x14161c], [8, 0.2, 0xc8102e]].forEach(([vz, a, col]) => { const v = new THREE.Group(); v.position.set(W + 5, 0, vz); v.rotation.y = a; q.add(v); h.pose('voitureGaree', peau(col), v); });
-        [[W + 8.6, -7, 1], [W + 8.9, -6.2, 0.92], [W + 9, 3, 1.04], [W + 3, 4.5, 0.98]].forEach(([px, pz, t]) => h.pose('passant', { ombre: vitre }, q, [px, 0, pz], t));
+        [[-11, 0.25, 0xd8d8d0], [-2, -0.1, 0x14161c], [8, 0.2, 0xc8102e]].forEach(([vz, a, col]) => { const v = new THREE.Group(); v.position.set(W + 5, 0, vz); v.rotation.y = a; q.add(v);
+          h.pose('voitureGaree', { caisse: h.mat('laque', { c: col }), vitre, feuRouge, feuBlanc, chassis: gris, roue, pneu }, v); });
+        q.updateMatrixWorld();
+        (insts(h, 'passant', { ombre: vitre }, [[W + 8.6, -7, 1], [W + 8.9, -6.2, 0.92], [W + 9, 3, 1.04], [W + 3, 4.5, 0.98]].map(([px, pz, t]) => { const p = V(px, pz); return [p.x, p.y, p.z, q.rotation.y, t]; })));
         allume(q, i, W + 11, 1, 0xfff0d0, 16, 2); }
-      // pts 10-12 : une ligne à haute tension franchit la crête, feux rouges clignotants ; la lueur de la supérette se devine entre les troncs
-      const feuPylone = h.mat('feuRouge', LUM), fils = [];
-      { const i = at(i10, ic, 0.4), s = S[i], pyl = (sd > 0 ? [-260, -70, 75] : [-75, 70, 260]).map(o => { const p = site(i, Math.sign(o), Math.abs(o), 60); p.rotation.y = h.across(s) + Math.PI / 2; h.pose('pyloneHT', { acier: h.mat('matGris'), feu: feuPylone }, p); p.updateMatrixWorld(); return p; });
-        const bouts = pyl.map(p => [[-6.3, 26.7], [6.3, 26.7], [-6.3, 31.7], [6.3, 31.7], [-4.3, 36.7], [4.3, 36.7]].map(([lx, ly]) => p.localToWorld(new THREE.Vector3(lx, ly, 0))));
-        for (let k = 0; k + 1 < pyl.length; k++) for (let c = 0; c < 6; c++) { const A = bouts[k][c], Bq = bouts[k + 1][c], f = u => [A.x + (Bq.x - A.x) * u, A.y + (Bq.y - A.y) * u - 36 * u * (1 - u), A.z + (Bq.z - A.z) * u]; // 9 m de flèche
-          for (let t = 0; t < 1; t += 1 / 16) fils.push(...f(t), ...f(t + 1 / 16)); }
-        const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(fils, 3)); h.scene.add(new THREE.LineSegments(fg, new THREE.LineBasicMaterial({ color: 0x4a5058 }))); }
-      { const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: h.mat('brume').map, color: 0xbfdcff, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
-        halo.position.set(cx, g.hAt(cx, cz) + 8, cz); halo.scale.set(70, 34, 1); h.scene.add(halo); }
+      // pts 10-12 : des pylônes à haute tension sur la crête, feux rouges clignotants (sans câbles : ils traversaient talus et arbres)
+      const feuPylone = h.mat('feuRouge', LUM);
+      { const i = at(i10, ic, 0.4), s = S[i]; (insts(h, 'pyloneHT', { acier: gris, feu: feuPylone }, (sd > 0 ? [-260, -70, 75] : [-75, 70, 260]).map(o => { const p = site(i, Math.sign(o), Math.abs(o), 60); h.scene.remove(p); return [p.position.x, p.position.y, p.position.z, h.across(s) + Math.PI / 2]; }))); }
       // le retour (pts 41-48) : des jizō à bavoir rouge et leur bougie, puis une cabine téléphonique allumée
-      { const i = pt(h, 43), p = site(i, ext(i), W + 2.6, 0.4); h.pose('jizos', { socle: beton, pierre, bavoir: h.mat('laque', { c: 0xc8102e }), bois, toit: h.mat('matGris'), feu: feuDoux }, p); allume(p, i, -0.6, 0.4, 0xffa040, 6, 1.2); }
-      { const i = pt(h, 46), p = site(i, ext(i), W + 2.8, 0.4); h.pose('cabine', { socle: beton, verre: h.mat('vitrine', { lum: 1, c: 0xd8ffe0 }), cadre: h.mat('laque', { c: 0x1f8f5a }) }, p); allume(p, i, 0, 2, 0xe0ffe8, 12, 2); }
+      { const i = pt(h, 43), p = site(i, ext(i), W + 2.6, 0.4); h.pose('jizos', { socle: beton, pierre, bavoir: h.mat('laque', { c: 0xc8102e }), bois, toit: gris, feu: feuDoux }, p); allume(p, i, -0.6, 0.4, 0xffa040, 6, 1.2); }
+      { const i = pt(h, 46), p = site(i, ext(i), W + 2.8, 0.4); h.pose('cabine', { socle: beton, verre: h.mat('vitrine', { lum: 1, c: 0xd8ffe0 }), cadre: blanc }, p); allume(p, i, 0, 2, 0xe0ffe8, 12, 2); }
 
+      { // fusion : tout ce qui précède (objets posés un à un, et les petits groupes d'instances, dépliés) en une géométrie par matière et par case de 150 m :
+        // une passe de dessin par matière et par case dans le champ, au lieu d'une par pièce ou d'un groupe d'instances dessiné partout (three r128 ne les écarte pas)
+        const par = new Map(), M4 = new THREE.Matrix4(), v = new THREE.Vector3(); h.scene.updateMatrixWorld();
+        const met = (m, mw) => { const ge = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone(); ge.applyMatrix4(mw); v.setFromMatrixPosition(mw);
+          const k = m.material.uuid + (Math.floor(v.x / 150) * 1000 + Math.floor(v.z / 150)); if (!par.has(k)) par.set(k, [m.material]); par.get(k).push(ge); };
+        for (const o of h.scene.children.slice(n0)) { h.scene.remove(o);
+          o.traverse(m => { if (!m.isMesh) return; if (!m.isInstancedMesh) return met(m, m.matrixWorld); for (let k = 0; k < m.count; k++) { m.getMatrixAt(k, M4); met(m, M4.premultiply(m.matrixWorld)); } }); }
+        for (const [mt, ...l] of par.values()) { const ge = new THREE.BufferGeometry();
+          for (const [k, sz] of [['position', 3], ['normal', 3], ['uv', 2]]) { const A = new Float32Array(l.reduce((n, e) => n + e.attributes.position.count, 0) * sz); let o = 0; for (const e of l) { A.set(e.attributes[k].array, o); o += e.attributes.position.count * sz; } ge.setAttribute(k, new THREE.BufferAttribute(A, sz)); }
+          const m = new THREE.Mesh(ge, mt); ge.computeBoundingSphere(); proches.push(m); h.scene.add(m); } }
       const rouge = ville(h, g); // la mégapole en contrebas, à l'ouest des lacets
-      return (dt, now) => { cligno.color.setHex((now / 450 & 1) ? 0xff8c1a : 0x3a2008); const r = now % 1500 < 700 ? 0xff2018 : 0x300404; rouge.color.setHex(r); feuPylone.color.setHex(r); eau.map.offset.x += dt * 0.3; };
+      return (dt, now) => { cligno.color.setHex((now / 450 & 1) ? 0xff8c1a : 0x3a2008); const r = now % 1500 < 700 ? 0xff2018 : 0x300404; rouge.color.setHex(r); feuPylone.color.setHex(r); eau.map.offset.x += dt * 0.3;
+        if (vues.length) { for (const m of proches) { const b = m.geometry.boundingSphere, d = 180 + b.radius; m.visible = vues.some(p => p.distanceToSquared(b.center) < d * d); } vues.length = 0; } };
     },
 
     // ---------- Wan-9 : la ville au nord, le chenal, l'île du port au sud. Voie rapide du front de mer, pont à haubans, quais à conteneurs,
