@@ -480,6 +480,7 @@
   { // chevrons à l'extérieur des virages, piles du viaduc, tubes néon en bord de route (repères de vitesse)
     const dummy = new THREE.Object3D();
     const sg = [0, 1].map(f => new THREE.InstancedMesh(geo('chevron'), mat('chevron', { lum: 1, side: THREE.DoubleSide, retro: 1.5 }, f), 600)), cnt = [0, 0]; // rétroréfléchissants : ils s'allument dans les phares
+    const poteaux = new THREE.InstancedMesh(geo('boite', 0.14, 5.4, 0.14), mat('matGris'), 1200); let npo = 0; // deux poteaux sous chaque panneau de virage : c'est un vrai panneau, pas un repère d'interface (en tunnel, il est fixé à la paroi)
     const piles = new THREE.InstancedMesh(habille(geo('pileViaduc'), concrete), concrete, 60); let np = 0;
     const tubes = [glowM, glowC].map(m => new THREE.InstancedMesh(geo('tubeNeon'), m, 200)), nt = [0, 0];
     const streaks = ['#ff2bd6', '#00f0ff'].map(c => new THREE.InstancedMesh(geo('refletTube'), addMat(tx('degrade', c)), 200));
@@ -499,9 +500,10 @@
         const f = s.k > 0 ? 0 : 1, side = s.k > 0 ? -1 : 1, off = inT ? W - 0.2 : W + 0.6;
         dummy.position.set(s.x + nx * side * off, s.y + 3, s.z + nz * side * off); dummy.lookAt(s.x, s.y + 3, s.z); dummy.updateMatrix();
         sg[f].setMatrixAt(cnt[f]++, dummy.matrix);
+        if (!inT) for (const u of [-1.8, 1.8]) { dummy.position.set(s.x + nx * side * (off + 0.1) + s.tx * u, s.y + 1.45, s.z + nz * side * (off + 0.1) + s.tz * u); dummy.updateMatrix(); poteaux.setMatrixAt(npo++, dummy.matrix); } // du sol (1,25 m sous la chaussée) au haut du panneau
       }
     }
-    sg.forEach((m, f) => { m.count = cnt[f]; scene.add(m); }); piles.count = np; scene.add(piles);
+    sg.forEach((m, f) => { m.count = cnt[f]; scene.add(m); }); poteaux.count = npo; scene.add(poteaux); piles.count = np; scene.add(piles);
     tubes.forEach((m, c) => { m.count = nt[c]; scene.add(m); streaks[c].count = nt[c]; scene.add(streaks[c]); repli(streaks[c]); });
   }
 
