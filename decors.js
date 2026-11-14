@@ -905,8 +905,10 @@
       }
       inst(h, h.geo('berme'), h.mat('betonGris'), berme);
       const tete = { beton, corniche: gris, structure: gris, nom: h.mat('ecrit', LUM, 128, 22, '#0e5a38', '#f4f1e0', '湾岸海底トンネル  WAN-9 UNDERSEA TUNNEL', 9), feux: h.mat('feuxVoie', LUM, 4),
-        limite: h.mat('rayures', LUM), panneau: h.mat('ecrit', LUM, 16, 16, '#f4f0e0', '#c8102e', '4.3m', 7) };
+        limite: h.mat('matGris', { visible: false }), panneau: h.mat('matGris', { visible: false }), structure: h.mat('matGris', { visible: false }) }; // le gabarit de la tête est rigide, à 26 m : dans la courbe d'accès il tombait dans le mur ; posé à part, plus bas
       for (const [i, rv] of [[T.t0, 0], [T.t1, Math.PI]]) { const r = repere(h, S[i]); r.rotation.y += rv; h.pose('teteTunnel', tete, r, [0, 0, 0], W); }
+      for (const [i, rv] of [[T.t0 - 13, 0], [T.t1 + 13, Math.PI]]) { const r = repere(h, S[(i + N) % N]); r.rotation.y += rv; // le portique de gabarit, sur la route elle-même, 26 m avant chaque tête
+        h.pose('gabarit', { limite: h.mat('rayures', LUM), structure: gris, panneau: h.mat('ecrit', LUM, 16, 16, '#f4f0e0', '#c8102e', '4.3m', 7) }, r, [0, 0, 0], W); }
       const persiennes = h.mat('persiennes'), quai = h.mat('bitume'), feuxRouges = [];
       { const s = S[T.t0], [x, z] = bord(s, 1, W + 46), r = repere(h, s); r.position.set(x, g.hAt(x, z), z); h.pose('tourVentilation', { persiennes, beton }, r, [0, 0, 18], 24); feuxRouges.push(x, 46, z); }
       { const s = S[T.t1], [x, z] = bord(s, -1, W + 40), r = repere(h, s); r.position.set(x, g.hAt(x, z), z); h.pose('tourVentilation', { persiennes, beton }, r, [0, 0, -18], 20); feuxRouges.push(x, 42, z); }
@@ -1046,7 +1048,26 @@
         insts(h, 'voitureGaree', { caisse: h.mat('peinture', { c: 0xffffff }), vitre: h.mat('vitreSombre'), feuRouge: h.mat('feuRouge'), feuBlanc: h.mat('matGris'), chassis: h.mat('matGris'), roue: h.mat('roue'), pneu: h.mat('pneu') }, autos, { teinte: 'caisse' });
         insts(h, 'palettes', { bois: h.mat('planches', { c: 0xc8a878 }) }, pal, { a: [1, false] });
         insts(h, 'chariot', { caisse: h.mat('metalClair', { c: 0xe0a020 }), contrepoids: h.mat('matGris'), acier: h.mat('acier'), roue: h.mat('roue') }, chariots);
-        insts(h, 'barriere', { rayures: h.mat('rayures', LUM), clignotant: h.mat('clignotant', LUM) }, barr); }
+        insts(h, 'barriere', { rayures: h.mat('rayures', LUM), clignotant: h.mat('clignotant', LUM) }, barr);
+        // mobilier du trottoir : distributeurs de boissons éclairés, poubelles, bancs, tournés vers la route ; réverbères de rue de 6 m sur la ligne droite (côté ville), sans lampadaire d'autoroute
+        const dis = [], pou = [], bancs = [], rev = [], face = (s, sd) => Math.atan2(s.tz * sd, -s.tx * sd);
+        for (let k = 6; k < n; k += 12) { const s = S[(i0 + k) % N];
+          for (const sd of [-1, 1]) { const [x, z] = bord(s, sd, W + 3.6), u = al(); if (!ok(x, z, 1)) continue; const y = s.y + 0.15, r = face(s, sd);
+            if (u < 0.35) for (let q = 0; q < 2 + (al() * 2 | 0); q++) dis.push([x + s.tx * q * 1.05, y, z + s.tz * q * 1.05, r]);
+            else if (u < 0.6) pou.push([x, y, z, r]); else if (u < 0.85) bancs.push([x, y, z, r + Math.PI]); } }
+        for (let k = 0; k < n; k += 15) { const i = (i0 + k) % N, s = S[i]; for (const sd of [-1, 1]) { if (i >= pt(h, 36) || i < pt(h, 3) && sd > 0) continue; // les lampadaires d'autoroute éclairent déjà le retour (points 36 à 40) ; la marina n'a que ses bornes
+          const [x, z] = bord(s, sd, W + 4.8); if (!ok(x, z, 0.5)) continue; rev.push([x, s.y + 0.15, z, Math.atan2(s.tx * sd, s.tz * sd)]); const [lx, lz] = bord(s, sd, W + 3.7); h.lum(i, lx, s.y + 6, lz, 0xffd8a0, 24, 1.6); } }
+        insts(h, 'distributeur', { caisse: h.mat('metalClair', { c: 0xe8e8ec }), facade: h.mat('tourFenetres', LUM, ['#f4f8ff', '#ff4a5a', '#4ab0ff']) }, dis);
+        insts(h, 'poubelle', { bac: h.mat('metalClair', { c: 0x2a6a3a }), bac2: h.mat('metalClair', { c: 0x2a4a8a }) }, pou);
+        insts(h, 'banc', { vert: h.mat('planches', { c: 0x9a7a5a }), fer: h.mat('matGris') }, bancs);
+        insts(h, 'reverbereRue', { fut: h.mat('matGris'), lampe: h.mat('lampe', LUM) }, rev); }
+      // le sol entre les tours : des rues (asphalte, trottoirs, passages piétons) calées sur la grille des tours ; à l'est de la tranchée du tunnel, sous la route (plus haute), au-dessus du terrain
+      { const x0 = g.box[0] + 67 + 58 * Math.ceil((-560 - g.box[0] - 67) / 58), z0 = g.box[1] + 9, nx = Math.floor((g.box[2] - x0) / 58); let nz = Math.ceil((-14 - z0) / 58); if (z0 + nz * 58 > 12) nz--;
+        boite(h, h.mat('rueVille'), nx * 58, 0.3, nz * 58, x0 + nx * 29, -0.45, z0 + nz * 29);
+        const rv = []; // réverbères de rue aux carrefours, près de la route
+        for (let a = 0; a <= nx; a++) for (let b = 0; b <= nz; b++) for (const [dx, dz] of [[-9, -9], [9, 9]]) { const x = x0 + a * 58 + dx, z = z0 + b * 58 + dz, d = g.dAt(x, z);
+          if (d < W + 4 || d > 150 || tl.some(l => l.some(t => Math.abs(x - t[0]) < t[4] / 2 + 1 && Math.abs(z - t[2]) < t[6] / 2 + 1))) continue; rv.push([x, -0.3, z, Math.atan2(-dz, dx)]); if (d < 60) h.lum(near(h, x, z), x, 6, z, 0xffd8a0, 26, 1.4); }
+        insts(h, 'reverbereRue', { fut: h.mat('matGris'), lampe: h.mat('lampe', LUM) }, rv); }
       // au loin, hors brouillard : la ville derrière, une côte en face de l'autre côté de la baie, la zone industrielle à l'est, un grand pont suspendu à l'ouest
       const loins = [['#0a1020', ['#ffb85a', '#f4f1e0', '#ffd27a'], 90], ['#0c0e18', ['#9fd0ff', '#f4f1e0'], 60], ['#140c10', ['#ff9a5a', '#ffd27a'], 40]].map(([f, c, n]) => h.mat('tourLoin', { lum: 1, fog: false }, f, c, n)), ll = loins.map(() => []);
       const amas = (cx, cz, n, rx, rz, hmin, hmax, wmin) => { for (let i = 0; i < n; i++) { const hh = hmin + rnd() * rnd() * (hmax - hmin), w = wmin + rnd() * wmin; ll[i % 3].push([cx + (rnd() - 0.5) * rx, hh / 2 - 4, cz + (rnd() - 0.5) * rz, 0, w, hh, w]); } };
@@ -1073,6 +1094,21 @@
       for (const z of [-4.2, 4.2]) for (let i = 0; i < 48; i++) { const a = i / 48 * 6.283; rp.push(Math.cos(a) * RR, Math.sin(a) * RR, z); rc.push(...[[1, 0.3, 0.6], [0.3, 0.9, 1], [1, 0.9, 0.3]][i % 3]); if (i % 6 === 0) for (let r = 10; r < RR; r += 12) { rp.push(Math.cos(a) * r, Math.sin(a) * r, z); rc.push(1, 1, 1); } }
       const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.Float32BufferAttribute(rp, 3)); rg.setAttribute('color', new THREE.Float32BufferAttribute(rc, 3));
       const roue2 = new THREE.Points(rg, new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true, fog: false })); roue2.frustumCulled = false; rotor.add(roue2);
+      // le pied de la roue : esplanade dallée, guichets, manège qui tourne, file d'attente, guirlandes ; la roue sort de la terre gardée entre les deux bassins de la marina
+      const manege = new THREE.Group(); manege.userData.dyn = 1; manege.position.set(672, 0.05, 46); h.scene.add(manege);
+      { boite(h, h.mat('trottoir'), 150, 0.3, 46, 620, -0.1, 37);
+        h.pose('carrousel', { socle: h.mat('planches', { c: 0xd8b07a }), mat: h.mat('metalClair', { c: 0xe8c040 }), toit: h.mat('metalClair', { c: 0xc8304a }), barre: h.mat('metalClair', { c: 0xe8c040 }), cheval: h.mat('metalClair', { c: 0xf4f0ea }) }, manege);
+        const lm = [], lc = []; for (let k = 0; k < 40; k++) { const a = k / 40 * 6.283; lm.push(Math.cos(a) * 8, 6.4, Math.sin(a) * 8); lc.push(...[[1, 0.85, 0.3], [1, 0.3, 0.6], [0.3, 0.9, 1]][k % 3]); }
+        const mg2 = new THREE.BufferGeometry(); mg2.setAttribute('position', new THREE.Float32BufferAttribute(lm, 3)); mg2.setAttribute('color', new THREE.Float32BufferAttribute(lc, 3));
+        const pm2 = new THREE.Points(mg2, new THREE.PointsMaterial({ size: 3, sizeAttenuation: false, vertexColors: true })); pm2.frustumCulled = false; manege.add(pm2);
+        const gu = [[562, 20], [574, 20], [666, 22], [678, 22]].map(([x, z]) => [x, 0.05, z, Math.PI]);
+        insts(h, 'guichet', { cabane: h.mat('metalClair', { c: 0xf4ece0 }), vitre: h.mat('tourFenetres', LUM, ['#ffe2a0']), auvent: h.mat('rayures', LUM), enseigne: h.mat('ecrit', LUM, 64, 14, '#c8304a', '#ffffff', 'TICKETS', 9) }, gu);
+        const file = []; for (let k = 0; k < 14; k++) file.push([560 + (k % 7) * 2.2 + (k > 6 ? 108 : 0), 0.05, 15.5 + (rnd() - 0.5), rnd() * 6.3, 0.95 + rnd() * 0.1]);
+        insts(h, 'fetard', { corps: h.mat('vitreSombre') }, file);
+        const gl = [], gc = []; for (let x = 548; x <= 692; x += 2) { gl.push(x, 4 - Math.abs(Math.sin((x - 548) / 12 * Math.PI)) * 1.2, 15); gc.push(...[[1, 0.85, 0.3], [1, 0.4, 0.7]][(x / 2) & 1]); } // guirlande festonnée le long de l'esplanade
+        const gg2 = new THREE.BufferGeometry(); gg2.setAttribute('position', new THREE.Float32BufferAttribute(gl, 3)); gg2.setAttribute('color', new THREE.Float32BufferAttribute(gc, 3));
+        const pg2 = new THREE.Points(gg2, new THREE.PointsMaterial({ size: 2.5, sizeAttenuation: false, vertexColors: true })); pg2.frustumCulled = false; h.scene.add(pg2);
+        for (const x of [560, 620, 680]) h.lum(near(h, x, 0), x, 5, 24, x === 620 ? 0xff6ab0 : 0xffd890, 30, 1.8); }
       const NN = 24, nacelles = new THREE.InstancedMesh(h.geo('nacelle'), h.mat('nacelle', LUM, '#e8e8e8'), NN), dn = new THREE.Object3D(); nacelles.frustumCulled = false; roueG.add(nacelles);
       for (let k = 0; k < NN; k++) nacelles.setColorAt(k, new THREE.Color([0xff4a8a, 0x4ac8ff, 0xffd84a, 0x6aff8a][k % 4]));
 
@@ -1095,13 +1131,15 @@
           for (let x = x0 + 6; x < x1; x += 15) { bornes.push([x, 0, MQ - 2]); feux.push(x, 1.05, MQ - 2); if ((x - x0) % 30 < 15) h.lum(near(h, x, 0), x, 3, MQ + 4, 0xffe0a8, 36, 2.2); } // bornes de quai ; une sur trois éclaire (jusqu'à la route)
           pontons.push([(x0 + x1) / 2, -3.55, MQ + 3.5, 0, x1 - x0 - 4, 1, 1]); // le ponton principal, le long du quai
           for (let fx = x0 + 8; fx < x1 - 6; fx += 24) { if (fx > 410 && fx < 540) continue; // la place du yacht
-            pontons.push([fx, -3.55, MQ + 30, Math.PI / 2, 50, 1, 1]); feux.push(fx, -2.4, MQ + 55); // un ponton en peigne, sa lampe en bout
+            pontons.push([fx, -3.55, MQ + 30, Math.PI / 2, 50, 1, 1]); bornes.push([fx, -2.98, MQ + 54]); feux.push(fx, -1.93, MQ + 54); // un ponton en peigne, la même borne en bout
             if (fx + 24 >= x1 - 6) continue;
-            for (const dx of [5, 12, 19]) { if (rnd() < 0.12) continue; const L = 9 + rnd() * 8, v = rnd() < 0.55, bx = fx + dx, bz = MQ + 7 + L / 2; // l'étrave vers le quai
-              (v ? voiliers : vedettes).push([bx, -3.45, bz, -Math.PI / 2 + (rnd() - 0.5) * 0.05, L, L, L]); if (v) feux.push(bx, -3.45 + L * 1.33, bz + L * 0.1); } } }
+            // les places : le long de chaque ponton, des deux côtés de l'allée d'eau (16 m au milieu), du quai jusqu'au bout ; une sur quatre libre, au hasard
+            for (const [cx, sens] of [[fx + 3.4, 1], [fx + 20.6, -1]]) for (let bz = MQ + 8; bz < MQ + 52;) { const L = 8 + rnd() * 8; if (bz + L > MQ + 54) break;
+              if (rnd() > 0.26) { const v = rnd() < 0.55; (v ? voiliers : vedettes).push([cx + sens * (L * 0.16 - 2.4), -3.45, bz + L / 2, (rnd() < 0.7 ? -1 : 1) * Math.PI / 2 + (rnd() - 0.5) * 0.04, L, L, L]); }
+              bz += L + 1.5; } } }
         insts(h, 'borneQuai', { fut: h.mat('matGris'), lampe: h.mat('lampe', LUM) }, bornes);
         insts(h, 'ponton', { planches, flotteur: h.mat('matGris') }, pontons, { a: [1] }); // ponton de 1 m étiré à sa longueur (les planches suivent)
-        const peauB = { coque: blancB, pont: planches, hublots: hub, mat: h.mat('acier') };
+        const peauB = { coque: blancB, pont: planches, hublots: hub, mat: h.mat('acier'), liston: h.mat('metalClair', { c: 0x1a2a4a }), rouf: h.mat('metalClair', { c: 0xe8e4dc }), voile: h.mat('metalClair', { c: 0x2a4a7a }), blanc: blancB };
         insts(h, 'voilier', peauB, voiliers); insts(h, 'vedette', { ...peauB, coque: h.mat('metalClair', { c: 0xe8e4dc }) }, vedettes);
         // le yacht de la fête : à quai au bout du ponton principal ouest, parallèle au quai ; fêtards sur le pont arrière et sur le fly, guirlandes qui clignotent, lumière rose et cyan
         const YX = 470, YZ = MQ + 14, yacht = new THREE.Group(); yacht.position.set(YX, -2.7, YZ); yacht.rotation.y = Math.PI; h.scene.add(yacht);
@@ -1167,7 +1205,7 @@
         feuPhare.rotation.y = now * 0.0009; grueC.rotation.y = Math.sin(now * 0.00007) * 0.8; // un tour de phare toutes les 7 s ; la grue pivote lentement
         { const u = iPm + N + Math.sin(now * 0.00025) * 10, j = Math.floor(u), f = u - j, a = S[j % N], b = S[(j + 1) % N]; // ±20 m le long de la route, un aller-retour en 25 s
           portM.position.set(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, a.z + (b.z - a.z) * f); portM.rotation.y = h.across(a); }
-        rotor.rotation.z = now * 0.00012; bp.visible = (now / 700 & 1) === 1; ptsBouees.visible = (now / 1100 & 3) === 0;
+        manege.rotation.y = now * 0.0006; rotor.rotation.z = now * 0.00012; bp.visible = (now / 700 & 1) === 1; ptsBouees.visible = (now / 1100 & 3) === 0;
         for (let k = 0; k < NN; k++) { const a = k / NN * 6.2832 + rotor.rotation.z; dn.position.set(Math.cos(a) * RR, Math.sin(a) * RR - 2.2, 0); dn.updateMatrix(); nacelles.setMatrixAt(k, dn.matrix); } // la nacelle pend sous la jante, toujours d'aplomb
         nacelles.instanceMatrix.needsUpdate = true;
         for (const [p, ph] of passants) boucle(now * 0.007 / LB + ph, p); // 7 m/s
