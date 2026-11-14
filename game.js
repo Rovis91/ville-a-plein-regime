@@ -547,7 +547,7 @@
         if (q.aq) for (let k = 0; k < 3; k++) poussiere(x + jit(1), c.y + 0.15, z + jit(1), c.vx * 0.8 + jit(5), 1.5 + Math.random() * 4, c.vz * 0.8 + jit(5)); // l'eau du gué est trouble : une gerbe de la même teinte, plus haute
         else if (q.roul > 0.25) for (let k = 0; k < 2; k++) poussiere(x + jit(0.6), c.y + 0.15, z + jit(0.6), c.vx * 0.7 + jit(2), 0.3 + Math.random() * 1.2, c.vz * 0.7 + jit(2)); }
       POUS.step(dt); }
-    FUM.step(dt); dEch.value = RH / 2;
+    dgFrame(dt); FUM.step(dt); dEch.value = RH / 2;
     for (let i = 0; i < VN; i++) { const j = i * 6, s = i * VK; if (vS[s + 3] <= 0) { vCo.fill(0, j, j + 6); continue; }
       vS[s + 3] -= dt; vS[s + 1] -= vS[s + 5] * dt; const a = Math.max(0, vS[s + 3] / vS[s + 4]), k = vS[s + 6];
       for (let c = 0; c < 3; c++) vP[j + c] += vS[s + c] * dt; if (vP[j + 1] < vS[s + 7]) { vP[j + 1] = vS[s + 7]; vS[s + 1] *= -0.35; }
@@ -591,6 +591,90 @@
   // les voitures humaines, une par place de joueur (vu.hu de la vue de rang n : HUM[n]) : modèle, caisse (roulis), roues, feu stop, flammes de nitro et traînées. Une copie de carG a les mêmes enfants dans le même ordre : caisse, quatre roues, deux flammes.
   // Le joueur 2 a donc toute l'animation du joueur 1, alors que les adversaires gardent leurs roues fixes
   const HUM = [[carG, brakeMat], ...opps.slice(3).map(g => [g, g.userData.feu])].map(([g, feu]) => ({ g, feu, body: g.children[0], roues: g.children.slice(1, 5), fl: g.children.slice(5, 7), ...trainee() }));
+
+  // ---------- dégâts : purement visuels et sonores (la conduite et les temps n'en savent rien : fantômes, médailles et réseau intacts), remis à zéro à chaque départ ----------
+  // Par modèle (g.userData.dg) : z = usure des zones [avant, arrière, flanc z < 0, flanc z > 0] de 0 à 1 ; la caisse s'enfonce autour de chaque impact (au plus DG_MAX mètres par sommet) ;
+  // ph / fe = phare / feu cassé de chaque côté [z < 0, z > 0] : éteint, et sa lumière dynamique avec (vueFrame) ; pare-chocs et rétroviseurs qui tombent ; fumée du capot ; vitre fêlée peinte sur la livrée.
+  // Chaque modèle a sa copie des géométries de carG (formes-voitures.js) : P0 = la forme intacte, d = l'enfoncement cumulé.
+  const DG_MAX = 0.28, DGV = new Float32Array(32), DEB = [], NOIRV = [0.05, 0.05, 0.06], HC0 = LUX.uHC.value.clone(); let dgT = 0;
+  const nez = Math.max(...VO.plan.dessusCaisse.map(q => q[0])), cul = Math.min(...VO.plan.dessusCaisse.map(q => q[0])), cab0 = VO.plan.cab[0][0];
+  const DGM = [carG, ...opps].map(g => {
+    const D = { z: [0, 0, 0, 0], ph: [0, 0], fe: [0, 0], m: [], p: [], t: -1, fis: null, liv: null };
+    g.children[0].traverse(o => { const zn = Object.keys(VO.zones).find(k => VO.zones[k] === o.geometry); if (!zn) return;
+      const ge = o.geometry = o.geometry.clone(), P = ge.attributes.position.array, me = { o, zn, P0: P.slice(), d: new Float32Array(P.length) };
+      if (zn === 'phare' || zn === 'feu') { ge.setAttribute('color', new THREE.BufferAttribute(new Float32Array(P.length).fill(1), 3)); o.material.vertexColors = true; o.material.needsUpdate = true; }
+      if (zn === 'caisse') D.liv = o.material;
+      D.m.push(me);
+      // pièces qui peuvent tomber : les triangles entièrement dans leur boîte (pare-chocs : zone noire, au bout et en bas ; rétroviseurs : pièces unies de la caisse, hors de l'habitacle, près du pied de pare-brise)
+      const uv = ge.attributes.uv.array, uni = i => Math.abs(uv[i / 3 * 2] - 124 / 128) < 1e-3 && Math.abs(uv[i / 3 * 2 + 1] - 0.25) < 1e-3; // l'aplat de teinte de la livrée (plan.teinte)
+      const cherche = (nom, zi, test, sg) => { const tri = []; for (let i = 0; i < P.length; i += 9) { let ok = true; for (let k = 0; k < 9 && ok; k += 3) ok = test(P[i + k], P[i + k + 1], P[i + k + 2], i + k); if (ok) tri.push(i); } if (tri.length) D.p.push({ nom, zi, me, tri, sg, off: 0 }); };
+      if (zn === 'noir') { cherche('av', 0, (x, y) => x > nez - 0.3 && y < 0.5, [1, 0]); cherche('ar', 1, (x, y) => x < cul + 0.3 && y < 0.5, [-1, 0]); }
+      if (zn === 'caisse') for (const s of [-1, 1]) cherche('retro', s < 0 ? 2 : 3, (x, y, z, i) => uni(i) && z * s > VO.plan.wc / 2 && x > cab0 - 0.5 && x < cab0 + 0.3, [0, s]);
+    });
+    return g.userData.dg = D;
+  });
+  const dgEcrit = (D, me) => { const ge = me.o.geometry, P = ge.attributes.position.array; for (let i = 0; i < P.length; i++) P[i] = me.P0[i] + me.d[i];
+    for (const p of D.p) if (p.off && p.me === me) for (const i of p.tri) P.fill(0, i, i + 9); // pièce tombée : ses triangles réduits à un point
+    ge.attributes.position.needsUpdate = true; ge.computeVertexNormals(); };
+  function dgRaz() { // départ d'une course : toutes les voitures intactes, les débris ramassés
+    for (const D of DGM) { D.z.fill(0); D.ph.fill(0); D.fe.fill(0); D.t = -1;
+      for (const p of D.p) p.off = 0;
+      for (const me of D.m) { me.d.fill(0); dgEcrit(D, me); const c = me.o.geometry.attributes.color; if (c) { c.array.fill(1); c.needsUpdate = true; } }
+      if (D.fis) { D.liv.map.image.getContext('2d').putImageData(D.fis, 0, 0); D.liv.map.needsUpdate = true; D.fis = null; } }
+    for (const d of DEB) { scene.remove(d.m); d.m.geometry.dispose(); } DEB.length = 0;
+  }
+  // un choc sur le modèle g : (lx, lz) = d'où il vient, unitaire, dans le repère de la voiture (x vers l'avant) ; f = sa force (m/s) ; (vx, vz) = vitesse de la voiture, que gardent les pièces qui tombent
+  function dgChoc(g, lx, lz, f, vx = 0, vz = 0) {
+    const D = g.userData.dg, k = Math.min(1, (f - 2) / 25); if (k <= 0) return;
+    [lx, -lx, -lz, lz].forEach((a, i) => { if (a > 0) D.z[i] = Math.min(1, D.z[i] + k * a * a * 1.5); });
+    // enfoncement : un creux en cloche autour du point d'impact, posé sur le bord de l'encombrement
+    const t = Math.min(ENCt.x / 2 / (Math.abs(lx) + 1e-6), ENCt.z / 2 / (Math.abs(lz) + 1e-6)), px = ENCc.x + lx * t, pz = ENCc.z + lz * t, R = Math.min(1.2, 0.5 + f * 0.03), pr = Math.min(0.22, f * 0.013);
+    for (const me of D.m) { const P = me.P0, d = me.d;
+      for (let i = 0; i < P.length; i += 3) { const r = Math.hypot(P[i] - px, (P[i + 1] - 0.55) * 1.5, P[i + 2] - pz); if (r >= R) continue;
+        const w = (1 - r / R) ** 2 * pr; d[i] -= lx * w; d[i + 1] -= w * 0.3; d[i + 2] -= lz * w;
+        const l = Math.hypot(d[i], d[i + 1], d[i + 2]); if (l > DG_MAX) for (let c = 0; c < 3; c++) d[i + c] *= DG_MAX / l; } }
+    // phares et feux : cassés du côté du choc, des deux côtés si le choc est franc et la zone très abîmée
+    const s = lz < 0 ? 0 : 1, franc = Math.abs(lz) < 0.3;
+    if (lx > 0.4 && D.z[0] > 0.45) { D.ph[s] = 1; if (franc && D.z[0] > 0.8) D.ph[1 - s] = 1; }
+    if (lx < -0.4 && D.z[1] > 0.45) { D.fe[s] = 1; if (franc && D.z[1] > 0.8) D.fe[1 - s] = 1; }
+    for (const me of D.m) if (me.zn === 'phare' || me.zn === 'feu') { const c = me.o.geometry.attributes.color, B = me.zn === 'phare' ? D.ph : D.fe;
+      for (let i = 0; i < me.P0.length; i += 3) if (B[me.P0[i + 2] < 0 ? 0 : 1]) c.array.set(NOIRV, i); c.needsUpdate = true; }
+    for (const p of D.p) if (!p.off && D.z[p.zi] > (p.nom === 'retro' ? 0.5 : 0.65)) { p.off = 1; tombe(g, p, vx, vz); } // au-delà du seuil de sa zone, la pièce tombe
+    for (const me of D.m) dgEcrit(D, me);
+    if (f > 12 && !D.fis) fissure(D, lx);
+  }
+  function tombe(g, p, vx, vz) { // une pièce qui se détache : sa géométrie à part (telle que cabossée), lancée vers l'extérieur ; elle rebondit et reste au sol 20 s
+    const { me, tri, sg } = p, A = new Float32Array(tri.length * 9), U = new Float32Array(tri.length * 6), uv = me.o.geometry.attributes.uv.array, c = new V3(), ge = new THREE.BufferGeometry();
+    tri.forEach((i, k) => { for (let j = 0; j < 9; j++) A[k * 9 + j] = me.P0[i + j] + me.d[i + j]; U.set(uv.subarray(i / 3 * 2, i / 3 * 2 + 6), k * 6); });
+    ge.setAttribute('position', new THREE.BufferAttribute(A, 3)); ge.setAttribute('uv', new THREE.BufferAttribute(U, 2));
+    ge.computeBoundingBox(); ge.boundingBox.getCenter(c); ge.translate(-c.x, -c.y, -c.z); ge.computeVertexNormals();
+    const m = new THREE.Mesh(ge, me.o.material); m.castShadow = true; m.userData.dyn = 1; g.updateMatrixWorld(true);
+    m.position.copy(c).applyMatrix4(me.o.matrixWorld); m.quaternion.setFromRotationMatrix(me.o.matrixWorld); scene.add(m);
+    const fx = Math.cos(g.rotation.y), fz = -Math.sin(g.rotation.y), ox = fx * sg[0] - fz * sg[1], oz = fz * sg[0] + fx * sg[1]; // g.rotation.y = -cap
+    DEB.push({ m, v: new V3(vx * 0.8 + ox * 3, 2 + Math.random() * 2, vz * 0.8 + oz * 3), w: new V3(jit(10), jit(10), jit(10)), y0: g.position.y, t: 20 });
+  }
+  function fissure(D, lx) { // choc violent : une étoile de fêlures sur le pare-brise (la lunette si le choc vient de l'arrière), peinte sur la livrée de ce modèle ; dgRaz rend l'image d'origine
+    const lv = D.liv.map, g = lv.image.getContext('2d'), p = VO.plan, [[x0], [x1], [x2], [x3]] = p.cab, hw = p.wc / 2 - 0.16, av = lx > -0.4, xa = av ? x0 : x3, xb = av ? x1 : x2;
+    D.fis = g.getImageData(0, 0, lv.image.width, lv.image.height);
+    const [ax, ay] = p.dessus(xa, -hw), [bx, by] = p.dessus(xb, hw), [cx, cy] = p.dessus(xa + (xb - xa) * (0.3 + Math.random() * 0.4), (Math.random() * 2 - 1) * hw * 0.6);
+    g.save(); g.beginPath(); g.rect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)); g.clip();
+    g.strokeStyle = 'rgba(225,238,255,0.9)'; g.lineWidth = 1; g.beginPath();
+    for (let i = 0; i < 9; i++) { const a = (i + Math.random() * 0.6) / 9 * 2 * Math.PI, l = 4 + Math.random() * 10; g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * l * 0.5 + jit(2), cy + Math.sin(a) * l * 0.5 + jit(2)); g.lineTo(cx + Math.cos(a) * l, cy + Math.sin(a) * l); }
+    g.moveTo(cx + 3, cy); g.arc(cx, cy, 3, 0, 2 * Math.PI); g.stroke(); g.restore(); lv.needsUpdate = true;
+  }
+  const dgPas = (c, vx0, vz0) => { // après un pas de simulation : un choc franc (mur, camion, autre voiture) abîme son modèle ; il vient de l'opposé de ce qu'il a fait à la vitesse
+    const f = Math.max(c.hit, c.bump || 0), g = modele(c), D = g.userData.dg; if (f <= 3 || dgT - D.t < 0.15) return; D.t = dgT; // un contact qui dure ne compte qu'une fois
+    let dx = vx0 - c.vx, dz = vz0 - c.vz, l = Math.hypot(dx, dz); if (l < 0.5) { dx = c.vx; dz = c.vz; l = Math.hypot(dx, dz) || 1; }
+    const fx = Math.cos(c.th), fz = Math.sin(c.th); dgChoc(g, (dx * fx + dz * fz) / l, (dz * fx - dx * fz) / l, f, c.vx, c.vz);
+  };
+  const dgNiv = c => { const z = modele(c).userData.dg.z; return Math.min(1, z[0] * 0.6 + (z[1] + z[2] + z[3]) * 0.2); }; // pour le son : l'avant (le moteur) compte le plus
+  function dgFrame(dt) { // débris qui tombent, fumée d'un capot très abîmé
+    for (let i = DEB.length - 1; i >= 0; i--) { const d = DEB[i], p = d.m.position; if ((d.t -= dt) < 0) { scene.remove(d.m); d.m.geometry.dispose(); DEB.splice(i, 1); continue; }
+      d.v.y -= 15 * dt; p.addScaledVector(d.v, dt); d.m.rotation.x += d.w.x * dt; d.m.rotation.y += d.w.y * dt; d.m.rotation.z += d.w.z * dt;
+      if (p.y < d.y0 + 0.06) { p.y = d.y0 + 0.06; d.v.y *= -0.3; d.v.x *= 0.5; d.v.z *= 0.5; d.w.multiplyScalar(0.5); } }
+    for (const c of race ? race.cars : [VUES[0].moi]) { const g = modele(c), z = g.userData.dg.z[0]; if (!g.visible || z < 0.6 || Math.random() > dt * 30 * (z - 0.5)) continue;
+      const fx = Math.cos(c.th), fz = Math.sin(c.th), a = ENC.max.x - 0.9; FUM.emit(c.x + fx * a + jit(0.4), g.position.y + 1, c.z + fz * a + jit(0.4), c.vx * 0.85 + jit(1), 1 + Math.random(), c.vz * 0.85 + jit(1)); }
+  }
   // feux arrière des adversaires et des camions : deux points rouges hors brouillard (au-delà de 60 m la caisse ne fait plus que quelques pixels et rien ne l'éclaire) ;
   // leur taille suit la distance (un feu d'environ 0,5 m) : de loin, jamais plus gros que le véhicule, et jamais sous 1 pixel (le minimum de WebGL), donc toujours visibles ;
   // à moins de 40 m, aucun point : les feux de la caisse se voient, et un point de 0,5 m y ferait un pavé rouge
@@ -776,7 +860,7 @@
     if (race && invite()) { const g = race.glob = race.cars.slice(), h = [NET.moi, ...g.slice(0, nj).map((_, i) => i).filter(i => i !== NET.moi)]; race.cars = [...h.map(i => g[i]), ...g.slice(nj)]; } // invité : sa voiture en tête de liste, comme un joueur 1 (R.glob garde l'ordre de l'hôte, celui des états reçus)
     if (race) race.cars.forEach((c, i) => { c.k = i < nj ? (i ? 2 + i : -1) : i - nj; c.rl = c.rlT = c.bl = 0; }); // et ses tours : dernier tour compté, son heure, meilleur tour (voir frame) // rang de chaque voiture dans OPP et opps : le joueur 2 prend le dernier modèle, les rivaux les premiers
     const seule = race ? null : newCar(T); VUES.forEach((vu, i) => { suit(vu, race ? race.cars[i] : seule); vu.gear = 0; vu.splitMsg = null; }); VUES[0].moi.manual = manuel1(); // (hors course, un mode sans rivaux lancé à deux : les deux vues suivent la seule voiture)
-    state = 'count'; count = 3; shown = 0; tTraf = 0; acc = 0;
+    state = 'count'; count = 3; shown = 0; tTraf = 0; acc = 0; dgRaz();
     pique = null; piqueT = 0; if (race && enCourse() && VUES.length === 1 && !demo && !enLigne()) { const r = race.cars.filter(c => c.k >= 0 && c.k < 3); pic(r[Math.random() * r.length | 0], 'grille'); }
   }
   // Mode démo : à l'écran titre (accueil ou menu principal, en solo), DEMO_ATTENTE secondes sans rien toucher, le pilote automatique court une Course, carte après carte dans l'ordre de la nuit (SOIREE).
@@ -1219,8 +1303,10 @@
     }
     const J = VUES[0], inp = J.inp, car = J.moi; // le joueur 1 : sa hauteur et sa lumière lissées servent aux effets de la scène ; sa voiture est celle du jeu hors course
     for (acc += dt; acc >= H; acc -= H) {
+      const dgL = race && state === 'race' ? race.cars : [car]; dgL.forEach((c, i) => { DGV[i * 2] = c.vx; DGV[i * 2 + 1] = c.vz; }); // dégâts : la vitesse avant le pas, pour savoir d'où vient un choc
       // en course, sim.js fait avancer tout le monde, avec une entrée par humain ; entrée nulle : l'IA conduit la voiture de ce joueur (?auto, ou une fois arrivé)
       if (race && state === 'race') { if (invite()) NET.applique(race); else { for (let i = 0; i < race.h; i++) INS[i] = enLigne() && i ? NET.ins[i] : AUTO || demo || VUES[i].fini ? null : VUES[i].inp; stepRace(race, INS, H); } } else { step(car, inp, T, H); if (M.trafic && state === 'race') hitTrafic(car, T, tTraf); }
+      dgT += H; if (state === 'race') dgL.forEach((c, i) => dgPas(c, DGV[i * 2], DGV[i * 2 + 1]));
       for (const vu of VUES) { const c = vu.car; vu.land = Math.max(vu.land, c.land); vu.bump = Math.max(vu.bump, c.bump || 0); vu.hit = Math.max(vu.hit, c.hit, vu.bump); } // chocs de l'image, par vue (sa secousse) ; shortcut: un choc entre voitures réutilise les effets du choc mur (étincelles côté mur), à séparer si ça se voit
       if (state === 'race' && !ses.raceEnd) { // fin de course, tour bouclé, Glisse finie : la session décide, on montre et on fait entendre
         tTraf += H; const ev = ses.pas(car, H);
@@ -1271,7 +1357,7 @@
     fxFrame(dt, now);
     // son : moteur, boîte et pneus par joueur (SE.cars, une entrée par vue ; muette si la vue regarde une autre voiture que celle de son joueur, ou la voiture que la première vue fait déjà entendre : après une élimination, au menu à deux) ; la radio, le tunnel, la pluie et l'ambiance suivent l'humain le mieux placé encore en course (seul, hors course ou tous arrivés : le joueur 1). Les objets restent accrochés aux vues : rien n'est alloué par image
     const SE = J.son || (J.son = { cars: [] }); let Jm = J; if (race) for (const vu of VUES) if (!vu.fini && (Jm.fini || vu.car.pos < Jm.car.pos)) Jm = vu;
-    SE.cars.length = 0; for (const vu of VUES) { const c = vu.car, o = vu.sj || (vu.sj = {}); o.muet = vu.spec || (vu !== J && !J.spec && J.car === c); o.car = c; o.sp = Math.hypot(c.vx, c.vz); o.r = Math.min(1, o.sp / TOP); o.gas = vu.gas; o.hit = vu.hit; o.bump = vu.bump; o.land = vu.land; o.up = vu.up > 0; o.down = vu.up < 0; o.rpm = vu.rpm; o.load = vu.load; o.spool = vu.spool; SE.cars.push(o); }
+    SE.cars.length = 0; for (const vu of VUES) { const c = vu.car, o = vu.sj || (vu.sj = {}); o.muet = vu.spec || (vu !== J && !J.spec && J.car === c); o.car = c; o.sp = Math.hypot(c.vx, c.vz); o.r = Math.min(1, o.sp / TOP); o.gas = vu.gas; o.hit = vu.hit; o.bump = vu.bump; o.land = vu.land; o.up = vu.up > 0; o.down = vu.up < 0; o.rpm = vu.rpm; o.load = vu.load; o.spool = vu.spool; o.dg = dgNiv(c); SE.cars.push(o); }
     const cm = Jm.car, jm = Jm.sj; SE.state = state; SE.car = cm; SE.T = T; SE.tour = race ? Math.min(race.laps - 1, Math.max(0, Math.floor(cm.dist / N))) : 0; SE.tours = race ? race.laps : 0; SE.hot = hot(cm.idx, 50); SE.tun = Jm.lm; SE.amb = ambAt(cm.idx); SE.r = jm.r; SE.sp = jm.sp; SE.hit = jm.hit; SE.bump = jm.bump; SE.fini = ses.raceEnd; // fini : la radio s'efface derrière le tableau d'arrivée
     { const s = S[cm.idx], L = s.w - 1.1; SE.mur = Math.sign(cm.d) * clamp(1 - (L - Math.abs(cm.d)) / 5, 0, 1); } // le bord qu'on serre (+ à droite) : son écho répond plus fort
     { const fx = Math.cos(cm.th), fz = Math.sin(cm.th), veh = race ? race.cars.filter(c => c !== cm && !partie(c)) : M.trafic && state !== 'title' ? trafic(T, tTraf) : []; // les deux autres véhicules les plus proches, qu'on entend
@@ -1320,12 +1406,13 @@
     beams.forEach((b, i) => b.rotation.set(0, Math.atan2(cam.position.x - b.position.x, cam.position.z - b.position.z), Math.sin(now * 0.0004 * (i % 3 + 1) + i) * 0.5)); // les faisceaux de projecteurs font face à la caméra
     // lumière dynamique : phares, boîte d'ombre de la voiture, reflets, puis la liste des luminaires
     const cp = Math.cos(pitch);
-    LUX.uCam.value = cam.position; LUX.uHP.value.set(car.x + fx * 1.9, carY + 0.62, car.z + fz * 1.9); LUX.uHD.value.set(fx * cp, Math.sin(pitch), fz * cp);
+    const dg = G.userData.dg, hs = (dg.ph[0] - dg.ph[1]) * 0.55; // un phare cassé : le faisceau part de l'autre, à moitié ; les deux : plus rien
+    LUX.uCam.value = cam.position; LUX.uHP.value.set(car.x + fx * 1.9 - fz * hs, carY + 0.62, car.z + fz * 1.9 + fx * hs); LUX.uHD.value.set(fx * cp, Math.sin(pitch), fz * cp); LUX.uHC.value.copy(HC0).multiplyScalar(1 - (dg.ph[0] + dg.ph[1]) / 2);
     G.updateMatrixWorld(); LUX.uBox.value.copy(G.matrixWorld).multiply(BOITE).invert(); // G : le modèle de la voiture de la vue ; l'ombre portée sous les luminaires n'existe que pour elle
     LUX.uSunC.value.copy(SUNC).multiplyScalar(1 - lm); LUX.uSky.value.copy(scene.fog.color); LUX.uRes.value.set(TRB ? vu.rw / 2 / TRB : 0, RH / 2 / TRB);
     let nl = 0;
     const put = (x, y, z, c, r, k) => { if (nl < NL) { LUX.uLP.value[nl].set(x, y, z, r); LUX.uLC.value[nl++].copy(c).multiplyScalar(k * LUM_GAIN); } };
-    put(car.x - fx * 4.4, carY + 0.35, car.z - fz * 4.4, ROUGE, 9, NUIT * (inp.brake || car.frA ? 2.4 : 0.45)); // feux arrière : ils teintent ce qui suit, davantage au freinage
+    put(car.x - fx * 4.4, carY + 0.35, car.z - fz * 4.4, ROUGE, 9, NUIT * (inp.brake || car.frA ? 2.4 : 0.45) * (1 - (dg.fe[0] + dg.fe[1]) / 2)); // feux arrière (moins les cassés) : ils teintent ce qui suit, davantage au freinage
     if (L.neon) put(car.x, carY + 0.3, car.z, NEONC, 5.5, NUIT * (0.8 + 0.4 * pulse)); // néon de bas de caisse
     // les deux véhicules les plus proches (adversaires, ou camions du trafic) : phares devant, feux rouges derrière
     const d2 = c => (c.x - car.x) ** 2 + (c.z - car.z) ** 2;
@@ -1336,7 +1423,8 @@
     feux.material.size = 0.5 / Math.tan(vu.cam.fov * Math.PI / 360) * RH / renderer.domElement.height * renderer.getPixelRatio(); // three.js mesure les points sur la toile (0,5 × sa hauteur / distance), on dessine dans la cible de la vue, de RH lignes
     for (const c of veh.sort((a, b) => d2(a) - d2(b)).slice(0, 2)) {
       const ax = Math.cos(c.th), az = Math.sin(c.th), y = c.y, av = c.lane === undefined ? 6.5 : 10, ar = c.lane === undefined ? 3.4 : 7; // un camion est plus long
-      put(c.x + ax * av, y + 0.8, c.z + az * av, PHARE, 14, 3 * NUIT); put(c.x - ax * ar, y + 0.7, c.z - az * ar, ROUGE, 9, 1.4 * NUIT);
+      const dv = c.lane === undefined ? modele(c).userData.dg : null, kp = dv ? 1 - (dv.ph[0] + dv.ph[1]) / 2 : 1, kf = dv ? 1 - (dv.fe[0] + dv.fe[1]) / 2 : 1; // ses phares et feux cassés
+      put(c.x + ax * av, y + 0.8, c.z + az * av, PHARE, 14, 3 * NUIT * kp); put(c.x - ax * ar, y + 0.7, c.z - az * ar, ROUGE, 9, 1.4 * NUIT * kf);
       if (L.neon && race && (c.k < 0 || c.k >= 3)) put(c.x, y + 0.3, c.z, NEONC, 5.5, NUIT * (0.8 + 0.4 * pulse)); // la voiture de l'autre joueur garde son néon de bas de caisse (c.k : -1 le joueur 1, 3 le joueur 2)
     }
     // luminaires fixes : les plus proches le long de la piste (ceux de devant comptent double), fondus en bout de liste pour qu'aucun ne s'allume d'un coup
@@ -1395,6 +1483,6 @@
     if (d) demoLance(JSON.parse(d)); else if (f === 'a') accueil = true; } catch (e) { } // démo : carte suivante de la nuit, ou retour sur la carte d'origine (à l'accueil si l'on en venait)
   if (NET.role) { NET.ev = onNet; let g = null; try { g = sessionStorage.getItem('vpr.netgo'); sessionStorage.removeItem('vpr.netgo'); } catch (e) { } // carte changée en ligne : ce fichier vient d'être rejoué, le salon (reseau.js) est resté
     if (g) { choix = false; start(true); } else if (invite()) attente(); }
-  window.__g = { get enl() { return enl; }, get demo() { return demo; }, get inactif() { return inactif; }, frame, start, fin, libere, joueurs, places: PLACES, get ins() { return ins; }, get com() { return COM; }, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return ses.tnFin; }, get defi() { return { DEFI, defiErr, dernier: ses.dernier }; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam: VUES[0].cam, vues: VUES, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return VUES[0].moi; }, get state() { return state; }, get t() { return ses.tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; } }; // prise de test
+  window.__g = { get enl() { return enl; }, get demo() { return demo; }, get inactif() { return inactif; }, frame, start, fin, libere, joueurs, places: PLACES, get ins() { return ins; }, get com() { return COM; }, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return ses.tnFin; }, get defi() { return { DEFI, defiErr, dernier: ses.dernier }; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam: VUES[0].cam, vues: VUES, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return VUES[0].moi; }, get state() { return state; }, get t() { return ses.tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; }, degats: x => { const f = 2 + 25 * x / 1.5; for (const g of [carG, ...opps]) for (const [a, b] of [[1, 0], [-1, 0], [0, -1], [0, 1]]) dgChoc(g, a, b, f); } }; // prise de test ; degats(x) : chaque zone de chaque voiture abîmée à x (captures)
 })();
 if (/[?&]perf\b/.test(location.search)) import('./outils/perf.js').then(m => m.suite()); // banc de performance : voir outils/perf.js

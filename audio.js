@@ -527,7 +527,7 @@ class WG { // guide d'onde : deux lignes à retard (aller, retour) ; a, b : réf
 }
 const mix = (v, o, c) => c + (o - c) * v, TAU = 2 * Math.PI, PB = 1.5; // PB : poids des bouffées d'échappement directes
 class Moteur extends AudioWorkletProcessor {
-  static get parameterDescriptors() { return [{ name: 'rpm', defaultValue: 900, minValue: 0, maxValue: 15000 }, { name: 'load', defaultValue: 0, minValue: 0, maxValue: 1 }]; }
+  static get parameterDescriptors() { return [{ name: 'rpm', defaultValue: 900, minValue: 0, maxValue: 15000 }, { name: 'load', defaultValue: 0, minValue: 0, maxValue: 1 }, { name: 'dg', defaultValue: 0, minValue: 0, maxValue: 1 }]; } // dg : dégâts de la voiture (game.js), qui dérèglent l'allumage
   constructor() { super(); this.rev = 0; this.jit = 0; this.bl = 0; this.pf = 0; this.dx = 0; this.dy = 0; this.vit = true; this.port.onmessage = e => { if (e.data) this.cfg(e.data); else this.vit = false; }; }
   cfg(P) { const k = sampleRate / 44100, L = x => Math.max(2, Math.round(x * k));
     this.ign = P.ign; this.irr = P.irr; this.off = P.off || Array.from({ length: P.n }, (_, i) => i / P.n);
@@ -535,14 +535,14 @@ class Moteur extends AudioWorkletProcessor {
     this.st = new WG(L(P.str), 0.01, 0.01); this.mu = P.muf.map(x => new WG(L(x), 0.01, 0.01)); this.ou = new WG(L(P.out), 0.01, 0.01); }
   process(_, outs, par) {
     if (!this.C) return this.vit; // pas encore de configuration
-    const o = outs[0][0], R = par.rpm, LD = par.load, C = this.C, n = C.length, m = this.mu.length, kb = 1 - Math.exp(-TAU * 125 / sampleRate), kp = 1 - Math.exp(-TAU * 4000 / sampleRate);
+    const o = outs[0][0], R = par.rpm, LD = par.load, dg = par.dg[0], C = this.C, n = C.length, m = this.mu.length, kb = 1 - Math.exp(-TAU * 125 / sampleRate), kp = 1 - Math.exp(-TAU * 4000 / sampleRate);
     for (let s = 0; s < o.length; s++) {
       const rpm = R.length > 1 ? R[s] : R[0], ld = LD.length > 1 ? LD[s] : LD[0], ig = 5 * (0.2 + 0.8 * ld);
       this.rev = (this.rev + rpm / 120 / sampleRate) % 1; this.jit += (Math.random() * 0.006 - this.jit) * 0.003; // vilebrequin, et le petit flottement d'un vrai moteur
       const stL = this.st.oL / n; let sx = 0, si = 0, sb = 0, sp = 0;
       for (let i = 0; i < n; i++) { const c = C[i], x = (this.rev + this.off[i] + this.jit) % 1;
         const iv = x < 0.25 ? Math.sin(2 * TAU * x) : 0, ev = x > 0.75 ? -Math.sin(2 * TAU * x) : 0;
-        if (x < c.x0) c.f = c.k * (1 + this.irr * 1.5 * (Math.random() * 2 - 1)); c.x0 = x; // nouvelle explosion : chaque cylindre a sa force, et elle varie d'un cycle à l'autre
+        if (x < c.x0) c.f = Math.random() < dg * dg * 0.3 ? 0 : c.k * (1 + (this.irr + dg * 0.8) * 1.5 * (Math.random() * 2 - 1)); c.x0 = x; // abîmé : cylindres plus inégaux, et des ratés // nouvelle explosion : chaque cylindre a sa force, et elle varie d'un cycle à l'autre
         const ia = this.ign * 0.2, e = x < ia ? x / ia : x < this.ign * 4 ? Math.exp((ia - x) / (this.ign * 0.6)) : 0; // front raide, puis la détente
         const dr = 1.5 * Math.cos(2 * TAU * x) + ig * c.f * e * (1 + 0.5 * (Math.random() * 2 - 1)); // piston + explosion (avec son bruit)
         c.in.b = mix(iv, 0.01, 0.95); c.cy.a = mix(iv, 0.01, 0.95); c.cy.b = mix(ev, 0.01, 0.95); c.ex.a = mix(ev, 0.01, 0.95);
@@ -764,7 +764,7 @@ registerProcessor('moteur', Moteur);`;
       // moteur (sous la musique) : timbre de son architecture, plus clair et plus râpeux en charge, sombre au lever de pied ; rupteur, turbo, pignons, pétarades
       if (j.up || j.down) (c.manual ? levier : clac)(j.down, t, v.mot); // boîte manuelle : le levier ; automatique : la transmission
       const P = MOT[CARD.moteur] || MOT.l6;
-      if (v.node) { if (v.typ !== P) { v.node.port.postMessage(P); v.typ = P; } k(v.node.parameters.get('rpm'), rpm * CARD.red, 0.02); k(v.node.parameters.get('load'), load, 0.03); } // le vrai régime : la hauteur vient de la physique
+      if (v.node) { if (v.typ !== P) { v.node.port.postMessage(P); v.typ = P; } k(v.node.parameters.get('rpm'), rpm * CARD.red, 0.02); k(v.node.parameters.get('load'), load, 0.03); k(v.node.parameters.get('dg'), j.dg || 0, 0.2); } // le vrai régime : la hauteur vient de la physique
       k(v.eng.gain, 0.5 + 0.5 * load, 0.05);
       k(v.out.gain, state === 'title' ? 0.004 : 0.025 + 0.022 * load + 0.0125 * rpm); // sous la musique, mais présent
       const li = state !== 'title' && j.gas && rpm > 0.985 ? 0.5 : 0; k(v.lim.gain, 1 - li, 0.01); k(v.limD.gain, li, 0.01);
@@ -772,6 +772,7 @@ registerProcessor('moteur', Moteur);`;
       if (v.gas && !j.gas && racing) { if (rpm > 0.55 && j.spool > 0.5) petarade(j.spool, t, v.mot); if (tb > 0.4) pschitt(tb, t, v.mot); v.crk = rpm > 0.5 ? 1 : 0; }
       if (j.gas || !racing) v.crk = 0; else if (v.crk > 0) { v.crk -= dt; if (rpm > 0.4 && Math.random() < dt * 9 * v.crk) pop(t + Math.random() * 0.03, v.mot, 0.06 * v.crk); } // le moteur qui retient crépite une seconde
       v.gas = j.gas;
+      if (racing && j.dg > 0.3 && j.sp > 3 && Math.random() < dt * (3 + 12 * j.r) * (j.dg - 0.3)) nz(t + Math.random() * 0.02, 0.012, 0.03 * j.dg, v.mot, 'bandpass', 2500 + Math.random() * 2500, 6, mbuf, 0.001); // cliquetis : une pièce desserrée qui tape
       // roulement : selon le sol sous la voiture (c.sol, voir SURF dans sim.js), coupé en l'air
       const Q = c.sol || SEC, air = c.air ? 0 : 1, meu = clamp((Q.colle - 0.35) / 0.25, 0, 1) * clamp(Q.roul / 0.2, 0, 1), neig = clamp(Q.vir / 0.3, 0, 1) * meu, ice = clamp((Q.vir - 0.3) / 0.3, 0, 1), pv = clamp(Q.roul / 0.15, 0, 1) * (1 - meu), we = clamp(Q.aq / 0.1, 0, 1), sv = Math.min(1, j.sp / 25);
       k(v.roul.gain, air * RL * j.r ** 1.3 * (1 - 0.7 * meu) * (1 - 0.5 * ice), 0.1); k(v.rl.frequency, 600 + 500 * j.r, 0.1); // le pic du roulement monte avec la vitesse, vers 1,1 kHz
