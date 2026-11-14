@@ -269,18 +269,18 @@
         chev: 1, murH: 1.1, route: ['#26282c', '#34363c', '#e8e6da', '#ff8c1a', '#26282c', '#26282c', false], mur: ['#34363a', '#e8e6da', '#a8a69c', '#101214'], depart: [0xff8c1a, 0xe8e6da, '#e8e6da'],
         hud: { y: '#f4f0e0', c: '#ff8c1a', r: '#ff2a3a', fond: 'rgba(6,12,10,.84)', style: 'trait', jauge: 'aiguille', split: 0, jp: ['ラップ', 'スピード'], sur: ['烏峠ダウンヒル', 'DESCENTE DE NUIT'], titre: ['KARASU', 'TOGE'] } } },
 
-    // Wangan : voie rapide du front de mer à fond, pont à haubans vers l'île du port, enfilade entre les conteneurs, tunnel immergé sous le chenal, retour en ville. Du trafic à doubler.
-    { id: 'wangan', nom: 'WAN-9', W: 8, kmh: 0.92, vit: [210, 255], grip: 24, sc: 1, tun: [23, 28], chaud: [12, 22], sect: [8, 22], amb: [[8, 13]], anticipe: 1, trafic: 14, bouchon: [5, 8, 0.3], // port et corne de navire : du bout du pont aux premiers conteneurs
-      pts: [[0, 0, 18], [400, 0, 18], [800, 0, 18], [1100, 10, 18], [1300, 60, 19], [1400, 180, 23], [1410, 310, 33], [1400, 440, 26], [1390, 550, 19], [1340, 660, 12], [1220, 730, 6], [1080, 740, 3], [940, 700, 2], [800, 760, 2], [660, 700, 2], [520, 790, 2], [400, 700, 2], [250, 745, 2], [100, 735, 2], [-60, 790, 2], [-220, 760, 2], [-400, 800, 2], [-540, 760, 0], [-610, 660, -5], [-620, 540, -13], [-620, 400, -15], [-610, 250, -15], [-620, 110, -14], [-620, -20, -9], [-600, -130, 0], [-520, -230, 9], [-380, -250, 15], [-240, -180, 18], [-150, -60, 18]],
+    // Wangan : ligne droite de la marina au ras de l'eau, grand virage qui monte au pont à haubans, épingle autour du phare au bout de l'île, enfilade entre les conteneurs, tunnel immergé sous le chenal, retour au sol par la ville. Du trafic à doubler.
+    { id: 'wangan', nom: 'WAN-9', W: 8, kmh: 0.92, vit: [210, 255], grip: 24, sc: 1, tun: [30, 35], chaud: [19, 29], sect: [8, 29], amb: [[8, 19]], anticipe: 1, trafic: 14, bouchon: [5, 8, 0.3], // port et corne de navire : du bout du pont aux premiers conteneurs (épingle du phare comprise)
+      pts: [[0, 0, 1], [400, 0, 1], [800, 0, 1], [1080, 20, 3], [1270, 90, 10], [1380, 200, 20], [1410, 320, 30], [1405, 440, 26], [1395, 550, 18], [1410, 650, 9], [1450, 750, 3], [1530, 840, 1], [1600, 920, 1], [1625, 1000, 1], [1570, 1025, 1], [1510, 985, 1], [1420, 900, 2], [1260, 800, 2], [1100, 750, 2], [940, 700, 2], [800, 760, 2], [660, 700, 2], [520, 790, 2], [400, 700, 2], [250, 745, 2], [100, 735, 2], [-60, 790, 2], [-220, 760, 2], [-400, 800, 2], [-540, 760, 0], [-610, 660, -5], [-620, 540, -13], [-620, 400, -15], [-610, 250, -15], [-620, 110, -14], [-620, -20, -9], [-600, -130, 0], [-520, -230, 1], [-380, -250, 2], [-240, -180, 2], [-150, -60, 1]],
       // Toyota Supra RZ (JZA80, 1997) : 6 en ligne biturbo 2JZ-GTE, fiche export 320 ch, 427 N·m à 4000 tr/min, 1510 kg, Getrag V160 (rapports à vérifier sur fiche)
       car: car({ nom: 'KAIRYU RZ', ratios: [3.827, 2.360, 1.685, 1.312, 1.000, 0.793], final: 3.266, wheel: 0.318, mass: 1585, idle: 800, red: 6800, cd: 0.32, area: 1.95,
         tq: [0, 180, 300, 400, 427, 420, 400, 340, 260], son: 0.95, moteur: 'l6', turbo: 1, look: { type: 'a80', col: 0x4a4e5c, l: 1.02, w: 1, h: 0.96, nez: 0.66, cab: [-0.45, 2.1, 0.5], aileron: 2 } }),
       radio: RADIO.wangan,
-      th: { decor: 'wangan', pluie: [[9, 24, 3]], fog: 0x0c1424, fogD: [90, 1300], sky: [[0, '#02030a'], [0.38, '#0a1024'], [0.47, '#4a2c18'], [0.5, '#0c1424'], [1, '#0c1424']], stars: 40,
+      th: { decor: 'wangan', pluie: [[9, 31, 3]], fog: 0x0c1424, fogD: [90, 1300], sky: [[0, '#02030a'], [0.38, '#0a1024'], [0.47, '#4a2c18'], [0.5, '#0c1424'], [1, '#0c1424']], stars: 40,
         astre: { dir: [0.5, 0.7, -0.4], col: '#e8e0d0', ombre: '#b8b0a0', taille: 120 }, hemi: [0x4a5a8a, 0xff9a2e, 0.55], sun: [0x8fa0d0, 0.25], phares: 2.4, bloom: 0.1, scan: 0.1,
         chev: 1, piles: -14, murH: 1.4, route: ['#24262e', '#30323c', '#f4f1e0', '#f4f1e0', '#24262e', '#24262e', false], mur: ['#3a3e46', '#c9ced6', '#ff9a2e', '#16181e'], depart: [0x1f8f5a, 0xc9ced6, '#f4f1e0'],
-        tun: { sol: ['#2a2218', '#3a2e20', '#f4f1e0', '#f4f1e0', '#2a2218', '#2a2218'], murs: ['#ffb85a', '#ffb85a'], paroi: ['#3a2c18', '#6a5028', '#8a6a38', '#120e08'], plafond: ['#1a140c', '#ffb85a', '#ffb85a', '#3a2e20'],
-          fog: 0x2a1a08, portail: 0x1f8f5a, neons: [0xff9a2e, 0xff9a2e], coque: 80 },
+        tun: { sol: ['#3e3426', '#524432', '#f4f1e0', '#f4f1e0', '#3e3426', '#3e3426'], murs: ['#ffc878', '#ffc878'], paroi: ['#6a5434', '#a8844a', '#c8a464', '#2a2010'], plafond: ['#3a2e1c', '#ffc878', '#ffc878', '#5a4a34'], // éclairci après essai : on n'y voyait pas les parois
+          fog: 0x5a3c18, portail: 0x1f8f5a, neons: [0xffb050, 0xffb050], coque: 80 },
         hud: { y: '#ffffff', c: '#ffb85a', r: '#ff2a3a', fond: 'rgba(10,84,52,.92)', style: 'panneau', split: 0, jp: ['周回', '速度'], sur: ['湾岸九号線', 'LIGNE DE BAIE'], titre: ['WAN-9', 'BAYSHORE'] } } },
 
     // Paris à l'aube : circuit de rues, relances entre des angles, pavés.
