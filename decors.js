@@ -575,11 +575,12 @@
     // tranchée et tunnel immergé sous le chenal, retour en ville. L'eau n'existe que là où la route passe au-dessus (pont) ou dessous (tunnel). ----------
     wangan(h) {
       const { THREE, S, N, W, rnd, T } = h;
-      const CH0 = 62, CH1 = 520, ILE = [-880, 1650, 1045]; // chenal entre z = CH0 et CH1 ; l'île va de x = ILE[0] à ILE[1], jusqu'à z = ILE[2]
+      const CH0 = 62, CH1 = 520, ILE = [-880, 1650, 1045], PH = [1568, 958]; // chenal entre z = CH0 et CH1 ; l'île va de x = ILE[0] à ILE[1], jusqu'à z = ILE[2] ; PH : le phare, au bout de l'île, dans l'épingle (points 11 à 16)
       const mer = (x, z) => (z > CH0 && z < CH1) || (z >= CH1 && (x < ILE[0] || x > ILE[1] || z > ILE[2]));
       const tun = i => h.zone(i, 0) === 1;
+      const MQ = 22, bassin = (x, z) => z > MQ && z <= CH0 && x > 30 && x < 1040 && Math.abs(x - 620) > 80; // bassin de la marina, creusé entre la route du départ et le chenal (la grande roue garde sa terre, en x = 620) : vu de la route, les bateaux sont à 20 m, pas cachés derrière le quai du chenal
       // au-dessus du tunnel, le sol reste au niveau du quai : le tube passe dessous ; dans les tranchées d'accès, il suit la route qui descend
-      const g = terrain(h, { pas: 16, marge: 330, sol: s => tun(S.indexOf(s)) ? 0 : Math.min(s.y, 0), creux: (x, z) => mer(x, z) ? 13 : 0, mat: h.mat('bruit', {}, '#1a1c22', ['#22252c', '#14161a', '#2a2622']) });
+      const g = terrain(h, { pas: 16, marge: 330, sol: s => tun(S.indexOf(s)) ? 0 : Math.min(s.y, 0), creux: (x, z) => mer(x, z) || bassin(x, z) ? 13 : 0, mat: h.mat('bruit', {}, '#1a1c22', ['#22252c', '#14161a', '#2a2622']) });
       { // un sol en grille de 16 m ne peut pas épouser le tube (fond du chenal, rampes) : on retire les triangles qui entrent dans le tube ou passent au-dessus de la chaussée des tranchées ; de dehors, on voit la coque
         const ge = h.scene.children[h.scene.children.length - 1].geometry, P = ge.attributes.position.array, I = ge.index.array, zs = [];
         for (let i = T.t0 - 120; i < T.t1 + 120; i++) { const k = (i + N) % N; if (tun(k) || S[k].y < -0.3) zs.push([S[k], tun(k)]); }
@@ -613,7 +614,7 @@
       inst(h, h.geo('teteLampadaire'), h.mat('sodium', LUM), tetes);
       // panneaux d'autoroute verts, rétroréfléchissants : chacun annonce ce qui vient (pont, port, tunnel sous le chenal, centre)
       const gris = h.mat('portiqueGris'), pan = t => h.mat('panneauRoute', { lum: 1, retro: 0.7 }, t);
-      for (const [ip, a, b] of [[1, '湾岸線 ↑', '橋 BRIDGE 1km'], [3, '橋 BRIDGE', '港 PORT →'], [9, '港 PORT', '出口 EXIT'], [20, '海底トンネル', 'UNDERSEA 1.4km'], [22, '水深 -25m', '危険物 ✕ HAZMAT'], [32, '湾岸線 WAN-9', '都心 CENTER']])
+      for (const [ip, a, b] of [[1, '湾岸線 ↑', '橋 BRIDGE 1km'], [3, '橋 BRIDGE', '港 PORT →'], [17, '港 PORT', '出口 EXIT'], [27, '海底トンネル', 'UNDERSEA 1.4km'], [29, '水深 -25m', '危険物 ✕ HAZMAT'], [39, '湾岸線 WAN-9', '都心 CENTER']])
         h.pose('portiqueAutoroute', { structure: gris, panneauGauche: pan(a), panneauDroit: pan(b) }, repere(h, S[pt(h, ip)]), [0, 0, 0], W);
       // pont à haubans sur le chenal : deux pylônes en H, câbles tirés jusqu'au tablier
       const blanc = h.mat('blancPont'), fils = [], balises = [];
@@ -650,7 +651,7 @@
       const ptsBouees = new THREE.Points(fb, new THREE.PointsMaterial({ color: 0xffc81a, size: 3, sizeAttenuation: false })); ptsBouees.frustumCulled = false; h.scene.add(ptsBouees);
 
       // ---------- l'île du port : quai, parcs à conteneurs en blocs inégaux, engins, mâts d'éclairage ----------
-      const axe = S[near(h, -615, 560)].x, libre = (x, z, m = 14) => g.dAt(x, z) > W + m && (z > 700 || Math.abs(x - axe) > 90) && // rien dans l'axe du tunnel : de la tranchée, on voit le chenal
+      const axe = S[near(h, -615, 560)].x, libre = (x, z, m = 14) => g.dAt(x, z) > W + m && (z > 700 || Math.abs(x - axe) > 90) && Math.hypot(x - PH[0], z - PH[1]) > 30 && // rien dans l'axe du tunnel : de la tranchée, on voit le chenal ; rien contre le phare
          g.hAt(x, z) > -1.5 && z > CH1 + 4 && z < ILE[2] - 12 && x > ILE[0] + 10 && x < ILE[1] - 10;
       boite(h, h.mat('parc'), ILE[1] - ILE[0] - 40, 0.3, 74, (ILE[0] + ILE[1]) / 2, -0.2, CH1 + 37); // terre-plein du quai, marqué
       const cols = [0xb8442c, 0x2c6ab8, 0xc9a02c, 0x3a8a5a, 0xd8d4cc, 0x7a3a6a, 0x1a4a5a], piles = cols.map(() => []), cavaliers = [], portiques = [];
@@ -692,10 +693,10 @@
         const xx = x + (z % 3) * 20; if (!libre(xx, z, 6)) continue; mats35.push([xx, g.hAt(xx, z), z]);
         if (g.dAt(xx, z) < 60) h.lum(near(h, xx, z), xx, 33, z, 0xe8f0ff, 70, 1.6);
       }
-      // ---------- l'enfilade du port (points 10 à 21) : le port vient jusqu'à la route. Vu de la chaussée, les parcs étaient à 40 m et plus, derrière le muret et le brouillard :
+      // ---------- l'enfilade du port (points 18 à 28) : le port vient jusqu'à la route. Vu de la chaussée, les parcs étaient à 40 m et plus, derrière le muret et le brouillard :
       // un mur de conteneurs de chaque côté, juste derrière le muret, de 2 à 5 de haut avec des brèches sur les parcs ; des projecteurs blancs bas (le blanc dur des quais contre l'orange du sodium) ;
       // et deux portiques de parc qui enjambent la route
-      { const i0 = pt(h, 10), n = (pt(h, 21) - i0 + N) % N, grues = []; let gr = 7; const al = () => (gr = gr * 16807 % 2147483647) / 2147483647; // hasard propre : ne décale pas rnd, donc rien du reste du décor
+      { const i0 = pt(h, 18), n = (pt(h, 28) - i0 + N) % N, grues = []; let gr = 7; const al = () => (gr = gr * 16807 % 2147483647) / 2147483647; // hasard propre : ne décale pas rnd, donc rien du reste du décor
         for (const sd of [-1, 1]) { let br = 0; // br : colonnes qui restent à sauter (une brèche)
           for (let j = 0; j < n; j += 7) { const i = (i0 + j) % N, s = S[i], [x, z] = bord(s, sd, W + 6.5);
             if (j % 140 < 14 || mer(x, z) || g.hAt(x, z) < -1.5 || z < CH1 + 4) continue; // de la place sous les deux portiques (j = 0, 140, 280…), pas dans l'eau
@@ -776,13 +777,29 @@
       const NN = 24, nacelles = new THREE.InstancedMesh(h.geo('nacelle'), h.mat('nacelle', LUM, '#e8e8e8'), NN), dn = new THREE.Object3D(); nacelles.frustumCulled = false; roueG.add(nacelles);
       for (let k = 0; k < NN; k++) nacelles.setColorAt(k, new THREE.Color([0xff4a8a, 0x4ac8ff, 0xffd84a, 0x6aff8a][k % 4]));
 
-      // ---------- la longue droite du front de mer (points 0 à 3) : un phare rouge et blanc au bout d'une digue côté chenal, au faisceau qui tourne ; en face, côté ville, une grue de chantier illuminée ----------
-      const blancP = h.mat('metalClair', { c: 0xf2f0ea }), rougeP = h.mat('metalClair', { c: 0xc8202a }), PH = [330, 150]; // pied du phare : 150 m au large de la route
-      boite(h, beton, 9, 3, PH[1] - 14, PH[0], -1, (PH[1] + 14) / 2); boite(h, beton, 16, 3, 16, PH[0], -1, PH[1]); // la digue et son musoir
-      h.pose('phare', { beton, rouge: rougeP, blanc: blancP, acier: gris, lampe: h.mat('lampe', LUM) }, h.scene, [PH[0], 0.5, PH[1]]);
-      const feuPhare = new THREE.Group(); feuPhare.userData.dyn = 1; feuPhare.position.set(PH[0], 28.3, PH[1]); h.scene.add(feuPhare);
-      const mFais = h.addMat(h.tx('degrade', '#fff2c0', true), { opacity: 0.32 });
-      for (const rx of [0, Math.PI / 2]) for (const sd of [-1, 1]) { const b = new THREE.Mesh(h.geo('faisceau'), mFais); b.rotation.set(rx, 0, sd * Math.PI / 2, 'XZY'); b.scale.set(0.35, 0.5, 1); feuPhare.add(b); } // deux pinceaux opposés, chacun en croix pour avoir du volume
+      // ---------- le phare rouge et blanc au bout de l'île, au bord de l'eau : l'épingle (points 11 à 16) en fait le tour ; son faisceau tourne, court et discret ----------
+      const blancP = h.mat('metalClair', { c: 0xf2f0ea }), rougeP = h.mat('metalClair', { c: 0xc8202a }), yPH = g.hAt(PH[0], PH[1]);
+      h.pose('phare', { beton, rouge: rougeP, blanc: blancP, acier: gris, lampe: h.mat('lampe', LUM) }, h.scene, [PH[0], yPH, PH[1]]);
+      const feuPhare = new THREE.Group(); feuPhare.userData.dyn = 1; feuPhare.position.set(PH[0], yPH + 27.8, PH[1]); h.scene.add(feuPhare);
+      const mFais = h.addMat(h.tx('degrade', '#fff2c0', true), { opacity: 0.18 });
+      for (const sd of [-1, 1]) { const b = new THREE.Mesh(h.geo('faisceau'), mFais); b.rotation.z = sd * Math.PI / 2; b.scale.set(0.1, 0.15, 1); feuPhare.add(b); } // deux pinceaux opposés de 135 m, un plan vertical chacun : en croix, ils couvraient l'écran en passant au-dessus de l'épingle (banc : pires images à 60 ms)
+      h.lum(near(h, PH[0], PH[1]), PH[0], yPH + 6, PH[1], 0xfff2d0, 40, 1.2); // le pied du phare éclairé : on le voit dans l'épingle
+
+      // ---------- la marina, le long de la ligne droite du départ (points 0 à 3, au ras de l'eau) : quai, pontons en peigne, voiliers et vedettes amarrés, lampes de ponton ----------
+      { for (const [x0, x1] of [[30, 540], [700, 1040]]) { boite(h, eau, x1 - x0, 1, CH0 - MQ, (x0 + x1) / 2, -3.5, (MQ + CH0) / 2); boite(h, beton, x1 - x0, 4, 3, (x0 + x1) / 2, -2, MQ); } // l'eau du bassin et son quai
+        const ponton = h.mat('planches'), coques = [], cabines = [], mats = [], feuxM = [];
+        for (let x = 40; x < 1040; x += 52) { if (Math.abs(x - 620) < 70) continue; // la grande roue
+          boite(h, ponton, 3, 0.5, 78, x, -2.9, MQ + 40); feuxM.push(x, -1.2, MQ + 79);
+          for (let k = 0; k < 6; k++) for (const sd of [-1, 1]) { if (rnd() < 0.2) continue; const L = 8 + rnd() * 9, z = MQ + 8 + k * 12 + rnd() * 2, bx = x + sd * (3 + L * 0.17), voile = rnd() < 0.6;
+            coques.push([bx, -3.1, z, Math.PI / 2 + (rnd() - 0.5) * 0.06, L * 0.33, 1, L]); cabines.push([bx, -1.9, z + (voile ? 0 : L * 0.1), Math.PI / 2, L * 0.25, voile ? 0.9 : 1.6, L * 0.35]);
+            if (voile) { mats.push([bx, L * 0.65 - 2.4, z, 0, 0.18, L * 1.3, 0.18]); feuxM.push(bx, L * 1.95 - 2.4, z); } }
+        }
+        inst(h, h.geo('bloc'), h.mat('metalClair', { c: 0xf2f0ea }), coques); inst(h, h.geo('bloc'), h.mat('tourFenetres', LUM, ['#ffd27a', '#f4f1e0']), cabines); inst(h, h.geo('bloc'), gris, mats);
+        const mg = new THREE.BufferGeometry(); mg.setAttribute('position', new THREE.Float32BufferAttribute(feuxM, 3));
+        const pm = new THREE.Points(mg, new THREE.PointsMaterial({ color: 0xfff2d0, size: 2, sizeAttenuation: false })); pm.frustumCulled = false; h.scene.add(pm);
+        for (let x = 60; x < 1040; x += 160) h.lum(near(h, x, 0), x, 5, MQ - 4, 0xfff2d0, 30, 1); } // réverbères du quai
+
+      // ---------- en face de la marina, côté ville : une grue de chantier illuminée ----------
       const CG = [880, -60], grueC = new THREE.Group(); grueC.userData.dyn = 1; grueC.position.set(CG[0], g.hAt(CG[0], CG[1]), CG[1]); h.scene.add(grueC);
       const jaune = h.mat('metalClair', { c: 0xe8b020 });
       h.pose('grueTour', { beton, treillis: h.mat('treillis', { alphaTest: 0.5, side: THREE.DoubleSide }, '#e8b020'), acier: jaune, cabine, vitre }, grueC);
@@ -795,7 +812,7 @@
         const pg = new THREE.Points(lg2, new THREE.PointsMaterial({ size: 3, sizeAttenuation: false, vertexColors: true, fog: false })); pg.frustumCulled = false; grueC.add(pg); }
 
       // ---------- le portique mobile de l'enfilade : un des portiques de parc roule au-dessus de la route, d'avant en arrière (voir l'enfilade, plus haut) ----------
-      const iPm = (pt(h, 10) + 142) % N, portM = new THREE.Group(); portM.userData.dyn = 1; h.scene.add(portM);
+      const iPm = (pt(h, 18) + 142) % N, portM = new THREE.Group(); portM.userData.dyn = 1; h.scene.add(portM);
       h.pose('grueParc', { structure: h.mat('metalClair', { c: 0xe0b020 }), cabine, vitre, roue, machinerie }, portM, [0, 0, 0], 36);
       { const s = S[iPm], [x, z] = bord(s, 1, 18); h.lum(iPm, x, s.y + 22, z, 0xffc040, 40, 1.4); } // gyrophare et éclairage du portique
 
