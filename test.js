@@ -161,7 +161,7 @@ assert(a.vf > 36 && Math.hypot(b.vx, b.vz) > 36, 'le contact latéral ne doit pa
 }
 
 // le tour d'une voiture seule ne doit pas bouger quand on touche à la course (records comparables)
-assert(Math.abs(t - 43.47) < 0.01, `le tour solo a changé: ${t} / ${tf}`);
+assert(Math.abs(t - 42.54) < 0.01, `le tour solo a changé: ${t} / ${tf}`);
 // les 3 niveaux d'IA, seuls : du plus rapide au plus lent, tous derrière le tour propre, à moins de 2 s
 const laps = AI_LVL.map(lvl => { const c = newCar(T); let t = 0; while (c.dist < n && t < 180) { step(c, autopilot(c, T, lvl), T, H); t += H; assert(c.hit < 3, 'IA seule dans le mur'); } return t; });
 assert(laps.every((l, i) => l > t && l < t + 2 && (!i || l > laps[i - 1] + 0.2)), 'rythme des IA hors plage: ' + laps);

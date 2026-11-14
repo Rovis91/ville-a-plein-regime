@@ -7,15 +7,15 @@
   const WALL_RUB = 0.35, WALL_SOFT = 0.2, WALL_LOSS = 7, WALL_HARD = 0.45, WALL_MU = 10; // murs : frein du frottement (1/s) ; sinus de l'angle d'arrivée sous lequel ça gratte sans perte ; pente de la perte au-delà (choc franc) ; sinus au-dessus duquel le moteur coupe ; frottement du mur extérieur d'un virage (frein en 1/s par rad/s de rotation que le mur impose à la voiture)
   const torque = (CARD, rpm) => { const x = Math.max(0, Math.min(8, rpm / 1000)), i = Math.min(7, x | 0); return CARD.tq[i] + (CARD.tq[i + 1] - CARD.tq[i]) * (x - i); };
   // La conduite (une seule, pour toutes les cartes), façon kart : le volant commande directement une vitesse de rotation qui dépend peu de la vitesse, donc on tourne fort même vite.
-  //   w0, w1 = lacet volant à fond (rad/s) à l'arrêt et à vref (m/s, 250 km/h) : rayon = v / lacet. Calés sur la carte par buildTrack : à vref, le rayon vaut `large` fois (rayon du virage le plus serré + demi-largeur),
-  //            donc à fond on ne passe pas ce virage en adhérence ; pied levé on s'en approche, en glisse volant dedans on le passe avec de la marge.
+  //   w0, w1 = lacet volant à fond (rad/s) à l'arrêt et à vref (m/s, 250 km/h) : rayon = v / lacet. Les mêmes pour toutes les voitures et toutes les cartes : une seule façon de tourner,
+  //            120 km/h volant à fond : 30 m de rayon ; une épingle de 20 m se passe en freinant (vers 80 km/h) ou en glisse.
   //   Adhérence = sol × voiture : sol = 1 - vir de SURF pour tourner, 1 - colle pour que la vitesse suive le nez ; voiture = car.grip (1 par défaut), qui multiplie w0 et w1.
   //   lift = surcroît de lacet pied levé ou au frein : lâcher les gaz resserre ; tv = vitesse perdue en tournant (m/s² par rad/s de lacet)
   //   Glisse : bouton seul = frein arrière (frAr m/s², feux stop et fumée) ; bouton + volant = glisse de ce côté, tenue tant que le bouton l'est.
   //   Elle part du lacet qu'on avait (aucune perte de virage à l'entrée) et le lacet rejoint à yr (1/s) son niveau de glisse : lacet d'adhérence × kIn volant dedans, × kN au neutre, × kOut volant dehors,
   //   au prix de scrub (m/s²) au plein angle. L'angle de dérive (visuel et glissement) monte vers angMax × aIn / aN / aOut à sar (1/s), plus vite et plus loin sur sol glissant ;
   //   à la sortie il revient deux fois plus vite. En glisse, la vitesse suit le nez mieux qu'en adhérence sur sol glissant (adhérence^0,35) : sur la neige, on tient sa glisse.
-  const KT0 = { vref: 70, large: 2.2, lift: 1.25, tv: 1, frAr: 4, kIn: 1.6, kN: 1, kOut: 0.3, yr: 8, scrub: 1, sar: 4, angMax: 0.5, aIn: 1, aN: 0.55, aOut: 0.15 };
+  const KT0 = { w0: 1.36, w1: 0.85, vref: 70, lift: 1.25, tv: 1, frAr: 4, kIn: 1.3, kN: 0.5, kOut: 0.05, yr: 8, scrub: 1, sar: 4, angMax: 0.5, aIn: 1, aN: 0.55, aOut: 0.15 };
   const omega = (v, KT) => (KT.w0 - (KT.w0 - KT.w1) * Math.min(1, v / KT.vref)) * Math.min(1, v / 10); // lacet volant à fond à la vitesse v, sans glisse, adhérence 1
   const vturn = (a, k, KT) => { const c = a / k; return KT.w1 * c >= KT.vref ? KT.w1 * c : KT.w0 * c / (1 + (KT.w0 - KT.w1) * c / KT.vref); }; // vitesse à laquelle la part a du braquage suffit pour une courbure k
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
@@ -122,7 +122,7 @@
     const sf = M.surf || {}, sz = (sf.zones || []).map(([a, b, t, f = 1]) => [span(at(a), at(b), 10), SURF[t], f]);
     const surf = S.map((_, i) => { let q = mele(SURF[sf.fond || 'sec'], SURF.mouille, (pluie[i] ? clamp(0.3 + (pluie[i] - 1) * 0.35, 0, 1) : 0) * (M.tun ? 1 - tz(i) : 1)); for (const [z, t, f] of sz) q = mele(q, t, z(i) * f); return q; });
     // tun : la carte a un tunnel, de t0 à t1 ; h0-h1 : secteur « chaud » pour la musique ; sp : les deux temps intermédiaires (indices d'échantillons)
-    KT.w1 = KT.vref / (KT.large * (1 / Math.max(...S.map(s => Math.abs(s.k))) + W)) * (CARD.grip || 1); KT.w0 = 1.6 * KT.w1; // calage sur le virage le plus serré (voir KT0)
+    KT.w0 *= CARD.grip || 1; KT.w1 *= CARD.grip || 1; // une voiture plus ou moins adhérente tourne plus ou moins fort (toutes à 1 aujourd'hui)
     return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, surf, surfL: SURF[sf.large], vert, carte: M, car: CARD, kt: KT,
       trucks: Array.from({ length: M.trafic || 0 }, (_, i) => ({ lane: [-4.6, 0, 4.6][(i * 2) % 3], v: 25 + (i * 7 % 5) * 1.5, x: 0, y: 0, z: 0, th: 0, idx: 0, d: 0, vx: 0, vz: 0 })) }; // camions : voir trafic()
   }
@@ -288,7 +288,7 @@
       va = 1e9; let fr = 0; // fr : ce que le freinage peut reprendre d'ici là, surface par surface (une plaque de glace devant se freine avant)
       for (let j = 0; j < 200; j++) {
         const i = (idx + j) % n, Q = surf(T, i), k = Math.abs(S[i].kl) + 1e-4, g = 1.2 * (1 - Q.vir) * (1 - 0.8 * Math.max(0, Q.colle - 0.5)), vq = Q.vaq;
-        let v = vturn(g, k, T.kt); if (Q.aq && v > vq) v = Math.max(vq, vturn(g * (1 - Q.aq) * 0.85, k, T.kt)); // au-delà du seuil d'aquaplaning, avec de la marge : la voiture y chasse
+        let v = vturn(g, k, T.kt); if (Q.aq && v > vq) v = Math.max(vq, vturn(g * (1 - Q.aq), k, T.kt)); // au-delà du seuil d'aquaplaning, avec de la marge : la voiture y chasse
         va = Math.min(va, Math.sqrt(v ** 2 + fr)); fr += 40 * (1 - Q.frein);
       }
       VA[idx] = va;
@@ -324,7 +324,7 @@
     const C = T.car, vg = T.vg || (T.vg = C.red / 60 * 2 * Math.PI * C.wheel / (C.ratios[C.ratios.length - 1] * C.final)); // vg : la pointe au rupteur, sur le dernier rapport
     const va = vAdmise(T, c.idx), vt = Math.min(vcap, va * lvl * (off ? 0.9 : 1), lvl < 1 ? vg * lvl : 1e9); // hors trajectoire, on passe moins vite
     const st = clamp(e * 3, -1, 1);
-    return { steer: st, gas: sp < vt && (Math.abs(st) < 1 || sp < 20) ? lvl : 0, brake: sp > vt + 3 ? 1 : 0, hand: false, nitro: sp < vt - 8 && Math.abs(st) < 0.25 && (c.boost > 0 || c.nitro > 0.3) }; // la nitro : en ligne droite, loin du prochain freinage, par coups francs (il attend d'avoir un tiers de jauge)
+    return { steer: st, gas: sp < vt && (Math.abs(st) < 1 || sp < 20) ? lvl : 0, brake: sp > vt + 3 ? 1 : 0, hand: false, nitro: sp < vt - 20 && Math.abs(st) < 0.25 && (c.boost > 0 || c.nitro > 0.3) }; // la nitro : en ligne droite, loin du prochain freinage, par coups francs (il attend d'avoir un tiers de jauge)
   }
 
   // ---------- Course contre des adversaires IA ----------
@@ -380,7 +380,7 @@
     return c => {
       const Q = surfAt(T, c), a = autopilot(c, T, c.dd ? 1 + (lg - 1) * (1 - Q.vir) : lv), sp = Math.hypot(c.vx, c.vz), la = S[(c.idx + 3 + Math.floor(sp * 0.1)) % n], ks = (1 - Q.vir) * (1 - Q.aq * (c.aq || 0)), om = omega(sp, KT) * ks;
       const dem = s => s.kl * sp / om, err = wrap(Math.atan2(la.z + la.tx * la.dl - c.z, la.x - la.tz * la.dl - c.x) - Math.atan2(c.vz, c.vx)); // err : écart de cap de la vitesse à la trajectoire
-      const d = c.dd || Math.sign(la.kl), garde = c.dd ? dem(la) * d > ten || dem(S[c.idx]) * d > ten : Math.abs(dem(la)) > ent && sp > 15 && err * d > -0.05 && Q.vir < 0.5; // (pas de glisse lancée sur la glace)
+      const d = c.dd || Math.sign(la.kl), garde = c.dd ? (dem(la) * d > ten || dem(S[c.idx]) * d > ten) && Q.vir < 0.5 : Math.abs(dem(la)) > ent && sp > 15 && err * d > -0.05 && Q.vir < 0.5; // (pas de glisse lancée sur la glace)
       if (!garde) return { ...a, gas: a.gas ? 1 : 0, nitro: !!a.gas };
       const k = d * (la.kl * sp + 1 * err) / Math.max(om, 1e-3), sd = k >= KT.kN ? (k - KT.kN) / (KT.kIn - KT.kN) : -(KT.kN - k) / (KT.kN - KT.kOut); // le volant qui donne ce lacet
       return { steer: d * clamp(c.dd ? sd : 1, -1, 1), gas: a.gas ? 1 : 0, brake: a.brake, hand: true };

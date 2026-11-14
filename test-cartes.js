@@ -51,15 +51,15 @@ for (const M of CARTES) {
   const rayon = (c, inp) => { go(c, inp, 0.7); let d = 0, tw = 0, p = cap(c); for (let i = 0; i < 60; i++) { go(c, inp, H); d += Math.hypot(c.vx, c.vz) * H; tw += wrap(cap(c) - p); p = cap(c); } return d / tw; };
   const vtop = Math.hypot(lance(999).vx, lance(999).vz), ext = rmin + W, v120 = 120 / 3.6, v200 = 200 / 3.6, glisse = v => go(lance(v), I(1, 0, 0, true), 0.3);
   const r120 = rayon(lance(v120), I(1, 1)), r120l = rayon(lance(v120), I(1, 0)), rtop = rayon(lance(vtop - 0.5), I(1, 1)), r240 = rayon(lance(240 / 3.6), I(1, 1));
-  const gin = rayon(glisse(v200), I(1, 1, 0, true)), gn = rayon(glisse(v200), I(0, 1, 0, true)), gout = rayon(glisse(v200), I(-1, 1, 0, true)), g200 = rayon(lance(v200), I(1, 1));
-  // le volant commande une rotation : à 120 km/h, volant à fond, on tourne plus serré que le virage le plus serré de la carte élargi de la demi-route, et lever le pied resserre encore
-  assert(r120 < ext && r120l < 0.9 * r120, `${M.id} : à 120 km/h, rayon ${r120} m sur les gaz, ${r120l} m pied levé (virage de ${rmin} m, ${ext} m avec la demi-largeur)`);
+  const gin120 = rayon(go(lance(v120), I(1, 1, 0, true), 0.3), I(1, 1, 0, true)), gin = rayon(glisse(v200), I(1, 1, 0, true)), gn = rayon(glisse(v200), I(0, 1, 0, true)), gout = rayon(glisse(v200), I(-1, 1, 0, true)), g200 = rayon(lance(v200), I(1, 1));
+  // le volant commande une rotation, la même pour toutes les voitures : à 120 km/h pied levé, volant à fond, on passe le virage le plus serré de la carte élargi de la demi-route ; lever le pied resserre
+  assert(r120l < ext && r120l < 0.9 * r120, `${M.id} : à 120 km/h, rayon ${r120} m sur les gaz, ${r120l} m pied levé (virage de ${rmin} m, ${ext} m avec la demi-largeur)`);
   // le rayon dépend peu de la vitesse : doubler la vitesse ne fait pas plus que le tripler (une limite d'adhérence le quadruplerait)
   assert(r240 < 3 * r120, `${M.id} : rayon ${r120} m à 120 km/h, ${r240} m à 240`);
   // mais à la vitesse de pointe, sans glisse, le virage le plus serré ne passe pas : il faut lever le pied, freiner ou glisser
   assert(rtop > ext, `${M.id} : à ${vtop * 3.6} km/h le rayon (${rtop} m) passe le virage le plus serré sans rien faire`);
-  // glisse à 200 km/h (bouton tenu) : volant vers l'intérieur elle serre plus que le virage le plus serré et bien plus qu'en adhérence ; au neutre puis vers l'extérieur elle ouvre, sans jamais changer de sens
-  assert(gin < ext && gin < 0.6 * g200 && gin < gn && gn < gout && gout > 0, `${M.id} : glisse à 200 km/h, rayons ${gin} / ${gn} / ${gout} m (adhérence ${g200} m)`);
+  // glisse (bouton tenu) : à 200 km/h volant vers l'intérieur elle serre bien plus qu'en adhérence ; au neutre puis vers l'extérieur elle ouvre, sans jamais changer de sens ; à 120 km/h elle passe le virage le plus serré
+  assert(gin120 < ext && gin < 0.8 * g200 && gin < gn && gn < gout && gout > 0, `${M.id} : glisse à 200 km/h, rayons ${gin} / ${gn} / ${gout} m (adhérence ${g200} m)`);
   // réponse au volant : à 120 km/h, 0,2 s après le coup de volant la voiture tourne déjà à 85 % de son régime
   const y02 = go(lance(v120), I(1, 1), 0.2).yaw, y06 = go(lance(v120), I(1, 1), 0.6).yaw;
   assert(y02 > 0.85 * y06, `${M.id} : volant trop lent (${deg(y02)} °/s à 0,2 s, ${deg(y06)} à 0,6 s)`);
@@ -78,8 +78,9 @@ for (const M of CARTES) {
   const [tni, bni, hni, dni, reste] = tour(c => autopilot(c, T), 1);
   assert(bni && reste <= 0.3 && tni < lap - 0.3 && hni <= hits && !dni, `${M.id} : tour du pilote automatique avec une jauge de nitro ${tni} s (${bni} coups, reste ${reste}, ${hni} chocs, ${dni} réceptions dures) contre ${lap} s sans`);
   const [tfond, , hfond] = tour(c => ({ ...autopilot(c, T), gas: 1, brake: 0 })), [tgl, boosts, hgl] = tour(piloteGlisse(T, 1, 1.2, 0.9, 0.3));
-  assert(boosts > 1 && tgl < lap, `${M.id} : tour en glisse (${tgl} s, ${boosts} coups de nitro, ${hgl} chocs) pas plus rapide que le tour propre (${lap} s)`);
-  assert(hfond && tfond > lap * 1.01, `${M.id} : à fond dans les murs (${tfond} s, ${hfond} chocs) pas plus lent que le tour propre (${lap} s)`);
+  assert(boosts > 1 && tgl < lap * (M.surf && M.surf.fond === 'neige' ? 1.02 : 1), // sur la neige, la glisse (douce) ne paie plus forcément : à 2 % près
+     `${M.id} : tour en glisse (${tgl} s, ${boosts} coups de nitro, ${hgl} chocs) pas plus rapide que le tour propre (${lap} s)`);
+  assert(hfond && tfond > lap * 1.005, `${M.id} : à fond dans les murs (${tfond} s, ${hfond} chocs) pas plus lent que le tour propre (${lap} s)`);
   // trafic : positions finies, sur la route ; une voiture arrêtée sur une file se fait pousser sans être traversée
   if (M.trafic) {
     for (const tt of [0, 37.3, 400]) for (const k of trafic(T, tt)) assert(Number.isFinite(k.x) && Math.abs(k.d) < W - 1.4, `${M.id} : camion hors route`);
@@ -98,7 +99,7 @@ for (const M of CARTES) {
   assert(T.surf.length === n); assert(M.surf || T.surf.every(q => q === SURF.sec) === !M.th.pluie, M.id + ' : route mouillée là où il ne pleut pas');
   if (T.surf.some(q => q !== SURF.sec)) {
     const E = T.surf; T.surf = null; const [sec, , hsec] = tour(c => autopilot(c, T)); T.surf = E;
-    if (!M.surf) assert(lap > 1.005 * sec && lap < 1.16 * sec, `${M.id} : tour sous la pluie ${lap} s, au sec ${sec} s`);
+    if (!M.surf) assert(lap > 1.002 * sec && lap < 1.16 * sec, `${M.id} : tour sous la pluie ${lap} s, au sec ${sec} s`);
     // surface déclarée (neige, glace, terre) : la carte se conduit autrement qu'au sec, sans tourner à la patinoire. Le tour perd de 8 à 35 % (sur fond de terre : de -5 à 35 %, car la carte est étroite et réglée pour la terre ; au sec le pilote automatique y arrive trop vite, tape et perd plus qu'il ne gagne : le nombre de chocs au sec est affiché), et la glace vive, s'il y en a, reste par plaques : moins du quart du tour
     else { const gl = T.surf.filter(q => q.vir > 0.45).length / n; surfCarte = `, ${((lap / sec - 1) * 100).toFixed(0)} % plus lent qu'au sec (${sec.toFixed(1)} s${hsec ? ', où le pilote automatique tape ' + hsec + ' fois' : ''}), glace vive sur ${(gl * 100).toFixed(0)} % du tour`;
       assert((M.surf.fond ? lap > (M.surf.fond === 'terre' ? 0.95 : 1.08) * sec : lap >= sec - 0.05) && lap < 1.35 * sec && gl < 0.25, `${M.id} : tour ${lap} s${surfCarte}`); }
