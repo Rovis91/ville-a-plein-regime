@@ -1,0 +1,199 @@
+<title>Revue des circuits</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout : une feuille de stand — tableau des notes en tête, puis une fiche par carte (tracé avant/après + changements). Thème sombre assumé, couleur d'asphalte la nuit. */
+:root {
+  color-scheme: dark;
+  --asphalt: #14151a; --panel: #1c1e25; --line: #2c2f39; --fg: #ebe7dc; --muted: #9a978f;
+  --sodium: #ffb547; --old: #5f6370; --good: #6fcf8f; --warn: #ff7a59;
+  --display: "Chakra Petch", "Arial Narrow", sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+body { background: var(--asphalt); color: var(--fg); font: 15px/1.55 var(--body); }
+.wrap { max-width: 1100px; margin: 0 auto; padding-block: 40px 80px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 48px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: .01em; }
+h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.05; }
+h2 { font-size: 24px; }
+h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-family: var(--body); font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+.lede { color: var(--muted); margin-top: 12px; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+section { display: grid; gap: 18px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-weight: 500; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+th.n { text-align: right; }
+.bar { display: flex; align-items: center; gap: 10px; }
+.bar i { display: block; height: 8px; background: var(--sodium); border-radius: 1px; }
+.bar.low i { background: var(--warn); }
+.crit { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
+.crit div { border-top: 2px solid var(--line); padding-top: 10px; }
+.crit b { font-family: var(--display); font-size: 16px; display: block; }
+.crit span { color: var(--muted); font-size: 14px; }
+.debate { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.debate ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+.fiche { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 28px; border-top: 1px solid var(--line); padding-top: 28px; }
+@media (max-width: 760px) { .fiche { grid-template-columns: minmax(0, 1fr); } }
+.fiche header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.score { font-family: var(--display); font-size: 34px; color: var(--sodium); line-height: 1; }
+.score.low { color: var(--warn); }
+.score small { font-size: 15px; color: var(--muted); }
+.plan { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 10px; }
+.plan svg { display: block; width: 100%; height: auto; }
+.legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 8px; flex-wrap: wrap; }
+.legend span::before { content: ""; display: inline-block; width: 18px; height: 0; border-top: 3px solid var(--sodium); vertical-align: middle; margin-right: 6px; }
+.legend span.o::before { border-top: 2px dashed var(--old); }
+.temps { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-top: 6px; }
+.body { display: grid; gap: 14px; min-width: 0; }
+.body ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 5px; }
+.body li { max-width: 72ch; }
+.pt { font-family: var(--mono); font-size: 12.5px; color: var(--sodium); white-space: nowrap; }
+.tag { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; padding: 2px 6px; border: 1px solid var(--line); border-radius: 2px; color: var(--muted); margin-right: 6px; }
+.alert { border-left: 3px solid var(--warn); padding: 10px 14px; background: var(--panel); }
+.order { display: flex; flex-wrap: wrap; gap: 8px; counter-reset: o; padding: 0; margin: 8px 0 0; list-style: none; }
+.order li { counter-increment: o; background: var(--panel); border: 1px solid var(--line); padding: 6px 10px; border-radius: 2px; font-size: 14px; }
+.order li::before { content: counter(o) " "; font-family: var(--mono); color: var(--sodium); }
+</style>
+
+<div class="wrap">
+  <header>
+    <h3>Ville à plein régime · revue des 8 tracés</h3>
+    <h1>Revue des circuits</h1>
+    <p class="lede">Quatre regards ont noté chaque carte : un game designer (rythme, moments forts), un expert en dessin de circuits (rayons, relief, mesuré sur le vrai <span class="mono">buildTrack</span>), un directeur artistique (ambiance, décor) et un joueur testeur (difficulté, plaisir, temps du pilote automatique). Les tracés proposés ont tous été repassés aux contraintes de <span class="mono">test-cartes.js</span> : rayon, recoupement, pilote auto qui boucle sans taper.</p>
+  </header>
+
+  <section>
+    <h2>Les notes</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Carte</th><th class="n">Game design</th><th class="n">Tracé</th><th class="n">Ambiance</th><th class="n">Plaisir</th><th class="n">Difficulté</th><th>Moyenne</th></tr></thead>
+      <tbody id="notes"></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Ce qui fait un bon circuit</h2>
+    <div class="crit">
+      <div><b>Rythme · 20 %</b><span>Des tempos qui changent : grande courbe, freinage fort, enchaînement. Jamais deux fois le même motif à la suite.</span></div>
+      <div><b>Moments forts · 15 %</b><span>Un ou deux passages qu'on raconte après la course : le tunnel, le pont, les épingles.</span></div>
+      <div><b>Lisibilité · 15 %</b><span>On voit le virage avant d'y être. Un repère visuel par point de freinage.</span></div>
+      <div><b>Profondeur · 15 %</b><span>Choix de trajectoire, risque contre gain, glisse et nitro qui payent. L'écart débutant/expert doit exister.</span></div>
+      <div><b>Identité · 15 %</b><span>Ce que seule cette carte demande : trafic, glace, sauts, pavés.</span></div>
+      <div><b>Dépassements · 10 %</b><span>Zones de freinage et largeur pour doubler en course.</span></div>
+      <div><b>Tracé et décor · 10 %</b><span>Le tracé a l'air d'exister à cet endroit, et chaque secteur raconte quelque chose.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Le débat</h2>
+    <div class="debate">
+      <div><h3>Tout le monde est d'accord</h3><ul>
+        <li>La ville est la meilleure carte : on n'y touche presque pas.</li>
+        <li>Le stade est la plus faible (5 à 6,2) : trois droites parallèles, trois demi-tours identiques, tout à plat. Votre intuition est confirmée.</li>
+        <li>La montée du touge est vide, en conduite comme en décor : de longues courbes ouvertes à fond, un couloir de cèdres sans repère jusqu'au carrefour.</li>
+        <li>Les quatre épingles du touge sont des copies exactes (même rayon, mêmes bras de 85 m) : la quatrième n'apprend plus rien.</li>
+        <li>Canal et wangan répètent un même S en slalom ; on passe le wangan sans jamais freiner (+0,6 % seulement « à fond »).</li>
+      </ul></div>
+      <div><h3>Là où ils divergent</h3><ul>
+        <li><b>Givre</b> : 9 en ambiance, 6 en plaisir. La plus narrative, mais 23 % de glace vive et la glisse y fait <i>perdre</i> du temps, même sur le lac pensé pour elle.</li>
+        <li><b>Paris</b> : 9 en ambiance, 7 en plaisir. Le quai fait un kilomètre droit et plat, sans rien à faire.</li>
+        <li><b>Terre</b> : 8 en tracé, mais la glisse ne rapporte que 4,9 % sur une spéciale « en travers », et tous les virages se ressemblent (R30 à 40).</li>
+        <li><b>Ordre du menu</b> : le touge en 2e est trop dur juste après la ville. Le game designer et le testeur le placent tous deux en fin de liste.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <section id="fiches"><h2>Carte par carte</h2></section>
+
+  <section>
+    <h2>Ordre de progression proposé</h2>
+    <p>Du plus accueillant au plus exigeant ; la ville reste en tête parce que c'est la carte vitrine.</p>
+    <ol class="order"><li>Ville</li><li>Canal</li><li>Wangan</li><li>Stade</li><li>Paris</li><li>Terre</li><li>Touge</li><li>Givre</li></ol>
+    <p class="lede">Tournée : elle s'ouvre sur la terre, la carte qui punit le plus le freinage tardif (+23,8 % « à fond »). Échanger les heures de terre et canal (le couchant va aux deux) et finir sur le givre plutôt que sur Paris.</p>
+  </section>
+
+  <section>
+    <h2>À savoir avant d'appliquer</h2>
+    <div class="alert"><p><b>Test cassé aujourd'hui :</b> la trace or du stade fait 37,0 s pour un seuil or à 34,3 s, donc le fantôme or est plus lent que l'or et <span class="mono">test-cartes.js</span> échoue. Au givre, la trace or tombe pile sur le seuil, sans marge.</p></div>
+    <ul>
+      <li>Tout changement de tracé invalide les traces or (<span class="mono">traces-or.js</span>) et les records de la carte : il faudra les régénérer.</li>
+      <li>Les décors placés en coordonnées dans <span class="mono">decors.js</span> (supérette, conteneurs, piles) sont à vérifier carte par carte. La nouvelle montée du touge garde les points 11 et 12 : le carrefour ne bouge pas.</li>
+      <li>Les temps ci-dessus sont ceux du pilote automatique, pas d'un joueur.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+const TRACES = [{"id":"ville","nom":"VILLE A PLEIN REGIME","old":[[0,0],[220,0],[420,10],[560,90],[600,240],[520,370],[360,400],[230,340],[110,400],[0,520],[-150,560],[-300,500],[-360,360],[-300,240],[-380,120],[-330,10],[-180,0]],"nw":[[0,0],[220,0],[420,10],[560,90],[600,240],[520,370],[360,400],[230,340],[110,400],[0,520],[-150,560],[-300,500],[-360,360],[-300,240],[-380,120],[-345,25],[-180,0]]},{"id":"touge","nom":"KARASU-TOGE","old":[[0,0],[150,0],[300,-40],[430,-10],[560,-70],[700,-40],[820,40],[860,170],[800,290],[840,400],[790,500],[720,580],[640,610],[570,580],[542,520],[540,430],[540,345],[534,331],[520,325],[506,331],[500,345],[500,430],[500,515],[494,529],[480,535],[466,529],[460,515],[460,430],[460,345],[454,331],[440,325],[426,331],[420,345],[420,430],[420,515],[414,529],[400,535],[386,529],[380,515],[380,430],[372,350],[335,285],[250,250],[150,275],[50,300],[-60,260],[-150,180],[-200,80],[-140,5]],"nw":[[0,0],[150,0],[300,-40],[450,-10],[610,-62],[750,-50],[832,-8],[826,72],[712,96],[646,162],[674,330],[720,580],[640,610],[570,580],[542,520],[540,430],[540,345],[534,331],[520,325],[506,331],[500,345],[500,430],[500,540],[494,554],[480,560],[466,554],[460,540],[460,430],[460,365],[454,351],[440,345],[426,351],[420,365],[420,430],[420,515],[414,529],[400,535],[386,529],[380,515],[380,430],[372,350],[335,285],[250,250],[150,275],[50,300],[-60,260],[-150,180],[-200,80],[-140,5]]},{"id":"wangan","nom":"WAN-9","old":[[0,0],[400,0],[800,0],[1100,10],[1300,60],[1400,180],[1410,310],[1400,440],[1390,550],[1340,660],[1220,730],[1080,740],[940,700],[800,760],[660,700],[520,770],[380,710],[240,780],[100,720],[-60,790],[-220,760],[-400,800],[-540,760],[-610,660],[-620,540],[-620,400],[-610,250],[-620,110],[-620,-20],[-600,-130],[-520,-230],[-380,-250],[-240,-180],[-150,-60]],"nw":[[0,0],[400,0],[800,0],[1100,10],[1300,60],[1400,180],[1410,310],[1400,440],[1390,550],[1340,660],[1220,730],[1080,740],[940,700],[800,760],[660,700],[520,790],[400,700],[250,745],[100,735],[-60,790],[-220,760],[-400,800],[-540,760],[-610,660],[-620,540],[-620,400],[-610,250],[-620,110],[-620,-20],[-600,-130],[-520,-230],[-380,-250],[-240,-180],[-150,-60]]},{"id":"paris","nom":"PREMIER METRO","old":[[0,0],[200,0],[330,15],[420,80],[480,80],[524,42],[534,-15],[505,-65],[430,-160],[420,-300],[450,-390],[540,-420],[700,-420],[810,-435],[880,-480],[860,-545],[800,-590],[830,-660],[930,-670],[1020,-630],[1070,-540],[1040,-410],[1085,-280],[1060,-150],[1100,0],[1090,140],[1010,225],[800,240],[600,250],[400,250],[200,240],[0,240],[-150,225],[-235,150],[-235,60],[-150,0]],"nw":[[0,0],[200,0],[330,15],[420,80],[480,80],[524,42],[534,-15],[505,-65],[430,-160],[420,-300],[450,-390],[540,-420],[700,-420],[810,-435],[880,-480],[860,-545],[800,-590],[830,-660],[930,-670],[1020,-630],[1070,-540],[1040,-410],[1085,-280],[1060,-150],[1100,0],[1090,140],[1010,225],[800,240],[600,250],[400,264],[200,234],[0,240],[-150,225],[-235,150],[-235,60],[-150,0]]},{"id":"canal","nom":"CANAL 6","old":[[0,0],[250,-80],[500,90],[750,-80],[1000,90],[1250,-80],[1500,60],[1720,40],[1825,123],[1828,168],[1803,206],[1760,220],[1500,230],[1300,290],[1100,220],[900,290],[700,220],[500,290],[300,220],[50,240],[-170,230],[-256,156],[-270,110],[-256,64],[-170,-10]],"nw":[[0,0],[250,-80],[500,90],[750,-110],[1000,60],[1250,-80],[1500,60],[1720,40],[1825,123],[1828,168],[1803,206],[1760,220],[1500,230],[1300,290],[1100,220],[900,320],[720,200],[500,290],[300,220],[50,240],[-170,230],[-256,156],[-270,110],[-256,64],[-170,-10]]},{"id":"stade","nom":"GRAND VACARME","old":[[0,0],[80,0],[150,0],[230,0],[300,0],[339,16],[355,55],[339,94],[300,110],[255,110],[150,110],[80,110],[45,125],[30,160],[45,195],[80,210],[126,210],[300,210],[339,226],[355,265],[339,304],[300,320],[190,320],[100,320],[0,320],[-60,320],[-173,273],[-220,160],[-173,47],[-60,0]],"nw":[[0,0],[80,0],[150,0],[230,0],[300,0],[348,18],[368,60],[348,102],[300,118],[250,118],[165,92],[100,118],[64,128],[42,160],[58,192],[96,206],[140,212],[290,208],[338,220],[356,260],[343,300],[305,322],[190,320],[100,320],[0,320],[-70,324],[-175,286],[-228,182],[-208,78],[-110,6]]},{"id":"givre","nom":"NUIT BLANCHE","old":[[0,0],[180,0],[340,-30],[480,10],[600,-30],[720,20],[790,120],[770,230],[680,270],[590,260],[558,273],[545,305],[558,337],[590,350],[700,350],[735,365],[750,400],[735,435],[700,450],[560,470],[420,440],[280,490],[150,470],[0,470],[-140,470],[-250,400],[-290,290],[-250,180],[-300,90],[-230,10],[-120,0]],"nw":[[0,0],[180,0],[340,-30],[480,10],[600,-30],[720,20],[790,120],[770,230],[680,270],[590,260],[558,273],[545,305],[558,337],[590,350],[700,350],[735,365],[750,400],[735,435],[700,450],[560,470],[420,440],[285,508],[150,470],[0,470],[-140,470],[-250,400],[-290,290],[-250,180],[-300,90],[-230,10],[-120,0]]},{"id":"terre","nom":"SPECIALE DES OCRES","old":[[0,0],[43,0],[85,0],[128,0],[170,0],[220,0],[255,0],[298,0],[340,0],[361,5],[378,18],[407,52],[429,67],[455,67],[476,52],[505,18],[528,3],[555,4],[576,21],[585,47],[585,94],[585,141],[593,167],[614,183],[652,197],[666,207],[673,224],[670,241],[658,254],[641,259],[591,259],[536,259],[513,259],[481,259],[471,259],[448,265],[432,281],[426,304],[426,344],[426,384],[420,406],[403,423],[369,443],[350,461],[344,486],[344,526],[338,547],[323,563],[302,568],[258,568],[214,568],[152,568],[126,568],[82,568],[57,568],[30,559],[14,535],[3,496],[-8,476],[-28,464],[-67,454],[-90,439],[-98,413],[-98,367],[-98,313],[-98,273],[-98,227],[-98,193],[-98,133],[-109,105],[-134,74],[-145,51],[-141,26],[-124,7],[-100,0],[-50,0]],"nw":[[0,0],[43,0],[85,0],[128,0],[170,0],[220,0],[255,0],[298,0],[340,0],[361,5],[378,18],[407,52],[429,67],[455,67],[476,52],[505,18],[528,3],[555,4],[576,21],[585,47],[585,94],[585,141],[593,167],[614,183],[652,197],[666,207],[673,224],[670,241],[658,254],[641,259],[591,259],[536,259],[513,259],[481,259],[471,259],[448,265],[432,281],[426,304],[426,344],[426,384],[420,406],[403,423],[369,443],[350,461],[344,486],[344,526],[338,547],[323,563],[302,568],[258,568],[214,568],[152,568],[126,568],[82,568],[57,568],[30,559],[14,535],[3,496],[-8,476],[-28,464],[-67,454],[-90,439],[-98,413],[-98,367],[-82,313],[-72,271],[-86,227],[-98,193],[-98,133],[-109,105],[-134,74],[-145,51],[-141,26],[-124,7],[-100,0],[-50,0]]}];
+const NOTES = { ville: [8, 8, 8, 9, 2], touge: [7.3, 7, 6.5, 8, 4], wangan: [7.6, 7, 8, 7, 2], paris: [7.8, 7.5, 9, 7, 3], canal: [6.6, 6, 7, 6, 1.5], stade: [6.2, 5, 6, 6, 2], givre: [7.9, 7.5, 9, 6, 5], terre: [7.4, 8, 8.5, 7, 3] };
+const FICHES = {
+  ville: { temps: '35,03 s → 35,06 s', diag: 'Une boucle courte et fluide, des rayons de 36 à 400 m, un vrai S avant le tunnel. Il manque un gros freinage, et la sortie au point 15 bride l\'entrée de la ligne droite.',
+    trace: ['<span class="pt">pt 15</span> déplacé en [-345, 25] : la sortie s\'ouvre vers la droite. Le tour ne change pas.'],
+    decor: ['<span class="pt">pts 3-5</span> station de monorail aérien, une rame qui passe au-dessus de la route : le repère du tour', '<span class="pt">pts 13-16</span> marché de nuit : lanternes rouges en travers de la rue, étals qui fument, parapluies transparents', '<span class="pt">pts 0-2</span> portique de départ avec écran de compte à rebours et grappe de drones'],
+    meca: ['Bretelle étroite et mouillée sous l\'échangeur <span class="pt">pts 13-15</span> : plus courte, mais glissante', 'Corde au ras du mur dans le tunnel <span class="pt">pts 7-9</span>, récompensée en nitro'] },
+  touge: { temps: '76,96 s → 81,02 s', diag: 'Les épingles sont un sommet de pilotage. La montée (pts 2 à 10, 120 m de dénivelé) n\'est qu\'une suite de grandes courbes à fond dans un couloir de cèdres. Le retour 41-48 est tout aussi muet.',
+    trace: ['Nouvelle montée, <span class="pt">pts 2-12</span> (toujours 11 points, chaud/sect/amb restent valables) : S rapide en 2-4, <b>épingle à droite en montée</b> (R34) en 5-7, freinée en côte, où la propulsion doit doser la remise des gaz ; gauche en deux temps en 8-9 ; crête désaxée en 10 ; entrée du carrefour qui se referme (R82 → R44)', 'Épingles désymétrisées : bras de la 2e allongé <span class="pt">pts 22-26</span>, bras de la 3e raccourci <span class="pt">pts 28-32</span>'],
+    decor: ['<span class="pt">pts 1-3</span> pont de pierre sur un torrent, brume basse au-dessus de l\'eau, panneau « 13 % » ; son de torrent et de grenouilles', '<span class="pt">pts 3-5</span> sanctuaire : torii vermillon, escalier de pierre, lanternes tōrō ; cerfs sika au bord de la route, yeux qui s\'allument dans les phares', '<span class="pt">pts 5-7</span> mur de soutènement moussu et filets ; un distributeur de boissons isolé, la première lumière depuis le départ', '<span class="pt">pts 7-9</span> trouée dans les cèdres : première vue sur la ville et la lune, panneau 展望. Le moment carte postale', '<span class="pt">pts 9-10</span> trois voitures garées feux allumés, silhouettes qui regardent passer', '<span class="pt">pts 10-12</span> pylônes sur la crête, feux rouges qui clignotent ; la lueur de la supérette entre les troncs', 'Variante : mer de nuages (brouillard épais 6-8, on en sort au-dessus au pt 9)'],
+    meca: ['Zone d\'ambiance sonore avancée à <span class="pt">[3, 13]</span>, et la musique qui monte dès le point 6 (le secteur chaud démarre aujourd\'hui au 14)', 'Une compression puis une crête aveugle à la cassure de pente : on arrive « au jugé » sur le virage'] },
+  wangan: { temps: '82,69 s → 83,53 s', diag: 'L\'identité tient : vitesse, trafic, pont, tunnel immergé. Mais l\'enfilade des conteneurs aligne sept gauche-droite identiques, et on fait le tour sans jamais freiner.',
+    trace: ['<span class="pt">pts 15-18</span> : un droite-gauche serré (R36) au milieu des conteneurs, la seule vraie zone de freinage. Le tunnel 23-28 n\'est pas touché.'],
+    decor: ['<span class="pt">pts 0-3</span> phare rouge et blanc sur la digue, faisceau tournant ; grue de chantier illuminée', 'Portique de grue mobile qui passe au-dessus de la route dans le port', '<span class="pt">pts 29-33</span> péage abandonné, guérites au sodium, puis une enseigne de love hotel qui annonce la ville'],
+    meca: ['Trafic plus dense sur le pont <span class="pt">pts 5-8</span> : choisir sa voie à 280 km/h', 'Panneau à message variable dans le tunnel avec l\'écart au fantôme'] },
+  paris: { temps: '68,53 s → 68,51 s', diag: 'La plus riche en cartes postales : boulevard, place, ruelle de la butte, quai. La place et la ruelle sont techniques, mais le quai fait un kilomètre droit et la descente 19-23 se lit mal.',
+    trace: ['<span class="pt">pts 29-30</span> : une légère courbe sur le quai, prise à fond. Un repère, et un côté à choisir pour dépasser. Le tunnel 27-30 est conservé.'],
+    decor: ['<span class="pt">pts 19-23</span> livreur de journaux à vélo, boulangerie qui lève son rideau, escaliers et réverbère de la butte', '<span class="pt">pt 19</span> feux tricolores en haut de la butte : repère de freinage avant la descente', '<span class="pt">pts 26-31</span> pigeons qui s\'envolent au passage'],
+    meca: ['Camion de livraison en double file sur le quai <span class="pt">pts 28-29</span>, qui change de côté à chaque tour', 'Place <span class="pt">pts 3-8</span> : intérieur des piles (court, pavés) contre extérieur (long, bitume)'] },
+  canal: { temps: '62,28 s → 65,04 s', diag: 'Large et tolérante, bonne carte de découverte et de glisse. Mais les deux côtés reprennent le même slalom, les deux bouts ont le même rayon, et l\'IA s\'y tamponne sans arrêt (714 chocs en course).',
+    trace: ['<span class="pt">pts 3-4</span> glisse plus profonde à l\'aller ; <span class="pt">pts 15-16</span> retour asymétrique. Les amplitudes ne se répètent plus.'],
+    decor: ['<span class="pt">pts 1-6</span> tribune nord : fanfare, majorettes, chars du meeting', '<span class="pt">pts 13-18</span> tribune sud différente : drapeaux à damier, montgolfières dans le couchant. L\'aller ne ressemble plus au retour'],
+    meca: ['Écluse avec rampe et petit saut <span class="pt">pts 15-16</span>', 'Boue de canal sur la corde <span class="pt">pts 3-4</span> : la corde coûte, l\'extérieur paye', 'Calmer les contacts entre voitures de l\'IA'] },
+  stade: { temps: '37,67 s → 39,14 s · 9 → 13 virages', diag: 'Trois fois le même motif : ligne droite, tremplin, demi-tour relevé. Tout est à 0 m. Le haut du mur gagne toujours, les tremplins ne demandent aucune décision, et la fosse ne punit qu\'un pilote lent. On connaît la trajectoire au deuxième tour.',
+    trace: ['Nouveau tracé complet (30 points, mêmes rôles pour sauts, murs, zones) : premier demi-tour plus large ; <b>chicane à la réception du tremplin 9</b>, il faut se replacer en l\'air ; épingle centrale serrée et décalée (R20) ; deuxième demi-tour plus serré que le premier ; talus de la tribune ouest à 4 m avec une compression en redescendant', 'Le pilote auto tape le mur une fois (limite du test : 2) : la chicane est au maximum de ce qui passe'],
+    decor: ['Demi-tour est : mur de pneus et carcasses écrasées ; demi-tour suivant : banderoles de supporters qui pendent du toit. Ils ne se confondent plus', 'Fosse : voitures broyées et boue au fond, monster truck garé au bord, étincelles qui tombent du toit à chaque saut', 'Une ola qui suit la voiture de tête, l\'écran géant qui rejoue le saut du joueur', 'Dernier tour : lumières éteintes, seuls les projecteurs de poursuite suivent les voitures, confettis à l\'arrivée'],
+    meca: ['<b>Joker lap</b> de rallycross dans l\'aire centrale : plus long de 4 à 6 %, avec tremplin et terre, obligatoire une fois par course. Les rivaux le prennent à des tours différents, d\'où des dépassements', '<b>Fosse en risque/récompense</b> : ligne directe par-dessus qui ne passe qu\'avec nitro et bon alignement, ou contournement sûr et plus long', 'Vomitoire sous la tribune ouest <span class="pt">pts 25-27</span> (tunnel) : on sort dans la lumière et le bruit', 'Mur roulable à deux étages : le haut rapide mais mal placé pour la sortie, la corde courte et lente', 'Barrière de l\'arche de feu ouverte un tour sur deux'] },
+  givre: { temps: '68,92 s → 69,25 s', diag: 'La plus narrative : falaise, lacets, crête, pont, lac gelé, lumière d\'aube. La plus dure aussi (15 essais et plus), et la glisse y fait perdre du temps, même sur le lac. La descente 19-24 est presque droite.',
+    trace: ['<span class="pt">pt 21</span> déplacé : un vrai S dans la descente.'],
+    decor: ['<span class="pt">pts 23-26</span> chasse-neige garé gyrophare allumé, remontée mécanique figée, chouette sur un jalon', '<span class="pt">pt 2</span> coulée de poudreuse au pied de la falaise (visuelle)', 'Balises qui annoncent chaque plaque de glace à 150 m'],
+    meca: ['Rendre la glisse payante sur le lac <span class="pt">pts 28-30</span> : glace moins punitive (0,45 aujourd\'hui) ou entrée plus large', 'Crête élargie au <span class="pt">pt 19</span> pour un vrai dépassement'] },
+  terre: { temps: '53,48 s → 53,92 s', diag: 'Rythme de spéciale, crêtes et gué bien placés, public sur les talus. Mais presque tous les virages font 30 à 40 m : on les distingue mal, et la glisse ne rapporte que 4,9 %.',
+    trace: ['<span class="pt">pts 64-66</span> : la longue droite du retour devient une grande courbe rapide (R ≈ 120), le seul virage à prendre en travers à haute vitesse.'],
+    decor: ['<span class="pt">pts 18-22</span> hélicoptère de la télé en vol stationnaire', '<span class="pt">pts 62-68</span> moulin en ruine, troupeau de moutons, berger qui fait signe', '<span class="pt">pts 31-33</span> gerbe d\'eau au passage du gué'],
+    meca: ['<b>Notes de copilote</b> (voix ou pictogrammes) : le plus gros gain de lisibilité possible sur cette carte', 'Saut-repère plus haut au <span class="pt">pt 51</span> (0,8 → 1,2)', 'Glisse mieux récompensée sur la terre, surtout à l\'épingle du belvédère <span class="pt">pts 24-29</span>'] },
+};
+
+// tracé fermé lissé (Catmull-Rom) à partir des points
+function chemin(pts, f) {
+  const n = pts.length, P = i => f(pts[(i + n) % n]); let d = '';
+  for (let i = 0; i < n; i++) {
+    const [a, b, c, e] = [P(i - 1), P(i), P(i + 1), P(i + 2)];
+    if (!i) d += `M${b[0].toFixed(1)},${b[1].toFixed(1)}`;
+    d += `C${(b[0] + (c[0] - a[0]) / 6).toFixed(1)},${(b[1] + (c[1] - a[1]) / 6).toFixed(1)} ${(c[0] - (e[0] - b[0]) / 6).toFixed(1)},${(c[1] - (e[1] - b[1]) / 6).toFixed(1)} ${c[0].toFixed(1)},${c[1].toFixed(1)}`;
+  }
+  return d + 'Z';
+}
+function plan(t) {
+  const all = [...t.old, ...t.nw], xs = all.map(p => p[0]), zs = all.map(p => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+  const W = 320, pad = 16, s = (W - 2 * pad) / Math.max(x1 - x0, z1 - z0), H = Math.round((z1 - z0) * s + 2 * pad);
+  const f = p => [pad + (p[0] - x0) * s + ((W - 2 * pad) - (x1 - x0) * s) / 2, pad + (p[1] - z0) * s];
+  const moved = t.nw.map((p, i) => Math.hypot(p[0] - t.old[i][0], p[1] - t.old[i][1]) > 1).map((m, i) => m ? f(t.nw[i]) : null).filter(Boolean);
+  const [sx, sy] = f(t.nw[0]);
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tracé actuel et tracé proposé de ${t.nom}">
+    <path d="${chemin(t.old, f)}" fill="none" stroke="var(--old)" stroke-width="2" stroke-dasharray="5 4"/>
+    <path d="${chemin(t.nw, f)}" fill="none" stroke="var(--sodium)" stroke-width="3" stroke-linejoin="round"/>
+    ${moved.map(([x, y]) => `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="var(--asphalt)" stroke="var(--sodium)" stroke-width="1.5"/>`).join('')}
+    <rect x="${(sx - 2).toFixed(1)}" y="${(sy - 7).toFixed(1)}" width="4" height="14" fill="var(--fg)"/>
+  </svg>`;
+}
+const moy = id => NOTES[id].slice(0, 4).reduce((a, b) => a + b) / 4, fr = x => x.toFixed(1).replace('.', ',');
+document.getElementById('notes').innerHTML = TRACES.map(t => { const n = NOTES[t.id], m = moy(t.id);
+  return `<tr><td>${t.nom}</td>${n.slice(0, 4).map(v => `<td class="n">${fr(v)}</td>`).join('')}<td class="n">${fr(n[4])} / 5</td><td><div class="bar${m < 6.5 ? ' low' : ''}"><i style="width:${(m * 10).toFixed(0)}px"></i><span class="mono">${fr(m)}</span></div></td></tr>`; }).join('');
+const li = a => `<ul>${a.map(x => `<li>${x}</li>`).join('')}</ul>`;
+document.getElementById('fiches').insertAdjacentHTML('beforeend', TRACES.map(t => { const F = FICHES[t.id], m = moy(t.id);
+  return `<article class="fiche"><div><div class="plan">${plan(t)}</div><div class="legend"><span class="o">actuel</span><span>proposé</span></div><div class="temps">Tour pilote auto : ${F.temps}</div></div>
+    <div class="body"><header><h2>${t.nom}</h2><div class="score${m < 6.5 ? ' low' : ''}">${fr(m)}<small> / 10</small></div></header><p>${F.diag}</p>
+    <div><h3>Tracé</h3>${li(F.trace)}</div><div><h3>Nouveaux décors</h3>${li(F.decor)}</div><div><h3>Nouvelles mécaniques</h3>${li(F.meca)}</div></div></article>`; }).join(''));
+</script>

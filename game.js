@@ -1,11 +1,13 @@
 // Ville à plein régime — rendu, effets, HUD, commandes et boucle de jeu. La piste et la physique sont dans sim.js.
 // Plan du fichier (chercher « // ---------- ») : rendu et passe finale · les trois entités du décor (textures.js, formes.js, placement) · piste · ville · horizon · voiture et effets ·
 // état de jeu et commandes · HUD · boucle. Voir README.md pour savoir où régler quoi.
-(window.lanceJeu = () => {
-  // Changer de carte ne recharge pas la page : lanceJeu est rejoué sur la nouvelle carte (voir changeCarte). La carte précédente s'arrête ici ; son décor n'est libéré
-  // qu'après la première image de la nouvelle, pour que les shaders compilés resservent (les compiler était l'essentiel de l'attente).
-  let avant = window.__g; if (avant && avant.fin) avant.fin();
-  const arret = new AbortController(), addEventListener = (ev, f) => window.addEventListener(ev, f, { signal: arret.signal }); // tous les écouteurs de ce fichier tombent d'un coup à l'arrêt
+(window.lanceJeu = async (CARTE = window.CARTE, fond = false) => {
+  // Une instance par carte, gardée en mémoire (window.__cartes) : changer de carte affiche une instance déjà construite (veille / reprend), sans rien reconstruire.
+  // Une carte pas encore vue se construit en fond (fond = true), par morceaux (await souffle()) pour que la carte affichée continue de tourner, puis reprend() l'affiche.
+  // Sans fond (premier chargement de la page), tout se fait d'un trait, comme avant : __g existe dès la fin du script (rythme.js s'en sert).
+  const souffle = () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = r; c.port2.postMessage(0); }); // pas setTimeout : bridé à 1 par seconde en arrière-plan
+  let actif = false; // seule l'instance affichée écoute clavier, souris et fenêtre
+  const arret = new AbortController(), addEventListener = (ev, f) => window.addEventListener(ev, e => { if (actif) f(e); }, { signal: arret.signal }); // tous les écouteurs de ce fichier tombent d'un coup à l'arrêt
   const T = buildTrack(THREE, CARTE), CARD = T.car, S = T.S, N = T.n, W = T.W, V3 = THREE.Vector3, M = CARTE, TH = M.th; // carte active et son thème : voir cartes.js
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a));
@@ -422,6 +424,7 @@
     m.customProgramCacheKey = () => k() + 'repli'; return o;
   };
 
+  fond && await souffle();
   // ---------- géométrie de la piste (hauteurs relatives à l'altitude de la route) ----------
   function ribbon(i0, cnt, oa, ya, ob, yb, mat, vLen = 8) { // oa, ya, ob, yb : constantes, ou fonctions de l'échantillon (largeur et hauteur variables)
     const pos = [], uv = [], idx = [], f = (o, s) => typeof o === 'function' ? o(s) : o;
@@ -540,6 +543,7 @@
     }
   }
 
+  fond && await souffle();
   // ---------- décor de la carte : decors.js ----------
   const VAP = [], vapeur = (x, y, z) => VAP.push([x, y, z]); // bouches de vapeur déclarées par le décor (panaches : voir flou)
   const beams = [], decorTick = window.DECORS[TH.decor]({ THREE, scene, T, S, N, W, M, TH, ribbon, rnd, across, zone, lum, geo, mat, tx, addMat, box, concrete, beams, pose, zones, habille, vapeur, temps: () => race ? -1 : tTraf }); // pas de trafic en course : les adversaires ne savent pas l'éviter
@@ -559,6 +563,7 @@
   const splash = new THREE.Points(splGeo, new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false }));
   splash.frustumCulled = false; scene.add(splash);
 
+  fond && await souffle();
   // ---------- voiture : géométrie dans formes-voitures.js, livrée dans textures-voitures.js ; ici le placement, les roues qui tournent et braquent, les feux stop, le roulis ----------
   const carG = new THREE.Group(), body = new THREE.Group(); carG.add(body); carG.userData.dyn = 1; scene.add(carG); // dyn : ne pas fondre dans le décor fixe (voir « fusion »)
   const L = CARD.look, K = L.type || 'gtr'; // le modèle de formes-voitures.js
@@ -751,6 +756,7 @@
   const RI = [carG, ...opps].map(g => { const w = g.children[1].children[0], m = new THREE.InstancedMesh(w.geometry, w.material, 4); m.castShadow = true; g.add(m); for (let r = 1; r < 5; r++) g.children[r].children[0].visible = false; return [g, m]; }), mRI = new THREE.Matrix4();
   const rouesInst = () => { for (const [g, m] of RI) if (g.visible) { for (let r = 1; r < 5; r++) { const st = g.children[r], w = st.children[0]; st.updateMatrix(); w.updateMatrix(); m.setMatrixAt(r - 1, mRI.multiplyMatrices(st.matrix, w.matrix)); } m.instanceMatrix.needsUpdate = true; } };
 
+  fond && await souffle();
   // ---------- dégâts : purement visuels et sonores (la conduite et les temps n'en savent rien : fantômes, médailles et réseau intacts), remis à zéro à chaque départ ----------
   // Par modèle (g.userData.dg) : z = usure des zones [avant, arrière, flanc z < 0, flanc z > 0] de 0 à 1 ; la caisse s'enfonce autour de chaque impact (au plus DG_MAX mètres par sommet) ;
   // ph / fe = phare / feu cassé de chaque côté [z < 0, z > 0] : éteint, et sa lumière dynamique avec (vueFrame) ; pare-chocs et rétroviseurs qui tombent ; fumée du capot ; vitre fêlée peinte sur la livrée.
@@ -841,6 +847,7 @@
   const feuxGeo = new THREE.BufferGeometry(), feuxP = new Float32Array(6 * Math.max(3, M.trafic || 0)); feuxGeo.setAttribute('position', new THREE.BufferAttribute(feuxP, 3));
   const feux = new THREE.Points(feuxGeo, new THREE.PointsMaterial({ color: 0xff2030, size: 1, fog: false })); feux.frustumCulled = false; scene.add(feux);
 
+  fond && await souffle();
   // ---------- fusion du décor fixe : une passe de dessin par matière, au lieu d'une par objet ----------
   // Tout maillage simple, opaque et immobile est fondu avec ceux de la même matière (mêmes ombres) en une seule géométrie, en coordonnées du monde : l'image est la même,
   // mais la ville passe de 950 passes de dessin à 150. Ce qui bouge, ou s'affiche et se cache, doit porter userData.dyn = 1 (lui ou un parent) :
@@ -922,6 +929,7 @@
     return up;
   }
 
+  fond && await souffle();
   // ---------- état de jeu ----------
   // clés « vpr8. » : la V3 change la conduite (glisse progressive, frein arrière, adhérence sol × voiture, surfaces visibles), les records « vpr7. » ne sont plus comparables.
   // une série de records par carte ; la ville garde ses clés d'origine
@@ -933,7 +941,7 @@
   const tr = s => traduit(s, langue);
   const appliqueLangue = () => { document.documentElement.lang = langue; document.title = langue === 'en' ? 'Full Throttle City' : 'Ville à plein régime'; };
   appliqueLangue();
-  let msel = 4; // ligne du menu principal
+  let msel = 5; // ligne du menu principal
   // écran d'accueil : le navigateur n'autorise le son qu'après un geste ; on le demande d'abord, pour que la musique soit là quand le menu s'affiche
   // Écran d'accueil : il sert d'abord à choisir la langue. Gauche / droite (ou haut / bas) change la langue tout de suite, Entrée part vers le menu principal.
   // (variantes essayées et écartées : branche prototype/accueil)
@@ -954,7 +962,7 @@
     else if (code === 'Escape') { choix = false; accueil = true; }
     else if (code === 'Enter' || code === 'Space') {
       if (csel === 2) { enl = { sel: 0, saisie: '' }; SON.beep(660); return; }
-      joueurs(csel ? Math.max(2, +pref('vpr7.ecran', '2')) : 1); setPref('vpr7.joueurs', VUES.length); choix = false; msel = 4; SON.beep(660); }
+      joueurs(csel ? Math.max(2, +pref('vpr7.ecran', '2')) : 1); setPref('vpr7.joueurs', VUES.length); choix = false; msel = 5; SON.beep(660); }
   };
   // ---------- En ligne (reseau.js) ----------
   // Salon par code de 4 lettres, ou par le lien ?salon=CODE. L'hôte choisit la carte au menu principal et lance : tout le monde court en Course (3 tours), chacun sur son écran, sa voiture en J1.
@@ -973,7 +981,7 @@
   const rejoint = code => { joueurs(1); NET.rejoindre(code, onNet); enl = { sel: 1, saisie: NET.code, attente: true }; };
   const salonAct = (code, key) => {
     if (code === 'Escape') { quitteSalon(); enl = null; return; }
-    if (NET.role === 'hote') { if (code === 'Enter' || code === 'Space') { enl = null; choix = false; msel = 4; mode = 'course'; SON.beep(660); } return; } // au menu principal : l'hôte choisit la carte, DEMARRER lance
+    if (NET.role === 'hote') { if (code === 'Enter' || code === 'Space') { enl = null; choix = false; msel = 5; mode = 'course'; SON.beep(660); } return; } // au menu principal : l'hôte choisit la carte, DEMARRER lance
     if (enl.attente) return;
     if (enl.sel) { // saisie du code : la lettre tapée (e.key), pas la position de la touche
       if (code === 'Backspace') enl.saisie = enl.saisie.slice(0, -1);
@@ -986,7 +994,6 @@
     else if (code === 'Enter' || code === 'Space') { joueurs(1); NET.heberger(onNet); mode = 'course'; SON.beep(660);
       try { navigator.clipboard.writeText(location.origin + location.pathname + '?salon=' + NET.code).then(() => padDit('LIEN DU SALON COPIE'), () => { }); } catch (e) { } }
   };
-  try { const m = sessionStorage.getItem('vpr.menu'); if (m) { msel = 0; sessionStorage.removeItem('vpr.menu'); entrer(); SON.reprendre(JSON.parse(m)); } } catch (e) { } // la musique de menu reprend où elle en était // on vient de changer de carte : on reste sur cette ligne, sans repasser par l'accueil (le navigateur garde en général le droit au son d'une page à l'autre ; sinon il revient à la touche suivante)
   for (const ev of ['mousedown', 'pointerup', 'touchend']) addEventListener(ev, e => { inactif = 0; if (demo) { if (!cible && ev !== 'mousedown') demoFin(); return; } if (performance.now() - demoSortie < 400) return; if (accueil) { if (ev === 'mousedown') return; if (e.isTrusted && !aMenu) PER.hidAuto(); SON.init(); const l = e.clientX < innerWidth / 2 ? 'fr' : 'en'; if (l === langue) accueilAct('ok'); else { aMenu = true; choisitLangue(l); } } else SON.init(); }); // à l'accueil : un clic à gauche choisit le français, à droite l'anglais ; un second clic du même côté part
   const fmt = t => `${t / 60 | 0}'${String(t % 60 | 0).padStart(2, '0')}"${String(t * 100 % 100 | 0).padStart(2, '0')}`;
   addEventListener('mousemove', e => { if (state !== 'race' && state !== 'count') return; const vu = VUES[0]; vu.lookA = clamp(vu.lookA + e.movementX * 0.006, -Math.PI, Math.PI); vu.lookP = clamp(vu.lookP + e.movementY * 0.03, -1, 5); vu.lookT = 2.5; }); // caméra libre à la souris : celle de la première vue (il n'y a qu'une souris)
@@ -1061,28 +1068,30 @@
   // menu de pause : [ligne, action]. À deux, pas de boîte (chacun a la sienne, sur son périphérique)
   const pauseItems = () => [['REPRENDRE', () => { state = prev; }], ['RECOMMENCER', start], ...(deux() ? [] : [['BOITE : ' + (manual ? 'MANUELLE' : 'AUTO'), () => { manual = !manual; VUES[0].moi.manual = manual; }]]),
     ['RADIO : ' + nomRadio(), zap], ['QUITTER', toMenu]];
-  function toMenu() { if (NET.role === 'hote') NET.stop(); if (invite()) attente(); ses.toMenu(); state = 'title'; ins = false; race = null; const c = newCar(T); for (const vu of VUES) suit(vu, c); msel = 4; }
-  // menu principal : 0 carte, 1 joueurs, 2 mode, 3 boîte, 4 démarrer ; d = -1 / +1 (gauche / droite ; Entrée vaut +1)
-  let cible = null, cibleT = 0; // carte demandée au menu, pas encore construite
+  function toMenu() { if (NET.role === 'hote') NET.stop(); if (invite()) attente(); ses.toMenu(); state = 'title'; ins = false; race = null; const c = newCar(T); for (const vu of VUES) suit(vu, c); msel = 5; }
+  // menu principal : 0 carte, 1 joueurs, 2 mode, 3 difficulté, 4 boîte, 5 démarrer ; d = -1 / +1 (gauche / droite ; Entrée vaut +1)
+  const cache = i => (i === 1 && !deux()) || (i === 3 && !enCourse()); // en solo pas de ligne JOUEURS ; DIFFICULTE seulement contre des IA
+  let cible = null, cibleT = 0; // carte demandée au menu, pas encore affichée
   function changeCarte() {
-    if (cible === M) { cible = null; return; }
-    setPref('vpr.carte', cible.id); try { sessionStorage.setItem('vpr.menu', 1); history.replaceState(null, '', location.pathname + '?carte=' + cible.id + (Q.has('joueurs') ? '&joueurs=' + VUES.length : '')); } catch (e) { } // le nombre de joueurs suit la préférence ; forcé par l'adresse (?joueurs=), il y reste d'une carte à l'autre
-    window.CARTE = cible; SON.carte(cible);
-    // ce fichier (décor, jeu) puis rythme.js s'il est là sont rejoués sur la nouvelle carte, sans recharger de script ; le renderer, ses shaders et le son restent.
-    // Après la pile en cours (comme l'ancien rechargement de balises) : l'instance qui appelle finit son image avant d'être arrêtée.
-    setTimeout(() => { lanceJeu(); if (window.lanceRythme) lanceRythme(); });
+    if (cible === M) { cible = null; window.__voulu = M.id; return; }
+    const c = cible; window.__voulu = c.id; // la dernière demandée : une construction finie entre-temps pour une autre carte ne s'affiche pas
+    construit(c).then(api => {
+      if (window.__voulu !== c.id || window.__g === api) return;
+      setPref('vpr.carte', c.id); try { sessionStorage.setItem('vpr.menu', 1); history.replaceState(null, '', location.pathname + '?carte=' + c.id + (Q.has('joueurs') ? '&joueurs=' + VUES.length : '')); } catch (e) { } // le nombre de joueurs suit la préférence ; forcé par l'adresse (?joueurs=), il y reste d'une carte à l'autre
+      SON.carte(c); api.reprend(); if (window.lanceRythme) lanceRythme();
+    });
   }
   function menuAct(d) {
-    if (cible && msel === 4) return; // une carte est en route : on ne démarre pas sur l'ancienne
-    if (msel === 0) { // changer de carte : le nom change tout de suite ; le décor suit dès qu'on cesse de faire défiler (0,15 s), sans recharger la page
+    if (cible && msel === 5) { try { sessionStorage.setItem('vpr.go', 2); } catch (e) { } clearTimeout(cibleT); changeCarte(); return; } // DEMARRER pendant qu'une carte arrive : la course part sur elle
+    if (msel === 0) { // changer de carte : le nom change tout de suite, la carte s'affiche dès qu'on cesse de faire défiler (0,15 s) ; déjà construite, aussitôt
       cible = CARTES[(CARTES.indexOf(cible || M) + d + CARTES.length) % CARTES.length];
       clearTimeout(cibleT); cibleT = setTimeout(changeCarte, 150);
     } else if (msel === 1) { // écran partagé seulement (la ligne n'existe pas en solo) : 2, 3 ou 4 joueurs, gardé dans les préférences
       joueurs(2 + (VUES.length - 2 + d + 3) % 3); setPref('vpr7.joueurs', VUES.length); setPref('vpr7.ecran', VUES.length); }
-    else if (msel === 2) { // les modes sans adversaire, puis la course et l'élimination à chaque difficulté ; à deux : Course, Élimination, Glisse en duel
-      const O = (deux() ? MODES2 : MODES).flatMap(m => AVEC_IA.includes(m) ? DIFF.map((_, i) => [m, i]) : [[m, diff]]);
-      [mode, diff] = O[(O.findIndex(([m, i]) => m === mode && i === diff) + d + O.length) % O.length]; setPref(cle('mode'), JSON.stringify(mode)); setPref(cle('diff'), diff); }
-    else if (msel === 3) { manual = !manual; VUES[0].moi.manual = manual; setPref('vpr.boite', manual ? 'm' : 'a'); }
+    else if (msel === 2) { // à un joueur MODES, à deux : Course, Élimination, Glisse en duel ; la difficulté a sa propre ligne
+      const O = deux() ? MODES2 : MODES; mode = O[(O.indexOf(mode) + d + O.length) % O.length]; setPref(cle('mode'), JSON.stringify(mode)); }
+    else if (msel === 3) { diff = (diff + d + DIFF.length) % DIFF.length; setPref(cle('diff'), diff); } // ligne DIFFICULTE : seulement pour les modes avec IA (voir cache)
+    else if (msel === 4) { manual = !manual; VUES[0].moi.manual = manual; setPref('vpr.boite', manual ? 'm' : 'a'); }
     else start();
   }
   // boîte et rapports, attribués au périphérique qui a appuyé (d : +1, -1, 0 = bascule manuelle / automatique) : ils vont à la voiture de la vue inscrite sous ce périphérique, sinon à celle du joueur 1
@@ -1125,11 +1134,11 @@
     if ((e.code === 'Escape' || key === 'p') && (state === 'race' || state === 'count')) { prev = state; state = 'pause'; psel = 0; return; }
     if (state === 'title') {
       const dx = (e.code === 'ArrowRight' || e.code === 'KeyD' ? 1 : 0) - (e.code === 'ArrowLeft' || e.code === 'KeyA' ? 1 : 0);
-      const pas = s => { msel = (msel + s + 5) % 5; if (msel === 1 && !deux()) msel = (msel + s + 5) % 5; }; // en solo, la ligne JOUEURS n'existe pas
+      const pas = s => { do msel = (msel + s + 6) % 6; while (cache(msel)); };
       if (e.code === 'ArrowUp' || e.code === 'KeyW') pas(-1);
       else if (e.code === 'ArrowDown' || e.code === 'KeyS') pas(1);
       else if (e.code === 'Enter' || e.code === 'Space') menuAct(1);
-      else if (dx && msel < 4) menuAct(dx);
+      else if (dx && msel < 5) menuAct(dx);
       else if (e.code === 'Escape') { choix = true; csel = deux() ? 1 : 0; if (enLigne()) { csel = 2; enl = { sel: 0, saisie: '' }; } }
       else if (key === 'i' && deux()) inscrit(); // à deux : rouvrir l'inscription pour changer de périphérique (les places prises ne sont plus redemandées au départ)
       return;
@@ -1271,18 +1280,24 @@
       const ti = titreCarte(M.id, HU.titre, langue); txt(ti[0], cx, 44, 24, Y, 'center', 2); txt(ti[1], cx, 70, 24, Y, 'center', 2);
       if (tFlash && performance.now() - tFlash < 400) R(hg, 'rgba(255,255,255,' + (1 - (performance.now() - tFlash) / 400).toFixed(2) + ')', 0, 0, HW, HH); // éclair blanc au sortir de l'accueil
       panel(cx - 160, 100, 320, 140);
-      [['CARTE', (cible || M).nom + '  ' + (CARTES.indexOf(cible || M) + 1) + '/' + CARTES.length], ['JOUEURS', d2 ? VUES.length + ' : ECRAN PARTAGE' : 'SOLO'], ['MODE', mode === 'tournee' ? 'TOURNEE : ' + DIFF[diff].nom : mode === 'course' ? 'COURSE : ' + DIFF[diff].nom : mode === 'elim' ? 'ELIMINATION : ' + DIFF[diff].nom : mode === 'glisse' ? d2 ? 'GLISSE EN DUEL' : 'GLISSE' : 'CONTRE-LA-MONTRE'], [d2 ? 'BOITE J1' : 'BOITE', manuel1() ? 'MANUELLE' : 'AUTO']].forEach(([l, v], i) => {
-        if (i === 1 && !d2) return; // en solo, pas de ligne JOUEURS : le choix est fait à l'écran d'avant
-        const on = msel === i, y = 105 + (i > 1 && !d2 ? i - 1 : i) * 12;
+      const L = [['CARTE', (cible || M).nom + '  ' + (CARTES.indexOf(cible || M) + 1) + '/' + CARTES.length], ['JOUEURS', d2 ? VUES.length + ' : ECRAN PARTAGE' : 'SOLO'], ['MODE', mode === 'tournee' ? 'TOURNEE' : mode === 'course' ? 'COURSE' : mode === 'elim' ? 'ELIMINATION' : mode === 'glisse' ? d2 ? 'GLISSE EN DUEL' : 'GLISSE' : 'CONTRE-LA-MONTRE'], ['DIFFICULTE', DIFF[diff].nom], [d2 ? 'BOITE J1' : 'BOITE', manuel1() ? 'MANUELLE' : 'AUTO']].map((r, i) => [...r, i]).filter(r => !cache(r[2]));
+      const serre = L.length > 4; // 5 lignes (à deux, contre des IA) : plus rapprochées, pour laisser DEMARRER au-dessus du tracé
+      L.forEach(([l, v, i], k) => {
+        const on = msel === i, y = (serre ? 104 : 105) + k * (serre ? 10 : 12);
         txt((on ? '> ' : '  ') + l, cx - 152, y, 8, on ? Y : '#e8e8e4'); txt(on ? '< ' + v + ' >' : v, cx + 152, y, 8, on ? Y : C, 'right');
       });
-      const go = mode === 'tournee' && tn() ? 'REPRENDRE' : 'DEMARRER'; if (msel === 4) { if (blink) tag('> ' + go + ' <', cx, 152, Y); } else txt(go, cx, 155, 8, '#e8e8e4', 'center');
+      const go = mode === 'tournee' && tn() ? 'REPRENDRE' : 'DEMARRER'; if (msel === 5) { if (blink) tag('> ' + go + ' <', cx, serre ? 154 : 152, Y); } else txt(go, cx, serre ? 157 : 155, 8, '#e8e8e4', 'center');
       hg.drawImage(MM.c, cx - 152, 170); // le tracé, puis la fiche de la carte
       [CARD.nom, (T.len / 1000).toFixed(1).replace('.', ',') + ' KM', mode === 'tournee' ? (tn() ? 'MANCHE ' + (tn().manche + 1) + '/' + SOIREE.length + ' · ' + SOIREE[tn().manche].heure + ' · ' + tn().pts[0] + ' PTS' : 'UNE NUIT, ' + SOIREE.length + ' MANCHES') : mode === 'course' ? d2 ? ['', '', '2 JOUEURS ET 2 RIVAUX', '3 JOUEURS ET 1 RIVAL', '4 JOUEURS, SANS IA'][VUES.length] : '3 TOURS CONTRE 3 IA' : mode === 'elim' ? 'LE DERNIER SORT' : d2 ? 'LE MEILLEUR SCORE GAGNE' : mode === 'glisse' ? 'RECORD ' + (ses.bestG ? ses.bestG + ' PTS' : '--') : 'RECORD ' + (ses.best ? fmt(ses.best) : '--')].forEach((l, i) => txt(l, cx - 58, 174 + i * 11, 8, i ? '#e8e8e4' : C));
       if (mode === 'tournee') { const r = trophee(); txt(r ? 'TROPHEE ' + MEDN[3 - r] : 'PAS ENCORE DE TROPHEE', cx - 58, 218, 8, r ? MEDC[3 - r] : '#e8e8e4'); } // le trophée de cette difficulté : or, argent ou bronze selon la meilleure place finale
       if (d2) txt("RIEN N'EST ENREGISTRE", cx - 58, 218, 8, '#e8e8e4'); // ni record, ni médaille, ni fantôme : rien à montrer non plus
       else if (!enCourse()) { const gl = mode === 'glisse', m = gl ? medG(ses.bestG) : medal(ses.best); if (m) txt(MEDN[m - 1], cx + 152, 196, 8, MEDC[m - 1], 'right'); if (m < 3) txt('VISE ' + MEDN[m] + ' ' + (gl ? GLM[m] + ' PTS' : fmt(REF * MED[m])), cx - 58, 218, 8, MEDC[m]); } // médaille acquise, et la prochaine à aller chercher
       txt('HAUT/BAS : CHOISIR  GAUCHE/DROITE : CHANGER', cx, 245, 8, '#e8e8e4', 'center'); txt(d2 ? 'I : INSCRIPTION (MANETTES, JOY-CON, CLAVIER)' : 'FLECHES / ZQSD   ESPACE : GLISSE   X : NITRO', cx, 257, 8, '#e8e8e4', 'center');
+      if (cible && !(window.__cartes || {})[cible.id]) { // carte choisie qui se construit encore (la première fois seulement) : son tracé à la place de la fiche
+        R(hg, '#08080c', cx - 156, 166, 312, 70); const P = cible.pts, xs = P.map(p => p[0]), zs = P.map(p => p[1]), x0 = Math.min(...xs), z0 = Math.min(...zs), k = Math.min(80 / (Math.max(...xs) - x0 || 1), 52 / (Math.max(...zs) - z0 || 1));
+        hg.strokeStyle = '#e8e8e4'; hg.lineWidth = 1; hg.beginPath(); P.forEach(p => hg.lineTo(cx - 150 + (p[0] - x0) * k, 172 + (p[1] - z0) * k)); hg.closePath(); hg.stroke();
+        txt(cible.nom, cx - 58, 174, 8, C); txt('CHARGEMENT...', cx - 58, 196, 8, blink ? Y : '#e8e8e4');
+      }
       if (enLigne()) tag('SALON ' + NET.code + ' · ' + NET.n + ' JOUEURS', cx, 25, Y); else if (defiErr) tag(defiErr, cx, 25, RD); else if (d2) { } else if (DEFI) tag('DEFI : ' + fmt(DEFI.t) + ' A BATTRE', cx, 25, FANTC[5]);; // à la place du sous-titre : plus bas, le bandeau mordait sur le titre
       return;
     }
@@ -1486,7 +1501,7 @@
     if (n > 1) { while (PLACES.length < n) PLACES.push(''); PLACES.length = n; } // une place par joueur ; celles des joueurs en trop sont rendues
     VUES.forEach((vu, i) => { vu.periph = n > 1 ? PLACES[i] : ''; });
     const Lm = n > 1 ? MODES2 : MODES; mode = DEFI && n < 2 ? 'solo' : Lm.find(m => pref(cle('mode'), '') === JSON.stringify(m)) || Lm[0]; diff = clamp(+pref(cle('diff'), 1) | 0, 0, DIFF.length - 1);
-    if (n > 1 && !COM) { const c = document.createElement('canvas'); renderer.domElement.after(c); COM = { c, g: c.getContext('2d') }; } // (la feuille de style de la page étire tout canvas sur l'écran, en pixels nets)
+    if (n > 1 && !COM) { const c = document.createElement('canvas'); renderer.domElement.after(c); COM = { c, g: c.getContext('2d') }; if (!actif) c.style.display = 'none'; } // (la feuille de style de la page étire tout canvas sur l'écran, en pixels nets)
     else if (n < 2 && COM) { COM.c.remove(); COM = null; }
     resize();
   };
@@ -1715,7 +1730,6 @@
       scene.traverse(o => { if (!o.visible) { caches.push(o); o.visible = true; } if (o.frustumCulled) { tri.push(o); o.frustumCulled = false; } });
       renderer.setRenderTarget(vu.rt); renderer.render(scene, cam);
       for (const o of caches) o.visible = false; for (const o of tri) o.frustumCulled = true;
-      if (avant && avant.libere) avant.libere(); avant = null; // l'ancienne carte peut maintenant rendre sa mémoire : la nouvelle tient les shaders communs (et on l'oublie, sinon chaque carte garderait toutes les précédentes)
     }
     // les matrices de la scène une fois pour les trois rendus de la vue (reflets, ombres mobiles, scène) : chacun les recalculait toutes
     rouesInst(); scene.updateMatrixWorld(); scene.autoUpdate = false; if (!vu.n) refFace();
@@ -1732,18 +1746,50 @@
   let chaud = false;
   let raf = 0;
   const loop = now => { raf = requestAnimationFrame(loop); frame(now); };
-  raf = requestAnimationFrame(loop);
   // arrêt (changement de carte) : plus de boucle ni d'écouteurs ; puis libere() rend au GPU tout ce que cette carte y avait mis (les shaders, eux, restent au renderer tant qu'une matière s'en sert)
   const fin = () => { cancelAnimationFrame(raf); arret.abort(); clearTimeout(padNoteT); padNote.remove(); if (COM) COM.c.remove(); };
   const libere = () => {
     for (const sc of [scene, repliScene]) sc.traverse(o => { if (o.geometry) o.geometry.dispose(); for (const m of [].concat(o.material || [])) { for (const k of ['map', 'emissiveMap', 'alphaMap', 'specularMap']) if (m[k]) m[k].dispose(); m.dispose(); } });
     VUES.forEach(rendVue); CUBE.dispose(); post.dispose(); ssr.dispose(); OEIL.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
   };
-  try { if (sessionStorage.getItem('vpr.go')) { sessionStorage.removeItem('vpr.go'); if (mode === 'tournee') start(); } } catch (e) { } // arrivée sur la carte d'une manche de Tournée : la course part tout de suite
-  try { const d = sessionStorage.getItem('vpr.demo'), f = sessionStorage.getItem('vpr.demoFin'); sessionStorage.removeItem('vpr.demo'); sessionStorage.removeItem('vpr.demoFin');
-    if (d) demoLance(JSON.parse(d)); else if (f === 'a') accueil = true; } catch (e) { } // démo : carte suivante de la nuit, ou retour sur la carte d'origine (à l'accueil si l'on en venait)
-  if (NET.role) { NET.ev = onNet; let g = null; try { g = sessionStorage.getItem('vpr.netgo'); sessionStorage.removeItem('vpr.netgo'); } catch (e) { } // carte changée en ligne : ce fichier vient d'être rejoué, le salon (reseau.js) est resté
-    if (g) { choix = false; start(true); } else if (invite()) attente(); }
-  window.__g = { get enl() { return enl; }, get demo() { return demo; }, get inactif() { return inactif; }, frame, start, fin, libere, joueurs, places: PLACES, get ins() { return ins; }, get com() { return COM; }, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return ses.tnFin; }, get defi() { return { DEFI, defiErr, dernier: ses.dernier }; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam: VUES[0].cam, vues: VUES, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return VUES[0].moi; }, get state() { return state; }, get t() { return ses.tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; }, degats: x => { const f = 2 + 25 * x / 1.5; for (const g of [carG, ...opps]) for (const [a, b] of [[1, 0], [-1, 0], [0, -1], [0, 1]]) dgChoc(g, a, b, f); } }; // prise de test ; degats(x) : chaque zone de chaque voiture abîmée à x (captures)
+  // arrivée sur cette carte (premier affichage ou retour) : ce que la carte d'avant a laissé dans sessionStorage
+  const arrivee = () => {
+    try { const m = sessionStorage.getItem('vpr.menu'); if (m) { msel = 0; sessionStorage.removeItem('vpr.menu'); entrer(); SON.reprendre(JSON.parse(m)); } } catch (e) { } // la musique de menu reprend où elle en était // on vient de changer de carte : on reste sur cette ligne, sans repasser par l'accueil (le navigateur garde en général le droit au son d'une page à l'autre ; sinon il revient à la touche suivante)
+    try { if (sessionStorage.getItem('vpr.go')) { const g = sessionStorage.getItem('vpr.go'); sessionStorage.removeItem('vpr.go'); if (mode === 'tournee' || g === '2') start(); } } catch (e) { } // arrivée sur la carte d'une manche de Tournée, ou par DEMARRER au menu : la course part tout de suite
+    try { const d = sessionStorage.getItem('vpr.demo'), f = sessionStorage.getItem('vpr.demoFin'); sessionStorage.removeItem('vpr.demo'); sessionStorage.removeItem('vpr.demoFin');
+      if (d) demoLance(JSON.parse(d)); else if (f === 'a') accueil = true; } catch (e) { } // démo : carte suivante de la nuit, ou retour sur la carte d'origine (à l'accueil si l'on en venait)
+    if (NET.role) { NET.ev = onNet; let g = null; try { g = sessionStorage.getItem('vpr.netgo'); sessionStorage.removeItem('vpr.netgo'); } catch (e) { } // carte changée en ligne : ce fichier vient d'être rejoué, le salon (reseau.js) est resté
+      if (g) { choix = false; start(true); } else if (invite()) attente(); }
+  };
+  // veille : la carte reste construite (scène, textures et shaders au GPU) mais ne dessine ni n'écoute plus ; reprend : elle revient au menu, dans l'état d'une carte neuve
+  const veille = () => { actif = false; cancelAnimationFrame(raf); padNote.style.display = 'none'; if (COM) COM.c.style.display = 'none'; for (const k in keys) keys[k] = 0; };
+  const reprend = () => {
+    const av = window.__g; if (av && av !== api) (av.veille || av.fin)();
+    actif = true; window.__g = api; window.CARTE = M;
+    if (state !== 'title') toMenu(); accueil = true; aMenu = false; choix = false; msel = 5; cible = null; demo = null; enl = null; ins = false; inactif = 0; // comme une carte neuve
+    langue = pref('vpr.langue', 'fr') === 'en' ? 'en' : 'fr'; appliqueLangue(); manual = pref('vpr.boite', 'a') === 'm'; VUES[0].moi.manual = manual; // les réglages ont pu changer sur une autre carte
+    { const n = +(Q.get('joueurs') || pref('vpr7.joueurs', '1')); joueurs(n > 1 && !DEFI && !NET.role ? n : 1); }
+    if (COM) COM.c.style.display = '';
+    arrivee(); resize(); cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
+    prepare();
+  };
+  // construit(c) : l'instance de la carte c, construite en fond la première fois (une promesse par carte, partagée par toutes les instances)
+  const construit = c => { const E = window.__enCours || (window.__enCours = {}); return E[c.id] || (E[c.id] = lanceJeu(c, true)); };
+  // prepare : une fois la page lancée, les autres cartes se construisent en fond, les voisines d'abord, une à la fois ; aux bancs et captures (?auto, ?perf, ?style) on ne construit que ce qui est demandé
+  const prepare = () => {
+    if (window.__prep || AUTO || ST || /[?&]perf\b/.test(location.search)) return;
+    const i0 = CARTES.indexOf(M), ordre = [...new Set(CARTES.flatMap((_, k) => [CARTES[(i0 + k) % CARTES.length], CARTES[(i0 - k + CARTES.length * 2) % CARTES.length]]))];
+    window.__prep = (async () => { for (const c of ordre) { await construit(c); await souffle(); } })();
+  };
+  const api = { veille, reprend, get enl() { return enl; }, get demo() { return demo; }, get inactif() { return inactif; }, frame, start, fin, libere, joueurs, places: PLACES, get ins() { return ins; }, get com() { return COM; }, carte: id => { cible = CARTES.find(m => m.id === id); changeCarte(); }, get tnFin() { return ses.tnFin; }, get defi() { return { DEFI, defiErr, dernier: ses.dernier }; }, get fantome() { return { nom: nomF(), visible: ghostM.visible, couleur: ghostM.material.color.getHexString(), x: ghostM.position.x, z: ghostM.position.z }; }, M, T, scene, cam: VUES[0].cam, vues: VUES, renderer, LUX, get race() { return race; }, get mode() { return mode; }, keys, ambAt, nearS, get accueil() { return accueil; }, get car() { return VUES[0].moi; }, get state() { return state; }, get t() { return ses.tRace; }, get ac() { return SON.ac; }, get out() { return SON.out; }, get smp() { return SON.smp; }, degats: x => { const f = 2 + 25 * x / 1.5; for (const g of [carG, ...opps]) for (const [a, b] of [[1, 0], [-1, 0], [0, -1], [0, 1]]) dgChoc(g, a, b, f); } }; // instance de la carte (et prise de test, en window.__g quand elle est affichée) ; degats(x) : chaque zone de chaque voiture abîmée à x (captures)
+  if (fond) { // première image de la carte d'avance, dans sa cible : shaders compilés et textures envoyées au GPU maintenant, pas au moment où elle s'affiche
+    await souffle(); const vu = VUES[0], caches = [], tri = [];
+    scene.traverse(o => { if (!o.visible) { caches.push(o); o.visible = true; } if (o.frustumCulled) { tri.push(o); o.frustumCulled = false; } });
+    renderer.setRenderTarget(vu.rt); renderer.render(scene, vu.cam); renderer.setRenderTarget(null);
+    for (const o of caches) o.visible = false; for (const o of tri) o.frustumCulled = true;
+  }
+  (window.__cartes || (window.__cartes = {}))[M.id] = api; (window.__enCours || (window.__enCours = {}))[M.id] = Promise.resolve(api);
+  if (!fond) reprend();
+  return api;
 })();
 if (/[?&]perf\b/.test(location.search)) import('./outils/perf.js').then(m => m.suite()); // banc de performance : voir outils/perf.js
