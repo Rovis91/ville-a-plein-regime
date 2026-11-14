@@ -11,7 +11,7 @@
 //   mode=course   le mode de jeu (mémorisé comme au menu, sinon celui du navigateur) ; tour=3 : les captures idx seulement à partir de ce tour (avec tours=3)
 //   vue=angle,distance,hauteur   caméra d'inspection autour de la voiture (window.__g.vue), sinon la caméra de course
 //   degats=0.7   chaque zone de chaque voiture abîmée à ce niveau (0 à 1) dès le départ, au lieu de compter sur les chocs du pilote automatique
-//   force=mur|nitro   avec idx : sur les 40 échantillons avant chaque capture, la voiture est poussée contre le mur de droite, ou la nitro tenue (le pilote auto ne fait ni l'un ni l'autre)
+//   force=mur|nitro|glisse   avec idx : sur les 40 échantillons avant chaque capture, la voiture est poussée contre le mur de droite, ou la nitro tenue, ou la nitro tenue en glisse (pilote en glisse de sim.js) (le pilote auto ne fait ni l'un ni l'autre)
 // Résultat : captures/<carte>-NN.jpg et captures/<carte>.json = { vues: [{ n, t, idx, kmh, tunnel }], erreurs, msParImage, tour }.
 // Quand le titre de la page passe à « FINI », tout est écrit.
 (async () => {
@@ -34,7 +34,7 @@
     vues.push({ n, t: +g.t.toFixed(1), idx: c.idx, kmh: Math.round(Math.hypot(c.vx, c.vz) * 3.6), tunnel: T.tun && ((c.idx - T.t0 + T.n) % T.n) < T.t1 - T.t0 });
     log(carte + '-' + n + '  t=' + g.t.toFixed(1) + ' s  échantillon ' + c.idx + '/' + T.n);
   };
-  let forcer = ''; const ap = w.autopilot; w.autopilot = (...a) => { const r = ap(...a); if (forcer === 'nitro') r.nitro = r.gas = 1; if (forcer === 'mur') r.steer = 0.4; forcer = ''; return r; }; // par la commande : sim.js remet c.boost à chaque pas, et le pilote ramène la voiture au milieu
+  let forcer = ''; const ap = w.autopilot; w.autopilot = (...a) => { const r = ap(...a); if (forcer === 'nitro') r.nitro = r.gas = 1; if (forcer === 'glisse') Object.assign(r, w.piloteGlisse(a[1], 1, 1.2, 0.6, 0.2)(a[0]), { nitro: 1, gas: 1 }); if (forcer === 'mur') r.steer = 0.4; forcer = ''; return r; }; // par la commande : sim.js remet c.boost à chaque pas, et le pilote ramène la voiture au milieu
   g.start();
   let k = 0, dernier = -1;
   for (; k < 9000 && g.car.dist < T.n * tours - 3; k++) {

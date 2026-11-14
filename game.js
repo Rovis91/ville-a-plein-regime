@@ -359,7 +359,7 @@
         if (i >= uN) break; // seulement les luminaires allumés
         vec3 d = uLP[i].xyz - vLw; float a = 1. - dot(d, d) / (uLP[i].w * uLP[i].w);
         if (a <= 0.) continue;
-        a *= luOmbre(vLw, d); vec3 l = normalize(d);
+        if (uLP[i].w > 0.) a *= luOmbre(vLw, d); vec3 l = normalize(d); // portée négative : feu porté par la voiture, qui ne projette pas l'ombre de sa propre boîte
         dif += uLC[i] * (a * a * max(dot(n, l), 0.));
         if (g > 0.) spe += uLC[i] * (a * mix(pow(max(dot(n, normalize(l + v)), 0.), 24.), pow(max(dot(rh, normalize(l.xz + 1e-4)), 0.), 40.), plat));
       }
@@ -1581,12 +1581,13 @@
     LUX.uSunC.value.copy(SUNC).multiplyScalar(1 - lm); LUX.uSky.value.copy(scene.fog.color); LUX.uRes.value.set(TRB ? vu.rw / 2 / TRB : 0, RH / 2 / TRB);
     let nl = 0;
     const put = (x, y, z, c, r, k) => { if (nl < NL) { LUX.uLP.value[nl].set(x, y, z, r); LUX.uLC.value[nl++].copy(c).multiplyScalar(k * LUM_GAIN); } };
-    put(car.x - fx * 4.4, carY + 0.35, car.z - fz * 4.4, ROUGE, 9, NUIT * (inp.brake || car.frA ? 2.4 : 0.45) * (1 - (dg.fe[0] + dg.fe[1]) / 2)); // feux arrière (moins les cassés) : ils teintent ce qui suit, davantage au freinage
-    if (L.neon) put(car.x, carY + 0.3, car.z, NEONC, 5.5, NUIT * (0.8 + 0.4 * pulse)); // néon de bas de caisse
+    put(car.x - fx * 4.4, carY + 0.35, car.z - fz * 4.4, ROUGE, -9, NUIT * (inp.brake || car.frA ? 2.4 : 0.45) * (1 - (dg.fe[0] + dg.fe[1]) / 2)); // feux arrière (moins les cassés) : ils teintent ce qui suit, davantage au freinage
+    if (L.neon) put(car.x, carY + 0.3, car.z, NEONC, -5.5, NUIT * (0.8 + 0.4 * pulse)); // néon de bas de caisse
     // éclats brefs, trois créneaux au plus pris sur les luminaires fixes : la gerbe d'étincelles contre un mur (orange, s'éteint en 0,2 s ; posée entre la caisse et le mur : dans la boîte d'ombre de la voiture elle n'éclairerait rien, derrière le mur elle tournerait le dos à sa face ; au-dessus du toit, la caisse ne cache pas la route), la flamme de nitro (bleue, vacille), l'éclair d'orage (tombe de haut, couvre tout)
     vu.ec = Math.max((vu.ec || 0) - dt * 5, vu.hit > 3 ? 1.5 : car.rub && sp > 8 ? 0.8 + 0.4 * Math.random() : 0);
     if (vu.ec > 0) { const s = S[car.idx], sg = Math.sign(car.d); const o = ENCt.z / 2 + 0.1; put(car.x - s.tz * sg * o, carY + 1.6, car.z + s.tx * sg * o, ETIN, 12, vu.ec * 4 * (0.5 + NUIT)); }
-    if (car.boost > 0) put(car.x - fx * 3.2, carY + 0.45, car.z - fz * 3.2, BLEU, 10, 2.5 * (0.5 + NUIT) * (0.8 + 0.4 * Math.random()));
+    // feux de la voiture (arrière, néon, nitro) : sans l'ombre de la boîte. Bas et tout près d'elle, ils la projetaient en rectangles nets sur la route et les murs autour (surtout la nitro en glisse, la boîte en travers)
+    if (car.boost > 0) put(car.x - fx * 3.2, carY + 0.45, car.z - fz * 3.2, BLEU, -10, 2.5 * (0.5 + NUIT) * (0.8 + 0.4 * Math.random()));
     if (fl) put(car.x + 30, carY + 70, car.z - 20, FLASH, 140, 2.2 * fl);
     // les deux véhicules les plus proches (adversaires, ou camions du trafic) : phares devant, feux rouges derrière
     const d2 = c => (c.x - car.x) ** 2 + (c.z - car.z) ** 2;
