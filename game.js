@@ -634,7 +634,12 @@
       step(dt) { const fr = Math.exp(-3 * dt); for (let k = 0; k < N; k++) if (A[k] < 1) { const j = k * 3; A[k] += dt / vie; V[j] *= fr; V[j + 2] *= fr; P[j] += V[j] * dt; P[j + 1] += V[j + 1] * dt; P[j + 2] += V[j + 2] * dt; }
         g.attributes.position.needsUpdate = g.attributes.age.needsUpdate = true; } };
   };
-  const POUS = TH.poussiere && flou(480, TH.poussiere, 0.5), FUM = flou(600, [0.68, 0.68, 0.72], 0.55), poussiere = (...a) => POUS.emit(...a);
+  const POUS = TH.poussiere && flou(480, TH.poussiere, 0.5), GERBE = TH.poussiere && T.surf.some(q => q.aq) && flou(500, [0.92, 0.93, 0.9], 0.4, 0.35), FUM = flou(600, [0.68, 0.68, 0.72], 0.55), poussiere = (...a) => POUS.emit(...a);
+  // gerbe d'eau du gué (Spéciale des Ocres : seule carte en terre avec une zone mouillée) : derrière chaque roue avant, des gouttes en traits blancs projetées en éventail sur le côté, qui retombent, et un peu d'écume au ras de l'eau (disques à vie courte : plus longue, ils grossissent en brume) ; plus haute et plus large avec la vitesse
+  const gerbe = (c, v) => { const fx = Math.cos(c.th), fz = Math.sin(c.th), k = Math.min(1, v / 40), n = 2 + 4 * k | 0;
+    for (const sd of [-1, 1]) for (let j = 0; j < n; j++) { const ox = c.x + fx * 1.1 - fz * sd * 0.9, oz = c.z + fz * 1.1 + fx * sd * 0.9, l = sd * (4 + Math.random() * 7) * k;
+      GERBE.emit(ox + jit(0.6), c.y + 0.25, oz + jit(0.6), c.vx * 0.45 - fz * l, (2 + Math.random() * 4.5) * k, c.vz * 0.45 + fx * l);
+      for (let d = 0; d < 5; d++) trait(ox, c.y + 0.2, oz, c.vx * 0.5 - fz * l * 1.4 + jit(3), (3 + Math.random() * 6) * k, c.vz * 0.5 + fx * l * 1.4 + jit(3), 0.9, 12, 0.09, [1, 1, 0.95], c.y + 0.05); } };
   // vapeur des bouches d'égout : un panache lent par bouche (4 s pour monter de 5 m), teinté par le luminaire le plus proche à moins de 30 m (les néons)
   const VAPS = VAP.map(([x, y, z]) => { const c = new THREE.Color(0.2, 0.2, 0.23); let lb = null, db = 900;
     for (const l of LUMS) { const d = (l.x - x) ** 2 + (l.z - z) ** 2; if (d < db) { db = d; lb = l; } }
@@ -690,9 +695,9 @@
     const { lm, moi: car } = VUES[0]; // le tonnerre est celui du joueur 1 (un seul son, comme SON.frame)
     if (TH.poussiere) { for (const c of race ? race.cars : [car]) { const q = T.surf[c.idx], v = Math.hypot(c.vx, c.vz), sd = Math.random() < 0.5 ? -0.8 : 0.8, x = c.x - Math.cos(c.th) * 1.6 - Math.sin(c.th) * sd, z = c.z - Math.sin(c.th) * 1.6 + Math.cos(c.th) * sd; // chaque voiture lève un panache derrière elle ; dans le gué, une gerbe d'eau. La poussière part à la vitesse de la voiture puis freine : le panache reste dans le champ de la caméra de poursuite
         if (v < 8 || c.air || c.out || !(VUES.some(v => v.car === c) || c.drift || Math.random() < 0.5)) continue;
-        if (q.aq) for (let k = 0; k < 3; k++) poussiere(x + jit(1), c.y + 0.15, z + jit(1), c.vx * 0.8 + jit(5), 1.5 + Math.random() * 4, c.vz * 0.8 + jit(5)); // l'eau du gué est trouble : une gerbe de la même teinte, plus haute
+        if (q.aq) gerbe(c, v); // le gué : une gerbe d'eau de chaque côté (GERBE)
         else if (q.roul > 0.25) for (let k = 0; k < 2; k++) poussiere(x + jit(0.6), c.y + 0.15, z + jit(0.6), c.vx * 0.7 + jit(2), 0.3 + Math.random() * 1.2, c.vz * 0.7 + jit(2)); }
-      POUS.step(dt); }
+      POUS.step(dt); if (GERBE) GERBE.step(dt); }
     dgFrame(dt); FUM.step(dt); dEch.value = RH / 2;
     for (const p of VAPS) { for (p.t += dt; p.t > 0.12; p.t -= 0.12) p.f.emit(p.x + jit(0.6), p.y, p.z + jit(0.6), 0.3 + jit(0.4), 1 + Math.random() * 0.6, jit(0.4)); p.f.step(dt); } // vapeur : toujours, même loin (40 points par bouche)
     for (let i = 0; i < VN; i++) { const j = i * 6, s = i * VK; if (vS[s + 3] <= 0) { vCo.fill(0, j, j + 6); continue; }
