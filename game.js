@@ -491,11 +491,11 @@
         g.attributes.position.needsUpdate = g.attributes.age.needsUpdate = true; } };
   };
   const POUS = TH.poussiere && flou(480, TH.poussiere, 0.5), FUM = flou(600, [0.68, 0.68, 0.72], 0.55), poussiere = (...a) => POUS.emit(...a);
-  // lignes de vitesse de la nitro : des traits posés autour de la route, qui reculent vers la voiture et qu'elle dépasse ; tête vive, queue éteinte
-  const VN = 160, vP = new Float32Array(VN * 6), vCo = new Float32Array(VN * 6), vS = new Float32Array(VN * 4), vGeo = new THREE.BufferGeometry(); let vi = 0;
+  // traits additifs, étirés le long de leur vitesse, tête vive et queue éteinte : étincelles du palier de glisse, lignes de vitesse de la nitro
+  const VN = 400, VK = 11, vP = new Float32Array(VN * 6), vCo = new Float32Array(VN * 6), vS = new Float32Array(VN * VK), vGeo = new THREE.BufferGeometry(); let vi = 0;
   vGeo.setAttribute('position', new THREE.BufferAttribute(vP, 3)); vGeo.setAttribute('color', new THREE.BufferAttribute(vCo, 3));
   const vites = new THREE.LineSegments(vGeo, new THREE.LineBasicMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false })); vites.frustumCulled = false; scene.add(vites);
-  function trait(x, y, z, vx, vz) { const i = vi++ % VN; vP.set([x, y, z], i * 6); vS.set([vx, vz, 0.6, 0.6], i * 4); } // vitesse au sol, vie restante, vie de départ
+  function trait(x, y, z, vx, vy, vz, vie, grav, k, rgb, sol = -1e9) { const i = vi++ % VN; vP.set([x, y, z], i * 6); vS.set([vx, vy, vz, vie, vie, grav, k, sol, ...rgb], i * VK); } // k : longueur du trait en secondes de vitesse ; sol : hauteur où il rebondit
   function emit(x, y, z, vx, vy, vz, life, r, gg, b, grav) { const i = pi++ % PN; pP.set([x, y, z], i * 3); pV.set([vx, vy, vz], i * 3); pB.set([r, gg, b], i * 3); pL[i] = pM[i] = life; pGv[i] = grav; }
 
   let flashT = 0, nextFlash = 6;
@@ -525,7 +525,7 @@
     else if (car.rub && sp > 8) { const s = S[car.idx], sg = Math.sign(car.d); for (let i = 0; i < 3; i++) emit(car.x - s.tz * sg, carY + 0.4, car.z + s.tx * sg, car.vx * 0.6 + jit(5), 1 + Math.random() * 4, car.vz * 0.6 + jit(5), 0.35, 1, 0.75, 0.25, 22); } // frottement continu : gerbe plus fine que le choc
     for (const fl of hu.fl) { fl.visible = car.boost > 0; fl.scale.y = (0.5 + Math.random() * 0.7) * Math.min(1, car.boost * 2); } // nitro : deux flammes d'échappement qui vacillent, les traînées virent au bleu
     const gl = car.dd && sp > 10 && !car.air;
-    if (gl && car.driftT > 0.6 && Math.random() < 0.12) for (const sd of [-0.9, 0.9]) emit(car.x - fx * 1.4 + rx * sd, carY + 0.15, car.z - fz * 1.4 + rz * sd, car.vx * 0.5 + rx * sd * 3 + jit(3), 1 + Math.random() * 3, car.vz * 0.5 + rz * sd * 3 + jit(3), 0.3, 1, 0.55, 0.1, 14); // palier de glisse (la jauge se remplit à plein débit) : des étincelles orange dans la fumée
+    if (gl && car.driftT > 0.6) for (const sd of [-0.9, 0.9]) for (let k = 1 + (Math.random() < 0.5); k--;) trait(car.x + fx * xr + rx * sd, carY + 0.08, car.z + fz * xr + rz * sd, car.vx * 0.7 + rx * sd * 4 + jit(4), 2 + Math.random() * 4, car.vz * 0.7 + rz * sd * 4 + jit(4), 0.4, 18, 0.06, [1, 0.55, 0.1], carY + 0.03); // palier de glisse (la jauge se remplit à plein débit) : des étincelles orange, en traits fins, dans la fumée
     // traces de gomme : chaque roue arrière tire son ruban tant qu'elle glisse ; un point d'alpha nul ouvre et ferme chaque trace, pour ne pas la relier à la suivante
     // shortcut: posées à la hauteur de la voiture, sans le tangage ; sur une pente raide le bout peut s'enfoncer ou flotter de quelques centimètres
     for (let l = 0; l < 2; l++) { const R = hu.gR[l], sd = l ? zr : -zr, p = { x: car.x + fx * xr + rx * sd, y: carY + 0.04, z: car.z + fz * xr + rz * sd, rx, rz, t: 0, a: 0.7 };
@@ -537,7 +537,7 @@
     hu.gGeo.attributes.position.needsUpdate = hu.gGeo.attributes.color.needsUpdate = true;
     // nitro : tant qu'elle pousse, des lignes de vitesse filent autour de la voiture
     if (car.boost > 0) for (hu.vAcc += 90 * dt; hu.vAcc >= 1; hu.vAcc--) { const an = Math.random() * Math.PI, r = 2.5 + Math.random() * 5, av = 15 + Math.random() * 30;
-      trait(car.x + fx * av + rx * Math.cos(an) * r, carY + 0.4 + Math.sin(an) * r, car.z + fz * av + rz * Math.cos(an) * r, -fx * 45, -fz * 45); }
+      trait(car.x + fx * av + rx * Math.cos(an) * r, carY + 0.4 + Math.sin(an) * r, car.z + fz * av + rz * Math.cos(an) * r, -fx * 45, 0, -fz * 45, 0.6, 0, 0.12, [0.7, 0.9, 1]); }
   }
   // effets de la scène entière, une fois par image : poussière, particules, éclairs, vie du décor
   function fxFrame(dt, now) {
@@ -548,9 +548,10 @@
         else if (q.roul > 0.25) for (let k = 0; k < 2; k++) poussiere(x + jit(0.6), c.y + 0.15, z + jit(0.6), c.vx * 0.7 + jit(2), 0.3 + Math.random() * 1.2, c.vz * 0.7 + jit(2)); }
       POUS.step(dt); }
     FUM.step(dt); dEch.value = RH / 2;
-    for (let i = 0; i < VN; i++) { const j = i * 6, s = i * 4; if (vS[s + 2] <= 0) { vCo.fill(0, j, j + 6); continue; }
-      vS[s + 2] -= dt; const a = Math.max(0, vS[s + 2] / vS[s + 3]); vP[j] += vS[s] * dt; vP[j + 2] += vS[s + 1] * dt; vP[j + 4] = vP[j + 1];
-      vP[j + 3] = vP[j] - vS[s] * 0.12; vP[j + 5] = vP[j + 2] - vS[s + 1] * 0.12; vCo.set([0.7 * a, 0.9 * a, a, 0, 0, 0], j); }
+    for (let i = 0; i < VN; i++) { const j = i * 6, s = i * VK; if (vS[s + 3] <= 0) { vCo.fill(0, j, j + 6); continue; }
+      vS[s + 3] -= dt; vS[s + 1] -= vS[s + 5] * dt; const a = Math.max(0, vS[s + 3] / vS[s + 4]), k = vS[s + 6];
+      for (let c = 0; c < 3; c++) vP[j + c] += vS[s + c] * dt; if (vP[j + 1] < vS[s + 7]) { vP[j + 1] = vS[s + 7]; vS[s + 1] *= -0.35; }
+      for (let c = 0; c < 3; c++) { vP[j + 3 + c] = vP[j + c] - vS[s + c] * k; vCo[j + c] = vS[s + 8 + c] * a; vCo[j + 3 + c] = 0; } }
     vGeo.attributes.position.needsUpdate = vGeo.attributes.color.needsUpdate = true;
     for (let i = 0; i < PN; i++) {
       if (pL[i] <= 0) continue;
