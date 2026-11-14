@@ -612,22 +612,25 @@
   const parts = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 1.1, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false })); parts.frustumCulled = false; scene.add(parts);
   // nuages flous : des disques opaques qui grossissent en s'effaçant (en additif ils se lisaient en carrés clairs) ; la poussière des cartes en terre (th.poussiere = sa teinte) et la fumée des pneus
   const dEch = { value: 135 };
-  const flou = (N, col, op, vie = 1.4) => { const P = new Float32Array(N * 3), V = new Float32Array(N * 3), A = new Float32Array(N).fill(1), g = new THREE.BufferGeometry(); let i = 0;
+  // frein : freinage horizontal (1/s) ; 0 : le nuage garde la vitesse de son émetteur
+  const flou = (N, col, op, vie = 1.4, frein = 3) => { const P = new Float32Array(N * 3), V = new Float32Array(N * 3), A = new Float32Array(N).fill(1), g = new THREE.BufferGeometry(); let i = 0;
     g.setAttribute('position', new THREE.BufferAttribute(P, 3)); g.setAttribute('age', new THREE.BufferAttribute(A, 1));
     const d = new THREE.Points(g, new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { col: { value: new THREE.Color(...col) }, ech: dEch, op: { value: op } },
       vertexShader: 'attribute float age; varying float a; uniform float ech; void main() { a = age; vec4 p = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * p; gl_PointSize = age < 1.0 ? ech * projectionMatrix[1][1] * (1.1 + 6.0 * age) / -p.z : 0.0; }',
       fragmentShader: 'varying float a; uniform vec3 col; uniform float op; void main() { float r = length(gl_PointCoord - 0.5) * 2.0; if (r > 1.0 || a >= 1.0) discard; gl_FragColor = vec4(col, (1.0 - r * r) * (1.0 - a) * min(1.0, 0.15 + a * 4.0) * op); }' })); d.frustumCulled = false; scene.add(d);
     return { emit(x, y, z, vx, vy, vz) { const k = i++ % N; P.set([x, y, z], k * 3); V.set([vx, vy, vz], k * 3); A[k] = 0; },
-      step(dt) { const fr = Math.exp(-3 * dt); for (let k = 0; k < N; k++) if (A[k] < 1) { const j = k * 3; A[k] += dt / vie; V[j] *= fr; V[j + 2] *= fr; P[j] += V[j] * dt; P[j + 1] += V[j + 1] * dt; P[j + 2] += V[j + 2] * dt; }
+      step(dt) { const fr = Math.exp(-frein * dt); for (let k = 0; k < N; k++) if (A[k] < 1) { const j = k * 3; A[k] += dt / vie; V[j] *= fr; V[j + 2] *= fr; P[j] += V[j] * dt; P[j + 1] += V[j + 1] * dt; P[j + 2] += V[j + 2] * dt; }
         g.attributes.position.needsUpdate = g.attributes.age.needsUpdate = true; } };
   };
-  const POUS = TH.poussiere && flou(480, TH.poussiere, 0.5), GERBE = TH.poussiere && T.surf.some(q => q.aq) && flou(500, [0.92, 0.93, 0.9], 0.4, 0.35), FUM = flou(600, [0.68, 0.68, 0.72], 0.55), poussiere = (...a) => POUS.emit(...a);
+  const POUS = TH.poussiere && flou(480, TH.poussiere, 0.5), GERBE = TH.poussiere && T.surf.some(q => q.aq) && flou(500, [0.92, 0.93, 0.9], 0.4, 0.35), GERBE1 = GERBE && flou(700, [0.9, 0.92, 0.88], 0.6, 0.5, 0), FUM = flou(600, [0.68, 0.68, 0.72], 0.55), poussiere = (...a) => POUS.emit(...a);
   // gerbe d'eau du gué (Spéciale des Ocres : seule carte en terre avec une zone mouillée) : derrière chaque roue avant, des gouttes en traits blancs projetées en éventail sur le côté, qui retombent, et un peu d'écume au ras de l'eau (disques à vie courte : plus longue, ils grossissent en brume) ; plus haute et plus large avec la vitesse
-  //   Vue de sa propre caméra (moi : une vue la suit), la même gerbe bouchait l'écran : les disques et les traits, freinés derrière la voiture, s'arrêtaient devant l'objectif, et l'additif plein blanc partait dans le bloom.
-  //   Pour elle : aucun disque, trois fois moins de gouttes, plus sombres (l'additif reste sous le seuil du bloom), lancées plus fort sur le côté et à la vitesse de la voiture, pour qu'elles s'écartent du champ au lieu de revenir vers la caméra
+  //   Vue de sa propre caméra (moi : une vue la suit), la même gerbe bouchait l'écran : ses disques et ses gouttes, freinés, restaient derrière la voiture, devant l'objectif. Pour elle, tout part à la vitesse de la voiture :
+  //   un nuage sans frein (GERBE1), bref et léger, qui l'accompagne de chaque côté, et des gouttes lancées en éventail vers l'extérieur ; elles retombent à côté de la voiture, jamais devant la caméra, et restent sous le seuil du bloom
   const gerbe = (c, v, moi) => { const fx = Math.cos(c.th), fz = Math.sin(c.th), k = Math.min(1, v / 40), n = 2 + 4 * k | 0;
     for (const sd of [-1, 1]) for (let j = 0; j < n; j++) { const ox = c.x + fx * 1.1 - fz * sd * 0.9, oz = c.z + fz * 1.1 + fx * sd * 0.9, l = sd * (4 + Math.random() * 7) * k;
-      if (moi) { if (j & 1) for (let d = 0; d < 3; d++) { const lm = l * 1.6; trait(ox, c.y + 0.2, oz, c.vx * 0.9 - fz * lm + jit(2), (2.5 + Math.random() * 4) * k, c.vz * 0.9 + fx * lm + jit(2), 0.6, 14, 0.06, [0.42, 0.43, 0.4], c.y + 0.05); } continue; }
+      if (moi) { const lm = l * 1.2, px = ox - fz * sd * 0.5, pz = oz + fx * sd * 0.5;
+        for (let d = 0; d < 2; d++) GERBE1.emit(px + jit(0.4), c.y + 0.3, pz + jit(0.4), c.vx - fz * lm * 0.6, (1.5 + Math.random() * 3) * k, c.vz + fx * lm * 0.6);
+        for (let d = 0; d < 5; d++) trait(px, c.y + 0.25, pz, c.vx * 0.97 - fz * lm + jit(1.5), (2.5 + Math.random() * 4.5) * k, c.vz * 0.97 + fx * lm + jit(1.5), 0.6, 14, 0.08, [0.85, 0.87, 0.82], c.y + 0.05); continue; }
       GERBE.emit(ox + jit(0.6), c.y + 0.25, oz + jit(0.6), c.vx * 0.45 - fz * l, (2 + Math.random() * 4.5) * k, c.vz * 0.45 + fx * l);
       for (let d = 0; d < 5; d++) trait(ox, c.y + 0.2, oz, c.vx * 0.5 - fz * l * 1.4 + jit(3), (3 + Math.random() * 6) * k, c.vz * 0.5 + fx * l * 1.4 + jit(3), 0.9, 12, 0.09, [1, 1, 0.95], c.y + 0.05); } };
   // vapeur des bouches d'égout : un panache lent par bouche (4 s pour monter de 5 m), teinté par le luminaire le plus proche à moins de 30 m (les néons)
@@ -685,9 +688,9 @@
     const { lm, moi: car } = VUES[0]; // le tonnerre est celui du joueur 1 (un seul son, comme SON.frame)
     if (TH.poussiere) { for (const c of race ? race.cars : [car]) { const q = T.surf[c.idx], v = Math.hypot(c.vx, c.vz), sd = Math.random() < 0.5 ? -0.8 : 0.8, x = c.x - Math.cos(c.th) * 1.6 - Math.sin(c.th) * sd, z = c.z - Math.sin(c.th) * 1.6 + Math.cos(c.th) * sd; // chaque voiture lève un panache derrière elle ; dans le gué, une gerbe d'eau. La poussière part à la vitesse de la voiture puis freine : le panache reste dans le champ de la caméra de poursuite
         if (v < 8 || c.air || c.out || !(VUES.some(v => v.car === c) || c.drift || Math.random() < 0.5)) continue;
-        if (q.aq) gerbe(c, v, VUES.some(u => u.car === c)); // le gué : une gerbe d'eau de chaque côté (GERBE), allégée pour une voiture qu'une caméra suit
+        if (q.aq > 0.099) gerbe(c, v, VUES.some(u => u.car === c)); // le gué : une gerbe d'eau de chaque côté, là seulement où la zone mouillée est pleine (decors.js y pose la nappe), et rien dans la boue de ses bords
         else if (q.roul > 0.25) for (let k = 0; k < 2; k++) poussiere(x + jit(0.6), c.y + 0.15, z + jit(0.6), c.vx * 0.7 + jit(2), 0.3 + Math.random() * 1.2, c.vz * 0.7 + jit(2)); }
-      POUS.step(dt); if (GERBE) GERBE.step(dt); }
+      POUS.step(dt); if (GERBE) { GERBE.step(dt); GERBE1.step(dt); } }
     dgFrame(dt); FUM.step(dt); dEch.value = RH / 2;
     for (const p of VAPS) { for (p.t += dt; p.t > 0.12; p.t -= 0.12) p.f.emit(p.x + jit(0.6), p.y, p.z + jit(0.6), 0.3 + jit(0.4), 1 + Math.random() * 0.6, jit(0.4)); p.f.step(dt); } // vapeur : toujours, même loin (40 points par bouche)
     for (let i = 0; i < VN; i++) { const j = i * 6, s = i * VK; if (vS[s + 3] <= 0) { vCo.fill(0, j, j + 6); continue; }
