@@ -13,7 +13,7 @@
   // prises de l'éditeur de musique (editeur.html) : muet / solo par partie, section jouée en boucle, témoins (jusqu'à quand chaque partie sonne), section en cours
   const EC = { mute: {}, solo: null, boucle: null, joue: {}, sec: '' }, jo = (p, t, d = 0.12) => { EC.joue[p] = t + d; };
   const pv = (st, p) => (EC.solo ? EC.solo === p : !EC.mute[p]) ? (st.mx && st.mx[p] != null ? st.mx[p] : 1) : 0; // niveau d'une partie : st.mx, réglé dans l'éditeur
-  let AC, live = true, timer, pret = Promise.resolve(), ana, master, musicG, tuneG, drumG, musF, duckG, swF, busDry, busDrv, acid, fuzz, kdrv, bsat, dly, dlyFb, eqL, eqM, eqH, mrevG, drumRv, revIn, echoIn, choIn, mbuf, secG, drumF, gritDry, gritWet, hpF, rev, musSend, motSend, nbuf, outG, vu, recG, crkG, recT = 0;
+  let AC, live = true, timer, pret = Promise.resolve(), ana, master, musicG, tuneG, drumG, musF, duckG, swF, busDry, busDrv, acid, fuzz, kdrv, bsat, dly, dlyFb, eqL, eqM, eqH, mrevG, drumRv, revIn, echoIn, choIn, mbuf, secG, drumF, gritDry, gritWet, hpF, rev, musSend, motSend, nbuf, outG, vu;
   let t0 = 0, nextT = 0, stp = 0, musicOn = true, lastHit = 0, lastMus = -9, lastN = 0, lastB = 0, menu = true;
   const vol = { mus: 1, mot: 1, pneu: 1, vent: 1, amb: 1, choc: 1, ui: 1, pluie: 1 }, V = {}; // volume par famille (banc d'écoute) et leurs nœuds
   // état musical piloté par la course : mix = secteur chaud, inten = vitesse, driftL = glisse, drums = batterie, fin = dernier secteur
@@ -659,8 +659,7 @@ registerProcessor('moteur', Moteur);`;
       const cote = p => { const g = gain(0, eIn), d = AC.createDelay(0.5), lp = filt('lowpass', 3500, 0.7, gain(0.25, d)), pn = AC.createStereoPanner(); pn.pan.value = p; g.connect(d); d.connect(pn); pn.connect(master); d.connect(lp); return { g, d }; };
       const L = cote(-0.85), R = cote(0.85), conv = AC.createConvolver(), lp = filt('lowpass', 3000, 0.7, master), rvG = gain(0, conv); eIn.connect(rvG); conv.connect(lp);
       esp = { L, R, conv, lp, rvG }; }
-    recG = gain(1, V.mus); crkG = gain(0, V.mus); { const rs = AC.createBufferSource(); rs.buffer = nbuf; rs.loop = true; rs.start(); rs.connect(filt('highpass', 2500, 0.7, crkG)); } // réception de la radio : décrochages (recG) et grésillement (crkG), dans les tunnels
-    musF = filt('lowpass', 18000, 0.7, recG); musicG = gain(musicOn ? 1 : 0, musF);
+    musF = filt('lowpass', 18000, 0.7, V.mus); musicG = gain(musicOn ? 1 : 0, musF);
     // bus de mixage : les platines y entrent ; pendant un passage DJ, il passe par une compression qui colle les deux morceaux (sans elle, ils s'additionnent)
     musIn = AC.createGain(); mixDry = gain(1, musicG); musIn.connect(mixDry); const mc = AC.createDynamicsCompressor(); musIn.connect(mc);
     mc.threshold.value = -28; mc.ratio.value = 4; mc.knee.value = 12; mc.attack.value = 0.012; mc.release.value = 0.25; mixW = gain(0, musicG); mc.connect(mixW);
@@ -756,7 +755,7 @@ registerProcessor('moteur', Moteur);`;
   function audioFrame(dt, e) {
     if (!AC) return;
     const { state, car, T, r, sp } = e, N = T.n, tun = e.tun || 0, CARD = M.car, t = AC.currentTime, racing = state === 'race', k = (p, v, tc = 0.04) => regle(p, v, t, tc);
-    if (state === 'pause') { for (const v of VX) tait(v, t); for (const v of AU) { k(v.g.gain, 0, 0.05); k(v.wh.gain, 0, 0.05); } k(scrapeG.gain, 0, 0.05); k(windG.gain, 0, 0.05); k(windL.gain, 0, 0.05); k(nitroG.gain, 0, 0.05); k(pluie.rid.gain, 0, 0.05); k(pluie.aq.gain, 0, 0.05); k(recG.gain, 1, 0.3); k(crkG.gain, 0, 0.05); return; } // en pause : la radio continue, les voitures se taisent
+    if (state === 'pause') { for (const v of VX) tait(v, t); for (const v of AU) { k(v.g.gain, 0, 0.05); k(v.wh.gain, 0, 0.05); } k(scrapeG.gain, 0, 0.05); k(windG.gain, 0, 0.05); k(windL.gain, 0, 0.05); k(nitroG.gain, 0, 0.05); k(pluie.rid.gain, 0, 0.05); k(pluie.aq.gain, 0, 0.05); return; } // en pause : la radio continue, les voitures se taisent
     if ((state === 'title') !== menu) { if (dk) finMix(); menu = !menu; retune(t + 0.05); tuneG.gain.cancelScheduledValues(t); tuneG.gain.setValueAtTime(0, t); tuneG.gain.linearRampToValueAtTime(lvl(), t + 0.3); } // menu ↔ course : la boucle de menu laisse la place à la station
     // une voix par joueur : seul, celle du centre, inchangée ; à deux, une de chaque côté, créées à l'arrivée du deuxième joueur et retirées à son départ (fondu, puis arrêt des sources)
     const L = e.cars || (UN[0] = e, UN), duo = L.length > 1; let hit = 0, bump = 0, rub = false; // chocs et frottement : ceux de n'importe quel joueur s'entendent (la musique, elle, n'encaisse que ceux du mieux placé)
@@ -826,9 +825,6 @@ registerProcessor('moteur', Moteur);`;
     // la musique s'ouvre avec la vitesse ; un gros choc l'étouffe ; dans un tunnel elle est étouffée et réverbérée, et le moteur résonne
     // (la musique n'est plus étouffée par un choc, et à peine quand on ralentit : passe-bas de 5 à 18 kHz selon la vitesse ; elle s'efface derrière le tableau d'arrivée)
     k(musF.frequency, e.fini ? 900 : Math.min(state === 'title' ? 7000 : 5000 * 3.6 ** Math.min(1, inten * 1.4 + mix), lerp(18000, 2500, tun)), 0.08);
-    // la radio dans le tunnel : la réception grésille et décroche par moments (0,1 à 0,5 s), les aigus s'en vont (musF) ; à la sortie elle revient en fondu
-    { const rc = musicOn && state !== 'title' ? tun : 0; if (rc > 0.5 && t > recT + 0.3 && Math.random() < dt * 0.8) recT = t + 0.1 + 0.4 * Math.random();
-      const dec = t < recT; k(recG.gain, dec ? 0.06 : 1 - 0.3 * rc, dec ? 0.012 : 0.4); k(crkG.gain, rc * (dec ? 0.03 : 0.002 + 0.025 * Math.random() ** 4), 0.008); }
     k(musSend.gain, 0.7 * tun, 0.2); k(motSend.gain, 2.5 * tun, 0.2);
     // espace : les deux échos (le côté du mur qu'on serre répond plus fort et plus tôt), la salle du lieu ; en tunnel, écho court et fort des deux côtés
     { const P = ESP[M.id] || ESP.essai, mu = state === 'title' ? 0 : e.mur || 0, on = state === 'title' ? 0.3 : 1;

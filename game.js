@@ -24,7 +24,7 @@
 
   // ---------- réglages de la lumière et du rendu rétro (tout se règle ici) ----------
   const NL = 20;        // luminaires calculés en même temps autour de la voiture (coût par pixel)
-  const LUM_GAIN = 1;   // force de tous les luminaires, phares compris
+  const LUM_GAIN = 0.75;   // force de tous les luminaires, phares compris
   const LUM_PAS = 5;    // tunnels : un luminaire tous les LUM_PAS échantillons (2 m), en quinconce gauche / droite
   const QUANT = 32;     // passe finale : niveaux par canal (une console 15 bits en a 32) ; 0 = pas de quantification
   const TRAME = 0.8;     // force du tramage ordonné de Bayer, 0 à 1
@@ -137,7 +137,7 @@
       float b2(vec2 a){ a = floor(a); return fract(a.x / 2. + a.y * a.y * .75); } // matrice de Bayer 4×4, par récurrence
       void main(){
         vec2 o = texture2D(oe, vec2(.5)).rg; // log de la luminosité à laquelle l'œil est fait (r) et de celle du dehors (g)
-        float e = clamp(exp(o.g - o.r), 1., 3.) * dn; // exposition : l'œil fait au noir ouvre l'image (jusqu'à ×3), puis se referme ; dn : la lumière vraie du tunnel (voir OEIL) ; fait au dehors, ×1 : l'image d'avant
+        float e = clamp(exp(o.g - o.r), 1., 1.6) * dn; // exposition : l'œil fait au noir ouvre l'image (jusqu'à ×1,6), puis se referme ; dn : la lumière vraie du tunnel (voir OEIL) ; fait au dehors, ×1 : l'image d'avant
         vec3 ai = air(v, px); vec2 w = v + ai.xy, c0 = vec2(.5, .42), d = w - c0; float l = length(d); vec3 c = vec3(0.);
         for (int i = 0; i < 8; i++) { // flou radial : nul au centre, fort sur les bords, proportionnel à la vitesse
           vec2 u = c0 + d * (1. - amt * l * float(i) * .026);
@@ -190,7 +190,7 @@
             vec3 f = vec3(0.); for (int k = -2; k < 2; k++) f += texture2D(t, h + vec2(0., (float(k) + .5) * 2. * px.y)).rgb; // étiré à la verticale, comme un reflet sur l'eau
             vec2 bd = min(h, 1. - h); trouve = smoothstep(0., .08, min(bd.x, bd.y)) * (1. - smoothstep(60., 320., a)); // s'éteint au bord de l'image et au loin
             float fr = .25 + .75 * pow(1. - max(dot(-e, up), 0.), 3.); // Fresnel : vu en rasant, la route est un miroir
-            c.rgb += f * .21 * w * fr * trouve;
+            c.rgb += f * .12 * w * fr * trouve;
           }
         }
         gl_FragColor = vec4(c.rgb, 1. - trouve); // alpha : 0 là où le reflet est trouvé, les rubans de repli n'y ajoutent rien (voir repli)
@@ -322,7 +322,7 @@
   const NUIT = TH.phares / 2.6; // force des feux de voiture : pleine de nuit, faible à l'aube et au couchant
   const SUNC = new THREE.Color(TH.sun[0]).multiplyScalar(TH.sun[1]);
   const LUX = { uLP: { value: Array.from({ length: NL }, () => new THREE.Vector4(0, 0, 0, 1)) }, uLC: { value: Array.from({ length: NL }, () => new THREE.Color(0)) },
-    uHP: { value: new V3() }, uHD: { value: new V3(1, 0, 0) }, uHC: { value: new THREE.Color(0xfff2d0).multiplyScalar(TH.phares * 1.25 * LUM_GAIN) }, uBox: { value: new THREE.Matrix4() },
+    uHP: { value: new V3() }, uHD: { value: new V3(1, 0, 0) }, uHC: { value: new THREE.Color(0xfff2d0).multiplyScalar(TH.phares * 1.1 * LUM_GAIN) }, uBox: { value: new THREE.Matrix4() },
     uSunD: { value: SD }, uCam: { value: new V3() }, uSunC: { value: new THREE.Color() }, uSky: { value: new THREE.Color() }, uN: { value: 0 }, uRes: { value: new THREE.Vector2() } };
   const LU_V = `{ vec4 lw = vec4(transformed, 1.);
     #ifdef USE_INSTANCING
@@ -367,7 +367,7 @@
       vec3 hv = vLw - uHP; float f = dot(hv, uHD);
       if (f > .5) { // phares : faisceau large, coupure horizontale nette (feu de croisement)
         vec3 hr = normalize(vec3(-uHD.z, 0., uHD.x));
-        float m = smoothstep(1.3, .6, abs(dot(hv, hr)) / f) / (1. + f * f * .0006), lo = m * step(dot(hv, cross(hr, uHD)) / f, .075);
+        float m = smoothstep(1.3, .6, abs(dot(hv, hr)) / f) / (1. + f * f * .0006), lo = m * smoothstep(.3, .02, dot(hv, cross(hr, uHD)) / f) * smoothstep(75., 25., f); // coupure adoucie : une route qui monte ne fait plus de ligne nette
         dif += uHC * (lo * (.45 + .55 * max(dot(n, -normalize(hv)), 0.)));
         if (uRetro > 0.) dif += uHC * (m * uRetro); // catadioptres et panneaux : renvoient le faisceau, même au-dessus de la coupure
       }
@@ -488,7 +488,7 @@
       beton: mat('beton'), acier: mat('acier', { c: TH.depart[1] }), treillis: mat('treillisPortique', { alphaTest: 0.5, side: THREE.DoubleSide }, ossature),
       nom: mat('bandeauNom', { lum: 1, net: 1 }, acc, M.nom, TH.depart[2]), boitier: mat('matGris'), feu0: FEUX[0] = mat('peinture', { lum: 1 }), feu1: FEUX[1] = mat('peinture', { lum: 1 }), feu2: FEUX[2] = mat('peinture', { lum: 1 }), lampe: mat('lampe', { lum: 1 }),
     }, g, [0, 0, 0], W);
-    lum(0, s.x, s.y + 8, s.z, 0xfff2d0, 24, 1.3);
+    lum(0, s.x, s.y + 8, s.z, 0xfff2d0, 18, 0.5); // éclairage du portique : discret, sinon le départ éblouit
   }
   { // chevrons à l'extérieur des virages, piles du viaduc, tubes néon en bord de route (repères de vitesse)
     const dummy = new THREE.Object3D();
@@ -684,9 +684,6 @@
       for (let k = 0; k < GN; k++) { const e = R[k], a = (l * GN + k) * 6, c = (l * GN + k) * 8, w = tw / 2; if (!e) { hu.gC.fill(0, c, c + 8); continue; }
         hu.gP.set([e.x - e.rx * w, e.y, e.z - e.rz * w, e.x + e.rx * w, e.y, e.z + e.rz * w], a); const al = e.a * (1 - e.t / GV); hu.gC.set([1, 1, 1, al, 1, 1, 1, al], c); } }
     hu.gGeo.attributes.position.needsUpdate = hu.gGeo.attributes.color.needsUpdate = true;
-    // nitro : tant qu'elle pousse, des lignes de vitesse filent autour de la voiture
-    if (car.boost > 0) for (hu.vAcc += 90 * dt; hu.vAcc >= 1; hu.vAcc--) { const an = Math.random() * Math.PI, r = 2.5 + Math.random() * 5, av = 15 + Math.random() * 30;
-      trait(car.x + fx * av + rx * Math.cos(an) * r, carY + 0.4 + Math.sin(an) * r, car.z + fz * av + rz * Math.cos(an) * r, -fx * 45, 0, -fz * 45, 0.6, 0, 0.12, [0.7, 0.9, 1]); }
   }
   // effets de la scène entière, une fois par image : poussière, particules, éclairs, vie du décor
   function fxFrame(dt, now) {
@@ -826,8 +823,8 @@
     for (let i = DEB.length - 1; i >= 0; i--) { const d = DEB[i], p = d.m.position; if ((d.t -= dt) < 0) { scene.remove(d.m); d.m.geometry.dispose(); DEB.splice(i, 1); continue; }
       d.v.y -= 15 * dt; p.addScaledVector(d.v, dt); d.m.rotation.x += d.w.x * dt; d.m.rotation.y += d.w.y * dt; d.m.rotation.z += d.w.z * dt;
       if (p.y < d.y0 + 0.06) { p.y = d.y0 + 0.06; d.v.y *= -0.3; d.v.x *= 0.5; d.v.z *= 0.5; d.w.multiplyScalar(0.5); } }
-    for (const c of race ? race.cars : [VUES[0].moi]) { const g = modele(c), z = g.userData.dg.z[0]; if (!g.visible || z < 0.6 || Math.random() > dt * 30 * (z - 0.5)) continue;
-      const fx = Math.cos(c.th), fz = Math.sin(c.th), a = ENC.max.x - 0.9; FUM.emit(c.x + fx * a + jit(0.4), g.position.y + 1, c.z + fz * a + jit(0.4), c.vx * 0.85 + jit(1), 1 + Math.random(), c.vz * 0.85 + jit(1)); }
+    for (const vu of VUES) { const c = vu.moi, g = modele(c), z = g.userData.dg.z[0]; if (!g.visible || z < 0.85 || Math.random() > dt * 8 * (z - 0.8)) continue; // seulement les voitures des joueurs, un filet : au plus 1,6 bouffée par seconde
+      const fx = Math.cos(c.th), fz = Math.sin(c.th), a = ENC.max.x - 0.9; FUM.emit(c.x + fx * a + jit(0.4), g.position.y + 1, c.z + fz * a + jit(0.4), c.vx * 0.3 + jit(1), 1.5 + Math.random(), c.vz * 0.3 + jit(1)); } // lâchée presque sur place : elle tombe derrière au lieu de suivre la voiture devant la caméra
   }
   // feux arrière des adversaires et des camions : deux points rouges hors brouillard (au-delà de 60 m la caisse ne fait plus que quelques pixels et rien ne l'éclaire) ;
   // leur taille suit la distance (un feu d'environ 0,5 m) : de loin, jamais plus gros que le véhicule, et jamais sous 1 pixel (le minimum de WebGL), donc toujours visibles ;
@@ -1535,7 +1532,7 @@
   }
   // Une vue : la caméra derrière sa voiture (plus basse, plus proche et plus grand-angle avec la vitesse), puis tout ce qui dans la scène dépend de qui regarde
   // (ciel, lune et son ombre, brouillard, lumière dynamique, feux lointains, pluie), son HUD, la scène dans sa cible et la passe finale.
-  const ASTRE = new THREE.Color(TH.astre.col), RAYS = 0.6; // RAYS : force des rayons de lumière (passe finale)
+  const ASTRE = new THREE.Color(TH.astre.col), RAYS = 0.25; // RAYS : force des rayons de lumière (passe finale)
   const [V0, V1] = (M.vit || [130, 200]).map(v => v / 3.6 / (M.kmh || 1)); // plage des effets de vitesse de la carte, en m/s vrais
   function vueFrame(vu, dt, now) {
     const { cam, car, carY, pitch, roll, lm, cth, stun, lookA, lookP, rainP, splP, splA, splD, inp } = vu, pulse = SON.pulse, G = modele(car);
@@ -1603,7 +1600,7 @@
     const NG = TH.neige || 0, pl = (NG || pluieAt(car.idx)) * (1 - lm), gl = NG ? 0.2 : 1.9 * Math.max(1, 0.4 + 0.6 * pl), nr = Math.min(RN, Math.round(400 * pl ** 1.5)); rain.visible = pl > 0.02; splash.visible = !NG && rain.visible; // th.neige = force des flocons : les mêmes particules, qui tombent à 4 m/s, sans impact ni bruit de pluie
     rainGeo.setDrawRange(0, 2 * nr); rain.position.set(car.x, carY, car.z); rain.material.opacity = Math.min(1, 0.6 + 0.15 * pl);
     // pluie éclairée : de nuit, un trait ne se voit vraiment que près d'un luminaire (les 8 plus proches le long de la piste) ou dans le faisceau des phares ; ailleurs il reste sombre
-    const amb = NG ? 1 : 1 - 0.75 * Math.min(1, NUIT), hph = 1.4 * Math.min(1, NUIT); let nlr = 0;
+    const amb = NG ? 1 : 1 - 0.75 * Math.min(1, NUIT), hph = 0.35 * Math.min(1, NUIT); let nlr = 0;
     if (rain.visible) for (let k = 0; k < 8 && k < vu.lums.length; k++) { const l = vu.lums[k].l, x = l.x - car.x, z = l.z - car.z, R = l.r * 0.6; if (x * x + z * z > 2500) continue;
       RL.set([x, l.y - carY, z, 1 / (R * R), l.c.r, l.c.g, l.c.b], nlr++ * 7); }
     for (let i = 0; i < nr; i++) {
@@ -1613,7 +1610,7 @@
       const o = i * 6; rainV[o] = x; rainV[o + 1] = y; rainV[o + 2] = z; rainV[o + 3] = x + car.vx * 0.035 + gl * 0.12; rainV[o + 4] = y + gl; rainV[o + 5] = z + car.vz * 0.035 + gl * 0.05; // vent constant : la traînée penche un peu (écrit case par case : un tableau par goutte et par image faisait travailler le ramasse-miettes)
       let r = 0.62 * amb, v = 0.8 * amb, b = amb; const f = x * fx + z * fz;
       if (f > 1 && f < 40 && y < 3 && Math.abs(z * fx - x * fz) < 1.5 + f * 0.3) { const w = hph * (1 - f / 40); r += w; v += 0.95 * w; b += 0.82 * w; } // phares : cône devant la voiture, bas
-      for (let k = 0; k < nlr; k++) { const j = k * 7, dx = x - RL[j], dy = y - RL[j + 1], dz = z - RL[j + 2], w = 1 - (dx * dx + dy * dy + dz * dz) * RL[j + 3]; if (w > 0) { const w2 = 0.6 * w * w; r += RL[j + 4] * w2; v += RL[j + 5] * w2; b += RL[j + 6] * w2; } }
+      for (let k = 0; k < nlr; k++) { const j = k * 7, dx = x - RL[j], dy = y - RL[j + 1], dz = z - RL[j + 2], w = 1 - (dx * dx + dy * dy + dz * dz) * RL[j + 3]; if (w > 0) { const w2 = 0.3 * w * w; r += RL[j + 4] * w2; v += RL[j + 5] * w2; b += RL[j + 6] * w2; } }
       const q = rainB[i]; rainC[o] = r * q; rainC[o + 1] = v * q; rainC[o + 2] = b * q; rainC[o + 3] = 0.13 * r * q; rainC[o + 4] = 0.15 * v * q; rainC[o + 5] = 0.2 * b * q; // queue éteinte
     }
     rainGeo.attributes.position.needsUpdate = rainGeo.attributes.color.needsUpdate = true;
@@ -1628,15 +1625,14 @@
     // alerte de virage : seulement un virage serré pour la vitesse du moment (alerteVirage, sim.js)
     // et la glace vive (T.surf, vir > 0,4) qui arrive entre 1,2 et 3,6 s devant, quand on n'y est pas encore : sans elle, une plaque était une surprise
     const glace = j => !!T.surf && T.surf[(car.idx + j) % N].vir > 0.4, D = Math.round(sp * 0.6); let surGlace = false; if (state === 'race' && sp > 15 && !glace(0)) for (let j = D; j < 3 * D && !surGlace; j++) surGlace = glace(j);
-    if (!ST) { // rayons de lumière : l'astre, les deux luminaires proches les plus forts à l'écran, les phares du véhicule le plus proche s'ils nous font face ; plus forts sous la pluie, dans la brume et en tunnel
-      cam.updateMatrixWorld(); const RY = post.uniforms.ray.value, RC = post.uniforms.rayC.value, brume = RAYS * Math.max(Math.min(1, pl), 600 / TH.fogD[1], lm), th = Math.tan(cam.fov * Math.PI / 360); let n = 0;
+    if (!ST) { // rayons de lumière : l'astre, les phares du véhicule le plus proche s'ils nous font face ; plus forts sous la pluie, dans la brume et en tunnel
+      cam.updateMatrixWorld(); const RY = post.uniforms.ray.value, RC = post.uniforms.rayC.value, brume = RAYS * Math.min(1, Math.max(0.5 * Math.min(1, pl), 600 / TH.fogD[1], 0.3 * lm)), th = Math.tan(cam.fov * Math.PI / 360); let n = 0;
       const src = (x, y, z, col, k, rw) => { // rw : rayon du halo autour de la source, en m (0 : l'astre, à l'infini)
         const dc = cam.position.distanceTo(tmp.set(x, y, z)); if (n > 3 || k < 0.01 || (rw && dc > 90)) return false;
         tmp.lerp(cam.position, rw ? Math.min(0.5, 1.5 / dc) : 0).project(cam); // 1,5 m vers la caméra : la lanterne ne cache pas sa propre lumière
         if (tmp.z > 1 || Math.abs(tmp.x) > 1.4 || Math.abs(tmp.y) > 1.4) return false;
         const r = rw ? rw / (2 * dc * th) : 0.08; RY[n].set(tmp.x * 0.5 + 0.5, tmp.y * 0.5 + 0.5, tmp.z * 0.5 + 0.5, 1 / (r * r)); RC[n++].copy(col).multiplyScalar(k); return true; };
       if (TH.astre.taille > 1) { const p = cam.position; src(p.x + SD.x * 1800, p.y + SD.y * 1800, p.z + SD.z * 1800, ASTRE, 1.3 * RAYS * TH.sun[1] * (1 - lm), 0); } // tout ce qui est à moins de 1 800 m cache l'astre ; le ciel (2 500 m), non
-      for (let k = 0, m = 0; k < 8 && k < vu.lums.length && m < 2; k++) { const l = vu.lums[k].l; if (src(l.x, l.y, l.z, l.c, brume, 3)) m++; }
       const c = veh[0]; if (c && Math.cos(c.th) * (cam.position.x - c.x) + Math.sin(c.th) * (cam.position.z - c.z) > 0) { const av = c.lane === undefined ? 6.5 : 10; src(c.x + Math.cos(c.th) * av, c.y + 0.8, c.z + Math.sin(c.th) * av, PHARE, brume * NUIT, 2); }
       for (; n < 4; n++) RC[n].setScalar(0);
     }
@@ -1647,7 +1643,7 @@
     // gouttes sur l'objectif (voir AIR) : la pluie en dépose, pas la neige ; elles glissent, puis le vent de la course les remonte en les étirant, et au-delà de M.vit[0] il les chasse
     const gt = vu.gt || (vu.gt = Array.from({ length: 8 }, () => ({ x: 0, y: 0, r: 0, a: 0, vie: 0 }))), ve = Math.min(1, sp / V0), chasse = clamp((sp - V0) / (V1 - V0), 0, 1), pg = NG ? 0 : pl;
     for (let i = 0; i < 8; i++) { const g = gt[i], u = U.gt.value[i];
-      if (g.a >= g.vie) { u.z = 0; if (pg > 0.02 && i < 6 && Math.random() < dt * 0.9 * pg * (1 - 0.6 * chasse)) Object.assign(g, { x: Math.random(), y: 0.15 + 0.85 * Math.random(), r: 0.013 + 0.022 * Math.random(), a: 0, vie: 2 + 4 * Math.random() }); else continue; }
+      if (g.a >= g.vie) { u.z = 0; if (pg > 0.02 && i < 6 && Math.random() < dt * 0.9 * pg * (1 - 0.6 * chasse)) Object.assign(g, { x: Math.random(), y: 0.15 + 0.85 * Math.random(), r: 0.004 + 0.006 * Math.random(), a: 0, vie: 2 + 4 * Math.random() }); else continue; }
       g.a += dt; g.y += dt * (-0.015 + 0.12 * ve * ve + 1.6 * chasse); if (g.y > 1.15 || g.y < -0.1) g.a = g.vie;
       u.set(g.x, g.y, g.r * Math.min(1, (g.vie - g.a) * 2, g.a * 8), 1 + 1.5 * ve * ve + 1.5 * chasse); // apparaît vite, s'évapore en rapetissant
     }
