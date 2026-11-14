@@ -11,7 +11,7 @@
     if (!o.isMesh || !m || !m.isMeshBasicMaterial || m.transparent || m.depthWrite === false || m.side === THREE.BackSide) return; // ni ciel, ni fumée, ni traînées, ni fantôme
     if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
     if (m.map && !o.userData.petit && o.geometry.boundingSphere.radius * Math.max(o.scale.x, o.scale.y, o.scale.z) > 60) return; // ni l'eau, ni les grands plans d'horizon (texturés) ; les liserés néon des murs, unis, restent
-    mats.set(m, m.color.clone());
+    mats.set(m, m.userData.c0 || (m.userData.c0 = m.color.clone())); // la couleur d'origine, gardée sur la matière : une carte remise à l'écran a ses couleurs encore modulées
   });
   let k = 1;
   cancelAnimationFrame(window.__rythme); // changement de carte : lanceRythme est rejoué, l'ancienne boucle s'arrête

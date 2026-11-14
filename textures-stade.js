@@ -29,6 +29,20 @@
       for (const k of [0, 32]) { R(g, '#1c1c2a', 0, k, 64, 2); R(g, '#16161f', k, 0, 1, 64); }
       for (let x = 7; x < 64; x += 16) for (let y = 15; y < 64; y += 16) { R(g, '#fff4d8', x, y, 2, 2); R(g, '#6a6048', x - 1, y, 1, 2); R(g, '#6a6048', x + 2, y, 1, 2); }
     }, 16],
+    // banderole de supporters, peinte à la main, qui pend du toit : k = laquelle ; fond uni, liseré, mots empilés (lue en hauteur)
+    banderoleSupporter: k => [64, 160, (g, o) => {
+      const l = [[['ALLEZ', 'NOUR !'], '#e8362a', '#f4f0e0'], [['ENZO', 'PLEIN', 'GAZ'], '#16161c', '#ffc21a'], [['JADE', 'REINE', 'DU MUR'], '#1c3fa8', '#f4f0e0'],
+        [['KOP', '170'], '#ffc21a', '#16161c'], [['ON', 'VEUT', 'DU', 'BRUIT'], '#f4f0e0', '#e8362a'], [['MASTIFF', '4', 'EVER'], '#2ab84a', '#16161c']][k % 6], [mots, f, c] = l;
+      o.R(g, f, 0, 0, 64, 160); o.R(g, c, 3, 3, 58, 2); o.R(g, c, 3, 155, 58, 2);
+      mots.forEach((m, j) => texte(g, m, 32, 80 + (j - (mots.length - 1) / 2) * 30, m.length > 5 ? 12 : 20, c, 'center'));
+    }],
+    // boue du fond de la fosse : terre détrempée presque noire, flaques plus claires (le reflet vient de la matière), traces de pneus
+    boue: () => [64, 64, (g, o) => {
+      const { R, alea, voile } = o; R(g, '#2a1c14', 0, 0, 64, 64);
+      for (let i = 0; i < 300; i++) R(g, alea() < 0.5 ? '#22160f' : '#36261a', alea() * 64 | 0, alea() * 64 | 0, 1 + (alea() * 3 | 0), 1);
+      for (let i = 0; i < 6; i++) { const x = alea() * 52 | 0, y = alea() * 56 | 0; R(g, '#4a3a30', x, y, 6 + (alea() * 8 | 0), 3 + (alea() * 4 | 0)); }
+      voile(g, 0.35, () => { for (let i = 0; i < 4; i++) { const x = alea() * 58 | 0; R(g, '#000', x, 0, 2, 64); R(g, '#000', x + 4, 0, 2, 64); } });
+    }, 6],
     // écran du cube : le classement de la course
     tableauStade: () => [256, 160, (g, o) => {
       const { R } = o; R(g, '#08080c', 0, 0, 256, 160); R(g, '#e8362a', 0, 0, 256, 26); texte(g, 'GRAND VACARME', 128, 14, 18, '#f4f0e0', 'center');

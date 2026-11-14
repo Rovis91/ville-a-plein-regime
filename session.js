@@ -14,18 +14,17 @@
   const H = 1 / 120; // sim.js est rejoué à chaque changement de carte : ses fonctions sont relues dans G à chaque appel
   function nouvelleSession({ T, carte: M, cartes: CARTES, store, prefs, auto: AUTO = false, defi: DEFI = null, ref, med: MED }) {
     const N = T.n, REF = ref.t, GLT = 2 * REF * MED[0] * 1.3; // Glisse : le score ne compte que si les deux tours sont bouclés en moins de GLT (deux tours au temps de bronze, plus 30 %)
-    const lis = (k, d) => { try { return JSON.parse(prefs.get(k, null)) || d; } catch (e) { return d; } }, TNK = 'vpr7.tournee' + (AUTO ? '.auto' : '');
+    const lis = (k, d) => { try { return JSON.parse(prefs.get(k, null)) || d; } catch (e) { return d; } }, TNK = 'vpr8.tournee' + (AUTO ? '.auto' : '');
     const TNS = [].concat(lis(TNK, [])), TROPHEE = [].concat(lis('vpr7.trophee', []));
     const medal = t => t ? MED.filter(k => t <= REF * k).length : 0; // 0 aucune, 1 bronze, 2 argent, 3 or
     let bestSpl = store.get('splits'), ghost = store.get('ghost'), si = 0, cur = [], recG = [], fini = []; const medF = [];
     const S = { race: null, raceEnd: false, tRace: 0, lapN: 1, best: store.get('best') || 0, bestG: store.get('glisse') || 0, glFin: null, tnFin: null, dernier: null, mode: 'solo', diff: 0, GLT, medal };
-    const NF = DEFI ? 6 : 5; // fantômes : 0 aucun, 1 record, 2..4 médailles, 5 défi
-    S.fant = DEFI ? 5 : (f => Number.isInteger(f) && f >= 0 && f < NF ? f : medal(S.best) < 3 ? medal(S.best) + 2 : 1)(store.get('fantome'));
-    S.choixF = f => { S.fant = f; if (!AUTO) store.set('fantome', f); };
+    S.fant = DEFI ? 5 : medal(S.best) < 3 ? medal(S.best) + 2 : 1; // la première médaille pas encore gagnée, sinon le record
+    S.choixF = f => { S.fant = f; };
     // Bronze et argent : la trace du tour de référence ralentie au ratio de la médaille. Or : la trace de la carte dans traces-or.js, ramenée au temps du seuil or.
     S.traceF = () => { const f = S.fant, i = f - 2; if (f < 2) return f ? ghost : null; if (f === 5) return DEFI.trace; if (medF[i]) return medF[i];
       const or = i === 2 ? G.defiLit((G.TRACES_OR || {})[M.id]) : { err: 1 }; return medF[i] = or.err ? G.etire(ref.trace, MED[i]) : G.etire(or.trace, REF * MED[2] / or.t); };
-    // Tournée : une en cours par difficulté (vpr7.tournee, { manche, pts }), trophée par difficulté (vpr7.trophee, meilleure place finale de 1 à 3)
+    // Tournée : une en cours par difficulté (vpr8.tournee depuis l'ordre de la nuit, { manche, pts }), trophée par difficulté (vpr7.trophee, meilleure place finale de 1 à 3)
     S.trophee = d => TROPHEE[d] >= 1 && TROPHEE[d] <= 3 ? TROPHEE[d] : 0;
     S.tn = d => { const t = TNS[d]; return t && CARTES[t.manche] && Array.isArray(t.pts) && t.pts.length === 4 && t.pts.every(Number.isFinite) ? t : null; }; // une sauvegarde abîmée, ou d'une liste de cartes plus longue, est ignorée
     S.tnOu = d => S.tn(d) || { manche: 0, pts: [0, 0, 0, 0] };

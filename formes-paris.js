@@ -87,5 +87,21 @@
       for (const x of [-18, -9, 0, 9, 18]) L.push(...paire(sz => ['relief', 3, 3, 0.4, x, 43.5, sz * 11.2]));
       return L;
     },
+    // camion de livraison garé en double file (obstacle de sim.js : 9 × 2,5 m), origine au sol au centre, avant vers +X : caisse frigorifique à l'arrière, cabine, roues, feux de détresse orange aux quatre coins
+    camionLivraison: () => [['caisse', 6.2, 2.9, 2.5, -1.3, 2.05, 0, null, 1], ['chassis', 8.8, 0.4, 2.2, 0, 0.75, 0], ['cabine', 2.4, 2.3, 2.4, 3.2, 1.95, 0], ['vitre', 0.1, 0.9, 2.1, 4.42, 2.45, 0],
+      ...paire(sz => ['vitre', 1.2, 0.8, 0.06, 3.4, 2.5, sz * 1.21]), ...[-3.2, 0.2, 3.2].flatMap(x => paire(sz => ['pneu', 1, 1, 0.3, x, 0.5, sz * 1.05])),
+      ...paire(sz => ['orange', 0.1, 0.2, 0.3, 4.45, 1.2, sz * 1.05]), ...paire(sz => ['orange', 0.1, 0.25, 0.25, -4.42, 1.3, sz * 1.0]), ...paire(sz => ['rouge', 0.1, 0.3, 0.3, -4.42, 0.9, sz * 1.0])],
+    // livreur de journaux à vélo, origine au sol, roule vers +X : deux roues fines, cadre, cycliste (jambes, torse, tête à casquette), sacoche de journaux sur le porte-bagages
+    livreur: () => [...paire(sx => ['pneu', 0.7, 0.7, 0.05, sx * 0.55, 0.35, 0]), ['cadre', 1.1, 0.05, 0.05, 0, 0.6, 0], ['cadre', 0.05, 0.5, 0.05, -0.15, 0.75, 0], ['cadre', 0.05, 0.05, 0.5, 0.45, 1.0, 0],
+      ['tenue', 0.15, 0.6, 0.3, -0.1, 0.85, 0], ['tenue', 0.35, 0.6, 0.4, 0.0, 1.4, 0, [0, 0, -0.35]], ['peau', 0.22, 0.24, 0.22, 0.12, 1.85, 0], ['tenue', 0.3, 0.06, 0.26, 0.17, 1.98, 0],
+      ['journaux', 0.5, 0.3, 0.45, -0.55, 0.85, 0]],
+    // escalier de la butte, origine en bas au bord du trottoir, monte vers -Z (s'éloigne de la rue) : n marches de 17 × 35 cm sur 3,5 m de large, murets de pierre et main courante
+    escalierButte: (n = 22) => { const B = []; for (let k = 0; k < n; k++) B.push(['marche', 3.5, 0.17 * (k + 1), 0.36, 0, 0.085 * (k + 1), -0.35 * k - 0.18]);
+      for (let k = 0; k < n; k += 2) B.push(...paire(sx => ['muret', 0.4, 0.17 * (k + 2) + 0.7, 0.72, sx * 1.95, (0.17 * (k + 2) + 0.7) / 2, -0.35 * k - 0.36])); // murets en gradins : ils suivent la pente, on voit les marches
+      B.push(['fer', 0.06, 0.06, 0.35 * n * 1.12, 0, 0.085 * n + 1.0, -0.175 * n, [Math.atan(0.17 / 0.35), 0, 0]]); return B; },
+    // pigeon posé, origine au sol, tête vers +X (instancié par dizaines : un seul bloc gris, la tête plus sombre)
+    pigeon: () => [['plume', 0.3, 0.16, 0.15, 0, 0.14, 0], ['plume', 0.12, 0.03, 0.14, -0.2, 0.18, 0], ['tete', 0.09, 0.1, 0.08, 0.17, 0.26, 0]],
+    // rideau de fer d'une devanture, origine en haut de la baie, pend vers -Y ; mis à l'échelle en hauteur quand il remonte
+    rideau: () => { const g = new THREE.BoxGeometry(11.5, 3, 0.08); g.translate(0, -1.5, 0); return g; },
   });
 })();

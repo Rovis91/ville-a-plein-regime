@@ -28,6 +28,23 @@
       ...[2.4, -2.2].flatMap(x => [-1, 1].map(sd => ['pneu', 0.9, 0.9, 0.3, x, 0.45, sd * 1.05]))],
     // dirigeable : enveloppe en fuseau (forme simple), puis nacelle, empennage et écrans latéraux autour de l'origine (centre de l'enveloppe)
     enveloppe: () => { const g = new THREE.SphereGeometry(1, 24, 12); g.scale(36, 9, 9); return g; },
+    // le défilé de l'aller (pts 1-6), devant la tribune nord. Figurant debout, pieds à l'origine, face vers +X ; m = 1 : majorette (jupette, bâton levé), 0 : musicien de la fanfare (shako haut, cuivre doré)
+    figurant: m => [['blanc', 0.2, 0.42, 0.34, 0, 0.21, 0], ['peau', 0.18, 0.44, 0.3, 0, 0.64, 0], ['tenue', 0.3, 0.62, 0.46, 0, 1.17, 0], ['peau', 0.22, 0.24, 0.22, 0, 1.6, 0],
+      ...(m ? [['tenue', 0.4, 0.22, 0.6, 0, 0.92, 0], ['blanc', 0.24, 0.2, 0.24, 0, 1.82, 0], ['tenue', 0.1, 0.55, 0.1, 0, 1.75, 0.3], ['blanc', 0.04, 1, 0.04, 0, 2.25, 0.3]]
+        : [['blanc', 0.26, 0.5, 0.26, 0, 1.97, 0], ['or', 0.5, 0.3, 0.22, 0.32, 1.3, 0], ['or', 0.3, 0.3, 0.3, 0.6, 1.36, 0]])],
+    // char du meeting (X vers l'avant) : tracteur, plateau à jupe, gâteau de trois étages à la couleur de l'instance (zone deco), un damier dressé en proue
+    charMeeting: () => [['caisse', 2.6, 2.6, 2.6, 6.4, 1.6, 0], ['vitre', 0.1, 1, 2.3, 7.72, 2.2, 0], ['blanc', 11.2, 0.9, 3.5, 0, 0.75, 0], ['caisse', 11, 0.4, 3.4, 0, 1.4, 0],
+      ['deco', 8, 1.4, 3, -0.5, 2.3, 0], ['deco', 5.4, 1.4, 2.3, -0.8, 3.7, 0], ['blanc', 2.6, 1.8, 1.6, -1, 5.3, 0], ['drapeau', 0.1, 2.4, 3.4, 3.8, 3.8, 0],
+      ...[5.6, 1.5, -3.6].flatMap(x => [-1, 1].map(sd => ['pneu', 1, 1, 0.4, x, 0.5, sd * 1.5]))],
+    // mât de drapeau à damier du retour (pts 13-18) : 14 m, l'étoffe vers +X
+    matDamier: () => [['acier', 0.2, 14, 0.2, 0, 7, 0], ['drapeau', 4, 2.6, 0.08, 2.1, 12.6, 0]],
+    // montgolfière : enveloppe en goutte (rayon 1, à l'échelle de l'instance), pointe en bas ; la nacelle est une boîte posée à part
+    ballon: () => { const g = new THREE.SphereGeometry(1, 20, 14), p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i), k = y < 0 ? 1 + y * 0.75 : 1; p.setXYZ(i, p.getX(i) * k, y * 1.15, p.getZ(i) * k); } g.computeVertexNormals(); return g; },
+    // écluse (repère de la route : X en travers, Z vers l'arrière, origine au bout de la rampe) : bajoyers de béton de chaque côté, portes busquées ouvertes contre eux,
+    // passerelle de manœuvre au-dessus de la piste avec ses deux cabestans ; W = demi-largeur de la route
+    ecluse: (W = 14) => [...[-1, 1].flatMap(sd => [['beton', 2.4, 6, 46, sd * (W + 2), 3, 14, null, 1], ['bois', 0.5, 5, 9, sd * (W + 0.55), 2.5, 4.6], ['bois', 0.5, 5, 9, sd * (W + 0.55), 2.5, 32],
+      ['acier', 0.6, 9, 0.6, sd * (W + 1.6), 7.5, 0, null, 1], ['acier', 0.9, 1.1, 0.9, sd * (W + 2.3), 6.55, 9], ['acier', 1.8, 0.2, 0.2, sd * (W + 2.3), 7.2, 9]]),
+      ['acier', 2 * W + 4, 0.7, 2.2, 0, 12.35, 0, null, 1], ['rouge', 2 * W + 4, 1, 0.1, 0, 13.2, -1.1], ['rouge', 2 * W + 4, 1, 0.1, 0, 13.2, 1.1]],
     dirigeable: () => [['nacelle', 8, 2.4, 3, 2, -9.6, 0], ['aileron', 7, 0.3, 16, -31, 0, 0], ['aileron', 7, 14, 0.3, -31, 0, 0], ['ecran', 30, 6, 0.2, 2, 0, 9.05], ['ecran', 30, 6, 0.2, 2, 0, -9.05]],
   });
 })();

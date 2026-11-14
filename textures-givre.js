@@ -12,10 +12,11 @@
     // L'alpha sert deux fois : 0 = pas de glace (pixel écarté par alphaTest), 0,8 = glace, un peu luisante sous la lumière dynamique (plus brillante, elle renvoie le ciel et se confond de loin avec la neige).
     // bout = 1 : les 10 derniers mètres d'une plaque, en langues qui s'effilent vers le bas de la texture
     glaceVive: bout => [64, bout ? 80 : 256, (g, o) => {
-      const { R, alea, voile } = o, H = bout ? 80 : 256; R(g, '#132240', 0, 0, 64, H);
-      for (let i = 0; i < H * 2; i++) R(g, alea() < 0.5 ? '#182842' : '#2a4268', alea() * 64 | 0, alea() * H | 0, 1 + (alea() * 2 | 0), 3 + (alea() * 12 | 0)); // la glace est tirée dans le sens de la route
-      voile(g, 0.5, () => { for (let i = 0; i < H / 20; i++) { let x = 6 + alea() * 52 | 0, y = alea() * H | 0; for (let k = 0; k < 26; k++) { R(g, '#b8d4f4', x, y, 1, 1); if (alea() < 0.5) x += alea() < 0.5 ? -1 : 1; y = (y + 1) % H; } } }); // fissures
-      voile(g, 0.35, () => { for (let i = 0; i < H / 6; i++) R(g, '#dcecff', alea() * 62 | 0, alea() * H | 0, 2, 1); }); // givre accroché
+      const { R, alea, voile } = o, H = bout ? 80 : 256; R(g, '#3a74ac', 0, 0, 64, H);
+      for (let i = 0; i < H * 2; i++) R(g, alea() < 0.5 ? '#2c6094' : '#5094cc', alea() * 64 | 0, alea() * H | 0, 1 + (alea() * 2 | 0), 3 + (alea() * 12 | 0)); // la glace est tirée dans le sens de la route : bleu glacier, pas gris bitume
+      voile(g, 0.6, () => { for (let i = 0; i < H / 5; i++) R(g, alea() < 0.4 ? '#cfeaff' : '#8cc4f0', alea() * 64 | 0, alea() * H | 0, 1, 10 + (alea() * 30 | 0)); }); // reflets polis, longs et fins
+      voile(g, 0.8, () => { for (let i = 0; i < H / 12; i++) { let x = 6 + alea() * 52 | 0, y = alea() * H | 0; for (let k = 0; k < 26; k++) { R(g, '#eef8ff', x, y, 1, 1); if (alea() < 0.5) x += alea() < 0.5 ? -1 : 1; y = (y + 1) % H; } } }); // fissures
+      voile(g, 0.5, () => { for (let i = 0; i < H / 4; i++) R(g, '#f2f8ff', alea() * 62 | 0, alea() * H | 0, 2, 1); }); // givre accroché
       g.globalCompositeOperation = 'destination-out';
       g.fillStyle = 'rgba(0,0,0,.2)'; g.fillRect(0, 0, 64, H);
       g.fillStyle = '#000';

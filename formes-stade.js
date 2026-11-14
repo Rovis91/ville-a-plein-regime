@@ -20,6 +20,11 @@
     // Scène de 49 × 6 m à l'est, bandeau lumineux sur ses deux faces ; mur à chevrons de 25 m à l'ouest ; entre les deux, un portique de 37 m de portée, enseigne suspendue, 8 m de passage dessous
     sceneArene: () => [['beton', 49, 4, 6, 34.5, 2, 0], ['ecran', 46, 3, 0.3, 34.5, 2.2, 3.1], ['ecran', 46, 3, 0.3, 34.5, 2.2, -3.1], ['bande', 49.4, 0.5, 6.4, 34.5, 4.25, 0],
       ['chevrons', 25, 2.6, 2, -35.5, 1.3, 0], ['acier', 1.6, 11, 1.6, -24, 5.5, 0], ['acier', 1.6, 7, 1.6, 11, 7.5, 0], ['acier', 37, 1.4, 1.8, -6.5, 11.3, 0], ['enseigne', 26, 2.2, 0.4, -6.5, 9.4, 0]],
+    // monster truck garé, origine au sol sous son milieu, X = l'avant : quatre roues de 2,2 m (deux boîtes croisées chacune), châssis tubulaire haut perché,
+    // caisse de pick-up à flammes peintes, cabine vitrée, rampe de phares sur le toit
+    monsterTruck: () => [...[-1.9, 1.9].flatMap(x => [-1.55, 1.55].flatMap(z => [['pneu', 2.2, 2.2, 1.1, x, 1.1, z], ['pneu', 2.2, 2.2, 1.1, x, 1.1, z, [0, 0, 0.785]], ['acier', 0.25, 1.6, 0.25, x, 2, z * 0.6, [z > 0 ? 0.5 : -0.5, 0, 0]]])),
+      ['chassis', 4.6, 0.35, 1.5, 0, 2.6, 0, null, 1], ['caisse', 5.2, 1.1, 2.5, 0, 3.3, 0, null, 1], ['flammes', 2.4, 0.5, 2.54, 1.3, 3.2, 0], ['caisse', 2.1, 1.05, 2.3, -0.2, 4.4, 0],
+      ['vitre', 0.1, 0.75, 2, 0.88, 4.45, 0], ['vitre', 1.7, 0.6, 2.34, -0.25, 4.5, 0], ['acier', 0.3, 0.3, 2.1, -0.2, 5.05, 0], ['lampe', 0.25, 0.3, 1.8, 0, 5.05, 0]],
     // éventail de n rayons laser de L m partant de l'origine vers le bas, écartés de e rad
     eventailLaser: (n = 5, L = 130, e = 0.3) => Array.from({ length: n }, (_, k) => { const a = (k - (n - 1) / 2) * e; return ['rayon', 0.3, L, 0.3, Math.sin(a) * L / 2, -Math.cos(a) * L / 2, 0, [0, 0, a]]; }),
   });
