@@ -459,7 +459,13 @@
   if (L.neon) for (const z of [-1, 1]) box(3, 0.07, 0.05, new THREE.MeshBasicMaterial({ color: L.neon }), 0, VO.plan.bas - 0.02, z * (VO.plan.w / 2 - 0.05), body); // liserés néon sous le bas de caisse
 
   // traînées lumineuses des feux arrière : deux rubans tirés sur les dernières positions
+  // freins : sur la roue, le disque et l'étrier (leurs teintes exactes dans la texture de textures-voitures.js) rougeoient quand ils chauffent ; au sol, derrière la voiture, une lueur rouge additive tant que les feux stop sont allumés
+  roueMat.emissiveMap = tex(64, 64, g => { const src = roueMat.map.image, d = (g.drawImage(src, 0, 0), g.getImageData(0, 0, 64, 64)), p = d.data;
+    for (let i = 0; i < p.length; i += 4) { const on = [[38, 38, 44], [106, 32, 36]].some(([r, v, b]) => Math.abs(p[i] - r) + Math.abs(p[i + 1] - v) + Math.abs(p[i + 2] - b) < 8); p[i] = p[i + 1] = p[i + 2] = on ? 255 : 0; }
+    g.putImageData(d, 0, 0); });
+  const solMat = new THREE.MeshBasicMaterial({ color: 0xff2030, map: tex(32, 32, g => { const r = g.createRadialGradient(16, 16, 0, 16, 16, 16); r.addColorStop(0, '#fff'); r.addColorStop(1, '#000'); g.fillStyle = r; g.fillRect(0, 0, 32, 32); }), blending: THREE.AdditiveBlending, transparent: true, opacity: 0, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
   const flames = [-0.5, 0.5].map(z => { const g = new THREE.ConeGeometry(0.17, 1.6, 5); g.translate(0, 0.8, 0); const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x60d0ff, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false })); m.rotation.z = Math.PI / 2; m.position.set(ENC.min.x, 0.42, z); m.visible = false; carG.add(m); return m; }); // pointe vers l'arrière
+  { const sol = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 3.6), solMat); sol.rotation.x = -Math.PI / 2; sol.position.set(ENC.min.x - 1.4, 0.05, 0); carG.add(sol); } // enfant 7 de carG, après les flammes
   const TN = 18, trailI = [], trailMat = addMat(null, { vertexColors: true, polygonOffset: false });
   for (let l = 0; l < 2; l++) for (let k = 0; k < TN - 1; k++) { const a = (l * TN + k) * 2; trailI.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
   const trainee = () => { // un jeu de traînées par voiture humaine (voir HUM) ; caché tant qu'aucune vue ne le tient : ses dernières positions et son ruban
@@ -507,7 +513,7 @@
     hu.g.rotation.order = 'YZX'; // cap, puis tangage, puis roulis autour de l'axe de la voiture
     hu.g.position.set(car.x, carY, car.z); hu.g.rotation.set(vu.roll, -car.th, vu.pitch); hu.body.rotation.x = car.steer * Math.min(1, sp / TOP) * 0.07;
     for (let i = 0; i < 4; i++) { const st = hu.roues[i]; st.children[0].rotation.z -= car.vf * dt / rr; if (i > 1) st.rotation.y = -car.steer * 0.45; }
-    hu.feu.color.setHex(inp.brake || car.frA ? 0xff7080 : 0x8a1020);
+    freins(hu.g, Math.max(inp.brake || 0, car.frA ? 0.5 : 0), sp, dt);
     // traînées
     hist.unshift([car.x + fx * ENC.min.x, carY + 0.72, car.z + fz * ENC.min.x, rx, rz]); if (hist.length > TN) hist.length = TN;
     const bst = car.boost > 0, glow = Math.min(1, sp / 15) * (inp.brake || car.frA || bst ? 1 : 0.4) * Math.min(1, TH.phares / 0.4);
@@ -573,10 +579,14 @@
   // pil(c) = [nom, couleur] d'une voiture, pour les étiquettes, la minicarte et le classement ; modele(c) = son modèle dans la scène
   const OPP = [['KENJI', '#00c8ff'], ['REI', '#ff8a00'], ['JUN', '#40ff80']].map(([n, c], i) => [M.rivaux ? M.rivaux[i] : n, c]).concat([['J2', '#ff4fd8'], ['J3', '#b070ff'], ['J4', '#ff4040']]);
   const opps = OPP.map(([, col]) => {
-    const g = carG.clone(), m = livree(new THREE.Color(col).getHex()), b = brakeMat.clone(); m.emissive.setRGB(1, 1, 1); m.emissiveMap = m.map; m.emissiveIntensity = 0.3; // un peu lumineuse : lisible de nuit et de loin
-    g.traverse(o => { if (o.material === carMat) o.material = m; else if (o.material === brakeMat) o.material = b; });
-    g.visible = false; g.userData.y = 0; g.userData.feu = b; scene.add(g); return g;
+    const g = carG.clone(), m = livree(new THREE.Color(col).getHex()), b = brakeMat.clone(), u = { feu: b, roue: roueMat.clone(), sol: solMat.clone() }; m.emissive.setRGB(1, 1, 1); m.emissiveMap = m.map; m.emissiveIntensity = 0.3; // un peu lumineuse : lisible de nuit et de loin
+    g.traverse(o => { if (o.material === carMat) o.material = m; else if (o.material === brakeMat) o.material = b; else if (o.material === roueMat) o.material = u.roue; else if (o.material === solMat) o.material = u.sol; });
+    g.visible = false; g.userData.y = 0; Object.assign(g.userData, u); scene.add(g); return g;
   });
+  Object.assign(carG.userData, { feu: brakeMat, roue: roueMat, sol: solMat }); // après les copies : Object3D.clone recopie userData en JSON
+  // freinage d'une voiture (fr : force du frein, 0 à 1) sur son modèle g : feu stop, lueur au sol, et disques qui chauffent aux gros freinages (≈ 1,5 s à fond depuis la pointe) puis refroidissent en ~3 s
+  const freins = (g, fr, sp, dt) => { const u = g.userData, h = u.ch = clamp((u.ch || 0) + (fr && sp > 12 ? fr * sp / TOP * 0.9 : -0.35) * dt, 0, 1); u.fr = fr;
+    u.feu.color.setHex(fr ? 0xff7080 : 0x8a1020); u.sol.opacity = fr * (0.25 + 0.5 * Math.min(1, NUIT)); u.roue.emissive.setRGB(1.6 * h * h, 0.55 * h ** 3, 0.12 * h ** 4); }; // rouge sombre, puis orange quand ça cogne
   // Les trois rivaux ont un caractère, tenu par leur rang (OPP, du plus rapide au moins rapide) : la référence, la tête brûlée, la recrue.
   // Une réplique au départ, quand on les double, quand ils nous doublent (en solo, hors démo ; une toutes les 7 s au plus, affichée 3 s). Textes en capitales sans accents : leur anglais est dans langue.js.
   const PIQUES = [
@@ -1174,7 +1184,7 @@
     sun.position.copy(sun.target.position).addScaledVector(SD, 400);
   }
 
-  const ROUGE = new THREE.Color(0xff1828), PHARE = new THREE.Color(0xfff2d0), NEONC = new THREE.Color(L.neon || 0), BOITE = new THREE.Matrix4().makeScale(ENCt.x / 2, ENCt.y / 2, ENCt.z / 2).setPosition(ENCc); // BOITE : englobe toute la caisse, pour l'ombre (un point dedans ou dessus n'est pas ombré)
+  const ROUGE = new THREE.Color(0xff1828), ETIN = new THREE.Color(0xff8a20), BLEU = new THREE.Color(0x3a9cff), PHARE = new THREE.Color(0xfff2d0), NEONC = new THREE.Color(L.neon || 0), BOITE = new THREE.Matrix4().makeScale(ENCt.x / 2, ENCt.y / 2, ENCt.z / 2).setPosition(ENCc); // BOITE : englobe toute la caisse, pour l'ombre (un point dedans ou dessus n'est pas ombré)
   const TRB = ST && ST.tremble * ST.aa || TREMBLE;
   // altitude continue le long de la piste : lue échantillon par échantillon, elle faisait sauter la voiture et la caméra à chaque pas, d'autant plus visible qu'on roule lentement
   // (le calcul est dans sim.js : sol(), qui ajoute la hauteur de la paroi sur un mur roulable ; car.y est ce sol, ou la hauteur de vol)
@@ -1251,6 +1261,7 @@
       const c = race && race.cars.find(c => c.k === i); g.visible = !!c && !partie(c) && !(c.out && race.t - c.out > 3 && now / 120 & 1); if (!c) return; // une voiture sortie se range, clignote, puis disparaît
       const [t, ro] = assiette(c); g.userData.y += (c.y - g.userData.y) * Math.min(1, dt * 18);
       g.rotation.order = 'YZX'; g.position.set(c.x, g.userData.y, c.z); g.rotation.set(ro, -c.th, t);
+      if (i < 3) { const u = g.userData, v = c.vf || 0; u.dec = (u.dec || 0) + ((u.vf === undefined ? 0 : (u.vf - v) / Math.max(dt, 1e-3)) - (u.dec || 0)) * Math.min(1, dt * 6); u.vf = v; freins(g, u.dec > 5 ? 1 : 0, v, dt); } // les rivaux n'exposent pas leur commande : on lit le frein dans la décélération (le frein moteur et l'air font moins de 5 m/s²)
       if (i < 3) for (let r = 1; r < 5; r++) { const st = g.children[r]; st.children[0].rotation.z -= (c.vf || 0) * dt / rr; if (r > 2) st.rotation.y = -(c.steer || 0) * 0.45; } // les rivaux ; les modèles des joueurs 2 à 4 tournent leurs roues dans fxVoiture
     });
     for (const vu of VUES) { const on = !vu.spec && (!vu.n || vu.car !== car); vu.hu.tr.visible = on; if (!vu.n) carG.visible = !vu.spec; if (on) fxVoiture(vu, dt); } // (une vue passée sur le meneur ne pose plus la voiture de son joueur : celle du joueur 2 reste un adversaire rangé, celle du joueur 1 est cachée) // chaque voiture humaine, avec l'état lissé de sa vue (le modèle du joueur 2 vient d'être posé comme un adversaire : on le repose). Deux vues sur la même voiture, au menu : une seule fois
@@ -1327,6 +1338,11 @@
     const put = (x, y, z, c, r, k) => { if (nl < NL) { LUX.uLP.value[nl].set(x, y, z, r); LUX.uLC.value[nl++].copy(c).multiplyScalar(k * LUM_GAIN); } };
     put(car.x - fx * 4.4, carY + 0.35, car.z - fz * 4.4, ROUGE, 9, NUIT * (inp.brake || car.frA ? 2.4 : 0.45)); // feux arrière : ils teintent ce qui suit, davantage au freinage
     if (L.neon) put(car.x, carY + 0.3, car.z, NEONC, 5.5, NUIT * (0.8 + 0.4 * pulse)); // néon de bas de caisse
+    // éclats brefs, trois créneaux au plus pris sur les luminaires fixes : la gerbe d'étincelles contre un mur (orange, s'éteint en 0,2 s ; posée entre la caisse et le mur : dans la boîte d'ombre de la voiture elle n'éclairerait rien, derrière le mur elle tournerait le dos à sa face ; au-dessus du toit, la caisse ne cache pas la route), la flamme de nitro (bleue, vacille), l'éclair d'orage (tombe de haut, couvre tout)
+    vu.ec = Math.max((vu.ec || 0) - dt * 5, vu.hit > 3 ? 1.5 : car.rub && sp > 8 ? 0.8 + 0.4 * Math.random() : 0);
+    if (vu.ec > 0) { const s = S[car.idx], sg = Math.sign(car.d); const o = ENCt.z / 2 + 0.1; put(car.x - s.tz * sg * o, carY + 1.6, car.z + s.tx * sg * o, ETIN, 12, vu.ec * 4 * (0.5 + NUIT)); }
+    if (car.boost > 0) put(car.x - fx * 3.2, carY + 0.45, car.z - fz * 3.2, BLEU, 10, 2.5 * (0.5 + NUIT) * (0.8 + 0.4 * Math.random()));
+    if (fl) put(car.x + 30, carY + 70, car.z - 20, FLASH, 140, 2.2 * fl);
     // les deux véhicules les plus proches (adversaires, ou camions du trafic) : phares devant, feux rouges derrière
     const d2 = c => (c.x - car.x) ** 2 + (c.z - car.z) ** 2;
     const veh = race ? race.cars.filter(c => c !== car && !partie(c)) : M.trafic && state !== 'title' ? trafic(T, tTraf).slice() : [];
@@ -1336,7 +1352,7 @@
     feux.material.size = 0.5 / Math.tan(vu.cam.fov * Math.PI / 360) * RH / renderer.domElement.height * renderer.getPixelRatio(); // three.js mesure les points sur la toile (0,5 × sa hauteur / distance), on dessine dans la cible de la vue, de RH lignes
     for (const c of veh.sort((a, b) => d2(a) - d2(b)).slice(0, 2)) {
       const ax = Math.cos(c.th), az = Math.sin(c.th), y = c.y, av = c.lane === undefined ? 6.5 : 10, ar = c.lane === undefined ? 3.4 : 7; // un camion est plus long
-      put(c.x + ax * av, y + 0.8, c.z + az * av, PHARE, 14, 3 * NUIT); put(c.x - ax * ar, y + 0.7, c.z - az * ar, ROUGE, 9, 1.4 * NUIT);
+      put(c.x + ax * av, y + 0.8, c.z + az * av, PHARE, 14, 3 * NUIT); put(c.x - ax * ar, y + 0.7, c.z - az * ar, ROUGE, 9, (c.lane === undefined && modele(c).userData.fr ? 2.4 : 1.4) * NUIT);
       if (L.neon && race && (c.k < 0 || c.k >= 3)) put(c.x, y + 0.3, c.z, NEONC, 5.5, NUIT * (0.8 + 0.4 * pulse)); // la voiture de l'autre joueur garde son néon de bas de caisse (c.k : -1 le joueur 1, 3 le joueur 2)
     }
     // luminaires fixes : les plus proches le long de la piste (ceux de devant comptent double), fondus en bout de liste pour qu'aucun ne s'allume d'un coup
