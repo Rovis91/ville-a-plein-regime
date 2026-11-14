@@ -583,10 +583,10 @@
       // le gué : le ruisseau traverse la route au creux du parcours. Sur toute la zone mouillée de la carte (sim.js : surf.zones, là où la voiture chasse), de la boue sombre et des ornières pleines d'eau, fondues dans la terre sèche aux deux bouts ;
       // au milieu, sur toute la zone mouillée pleine (54 m), de l'eau brun vert, brillante (reflets du soleil et des phares), avec une ligne d'écume à l'entrée et à la sortie ; de part et d'autre, le lit du ruisseau, ses galets et ses roseaux
       const iG0 = pt(h, g0), nG = (pt(h, g1) - iG0 + N) % N, verre = { transparent: true, depthWrite: false, side: THREE.DoubleSide };
-      const eau = h.mat('eauGue', { ...verre, opacity: 0.92, gloss: 0.1, rep: [4, 1] }), eauR = h.mat('eauGue', { ...verre, opacity: 0.92, gloss: 0.3, rep: [18, 1] }), ecume = h.mat('ecume', { ...verre, rep: [6, 1] });
-      h.ribbon((iG0 - 9 + N) % N, nG + 18, s => -s.w, 0.025, s => s.w, 0.025, h.mat('boueGue', { ...verre, gloss: 0.5 }), 2 * (nG + 18)).renderOrder = 1; // v de 0 à 1 sur toute la longueur : la texture s'efface aux deux bouts
-      h.ribbon(iG0, nG, s => -s.w - 0.5, 0.07, s => s.w + 0.5, 0.07, eau, 8).renderOrder = 2; // la nappe couvre la zone mouillée pleine : là où game.js fait partir la gerbe
-      for (const i of [iG0 - 1, iG0 + nG - 1]) h.ribbon((i + N) % N, 2, s => -s.w - 0.5, 0.08, s => s.w + 0.5, 0.08, ecume, 4).renderOrder = 3;
+      const eau = h.mat('eauGue', { ...verre, opacity: 0.92, rep: [4, 1] }), eauR = h.mat('eauGue', { ...verre, opacity: 0.92, rep: [18, 1] }), ecume = h.mat('ecume', { ...verre, rep: [6, 1] });
+      h.ribbon((iG0 - 9 + N) % N, nG + 18, s => -s.w, 0.025, s => s.w, 0.025, h.mat('boueGue', verre), 2 * (nG + 18)).renderOrder = -3; // v de 0 à 1 sur toute la longueur : la texture s'efface aux deux bouts
+      h.ribbon(iG0, nG, s => -s.w - 0.5, 0.07, s => s.w + 0.5, 0.07, eau, 8).renderOrder = -2; // la nappe couvre la zone mouillée pleine : là où game.js fait partir la gerbe. renderOrder négatif : l'eau (transparente) est dessinée avant la gerbe ; après, elle la recouvrait
+      for (const i of [iG0 - 1, iG0 + nG - 1]) h.ribbon((i + N) % N, 2, s => -s.w - 0.5, 0.08, s => s.w + 0.5, 0.08, ecume, 4).renderOrder = -1;
       h.pose('boite', eauR, repere(h, S[iG]), [0, -0.2, 0], 90, 0.3, 12); // le lit, 12 m de large, sous la nappe de la route
       const lit = (sd, off, a) => { const s = S[iG], [x, z] = bord(s, sd, off); return [x + s.tx * a, z + s.tz * a]; }, galets = [], roseaux = [];
       for (let k = 0; k < 70; k++) { const sd = k & 1 ? 1 : -1, [x, z] = lit(sd, S[iG].w + 1.5 + rnd() * 34, (rnd() < 0.5 ? -1 : 1) * (5.5 + rnd() * 2)), l = 0.5 + rnd() * 0.8; galets.push([x, sol(x, z, -0.25 * l), z, rnd() * 6, l, l * 0.6, l]); }
@@ -602,7 +602,7 @@
         i0 += n; }
       const larg = h.mat('terrePiste', { transparent: true, side: THREE.DoubleSide });
       for (let i0 = 0; i0 < N;) { if (S[i0].w < W + 0.3) { i0++; continue; } let n = 1; while (i0 + n < N && S[i0 + n].w >= W + 0.3) n++;
-        for (const sg of [-1, 1]) h.ribbon((i0 - 1 + N) % N, n + 1, sg * (W - 1.6), 0.012, s => sg * s.w, 0.012, larg, 6).renderOrder = 1;
+        for (const sg of [-1, 1]) h.ribbon((i0 - 1 + N) % N, n + 1, sg * (W - 1.6), 0.012, s => sg * s.w, 0.012, larg, 6).renderOrder = -3; // (avant les particules, comme l'eau du gué)
         i0 += n; }
       // le hameau : la terre laisse place à un bout de bitume entre des mas de pierre
       const peauM = { mur: h.mat('pierre'), toit: h.mat('tuilesCanal'), volet: h.mat('peinture', { c: 0x6a8ab8 }) }, mas = [], cypres = [], pins = [], futs = [], oliviers = [], buissons = [];
