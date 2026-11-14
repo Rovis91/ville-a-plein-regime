@@ -77,27 +77,28 @@
   }
   // Un timbre : o oscillateurs [onde, demi-tons, cents, niveau] · uni / sp unisson désaccordé · fm [rapport, indice, durée, reste] modulation de
   // fréquence · a d s r enveloppe · flt [type, départ, fin, durée, Q, suit la note] · form formants de talkbox · nz bruit [type, f, Q, niveau, durée] ·
-  // vib [Hz, cents, retard] · gl glissé (s) · bus (sat, fuzz) · len tenue en pas · lv niveau · pan, rv réverbération, ec écho, ch chorus · str écart entre les cordes d'un accord gratté (s) · sing voix chantée (F, H), syl ses voyelles · leg notes liées (vitesse du glissé d'une note à l'autre, s ; le glissé commence un peu avant la note, comme un chanteur)
+  // vib [Hz, cents, retard] · gl glissé (s) · bus (sat, fuzz) · len tenue en pas · lv niveau · pan, rv réverbération, ec écho, ch chorus · str écart entre les cordes d'un accord gratté (s) · ks corde pincée (voir corde()), avec : niveau des oscillateurs mêlés à la corde · tenue durée d'un accord (pas) · sing voix chantée (F, H), syl ses voyelles · leg notes liées (vitesse du glissé d'une note à l'autre, s ; le glissé commence un peu avant la note, comme un chanteur)
   const PATCH = {
     // basses
     bDark: { o: [['sawtooth', 0, -9], ['sawtooth', 0, 9], ['square', -12, 0, 0.7]], flt: ['lowpass', 2600, 300, 0.18, 6], d: 0.25, s: 0.5, bus: 'sat' }, // darksynth : scies saturées
     bDist: { o: [['sawtooth'], ['square', 0, 9]], flt: ['lowpass', 900, 200, 0.2, 4], d: 0.2, s: 0.4, bus: 'fuzz', lv: 0.8 }, // écrêtée
     bAcid: { o: [['sawtooth']], flt: ['lowpass', 3200, 250, 0.14, 16], d: 0.2, s: 0.3, gl: 0.05, bus: 'sat' }, // résonante façon TB-303
     bFM: { o: [['sine'], ['sine', -12, 0, 0.6]], fm: [1, 3.5, 0.12, 0.2], d: 0.25, s: 0.3, lv: 1.3 }, // basse FM des années 80
-    bSlap: { o: [['pulse'], ['sawtooth', 0, 6, 0.5]], flt: ['lowpass', 5000, 500, 0.07, 6], nz: ['bandpass', 2500, 2, 0.25, 0.012], d: 0.2, s: 0.25, lv: 1.2 }, // claquée
-    bPick: { o: [['triangle'], ['pulse', 0, 0, 0.4]], flt: ['lowpass', 2200, 400, 0.1, 2], nz: ['bandpass', 1800, 2, 0.15, 0.01], d: 0.22, s: 0.35, lv: 1.4 }, // basse électrique au médiator
+    bSlap: { o: [['pulse'], ['sawtooth', 0, 6, 0.5]], ks: { b: 0.7, t: 1.2, pos: 0.08 }, avec: 1, flt: ['lowpass', 5000, 500, 0.07, 6], nz: ['bandpass', 2500, 2, 0.25, 0.012], d: 0.2, s: 0.25, lv: 1.2 }, // claquée
+    bPick: { o: [['triangle'], ['pulse', 0, 0, 0.4]], ks: { b: 0.45, t: 1.6, pos: 0.12 }, avec: 1, flt: ['lowpass', 2200, 400, 0.1, 2], nz: ['bandpass', 1800, 2, 0.15, 0.01], d: 0.22, s: 0.35, lv: 1.4 }, // basse électrique au médiator
     bMoog: { o: [['sawtooth'], ['triangle', 0, 5], ['sine', -12, 0, 0.5]], flt: ['lowpass', 700, 350, 0.2, 3], s: 0.8, gl: 0.07, len: 1, lv: 1.3 }, // ronde, à portamento
     bReese: { o: [['sawtooth', 0, -14], ['sawtooth', 0, 14], ['sine', 0, 0, 0.9]], flt: ['lowpass', 600, 380, 1, 2], s: 1, r: 0.08, len: 1, lv: 1.2 }, // scies qui battent
     bOff: { o: [['sawtooth', 0, -6], ['square', 0, 6]], flt: ['lowpass', 1800, 250, 0.1, 5], d: 0.12, s: 0.1, lv: 1.2 }, // pincée, à contretemps
     bSeq: { o: [['pulse'], ['sine', 0, 0, 0.8]], flt: ['lowpass', 1500, 300, 0.08, 3], d: 0.1, s: 0.2, lv: 1.3 }, // impulsion séquencée
     bFuzz: { o: [['sawtooth'], ['sawtooth', 7, 6, 0.7], ['square', 12, -5, 0.5]], s: 0.9, len: 1, bus: 'fuzz' }, // riff de guitare saturée
     bBoost: { o: [['sine'], ['sine', 12, 0, 0.3], ['sawtooth', 0, 0, 0.2]], flt: ['lowpass', 900, 260, 0.15, 1], d: 0.4, s: 0.85, r: 0.06, len: 1, bus: 'sat', lv: 1.5 }, // « bass boosted » : sub énorme qui sature un peu
+    bCorde: { o: [['triangle'], ['pulse', 0, 0, 0.4]], ks: { b: 0.3, t: 2, pos: 0.2 }, avec: 1, flt: ['lowpass', 2200, 400, 0.1, 2], nz: ['bandpass', 1800, 2, 0.15, 0.01], d: 0.22, s: 0.35, lv: 1.4 }, // basse électrique : corde pincée mêlée à la basse au médiator
     bGrit: { o: [['sawtooth', 0, -7], ['sawtooth', 0, 7], ['sine', -12, 0, 0.9]], flt: ['lowpass', 1100, 420, 0.25, 1.2], d: 0.35, s: 0.75, r: 0.05, len: 1, bus: 'sat', lv: 1.1 }, // big beat : grosse, sale et tenue, sans résonance qui rebondit
     // claviers, nappes, accords
     epFM: { o: [['sine'], ['triangle', 12, 0, 0.15]], fm: [1, 1.6, 0.35, 0.1], d: 0.9, s: 0.15, ch: 0.5, rv: 0.15, lv: 1.6, str: 0.006 }, // piano électrique
     dxEp: { o: [['sine'], ['sine', 12, 3, 0.3]], fm: [3, 1.2, 0.2, 0.1], d: 0.7, s: 0.1, ch: 0.4, rv: 0.2, pan: -0.25, lv: 1.5, str: 0.006 }, // piano électrique FM brillant
     organ: { o: [['organ']], a: 0.005, s: 1, r: 0.04, vib: [6, 6, 0], lv: 0.9 },
-    clav: { o: [['pulse']], flt: ['highpass', 500, 500, 1, 0.7], d: 0.15, s: 0.1, pan: 0.3, lv: 1.1 },
+    clav: { o: [['pulse']], ks: { b: 0.7, t: 0.4, pos: 0.1 }, avec: 1, flt: ['highpass', 500, 500, 1, 0.7], d: 0.15, s: 0.1, pan: 0.3, lv: 1.1 },
     brass: { o: [['sawtooth', 0, -7], ['sawtooth', 0, 7], ['reed', 0, 0, 0.5]], a: 0.025, flt: ['lowpass', 600, 4500, 0.06, 2], d: 0.2, s: 0.7, rv: 0.15, lv: 1.1 }, // cuivres de synthé
     strings: { o: [['sawtooth']], uni: 4, sp: 14, a: 0.12, s: 1, r: 0.25, flt: ['highpass', 300, 300, 1, 0.7], ch: 0.6, rv: 0.3 }, // ensemble de cordes
     super: { o: [['sawtooth']], uni: 5, sp: 22, a: 0.01, d: 0.3, s: 0.8, r: 0.12, rv: 0.3, str: 0.002 }, // mur de scies désaccordées
@@ -106,11 +107,11 @@
     glass: { o: [['glass']], fm: [2, 0.8, 1.5, 0.3], a: 0.15, s: 0.8, r: 0.5, rv: 0.5, ch: 0.4, lv: 1.3 },
     warm: { o: [['triangle'], ['sawtooth', 0, 7, 0.3]], flt: ['lowpass', 1200, 1200, 1, 0.7], a: 0.3, s: 1, r: 0.4, rv: 0.2, lv: 1.3 },
     stabM7: { o: [['sawtooth', 0, -8], ['square', 0, 8, 0.6]], flt: ['lowpass', 3500, 500, 0.2, 4], d: 0.25, ec: 0.45, rv: 0.2, lv: 1.3, str: 0.001 }, // accord plaqué de Detroit
-    gtrMute: { o: [['pulse']], flt: ['bandpass', 1800, 1200, 0.05, 3], nz: ['bandpass', 3000, 2, 0.2, 0.008], d: 0.07, pan: 0.35, lv: 2, str: 0.009 }, // cocotte de guitare funk
-    pwr: { o: [['sawtooth', 0, -4], ['sawtooth', 0, 4]], s: 0.9, bus: 'fuzz', str: 0.012 }, // accords de puissance
-    gtrNylon: { o: [['triangle'], ['pulse', 0, 3, 0.35]], flt: ['lowpass', 3500, 1200, 0.15, 0.8], nz: ['bandpass', 3000, 2, 0.12, 0.01], d: 0.35, s: 0.15, r: 0.2, rv: 0.25, pan: -0.2, lv: 1.4, str: 0.018 }, // guitare à cordes de nylon, grattée (rumba)
+    gtrMute: { o: [['pulse']], ks: { b: 0.6, t: 0.25, pos: 0.15 }, avec: 1, flt: ['bandpass', 1800, 1200, 0.05, 3], nz: ['bandpass', 3000, 2, 0.2, 0.008], d: 0.07, pan: 0.35, lv: 2, str: 0.009 }, // cocotte de guitare funk
+    pwr: { o: [['sawtooth', 0, -4], ['sawtooth', 0, 4]], ks: { b: 0.6, t: 1.5, pos: 0.15 }, avec: 1, s: 0.9, bus: 'fuzz', str: 0.012 }, // accords de puissance
+    gtrNylon: { o: [['triangle'], ['pulse', 0, 3, 0.35]], ks: { b: 0.35, t: 1.4, pos: 0.13 }, avec: 1, flt: ['lowpass', 3500, 1200, 0.15, 0.8], nz: ['bandpass', 3000, 2, 0.12, 0.01], d: 0.35, s: 0.15, r: 0.2, tenue: 5, rv: 0.25, pan: -0.2, lv: 1.4, str: 0.018 }, // guitare à cordes de nylon, grattée (rumba) : corde pincée mêlée au synthé
     arpRond: { o: [['triangle'], ['sine', 12, 0, 0.3]], flt: ['lowpass', 2200, 900, 0.12, 1], d: 0.16, s: 0.1, ec: 0.25, rv: 0.15, pan: 0.2, lv: 1.4 }, // arpège rond, sans résonance
-    gtrClean: { o: [['sawtooth', 0, -5], ['pulse', 0, 5, 0.6]], flt: ['lowpass', 3200, 1100, 0.3, 0.8], d: 0.5, s: 0.25, r: 0.2, rv: 0.3, ch: 0.35, pan: -0.25, lv: 1.3, str: 0.014 }, // guitare électrique claire, grattée
+    gtrClean: { o: [['sawtooth', 0, -5], ['pulse', 0, 5, 0.6]], ks: { b: 0.65, t: 2, pos: 0.15 }, avec: 1, flt: ['lowpass', 3200, 1100, 0.3, 0.8], d: 0.5, s: 0.25, r: 0.2, tenue: 4, rv: 0.3, ch: 0.35, pan: -0.25, lv: 1.3, str: 0.014 }, // guitare électrique claire, grattée : corde pincée mêlée au synthé
     pluck: { o: [['sawtooth', 0, -7], ['sawtooth', 0, 7]], flt: ['lowpass', 6000, 500, 0.12, 3], d: 0.15, ec: 0.4, rv: 0.15 },
     pulseArp: { o: [['pulse']], d: 0.12, ec: 0.35, pan: -0.2 },
     seqArp: { o: [['sawtooth']], flt: ['lowpass', 3000, 600, 0.1, 8], d: 0.12, ec: 0.3, pan: 0.2 },
@@ -127,12 +128,12 @@
     ldTalk: { o: [['sawtooth'], ['triangle', 0, 0, 0.9]], form: 1, s: 0.9, gl: 0.05, vib: [5, 8, 0.2], lv: 0.3 }, // talkbox : voyelle « o », sans le sifflement à 2,6 kHz
     ldMoog: { o: [['sawtooth'], ['square', 0, 6, 0.5]], flt: ['lowpass', 900, 2600, 0.12, 2], a: 0.02, s: 0.9, gl: 0.08, vib: [5, 10, 0.25], ec: 0.35, rv: 0.35, lv: 0.13 }, // synthé monophonique à portamento, façon « Magic Fly »
     ldBrass: { o: [['sawtooth', 0, -8], ['sawtooth', 0, 8]], flt: ['lowpass', 500, 1600, 0.12, 1.2], a: 0.02, s: 0.85, vib: [5.5, 10, 0.3], rv: 0.3, ch: 0.3, lv: 0.11 }, // cuivres de synthé polyphonique des années 80, façon rock de stade
-    ldTwang: { o: [['pulse'], ['sawtooth', 0, 6, 0.5]], flt: ['lowpass', 2600, 1300, 0.25, 1.5], a: 0.004, d: 0.6, s: 0.55, r: 0.15, vib: [5.5, 14, 0.3], gl: 0.03, ec: 0.4, rv: 0.4, lv: 0.12 }, // guitare de western : claire, pincée, dans l'écho et la réverbération
+    ldTwang: { o: [['pulse'], ['sawtooth', 0, 6, 0.5]], ks: { b: 0.8, t: 2.5, pos: 0.1 }, avec: 1, flt: ['lowpass', 2600, 1300, 0.25, 1.5], a: 0.004, d: 0.6, s: 0.55, r: 0.15, vib: [5.5, 14, 0.3], gl: 0.03, ec: 0.4, rv: 0.4, lv: 0.12 }, // guitare de western : corde pincée près du chevalet mêlée au synthé, dans l'écho et la réverbération
     ldVoixF: { o: [['sawtooth'], ['triangle', 0, 0, 0.7]], sing: 'F', leg: 0.06, syl: 'aaoaei', a: 0.035, s: 0.9, r: 0.12, vib: [5.5, 9, 0.35], gl: 0.05, rv: 0.35, ec: 0.22, lv: 0.12 }, // voix de femme chantée (formants), façon Vocaloid
     ldVoixH: { o: [['sawtooth'], ['triangle', 0, 0, 0.7]], sing: 'H', leg: 0.06, syl: 'oaoe', a: 0.04, s: 0.9, r: 0.12, vib: [5, 8, 0.35], gl: 0.06, rv: 0.3, ec: 0.2, lv: 0.12 }, // voix d'homme chantée
     ldFroid: { o: [['triangle'], ['sawtooth', 0, 4, 0.25]], flt: ['lowpass', 2400, 1800, 0.2, 1], a: 0.04, s: 0.9, r: 0.25, leg: 0.05, vib: [5, 8, 0.3], rv: 0.4, ec: 0.3, lv: 0.14 }, // cold wave : thème lié, qui glisse d'une note à l'autre
-    ldNylon: { o: [['triangle'], ['pulse', 0, 0, 0.3]], flt: ['lowpass', 3000, 1400, 0.2, 1], a: 0.004, d: 0.5, s: 0.4, r: 0.15, vib: [5.5, 12, 0.25], gl: 0.03, rv: 0.3, ec: 0.15, lv: 0.16 }, // guitare à cordes de nylon, pincée
-    ldCrunch: { o: [['sawtooth', 0, -6], ['square', 0, 6, 0.5]], flt: ['lowpass', 1400, 1100, 0.2, 1], a: 0.01, s: 0.9, vib: [5.5, 12, 0.3], gl: 0.03, bus: 'sat', lv: 0.18 }, // guitare légèrement saturée et sombre : sans le sifflement de la guitare fuzz
+    ldNylon: { o: [['triangle'], ['pulse', 0, 0, 0.3]], ks: { b: 0.5, t: 2, pos: 0.12 }, avec: 1, flt: ['lowpass', 3000, 1400, 0.2, 1], a: 0.004, d: 0.5, s: 0.4, r: 0.15, vib: [5.5, 12, 0.25], gl: 0.03, rv: 0.3, ec: 0.15, lv: 0.16 }, // guitare à cordes de nylon, pincée : corde pincée mêlée au synthé
+    ldCrunch: { o: [['sawtooth', 0, -6], ['square', 0, 6, 0.5]], ks: { b: 0.6, t: 2, pos: 0.12 }, avec: 1, flt: ['lowpass', 1400, 1100, 0.2, 1], a: 0.01, s: 0.9, vib: [5.5, 12, 0.3], gl: 0.03, bus: 'sat', lv: 0.18 }, // guitare légèrement saturée et sombre : sans le sifflement de la guitare fuzz
     ldElectro: { o: [['square'], ['square', 12, 3, 0.25]], flt: ['lowpass', 2400, 2400, 1, 0.7], a: 0.005, d: 0.25, s: 0.6, r: 0.08, ec: 0.25, rv: 0.15, lv: 0.12 }, // électro des années 80 : carré simple et net, filtré, sans glissé ni vibrato
     ldEuro: { o: [['sawtooth', 0, -9], ['square', 0, 9, 0.6]], flt: ['lowpass', 3200, 1800, 0.2, 1], a: 0.01, d: 0.3, s: 0.7, ec: 0.3, rv: 0.25, lv: 0.1 }, // gimmick d'eurodance
     ldGtr: { o: [['sawtooth', 0, -5], ['sawtooth', 0, 5]], s: 0.9, vib: [5.5, 16, 0.15], gl: 0.05, bus: 'fuzz', lv: 0.2 }, // guitare saturée
@@ -144,6 +145,18 @@
   // voix chantée (sing) : une source riche passe par trois formants de voyelle, les syllabes (syl) se suivent d'une note à l'autre ; souffle à l'attaque
   const FORM = { F: { a: [800, 1150, 2900], e: [400, 2000, 2800], i: [300, 2300, 3000], o: [450, 800, 2830], u: [325, 700, 2700] }, H: { a: [700, 1220, 2600], e: [400, 1700, 2600], i: [300, 2200, 2900], o: [450, 800, 2600], u: [325, 700, 2530] } };
   let syl = 0;
+  // corde pincée (Karplus-Strong) : une corde qui vibre, calculée une fois par hauteur et par timbre puis rejouée (bien plus naturel qu'une onde filtrée) ;
+  // ks : b brillance de l'attaque (0..1), t durée de résonance (s), pos point de pincement (0..0,5 : près du chevalet, plus nasal)
+  const KSC = new Map();
+  function corde(f, k) {
+    const sr = AC.sampleRate, N = Math.max(2, Math.round(sr / f)), cle = sr + ':' + N + ':' + k.b + ':' + k.t + ':' + k.pos; let e = KSC.get(cle); if (e) return e;
+    const len = Math.ceil(sr * k.t), buf = AC.createBuffer(1, len, sr), out = buf.getChannelData(0), c = new Float32Array(N), rho = Math.pow(0.001, 1 / (k.t * f)), a = 0.15 + 0.8 * k.b, P = Math.round(N * k.pos);
+    let lp = 0; for (let i = 0; i < N; i++) { lp += a * (Math.random() * 2 - 1 - lp); c[i] = lp; } // le pincement : un bruit plus ou moins sourd
+    if (P) { const c0 = c.slice(); for (let i = 0; i < N; i++) c[i] = c0[i] - c0[(i + P) % N]; } // pincée à P échantillons du chevalet : certaines harmoniques s'éteignent
+    let pk = 1e-6; for (let i = 0; i < len; i++) { const j = i % N, y = c[j]; out[i] = y; c[j] = rho * 0.5 * (y + c[(j + 1) % N]); pk = Math.max(pk, Math.abs(y)); } // la corde : chaque tour, un peu plus sourde et un peu plus faible
+    for (let i = 0; i < len; i++) out[i] *= 0.5 / pk;
+    if (KSC.size > 400) KSC.clear(); e = { buf, rate: f * (N + 0.5) / sr }; KSC.set(cle, e); return e; // la boucle dure N + ½ échantillons : la vitesse de lecture corrige la hauteur
+  }
   function tone(pn, f, t, dur, vel, dest, from, ex = 1, sc = 0) { // from : fréquence de la note précédente, pour le glissé ; ex : nuance (1 = normale), qui joue aussi sur la brillance ; sc : attaque par en dessous (cents)
     const P = PATCH[pn]; if (!P || vel < 0.002) return [];
     // jouée plus fort, la note est aussi plus brillante ; drift : un instrument analogique n'est jamais juste au cent près ; le vibrato vient peu à peu
@@ -161,7 +174,8 @@
     if (P.fm) { m = AC.createOscillator(); const dev = P.fm[1] * f * P.fm[0]; mod = AC.createGain(); m.frequency.setValueAtTime(f * P.fm[0], t);
       mod.gain.setValueAtTime(dev, t); mod.gain.setTargetAtTime(dev * P.fm[3], t, P.fm[2] / 3); m.connect(mod); m.start(t); m.stop(fin); srcs.push(m); }
     const os = [], U = P.uni || 1, lv = 1 / Math.sqrt(P.o.length * U), drift = (Math.random() - 0.5) * 5;
-    for (const [w, semi = 0, cents = 0, olv = 1] of P.o) for (let u = 0; u < U; u++) {
+    if (P.ks) { const c = corde(f, P.ks), o = AC.createBufferSource(); o.buffer = c.buf; o.playbackRate.value = c.rate; o.detune.value = drift; o.connect(gain(1, d)); o.start(t); o.stop(Math.min(fin, t + P.ks.t)); os.push(o); srcs.push(o); }
+    if (!P.ks || P.avec) for (const [w, semi = 0, cents = 0, olv0 = 1] of P.o) for (let u = 0; u < U; u++) { const olv = olv0 * (P.ks ? P.avec : 1); // avec : la corde pincée mêlée aux oscillateurs du timbre, à ce niveau
       const o = AC.createOscillator(), fo = f * 2 ** (semi / 12); if (W[w]) o.setPeriodicWave(W[w]); else o.type = w;
       o.frequency.setValueAtTime(fo, t); o.detune.value = drift + cents + (U > 1 ? (u / (U - 1) - 0.5) * 2 * P.sp : 0);
       if (from && P.gl) { o.frequency.setValueAtTime(fo * from / f, t); o.frequency.exponentialRampToValueAtTime(fo, t + P.gl); }
@@ -338,7 +352,7 @@
       strip.d.gate.gain.setValueAtTime(d && sec.gate && st.gate[q] === '.' ? 0.06 : 1, t); } // nappe hachée (gate de trance)
     for (const p of ['c', 'g']) if (d && (x = on(p)) && (c = pat(st[p].v, x)[q]) !== '.') { const P = PATCH[st[p].p];
       const up = q % 2 === 1, ts = lt(0.003), ex = acc * jit(0.08), ns = up ? [...vch].reverse() : vch; jo(p, t); // gratté : vers l'aigu sur les temps, vers le grave en contretemps, chaque corde un peu après l'autre (P.str)
-      ns.forEach((n, i) => tone(st[p].p, hz(n + 12 + (st[p + 'O'] || 0)), ts + i * (P.str || 0.004) * jit(0.3), S16 * (P.s ? 1.6 : 3), mxv(p) * (c === 'X' ? 0.065 : 0.045) * (P.lv || 1) * (1 - 0.06 * i), strip[p].in, 0, ex)); }
+      ns.forEach((n, i) => tone(st[p].p, hz(n + 12 + (st[p + 'O'] || 0)), ts + i * (P.str || 0.004) * jit(0.3), S16 * (P.tenue || (P.s ? 1.6 : 3)), mxv(p) * (c === 'X' ? 0.065 : 0.045) * (P.lv || 1) * (1 - 0.06 * i), strip[p].in, 0, ex)); }
     if ((x = on('a')) && (c = pat(st.a.v, x)[q]) !== '.' && (d || q % 2 === 0)) jo('a', t), tone(st.a.p, hz(ch[c % 4 % ch.length] + 12 + (c >= 4 ? 12 : 0) + (st.aO || 0)), lt(0.003), 0.2, mxv('a') * (q % 4 === 0 ? 0.05 : 0.038) * (PATCH[st.a.p].lv || 1), strip.a.in, 0, jit(0.1)); // 0-3 : notes de l'accord ; 4-7 : à l'octave
     if (d && (x = on('l'))) { const L = pat(st.l.v, x), N = L[q];
       if (N != null && N !== R) { let n = 1; while (q + n < 16 && L[q + n] == null) n++;
@@ -842,6 +856,6 @@ registerProcessor('moteur', Moteur);`;
       tone(st[p].p, hz(n), AC.currentTime, 0.25, p === 'l' ? (P.lv || 0.15) * (st.lV == null ? 1 : st.lV) : 0.3 * (P.lv || 1), strip[p].in); },
     get fond() { return curRoot; }, // fondamentale de la mesure en cours
     get pas() { return stp; }, get timbres() { return Object.keys(PATCH); }, get kits() { return Object.keys(KIT); },
-    get ac() { return AC; }, get out() { return master; }, get smp() { return Object.keys(smp); }, // prises de test
+    get ac() { return AC; }, get out() { return master; }, get patch() { return PATCH; }, get smp() { return Object.keys(smp); }, // prises de test
   };
 })();
