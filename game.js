@@ -164,54 +164,54 @@
   });
   const postScene = new THREE.Scene(), postCam = new THREE.Camera(), quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post);
   quad.frustumCulled = false; postScene.add(quad);
-  // reflets de la route mouillée calculés à l'écran : entre la scène et la passe finale. La route écrit dans l'alpha de la cible combien elle est mouillée
-  // (1 = sèche, 0,5 = détrempée, voir eclaire) ; de chacun de ses pixels on suit le rayon réfléchi dans la profondeur de la vue, et on ajoute la couleur qu'il rencontre :
-  // voitures, néons, feux arrière. Ce que le rayon ne trouve pas à l'écran (le ciel, ce qui est hors champ) reste aux rubans et aux reflets étirés de la lumière dynamique.
-  const ssr = new THREE.ShaderMaterial({
-    uniforms: { t: { value: null }, dz: { value: null }, P: { value: new THREE.Matrix4() }, Pi: { value: new THREE.Matrix4() }, up: { value: new V3() }, px: { value: new THREE.Vector2() } },
-    vertexShader: post.vertexShader,
-    fragmentShader: `uniform sampler2D t, dz; uniform mat4 P, Pi; uniform vec3 up; uniform vec2 px; varying vec2 v;
-      vec3 vpos(vec2 u){ vec4 p = Pi * vec4(u * 2. - 1., texture2D(dz, u).x * 2. - 1., 1.); return p.xyz / p.w; } // position dans le repère de la caméra
-      vec2 ecran(vec3 q){ vec4 c = P * vec4(q, 1.); return c.xy / c.w * .5 + .5; }
-      void main(){
-        vec4 c = texture2D(t, v); float w = c.a > ${(0.95 - EAU).toFixed(2)} && c.a < .99 ? (1. - c.a) / ${EAU.toFixed(2)} : 0., trouve = 0.;
-        if (w > 0.) {
-          vec3 p = vpos(v), e = normalize(p), r = reflect(e, up), q = p; float s = .4, a = 0., b = 0.; vec2 h = vec2(-1.);
-          for (int i = 0; i < 22; i++) { // pas qui s'allongent : 0,4 m au départ, plus de 300 m au bout
-            b = a; a += s; s *= 1.28; q = p + r * a; vec2 u = ecran(q);
-            if (q.z > -.5 || u.x < 0. || u.x > 1. || u.y < 0. || u.y > 1.) break;
-            float z = vpos(u).z;
-            if (q.z < z && q.z > z - max(1.2, s * 2.)) { // le rayon vient de passer derrière une surface, à moins d'une épaisseur : on resserre entre les deux derniers pas
-              for (int j = 0; j < 5; j++) { float m = (a + b) * .5; vec2 um = ecran(p + r * m); if (p.z + r.z * m < vpos(um).z) a = m; else b = m; }
-              h = ecran(p + r * a); break;
-            }
-          }
-          if (h.x >= 0.) {
-            vec3 f = vec3(0.); for (int k = -2; k < 2; k++) f += texture2D(t, h + vec2(0., (float(k) + .5) * 2. * px.y)).rgb; // étiré à la verticale, comme un reflet sur l'eau
-            vec2 bd = min(h, 1. - h); trouve = smoothstep(0., .08, min(bd.x, bd.y)) * (1. - smoothstep(60., 320., a)); // s'éteint au bord de l'image et au loin
-            float fr = .25 + .75 * pow(1. - max(dot(-e, up), 0.), 3.); // Fresnel : vu en rasant, la route est un miroir
-            c.rgb += f * .12 * w * fr * trouve;
-          }
-        }
-        gl_FragColor = vec4(c.rgb, 1. - trouve); // alpha : 0 là où le reflet est trouvé, les rubans de repli n'y ajoutent rien (voir repli)
-      }`,
-  });
-  // rubans de repli : dessinés après ssr dans la même cible, pondérés par son alpha, cachés par ce qui est devant eux dans la profondeur de la scène
-  const REPLI = { rDz: { value: null }, rRes: { value: new THREE.Vector2() } }, repliScene = new THREE.Scene();
+  // reflets de la route mouillée calculés à l'écran : entre la scène et la passe finale. La route écrit dans l'alpha de la cible combien elle est mouillée
+  // (1 = sèche, 0,5 = détrempée, voir eclaire) ; de chacun de ses pixels on suit le rayon réfléchi dans la profondeur de la vue, et on ajoute la couleur qu'il rencontre :
+  // voitures, néons, feux arrière. Ce que le rayon ne trouve pas à l'écran (le ciel, ce qui est hors champ) reste aux rubans et aux reflets étirés de la lumière dynamique.
+  const ssr = new THREE.ShaderMaterial({
+    uniforms: { t: { value: null }, dz: { value: null }, P: { value: new THREE.Matrix4() }, Pi: { value: new THREE.Matrix4() }, up: { value: new V3() }, px: { value: new THREE.Vector2() } },
+    vertexShader: post.vertexShader,
+    fragmentShader: `uniform sampler2D t, dz; uniform mat4 P, Pi; uniform vec3 up; uniform vec2 px; varying vec2 v;
+      vec3 vpos(vec2 u){ vec4 p = Pi * vec4(u * 2. - 1., texture2D(dz, u).x * 2. - 1., 1.); return p.xyz / p.w; } // position dans le repère de la caméra
+      vec2 ecran(vec3 q){ vec4 c = P * vec4(q, 1.); return c.xy / c.w * .5 + .5; }
+      void main(){
+        vec4 c = texture2D(t, v); float w = c.a > ${(0.95 - EAU).toFixed(2)} && c.a < .99 ? (1. - c.a) / ${EAU.toFixed(2)} : 0., trouve = 0.;
+        if (w > 0.) {
+          vec3 p = vpos(v), e = normalize(p), r = reflect(e, up), q = p; float s = .4, a = 0., b = 0.; vec2 h = vec2(-1.);
+          for (int i = 0; i < 22; i++) { // pas qui s'allongent : 0,4 m au départ, plus de 300 m au bout
+            b = a; a += s; s *= 1.28; q = p + r * a; vec2 u = ecran(q);
+            if (q.z > -.5 || u.x < 0. || u.x > 1. || u.y < 0. || u.y > 1.) break;
+            float z = vpos(u).z;
+            if (q.z < z && q.z > z - max(1.2, s * 2.)) { // le rayon vient de passer derrière une surface, à moins d'une épaisseur : on resserre entre les deux derniers pas
+              for (int j = 0; j < 5; j++) { float m = (a + b) * .5; vec2 um = ecran(p + r * m); if (p.z + r.z * m < vpos(um).z) a = m; else b = m; }
+              h = ecran(p + r * a); break;
+            }
+          }
+          if (h.x >= 0.) {
+            vec3 f = vec3(0.); for (int k = -2; k < 2; k++) f += texture2D(t, h + vec2(0., (float(k) + .5) * 2. * px.y)).rgb; // étiré à la verticale, comme un reflet sur l'eau
+            vec2 bd = min(h, 1. - h); trouve = smoothstep(0., .08, min(bd.x, bd.y)) * (1. - smoothstep(60., 320., a)); // s'éteint au bord de l'image et au loin
+            float fr = .25 + .75 * pow(1. - max(dot(-e, up), 0.), 3.); // Fresnel : vu en rasant, la route est un miroir
+            c.rgb += f * .12 * w * fr * trouve;
+          }
+        }
+        gl_FragColor = vec4(c.rgb, 1. - trouve); // alpha : 0 là où le reflet est trouvé, les rubans de repli n'y ajoutent rien (voir repli)
+      }`,
+  });
+  // rubans de repli : dessinés après ssr dans la même cible, pondérés par son alpha, cachés par ce qui est devant eux dans la profondeur de la scène
+  const REPLI = { rDz: { value: null }, rRes: { value: new THREE.Vector2() } }, repliScene = new THREE.Scene();
   const ssrScene = new THREE.Scene(), ssrQuad = new THREE.Mesh(quad.geometry, ssr); ssrQuad.frustumCulled = false; ssrScene.add(ssrQuad);
-  // adaptation de l'œil (sans style) : 96 points de la scène, moyenne des log de luminosité, rapprochée de la valeur de l'image d'avant ; tout reste sur le GPU, rien n'est relu
-  // Les tunnels sont peints aussi clairs que le dehors, comme vus par un œil déjà fait au noir : la lumière « vraie » y est TUN fois plus faible (ld = son log). Une fois l'œil adapté, l'image est celle d'avant ;
-  // à l'entrée il fait d'abord sombre puis la rétine s'habitue, à la sortie le dehors éblouit puis l'œil se referme.
-  const TUN = 0.4;
-  const OEIL = new THREE.ShaderMaterial({ uniforms: { t: { value: null }, prev: { value: null }, ld: { value: 0 }, kc: { value: 0 }, kn: { value: 0 }, kd: { value: 0 } }, depthTest: false, depthWrite: false,
-    vertexShader: post.vertexShader,
-    fragmentShader: `uniform sampler2D t, prev; uniform float ld, kc, kn, kd;
-      void main(){
-        float s = 0.; for (int i = 0; i < 12; i++) for (int j = 0; j < 8; j++) s += log(dot(texture2D(t, (vec2(i, j) + .5) / vec2(12., 8.)).rgb, vec3(.3, .59, .11)) + .002);
-        float L = s / 96., A = L + ld; vec4 p = texture2D(prev, vec2(.5));
-        if (p.a < .5) p = vec4(A, L, 0., 1.); // première image : l'œil est déjà fait à la scène
-        gl_FragColor = vec4(mix(p.r, A, A > p.r ? kc : kn), mix(p.g, L, kd), 0., 1.); // r : l'œil, vite vers le clair, lentement vers le noir ; g : la référence du dehors, suivie plus lentement encore, figée en tunnel
-      }` });
+  // adaptation de l'œil (sans style) : 96 points de la scène, moyenne des log de luminosité, rapprochée de la valeur de l'image d'avant ; tout reste sur le GPU, rien n'est relu
+  // Les tunnels sont peints aussi clairs que le dehors, comme vus par un œil déjà fait au noir : la lumière « vraie » y est TUN fois plus faible (ld = son log). Une fois l'œil adapté, l'image est celle d'avant ;
+  // à l'entrée il fait d'abord sombre puis la rétine s'habitue, à la sortie le dehors éblouit puis l'œil se referme.
+  const TUN = 0.4;
+  const OEIL = new THREE.ShaderMaterial({ uniforms: { t: { value: null }, prev: { value: null }, ld: { value: 0 }, kc: { value: 0 }, kn: { value: 0 }, kd: { value: 0 } }, depthTest: false, depthWrite: false,
+    vertexShader: post.vertexShader,
+    fragmentShader: `uniform sampler2D t, prev; uniform float ld, kc, kn, kd;
+      void main(){
+        float s = 0.; for (int i = 0; i < 12; i++) for (int j = 0; j < 8; j++) s += log(dot(texture2D(t, (vec2(i, j) + .5) / vec2(12., 8.)).rgb, vec3(.3, .59, .11)) + .002);
+        float L = s / 96., A = L + ld; vec4 p = texture2D(prev, vec2(.5));
+        if (p.a < .5) p = vec4(A, L, 0., 1.); // première image : l'œil est déjà fait à la scène
+        gl_FragColor = vec4(mix(p.r, A, A > p.r ? kc : kn), mix(p.g, L, kd), 0., 1.); // r : l'œil, vite vers le clair, lentement vers le noir ; g : la référence du dehors, suivie plus lentement encore, figée en tunnel
+      }` });
   const oeilScene = new THREE.Scene(), oeilQ = new THREE.Mesh(quad.geometry, OEIL); oeilQ.frustumCulled = false; oeilScene.add(oeilQ);
   if (ST) { // passe finale des styles : la scène telle quelle, l'effet du style, le HUD (toujours sur sa grille de 270 lignes), une vignette légère
     Object.assign(post.uniforms, { dz: { value: null }, ecr: { value: new THREE.Vector2(1, 1) }, pal: { value: PAL.map(c => new THREE.Color(c)) } });
@@ -634,7 +634,12 @@
       step(dt) { const fr = Math.exp(-3 * dt); for (let k = 0; k < N; k++) if (A[k] < 1) { const j = k * 3; A[k] += dt / vie; V[j] *= fr; V[j + 2] *= fr; P[j] += V[j] * dt; P[j + 1] += V[j + 1] * dt; P[j + 2] += V[j + 2] * dt; }
         g.attributes.position.needsUpdate = g.attributes.age.needsUpdate = true; } };
   };
-  const POUS = TH.poussiere && flou(480, TH.poussiere, 0.5), FUM = flou(600, [0.68, 0.68, 0.72], 0.55), poussiere = (...a) => POUS.emit(...a);
+  const POUS = TH.poussiere && flou(480, TH.poussiere, 0.5), GERBE = TH.poussiere && T.surf.some(q => q.aq) && flou(500, [0.92, 0.93, 0.9], 0.4, 0.35), FUM = flou(600, [0.68, 0.68, 0.72], 0.55), poussiere = (...a) => POUS.emit(...a);
+  // gerbe d'eau du gué (Spéciale des Ocres : seule carte en terre avec une zone mouillée) : derrière chaque roue avant, des gouttes en traits blancs projetées en éventail sur le côté, qui retombent, et un peu d'écume au ras de l'eau (disques à vie courte : plus longue, ils grossissent en brume) ; plus haute et plus large avec la vitesse
+  const gerbe = (c, v) => { const fx = Math.cos(c.th), fz = Math.sin(c.th), k = Math.min(1, v / 40), n = 2 + 4 * k | 0;
+    for (const sd of [-1, 1]) for (let j = 0; j < n; j++) { const ox = c.x + fx * 1.1 - fz * sd * 0.9, oz = c.z + fz * 1.1 + fx * sd * 0.9, l = sd * (4 + Math.random() * 7) * k;
+      GERBE.emit(ox + jit(0.6), c.y + 0.25, oz + jit(0.6), c.vx * 0.45 - fz * l, (2 + Math.random() * 4.5) * k, c.vz * 0.45 + fx * l);
+      for (let d = 0; d < 5; d++) trait(ox, c.y + 0.2, oz, c.vx * 0.5 - fz * l * 1.4 + jit(3), (3 + Math.random() * 6) * k, c.vz * 0.5 + fx * l * 1.4 + jit(3), 0.9, 12, 0.09, [1, 1, 0.95], c.y + 0.05); } };
   // vapeur des bouches d'égout : un panache lent par bouche (4 s pour monter de 5 m), teinté par le luminaire le plus proche à moins de 30 m (les néons)
   const VAPS = VAP.map(([x, y, z]) => { const c = new THREE.Color(0.2, 0.2, 0.23); let lb = null, db = 900;
     for (const l of LUMS) { const d = (l.x - x) ** 2 + (l.z - z) ** 2; if (d < db) { db = d; lb = l; } }
@@ -690,9 +695,9 @@
     const { lm, moi: car } = VUES[0]; // le tonnerre est celui du joueur 1 (un seul son, comme SON.frame)
     if (TH.poussiere) { for (const c of race ? race.cars : [car]) { const q = T.surf[c.idx], v = Math.hypot(c.vx, c.vz), sd = Math.random() < 0.5 ? -0.8 : 0.8, x = c.x - Math.cos(c.th) * 1.6 - Math.sin(c.th) * sd, z = c.z - Math.sin(c.th) * 1.6 + Math.cos(c.th) * sd; // chaque voiture lève un panache derrière elle ; dans le gué, une gerbe d'eau. La poussière part à la vitesse de la voiture puis freine : le panache reste dans le champ de la caméra de poursuite
         if (v < 8 || c.air || c.out || !(VUES.some(v => v.car === c) || c.drift || Math.random() < 0.5)) continue;
-        if (q.aq) for (let k = 0; k < 3; k++) poussiere(x + jit(1), c.y + 0.15, z + jit(1), c.vx * 0.8 + jit(5), 1.5 + Math.random() * 4, c.vz * 0.8 + jit(5)); // l'eau du gué est trouble : une gerbe de la même teinte, plus haute
+        if (q.aq) gerbe(c, v); // le gué : une gerbe d'eau de chaque côté (GERBE)
         else if (q.roul > 0.25) for (let k = 0; k < 2; k++) poussiere(x + jit(0.6), c.y + 0.15, z + jit(0.6), c.vx * 0.7 + jit(2), 0.3 + Math.random() * 1.2, c.vz * 0.7 + jit(2)); }
-      POUS.step(dt); }
+      POUS.step(dt); if (GERBE) GERBE.step(dt); }
     dgFrame(dt); FUM.step(dt); dEch.value = RH / 2;
     for (const p of VAPS) { for (p.t += dt; p.t > 0.12; p.t -= 0.12) p.f.emit(p.x + jit(0.6), p.y, p.z + jit(0.6), 0.3 + jit(0.4), 1 + Math.random() * 0.6, jit(0.4)); p.f.step(dt); } // vapeur : toujours, même loin (40 points par bouche)
     for (let i = 0; i < VN; i++) { const j = i * 6, s = i * VK; if (vS[s + 3] <= 0) { vCo.fill(0, j, j + 6); continue; }

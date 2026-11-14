@@ -29,12 +29,39 @@
       for (let y = 0; y < 64; y += 4) for (let x = 0; x < 64; x += 4) { R(g, ['#c8643a', '#b85530', '#d87a48', '#a84a2a', '#d08a58'][alea() * 5 | 0], x, y, 3, 4); R(g, '#7a3418', x + 3, y, 1, 4); }
       voile(g, 0.3, () => { for (let y = 3; y < 64; y += 4) R(g, '#000', 0, y, 64, 1); for (let i = 0; i < 8; i++) R(g, '#4a5a2a', alea() * 60 | 0, alea() * 60 | 0, 3 + (alea() * 4 | 0), 2); });
     }, 4],
-    // eau du gué : trouble, couleur de terre, rides claires
+    // eau du gué : un ruisseau peu profond sur la terre, brun vert, assez sombre pour se lire sur la piste ocre ; rides claires en travers du courant, reflets du ciel, quelques galets qui affleurent
     eauGue: () => [64, 64, (g, o) => {
-      const { R, alea } = o; R(g, '#8a6e4a', 0, 0, 64, 64);
-      for (let i = 0; i < 120; i++) R(g, alea() < 0.5 ? '#9a7c54' : '#74593a', alea() * 64 | 0, alea() * 64 | 0, 3 + (alea() * 6 | 0), 1);
-      for (let i = 0; i < 26; i++) R(g, '#d8c4a0', alea() * 64 | 0, alea() * 64 | 0, 2 + (alea() * 4 | 0), 1);
-    }, 12],
+      const { R, alea, voile } = o; R(g, '#5e5a3c', 0, 0, 64, 64);
+      voile(g, 0.5, () => { for (let i = 0; i < 70; i++) R(g, alea() < 0.5 ? '#76683e' : '#46482e', alea() * 64 | 0, alea() * 64 | 0, 6 + (alea() * 14 | 0), 2 + (alea() * 3 | 0)); });
+      for (let i = 0; i < 90; i++) R(g, alea() < 0.6 ? '#7e8a74' : '#a8b4a0', alea() * 64 | 0, alea() * 64 | 0, 3 + (alea() * 8 | 0), 1); // rides
+      for (let i = 0; i < 22; i++) R(g, '#dce4e8', alea() * 64 | 0, alea() * 64 | 0, 2 + (alea() * 5 | 0), 1); // reflets du ciel sur la crête des rides
+      for (let i = 0; i < 6; i++) { const x = alea() * 60 | 0, y = alea() * 60 | 0; R(g, '#8a7a5a', x, y, 3, 2); R(g, '#c8d0cc', x, y - 1, 3, 1); } // galets, et l'eau qui se brise dessus
+    }, 6],
+    // écume de la ligne d'eau : liserés blancs déchirés sur fond transparent, plus denses au milieu de la texture (là où l'eau touche la terre)
+    ecume: () => [64, 16, (g, o) => {
+      const { R, alea } = o;
+      for (let i = 0; i < 160; i++) { const y = 8 + (alea() + alea() + alea() - 1.5) * 6 | 0; R(g, alea() < 0.7 ? 'rgba(240,244,240,0.85)' : 'rgba(200,190,160,0.7)', alea() * 64 | 0, y, 2 + (alea() * 6 | 0), 1); }
+    }, 4],
+    // terre mouillée aux abords du gué : boue sombre, flaques et ornières pleines d'eau ; transparente aux deux bouts (haut et bas de la texture) pour se fondre dans la piste sèche
+    boueGue: () => [64, 64, (g, o) => {
+      const { R, alea } = o;
+      for (let y = 0; y < 64; y++) { const a = Math.min(1, Math.min(y, 63 - y) / 14); R(g, `rgba(74,52,32,${(0.75 * a).toFixed(2)})`, 0, y, 64, 1);
+        for (let i = 0; i < 5; i++) if (alea() < a) R(g, alea() < 0.5 ? `rgba(60,58,44,${a.toFixed(2)})` : `rgba(110,82,52,${(0.8 * a).toFixed(2)})`, alea() * 64 | 0, y, 2 + (alea() * 6 | 0), 1); }
+      for (const x of [17, 26, 36, 45]) for (let y = 10; y < 54; y += 2) if (alea() < 0.7) R(g, 'rgba(70,84,72,0.85)', x - 1 + (alea() * 3 | 0), y, 3, 2); // les ornières, pleines d'eau
+    }],
+    // terre de la piste hors de la bande centrale (parties larges) : même terre battue que la chaussée, damée et sans ornières ; le bord intérieur (gauche de la texture) est transparent, pour se fondre sur la bordure de la chaussée
+    terrePiste: () => [64, 32, (g, o) => {
+      const { R, alea } = o;
+      for (let x = 0; x < 64; x++) { const a = Math.min(1, x / 16); R(g, `rgba(168,106,58,${a.toFixed(2)})`, x, 0, 1, 32); for (let i = 0; i < 6; i++) if (alea() < a) R(g, ['#8a5228', '#b87a48', '#96602f', '#c89058'][alea() * 4 | 0], x, alea() * 32 | 0, 1, 1); }
+    }],
+    // talus de terre qui borde la piste : terre plus sombre et tassée côté route (bas de la texture), herbe sèche, cailloux et thym vers le haut ; les pneus l'ont rayé par endroits
+    talusPiste: () => [64, 32, (g, o) => {
+      const { R, alea, voile } = o; R(g, '#8e5a30', 0, 0, 64, 32);
+      for (let i = 0; i < 260; i++) R(g, alea() < 0.5 ? '#7a4c26' : '#a8703e', alea() * 64 | 0, alea() * 32 | 0, 1 + (alea() * 2 | 0), 1);
+      for (let i = 0; i < 70; i++) { const y = alea() * alea() * 16 | 0; R(g, alea() < 0.6 ? '#8a8440' : '#5e7038', alea() * 62 | 0, y, 2, 2); } // l'herbe sèche, en haut
+      for (let i = 0; i < 30; i++) R(g, '#d8c09a', alea() * 64 | 0, 8 + alea() * 24 | 0, 1, 1); // cailloux
+      voile(g, 0.25, () => { for (let i = 0; i < 6; i++) R(g, '#000', alea() * 56 | 0, 18 + alea() * 12 | 0, 8 + (alea() * 10 | 0), 1); }); // raies des pneus
+    }],
     // rang de lavande : touffes violettes serrées, quelques tiges vertes, la terre entre les pieds
     lavande: () => [16, 16, (g, o) => {
       const { R, alea } = o; R(g, '#7a58b8', 0, 0, 16, 16);
