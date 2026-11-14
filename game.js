@@ -1295,8 +1295,8 @@
       if (dev && !fini) { const g = (dev.dist - car.dist) * 2 / Math.max(sp, 15); txt('+' + g.toFixed(1) + ' ' + pil(dev)[0], 12, 44, 8, g < 1 ? Y : '#e8e8e4'); } else txt(fini ? '' : 'EN TETE', 12, 44, 8, Y); }
     else txt(gl ? 'DELAI ' + fmt(GLT) : ses.best ? 'REC ' + fmt(ses.best) : 'REC --', 12, 44, 8, gl && ses.tRace > GLT ? RD : C); // rouge : seulement le délai dépassé
     if (gl && !fini) { const au = race && race.cars[1 - vu.n]; // en duel : le score de l'autre joueur sous le sien (figé s'il est arrivé)
-      panel(6, 60, 132, au ? 55 : 41); txt('SCORE', 12, 65, 8, C); if (au) { txt(pil(au)[0], 12, 102, 8, pil(au)[1]); txt(String(Math.round(au.fin ? au.pts : au.score)), 132, 102, 8, pil(au)[1], 'right'); } txt('x' + car.mult, 132, 65, 8, car.mult > 1 ? Y : '#e8e8e4', 'right'); txt(String(Math.round(car.score)), 132, 79, 16, Y, 'right', 1);
-      if (car.cours > 0) tag('GLISSE +' + Math.round(car.cours) + (car.mult > 1 ? '  x' + car.mult : ''), cx, 102, car.glD >= GL.min ? Y : '#e8e8e4'); // blanche tant qu'elle est trop courte pour compter
+      panel(144, 6, 110, au ? 55 : 41); txt('SCORE', 150, 11, 8, C); if (au) { txt(pil(au)[0], 150, 48, 8, pil(au)[1]); txt(String(Math.round(au.fin ? au.pts : au.score)), 248, 48, 8, pil(au)[1], 'right'); } txt('x' + car.mult, 248, 11, 8, car.mult > 1 ? Y : '#e8e8e4', 'right'); txt(String(Math.round(car.score)), 248, 25, 16, Y, 'right', 1);
+      if (car.cours > 0) tag('GLISSE +' + Math.round(car.cours) + (car.mult > 1 ? '  x' + car.mult : ''), cx, 66, car.glD >= GL.min ? Y : '#e8e8e4'); // blanche tant qu'elle est trop courte pour compter
     }
     // vitesse
     panel(HW - 126, HH - 74, 120, 68); txt(HU.mph ? 'MPH' : 'KM/H', HW - 120, HH - 69, 8, C); if (HU.jp) txt(HU.jp[1], HW - 12, HH - 74, 16, C, 'right', 0, JP);
@@ -1359,7 +1359,7 @@
     }
     // écrans
     if (mode === 'tournee' && state === 'count') tag('MANCHE ' + (tnOu().manche + 1) + '/' + SOIREE.length + ' · ' + M.heure, cx, 88, C); // l'heure de la nuit à laquelle se court la manche
-    if (state === 'count' && shown || goT > 0) { const s = goT > 0 ? 'GO' : String(shown); R(hg, HU.fond, cx - 20 - s.length * 30, 6, 40 + s.length * 60, 78); txt(s, cx + 4, 14, 64, Y, 'center', 3); } // sur un fond, en haut : ni le portique ni les voitures ne passent derrière
+    if (state === 'count' && shown || goT > 0) { const s = goT > 0 ? 'GO' : String(shown); R(hg, HU.fond, cx - 20 - s.length * 30, 66, 40 + s.length * 60, 78); txt(s, cx + 4, 74, 64, Y, 'center', 3); } // sur un fond, en haut : ni le portique ni les voitures ne passent derrière
     if (result && state !== 'title' && !(race && fini) && (result.T -= dt) > 0) { // résultat du tour qu'on vient de boucler, sans arrêter la course
       tag('TOUR ' + result.n + '  ' + fmt(result.t), cx, 28, Y); if (result.pos) tag('PLACE ' + result.pos + '/' + result.of, cx, 44, C); else tag(result.first ? 'PREMIER TEMPS' : result.rec ? 'NOUVEAU RECORD' : '+' + result.diff.toFixed(2) + ' S', cx, 44, result.rec ? C : RD);
       const b = result.b, m = medal(result.t), L = [];

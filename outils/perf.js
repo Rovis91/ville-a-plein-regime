@@ -44,15 +44,19 @@ export async function tour({ images = 0 } = {}) {
   return r;
 }
 
-export async function suite() { // lancé par ?perf : chaque carte à son tour
-  const charge = Math.round(performance.now()), ids = CARTES.map(m => m.id), i = ids.indexOf(__g.M.id), Q = new URLSearchParams(location.search);
+export async function suite() { // lancé par ?perf : chaque carte à son tour ; ?perf&seule&carte=<id> : cette carte seulement
+  const charge = Math.round(performance.now()), ids = CARTES.map(m => m.id), i = ids.indexOf(__g.M.id), Q = new URLSearchParams(location.search), seule = Q.has('seule');
   // le nombre de vues est toujours écrit dans l'adresse : sans lui le jeu suivrait la préférence du menu, et le banc du solo tournerait à deux chez qui a joué à deux
-  const n = Q.get('joueurs') === '2' ? 2 : 1, d = n > 1 ? '2' : '', K = 'vpr.perf' + d, url = id => location.pathname + '?perf&auto&joueurs=' + n + '&carte=' + id;
-  if (!Q.get('carte') || !Q.get('joueurs') || __g.mode !== 'course') { localStorage.setItem('vpr7.mode' + d, '"course"'); localStorage.removeItem(K); location.href = url(ids[0]); return; }
-  const tout = JSON.parse(localStorage.getItem(K) || '[]'), r = await tour(); r.chargement = charge; // chargement : ms entre l'ouverture de la page et le jeu prêt
+  const n = Q.get('joueurs') === '2' ? 2 : 1, d = n > 1 ? '2' : '', K = 'vpr.perf' + d, url = id => location.pathname + '?perf&auto&joueurs=' + n + (seule ? '&seule' : '') + '&carte=' + id;
+  if (!Q.get('carte') || !Q.get('joueurs') || __g.mode !== 'course') { localStorage.setItem('vpr7.mode' + d, '"course"'); localStorage.removeItem(K); location.href = url(seule && Q.get('carte') || ids[0]); return; }
+  const tout = seule ? [] : JSON.parse(localStorage.getItem(K) || '[]'), r = await tour(); r.chargement = charge; // chargement : ms entre l'ouverture de la page et le jeu prêt
   tout.push(r); localStorage.setItem(K, JSON.stringify(tout));
-  if (i + 1 < ids.length) location.href = url(ids[i + 1]);
-  else { console.table(tout.map(({ piresLots, piresCpu, sectMs, sectAppels, ...t }) => t)); window.__perf = tout; }
+  if (!seule && i + 1 < ids.length) location.href = url(ids[i + 1]);
+  else {
+    console.table(tout.map(({ piresLots, piresCpu, sectMs, sectAppels, ...t }) => t)); window.__perf = tout;
+    const gl = __g.renderer.getContext(), e = gl.getExtension('WEBGL_debug_renderer_info'); // pour outils/banc.js : le résultat, la référence et la carte graphique qui a mesuré
+    fetch('/captures/perf' + d + '.json', { method: 'POST', body: JSON.stringify({ budget: budget(n), gpu: e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : '?', resultats: tout }) }).catch(() => {}); // seul outils/capture.py reçoit l'envoi
+  }
 }
 
 // Mémoire sur l'enchaînement des cartes sans rechargement, comme en Tournée : index.html?auto, mode course, puis dans la console : (await import('./outils/perf.js')).chaine()
