@@ -1082,6 +1082,46 @@
         for (let a = 0; a <= nx; a++) for (let b = 0; b <= nz; b++) for (const [dx, dz] of [[-9, -9], [9, 9]]) { const x = x0 + a * 58 + dx, z = z0 + b * 58 + dz, d = g.dAt(x, z);
           if (d < W + 4 || d > 150 || tl.some(l => l.some(t => Math.abs(x - t[0]) < t[4] / 2 + 1 && Math.abs(z - t[2]) < t[6] / 2 + 1))) continue; rv.push([x, -0.3, z, Math.atan2(-dz, dx)]); if (d < 60) h.lum(near(h, x, z), x, 6, z, 0xffd8a0, 26, 1.4); }
         insts(h, 'reverbereRue', { fut: h.mat('matGris'), lampe: h.mat('lampe', LUM) }, rv); }
+      // ---------- le front de mer est, de la marina au pont (sous le grand virage qui monte, points 3 à 5) : vu d'en haut, c'était un grand aplat noir entre la route et les tours.
+      // Quai et promenade éclairée le long du chenal, palmiers, et derrière, des lots : restaurants à terrasse, entrepôts bas, parkings ----------
+      { const X0 = 1040, X1 = 1720, ZQ = CH0 - 2; let hz = 31; const al = () => (hz = hz * 16807 % 2147483647) / 2147483647;
+        const dansTour = (x, z, m) => tl.some(l => l.some(t => Math.abs(x - t[0]) < t[4] / 2 + m && Math.abs(z - t[2]) < t[6] / 2 + m));
+        const terre = (x, z, m = 6) => g.dAt(x, z) > W + m && g.hAt(x, z) > -1.5 && z < ZQ - 1 && !dansTour(x, z, 2);
+        boite(h, h.mat('trottoir'), X1 - X0, 0.3, ZQ + 230, (X0 + X1) / 2, -0.4, (ZQ - 230) / 2); // dalles claires sur tout le quartier (au-dessus des rues, sous la route qui monte)
+        boite(h, beton, X1 - X0, 4, 3, (X0 + X1) / 2, -2, ZQ + 1.5); // le quai
+        const palmT = [], palmP = [], bancs = [], rev = [], bornes = [], feux = [], autos = [], stores = [], terr = [], gens = [], lumF = [], lumC = [];
+        for (let x = X0 + 8; x < X1; x += 16) { if (!terre(x, ZQ - 4, 3)) continue; bornes.push([x, -0.25, ZQ - 2]); feux.push(x, 0.8, ZQ - 2); // bornes du quai, comme à la marina
+          if (x % 32 < 16 && terre(x, ZQ - 12)) { const ht = 9 + al() * 4; palmT.push([x, ht / 2 - 0.25, ZQ - 12, 0, 1, ht, 1]); palmP.push([x, ht - 0.25, ZQ - 12, al() * 6.3]); }
+          if (x % 48 < 16 && terre(x, ZQ - 20)) { rev.push([x, -0.25, ZQ - 20, 0]); h.lum(near(h, x, ZQ - 20), x, 6, ZQ - 19, 0xffd8a0, 30, 1.6); }
+          else if (terre(x, ZQ - 18)) bancs.push([x, -0.25, ZQ - 18, Math.PI]); }
+        const bat = [[], []], entrepots = [], enseignes = [], parcs = [];
+        for (let lz = ZQ - 64; lz > -230; lz -= 44) for (let lx = X0 + 4 + al() * 10; lx < X1 - 40; lx += 52) { // lots de 44 × 34 m, façade vers le chenal (+z)
+          if (![[0, 0], [44, 0], [0, 34], [44, 34], [22, 17]].every(([dx, dz]) => terre(lx + dx, lz + dz))) continue;
+          const u = al(), cx = lx + 22, cz = lz + 17;
+          if (u < 0.38) { // restaurant : salle aux vitres chaudes, store rayé, terrasse et sa guirlande, clients
+            bat[al() < 0.5 ? 0 : 1].push([cx, 3.5 - 0.25, cz - 4, 0, 22, 7, 12]); stores.push([cx, -0.25, cz + 2, 0, 1, 1, 1, [0xc8304a, 0x2a6a4a, 0xe8a020][al() * 3 | 0]]);
+            for (const dz of [4, 7.5]) terr.push([cx, -0.25, cz + dz, 0]);
+            for (let k = 0; k < 6; k++) gens.push([cx - 6 + al() * 12, -0.25, cz + 4 + al() * 6, al() * 6.3, 0.95 + al() * 0.1]);
+            for (let x = cx - 11; x <= cx + 11; x += 1) { lumF.push(x, 4.2 - Math.abs(Math.sin((x - cx) / 5.5 * Math.PI)) * 0.6, cz + 9); lumC.push(...[[1, 0.85, 0.4], [1, 0.5, 0.3]][x & 1]); }
+            h.lum(near(h, cx, cz), cx, 4, cz + 6, 0xffb860, 28, 1.8); }
+          else if (u < 0.72) { // entrepôt bas : bardage, enseigne lumineuse, lampe au-dessus des portes
+            entrepots.push([cx, 4.5 - 0.25, cz - 2, 0, 40, 9, 26]); enseignes.push([cx, 7.6, cz + 11.1]); h.lum(near(h, cx, cz), cx, 6, cz + 13, 0xe8f0ff, 22, 1.2); }
+          else { parcs.push([cx, cz]); for (const dz of [-8, 8]) for (let x = lx + 3; x < lx + 42; x += 3) if (al() < 0.65) autos.push([x, -0.25, cz + dz, Math.PI / 2 + (al() < 0.5 ? 0 : Math.PI), 1, 1, 1, [0xe8e4dc, 0x1a1a20, 0x8a8e96, 0xc8302c, 0x2c4a8a, 0x3a3a40][al() * 6 | 0]]);
+            rev.push([lx + 1, -0.25, cz, 0]); h.lum(near(h, lx, cz), lx + 2, 6, cz, 0xffd8a0, 26, 1.2); } }
+        for (const [cx, cz] of parcs) boite(h, h.mat('parc'), 44, 0.3, 34, cx, -0.3, cz);
+        bat.forEach((l, i) => inst(h, h.geo('bloc'), h.mat('tourFenetres', LUM, i ? ['#ffd27a', '#ffb85a'] : ['#ffe8c0', '#ff9a5a']), l));
+        inst(h, h.geo('bloc'), h.mat('entrepot'), entrepots);
+        inst(h, h.geo('boite', 14, 1.6, 0.3), h.mat('ecrit', LUM, 96, 12, '#0e3a5a', '#f4f1e0', '湾岸倉庫  BAY WAREHOUSE', 9), enseignes);
+        inst(h, h.geo('troncPalmier'), h.mat('troncPalmier'), palmT); insts(h, 'palmes', { palme: h.mat('palme', { side: THREE.DoubleSide }) }, palmP);
+        insts(h, 'store', { toile: h.mat('toileRayee', { side: THREE.DoubleSide }), fer: h.mat('fonte') }, stores, { teinte: 'toile' });
+        insts(h, 'terrasse', { plateau: h.mat('craie'), fer: h.mat('fonte'), canne: h.mat('bruit', {}, '#b8925a', ['#8a6a3a', '#d0b080']) }, terr);
+        insts(h, 'fetard', { corps: h.mat('vitreSombre') }, gens);
+        insts(h, 'banc', { vert: h.mat('planches', { c: 0x9a7a5a }), fer: h.mat('matGris') }, bancs);
+        insts(h, 'borneQuai', { fut: h.mat('matGris'), lampe: h.mat('lampe', LUM) }, bornes);
+        insts(h, 'reverbereRue', { fut: h.mat('matGris'), lampe: h.mat('lampe', LUM) }, rev);
+        insts(h, 'voitureGaree', { caisse: h.mat('peinture', { c: 0xffffff }), vitre: h.mat('vitreSombre'), feuRouge: h.mat('feuRouge'), feuBlanc: h.mat('matGris'), chassis: h.mat('matGris'), roue: h.mat('roue'), pneu: h.mat('pneu') }, autos, { teinte: 'caisse' });
+        const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(feux.concat(lumF), 3)); fg.setAttribute('color', new THREE.Float32BufferAttribute(feux.map((v, k) => [1, 0.88, 0.66][k % 3]).concat(lumC), 3));
+        const pf = new THREE.Points(fg, new THREE.PointsMaterial({ size: 2.5, sizeAttenuation: false, vertexColors: true })); pf.frustumCulled = false; h.scene.add(pf); }
       // au loin, hors brouillard : la ville derrière, une côte en face de l'autre côté de la baie, la zone industrielle à l'est, un grand pont suspendu à l'ouest
       const loins = [['#0a1020', ['#ffb85a', '#f4f1e0', '#ffd27a'], 90], ['#0c0e18', ['#9fd0ff', '#f4f1e0'], 60], ['#140c10', ['#ff9a5a', '#ffd27a'], 40]].map(([f, c, n]) => h.mat('tourLoin', { lum: 1, fog: false }, f, c, n)), ll = loins.map(() => []);
       const amas = (cx, cz, n, rx, rz, hmin, hmax, wmin) => { for (let i = 0; i < n; i++) { const hh = hmin + rnd() * rnd() * (hmax - hmin), w = wmin + rnd() * wmin; ll[i % 3].push([cx + (rnd() - 0.5) * rx, hh / 2 - 4, cz + (rnd() - 0.5) * rz, 0, w, hh, w]); } };
