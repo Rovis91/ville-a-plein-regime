@@ -1,7 +1,6 @@
 // Formes propres à « touge » (Karasu-tōge) : complète le catalogue de formes.js (forme simple = géométrie, assemblage = liste de boîtes à zones). Voir METHODE-DECOR.md.
 // Sauf mention, X = en s'éloignant de la route, Z = le long de la route, origine au pied de l'objet.
 (function () {
-  const B = (w, h, d) => { const g = new THREE.BoxGeometry(w, h, d); g.userData.dim = [w, h, d]; return g; };
   const paire = f => [-1, 1].map(f);
   Object.assign(FORMES, {
     // pont de pierre sur le torrent, dans le repère de la route (X en travers) : parapets au-dessus des glissières, bandeaux sous la chaussée, culées dans les berges
@@ -20,12 +19,12 @@
         ['marche', 0.5, 0.15, 0.5, x, 1.17 + (x - 1.6) * 0.49, sd * 2], ['feu', 0.36, 0.34, 0.36, x, 1.42 + (x - 1.6) * 0.49, sd * 2], ['marche', 0.72, 0.18, 0.72, x, 1.68 + (x - 1.6) * 0.49, sd * 2]]).flat()),
       ['marche', 5, 0.4, 5, 9.6, 3.1, 0], ['bois', 3.2, 2.2, 3.6, 10, 4.4, 0], ['feu', 0.06, 1.2, 1.6, 8.38, 4.2, 0], ...paire(sd => ['toit', 4.4, 0.25, 2.6, 10, 5.85, sd * 1.15, [sd * 0.5, 0, 0]])],
     // cerf sika (X = vers l'avant) : corps, pattes fines, cou, tête, oreilles, petits bois, miroir blanc de la croupe ; les yeux renvoient les phares
-    cerf: () => [['poil', 1.25, 0.55, 0.45, 0, 1.0, 0, null, 1], ...paire(a => paire(c => ['patte', 0.09, 0.78, 0.09, a * 0.48, 0.39, c * 0.15])).flat(),
+    cerf: () => [['poil', 1.25, 0.55, 0.45, 0, 1.0, 0, null, 1], ...paire(a => paire(c => ['poil', 0.09, 0.78, 0.09, a * 0.48, 0.39, c * 0.15])).flat(),
       ['poil', 0.26, 0.6, 0.24, 0.62, 1.35, 0, [0, 0, -0.55]], ['poil', 0.46, 0.22, 0.22, 0.86, 1.63, 0], ['croupe', 0.08, 0.38, 0.36, -0.64, 1.02, 0],
       ...paire(sd => ['poil', 0.06, 0.2, 0.08, 0.72, 1.82, sd * 0.13, [sd * 0.5, 0, 0]]), ...paire(sd => ['bois', 0.05, 0.42, 0.05, 0.74, 1.95, sd * 0.07, [sd * 0.25, 0, 0.2]]),
       ...paire(sd => ['yeux', 0.07, 0.08, 0.06, 0.98, 1.68, sd * 0.09])],
-    // mur de soutènement en blocs (en travers : X = épaisseur) ; filet pare-pierres et son poteau, au-dessus
-    murSout: () => B(1, 5.5, 4.4), filetPierres: () => B(0.04, 2.4, 4.4), poteauFilet: () => B(0.14, 2.8, 0.14),
+    // enseigne haute de la supérette, sur mât : panneau face à Z (la voiture qui arrive)
+    enseigneHaute: () => [['acier', 0.6, 8, 0.6, 0, 4, 0], ['enseigne', 5.4, 3.4, 0.5, 0, 9.4, 0]],
     // distributeur de boissons isolé, face vers -X (la route) : caisse blanche, façade éclairée, auvent, bac à canettes, socle de béton
     distribIsole: () => [['socle', 1.6, 2, 2.6, 0, -0.9, 0], ['caisse', 0.85, 1.85, 1.05, 0, 1.0, 0], ['face', 0.04, 1.45, 0.88, -0.45, 1.1, 0], ['caisse', 1.0, 0.08, 1.2, -0.05, 1.96, 0],
       ['bac', 0.42, 0.75, 0.42, -0.1, 0.48, 0.85]],
@@ -38,7 +37,7 @@
     // jizō de bord de route : trois statues de pierre à bavoir rouge sous un auvent de bois, une bougie ; face vers -X
     jizos: () => [['socle', 2.4, 2, 1.4, 0, -0.9, 0], ...[-0.65, 0, 0.65].flatMap(z => [['pierre', 0.32, 0.6, 0.28, 0, 0.42, z], ['pierre', 0.24, 0.24, 0.22, 0, 0.86, z], ['bavoir', 0.3, 0.22, 0.34, -0.03, 0.62, z]]),
       ...paire(sd => ['bois', 0.1, 1.5, 0.1, -0.5, 0.85, sd * 1.05]), ...paire(sd => ['bois', 0.1, 1.5, 0.1, 0.5, 0.85, sd * 1.05]), ['toit', 1.4, 0.12, 2.6, 0, 1.65, 0, [0, 0, 0.25]], ['feu', 0.06, 0.12, 0.06, -0.45, 0.2, 0.32]],
-    // cabine téléphonique verte éclairée de l'intérieur, face vers -X
+    // cabine téléphonique éclairée de l'intérieur (verre teinté vert), face vers -X
     cabine: () => [['socle', 1.6, 2, 1.6, 0, -0.9, 0], ['verre', 0.95, 2.1, 0.95, 0, 1.15, 0], ['cadre', 1.05, 0.2, 1.05, 0, 2.3, 0], ['cadre', 1.05, 0.12, 1.05, 0, 0.16, 0]],
   });
 })();
