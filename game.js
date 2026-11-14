@@ -1238,7 +1238,7 @@
     for (const vu of VUES) { const c = vu.car, [tg, rl] = assiette(c);
       if (vu.hit > 8) vu.stun = 0.7; if (vu.land > 7) vu.stun = Math.max(vu.stun, Math.min(0.45, (vu.land - 6) * 0.08)); vu.stun -= dt; // une réception dure secoue aussi
       vu.up = drivetrain(vu, dt, vu.gas);
-      vu.carY += (c.y - vu.carY) * Math.min(1, dt * 18); vu.pitch += (tg - vu.pitch) * Math.min(1, dt * 10); vu.roll += (rl - vu.roll) * Math.min(1, dt * 10);
+      { const s = S[c.idx]; if (!c.air) vu.carY += s.sl * (c.vx * s.tx + c.vz * s.tz) * dt; } vu.carY += (c.y - vu.carY) * Math.min(1, dt * 18); // la pente d'abord, puis le lissage : sans elle la voiture lissée traînait sous la route en montée (30 cm à 13 %) et flottait en descente vu.pitch += (tg - vu.pitch) * Math.min(1, dt * 10); vu.roll += (rl - vu.roll) * Math.min(1, dt * 10);
       if (state === 'title') vu.cth += dt * 0.22; else vu.cth += wrap(c.th - vu.cth) * Math.min(1, dt * 6); // au menu, la caméra tourne autour de la voiture pour montrer la carte
       if ((vu.lookT -= dt) < 0) { const k = Math.exp(-dt * 5); vu.lookA *= k; vu.lookP *= k; } // souris immobile depuis 2,5 s : la caméra revient derrière la voiture
       vu.nit = clamp(vu.nit + (c.boost > 0 ? dt / 0.7 : -dt / 1.1), 0, 1); // nitro : 0,7 s pour entrer, 1,1 s pour sortir
