@@ -393,7 +393,7 @@ let duoTxt;
   assert(haut > 2 && c.d * ext > sC.pl + 3 && !vola, `à 200 km/h la voiture doit monter sur la paroi (hauteur ${haut} m, écart ${c.d} m, ${vola} pas en l'air)`);
   c = pose(iC - 10, ext * (sC.pl + 6), 6); const h0 = c.y - S[c.idx].y; for (let i = 0; i < 4 / H; i++) step(c, I(0, 0), T, H);
   assert(h0 > 2 && Math.abs(c.d) < S[c.idx].pl + 1 && c.y - S[c.idx].y < 0.2, `à 20 km/h la voiture doit redescendre de la paroi (de ${h0} m à ${c.y - S[c.idx].y} m, écart ${c.d} m)`);
-  // le grand mur de l'ouest se roule gaz à fond : un pilote qui vise les deux tiers de la paroi y monte à plus de 3 m, ne touche rien, n'y perd pas de vitesse et boucle le tour à moins de 1,5 s du tour propre du pilote automatique (qui reste sur le plat). À Grand Vacarme le mur est le chemin le plus long : il n'est pas plus rapide que la corde
+  // le grand mur de l'ouest se roule gaz à fond : un pilote qui vise les deux tiers de la paroi y monte à plus de 3 m, ne touche rien, n'y perd pas plus de vitesse que dans l'épingle et boucle le tour à moins de 1,5 s du tour propre du pilote automatique (qui reste sur le plat). À Grand Vacarme le mur est le chemin le plus long : il n'est pas plus rapide que la corde
   const wrap = a => Math.atan2(Math.sin(a), Math.cos(a)), murP = c => { const a = autopilot(c, T), sp = v(c), la = S[(c.idx + 3 + Math.floor(sp * 0.1)) % n]; if (!la.rc || la.w < la.pl + 11 || !S[(c.idx + 90) % n].rc) return a; // (il en redescend 180 m avant la fin de la paroi : plus tard, il sort trop large et tape le mur de la ligne droite)
     const off = -(la.pl + (la.w - 1.1 - la.pl) * 0.7) * Math.sign(la.k || 1), e = wrap(Math.atan2(la.z + la.tx * off - c.z, la.x - la.tz * off - c.x) - c.th); return I(Math.max(-1, Math.min(1, e * 3)), 1); };
   const tour = drive => { const c = newCar(T); let t = 0, t1 = 0, h = 0, vmin = 1e9, ymax = 0, vols = 0; while (c.dist < 2 * n && t < 300) { const a = c.air; step(c, drive(c), T, H); t += H; if (!t1 && c.dist >= n) t1 = t;
@@ -401,6 +401,8 @@ let duoTxt;
   const propre = tour(c => autopilot(c, T)), parMur = tour(murP);
   assert(propre.vols === CARTE.sauts.length && !propre.h && propre.ymax < 0.5, `tour propre : ${propre.vols} vols (un par tremplin), ${propre.h} chocs, ${propre.ymax} m sur la paroi`);
   assert(!parMur.h && parMur.ymax > 3 && parMur.t < propre.t + 1.5 && parMur.vmin > 0.98 * propre.vmin, `le mur doit se rouler à fond sans choc : ${parMur.t} s contre ${propre.t} s, ${parMur.h} chocs, ${parMur.ymax} m de haut, mini ${parMur.vmin} contre ${propre.vmin} m/s`);
+  // la hauteur se paie (sim.js, PAROI) : le haut du mur n'est pas le choix gagnant, il coûte au moins une demi-seconde au tour
+  assert(parMur.t > propre.t + 0.5, `rouler en haut du mur doit coûter du temps : ${parMur.t} s contre ${propre.t} s`);
   // pas de choc entre deux voitures à des hauteurs différentes : l'une survole l'autre
   const croise = dy => { const R = newRace(T), [a, b] = R.cars; R.cars.length = 2; for (const [c, i, sp] of [[a, 300, 40], [b, 303, 0]]) Object.assign(c, pose(i, 0, sp), { lvl: 1, pos: 1, lap: 1, fin: 0, bump: 0 });
     a.y += dy; a.air = dy > 0; a.airT = dy > 0 ? H : 0; let bump = 0; for (let i = 0; i < 0.25 / H; i++) { stepRace(R, I(0, 0), H); bump = Math.max(bump, a.bump); } return bump; };

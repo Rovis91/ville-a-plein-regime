@@ -76,10 +76,14 @@
   //   Elle tombe à GRAV ; le sol la rattrape et lui donne sa propre vitesse verticale. À plus de DROOP du sol (débattement des suspensions) elle vole : ni volant, ni moteur, ni frein.
   //   Réception : au-delà de LAND0 m/s d'impact contre le sol, LANDK de vitesse perdue par m/s, jusqu'à LANDX (se recevoir dans une descente ne coûte rien)
   const GRAV = 9.81, DROOP = 0.1, LAND0 = 6, LANDK = 0.025, LANDX = 0.45;
-  // Mur roulable : hors du plat (s.pl), la route remonte en quart de tube de rayon s.rc. paroi = hauteur, pente = dy/dd signée (vers la droite), plafonnée à 78° en haut du tube
+  // la hauteur prise sur une paroi se paie : monter coûte PAROI fois l'énergie de la hauteur gagnée, redescendre la rend (une gravité exagérée le long de la paroi, pour qu'on la sente ;
+  //   symétrique : avec un coût seul à la montée, le moindre tremblement de la voiture sur la pente raide du haut lui vidait sa vitesse)
+  const PAROI = 4;
+  // Mur roulable : hors du plat (s.pl), la route remonte en quart de tube de rayon s.rc. paroi = hauteur, pente = dy/dd signée (vers la droite), plafonnée à 78° en haut du tube ;
+  //   au-delà (paroi plus large que 0,98 rayon), un replat au sommet, contre le mur : pente nulle, comme la facette plate que dessine game.js (avec la pente de 78° gardée là-haut, la gravité y faisait pivoter la voiture)
   const tube = (s, d) => Math.min(Math.abs(d) - s.pl, 0.98 * s.rc);
   const paroi = (s, d) => { const x = s.rc ? tube(s, d) : 0; return x > 0 ? s.rc - Math.sqrt(s.rc * s.rc - x * x) : 0; };
-  const pente = (s, d) => { const x = s.rc ? tube(s, d) : 0; return x > 0 ? Math.sign(d) * x / Math.sqrt(s.rc * s.rc - x * x) : 0; };
+  const pente = (s, d) => { const x = s.rc ? tube(s, d) : 0; return x > 0 && Math.abs(d) - s.pl < 0.98 * s.rc ? Math.sign(d) * x / Math.sqrt(s.rc * s.rc - x * x) : 0; };
   // Sol sous la voiture : altitude du ruban, continue d'un échantillon au suivant (k = décalage en échantillons, pour la caméra), plus la paroi
   function sol(T, c, k = 0) {
     const S = T.S, N = T.n; let i = c.idx, a = S[i], b = S[(i + 1) % N], u = ((c.x - a.x) * (b.x - a.x) + (c.z - a.z) * (b.z - a.z)) / ((b.x - a.x) ** 2 + (b.z - a.z) ** 2 || 1);
@@ -299,6 +303,8 @@
     if (y > g && (c.airT || !p)) { c.y = y; c.vy = vy; c.air = y - g > DROOP; return; } // (sur une paroi on ne décolle pas : la vitesse y plaque la voiture, elle suit la surface)
     if (c.airT) { c.land = vg - vy; const k = 1 - clamp((c.land - LAND0) * LANDK, 0, LANDX); c.vx *= k; c.vz *= k; c.airT = 0; }
     c.y = g; c.vy = vg; c.air = false;
+    { const hp = paroi(s, c.d), dh = hp - (c.hp ?? hp); c.hp = hp; // c.hp : hauteur sur la paroi au pas précédent
+      if (dh) { const v2 = c.vx * c.vx + c.vz * c.vz, k = Math.sqrt(Math.max(1, v2 - 2 * GRAV * PAROI * dh) / Math.max(1, v2)); c.vx *= k; c.vz *= k; } }
     // sur une paroi, la gravité tire vers le bas de la pente : en travers de la voiture elle la fait tourner (c'est le virage relevé qui porte), dans son axe elle la freine en montée et la relance en descente
     // et les pneus, écrasés contre le béton, tournent d'autant plus fort : le lacet du volant y gagne le facteur de charge 1 / cos(pente)
     if (p) { const a = -GRAV * p; c.vx += nx * a * dt; c.vz += nz * a * dt; c.th += ((nz * Math.cos(c.th) - nx * Math.sin(c.th)) * a / Math.max(4, Math.hypot(c.vx, c.vz)) + c.yaw * (Math.sqrt(1 + p * p) - 1)) * dt; }
