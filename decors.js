@@ -275,11 +275,11 @@
         if (i > iB - 16 && i <= iB) sol.quad(au(a, -W), au(a, CZ - a.z), au(b, -W), au(b, CZ - b.z)); }
       for (let k = 0; k < 48; k++) { const f = j => [CX + Math.cos(j * Math.PI / 24) * PL.r, -0.03, CZ + Math.sin(j * Math.PI / 24) * PL.r], c = [CX, -0.03, CZ]; sol.quad(c, f(k), c, f(k + 1)); }
       sol.fin();
-      // les murs : la glissière du thème, au bord de la chaussée (au sommet des murs roulables) sauf dans l'aire et dans le vomitoire (ses parois sont celles du tunnel), et autour de l'aire là où elle déborde de la chaussée
+      // les murs : la glissière du thème, au bord de la chaussée (au sommet des murs roulables) sauf dans l'aire, et autour de l'aire là où elle déborde de la chaussée ; aux pointes où les deux bords se croisent, seulement là où sim.js met un mur (derrière la glissière, ni chaussée ni aire)
       const mur = nappe(h.mat('glissiere', { side: THREE.DoubleSide }, h.TH.mur)), pan = (p, q, v) => mur.quad([p[0], p[1] + 1.2, p[2]], [p[0], p[1] - 0.6, p[2]], [q[0], q[1] + 1.2, q[2]], [q[0], q[1] - 0.6, q[2]], v, v + 0.25);
-      for (let i = 0; i < N; i++) for (const sd of [-1, 1]) { if (h.zone(i, 0) === 1) continue; const a = S[i], b = S[(i + 1) % N], p = au(a, sd * a.w, haut(a)), q = au(b, sd * b.w, haut(b)); if (!dansAire(p[0], p[2], -0.4) || !dansAire(q[0], q[2], -0.4)) pan(p, q, i / 4); }
+      for (let i = 0; i < N; i++) for (const sd of [-1, 1]) { const a = S[i], b = S[(i + 1) % N], p = au(a, sd * a.w, haut(a)), q = au(b, sd * b.w, haut(b)); const o = au(a, sd * (a.w + 2.2)); if ((!dansAire(p[0], p[2], -0.4) || !dansAire(q[0], q[2], -0.4)) && !dansAire(o[0], o[2], -1.1)) pan(p, q, i / 4); }
       for (let k = 0; k < 96; k++) { const f = j => [CX + Math.cos(j * Math.PI / 48) * PL.r, 0, CZ + Math.sin(j * Math.PI / 48) * PL.r], p = f(k), q = f(k + 1), x = (p[0] + q[0]) / 2, z = (p[2] + q[2]) / 2, s = S[near(h, x, z)];
-        if (Math.hypot(s.x - x, s.z - z) > s.w - 0.4) pan(p, q, k / 4); }
+        const f2 = 1 + 2.2 / PL.r, ox = CX + (x - CX) * f2, oz = CZ + (z - CZ) * f2, s2 = S[near(h, ox, oz)]; if (Math.hypot(s.x - x, s.z - z) > s.w - 0.4 && Math.hypot(s2.x - ox, s2.z - oz) > s2.w - 1.1) pan(p, q, k / 4); }
       mur.fin();
       // le pourtour : deux longs côtés, deux angles arrondis à l'est, un demi-cercle à l'ouest qui épouse le grand virage relevé. Pièces [longueur, rayon, u => x, z, normale sortante]
       const X0 = -68, X1 = 308, Z0 = -34, Z1 = 354, RE = 90, RW = (Z1 - Z0) / 2, arc = (cx, cz, R, a0) => u => { const a = a0 + u / R; return [cx + Math.cos(a) * R, cz + Math.sin(a) * R, Math.cos(a), Math.sin(a)]; };
@@ -305,9 +305,8 @@
       const chev = h.mat('banderoleSaut', { lum: 1, rep: [4, 1] });
       h.pose('sceneArene', { beton, ecran: h.mat('banderoleStade', LUM, 4), bande: h.mat('peinture', { lum: 1, c: 0xffc21a }), chevrons: h.mat('banderoleSaut', { lum: 1, rep: [6, 1] }), acier,
         enseigne: h.mat('ecrit', LUM, 192, 16, '#16161c', '#ff8a1a', 'ARCHE DE FEU', 12) }, h.scene, [CX, 0, CZ]);
-      // portiques des tremplins, 30 m avant le bout, et les 8 derniers mètres peints de chevrons (même signal sur toutes les cartes à relief)
-      const peau = { acier, banderole: h.mat('banderoleSaut', { lum: 1, side: THREE.DoubleSide }) };
-      for (const [p] of M.sauts) { const i = pt(h, p), sp = S[(i - 15 + N) % N]; h.pose('portiqueSaut', peau, repere(h, sp), [0, 0, 0], sp.w); h.ribbon((i - 4 + N) % N, 4, -W + 0.6, 0.05, W - 0.6, 0.05, chev, 3.5); }
+      // les 8 derniers mètres de chaque tremplin peints de chevrons (même signal sur toutes les cartes à relief ; pas de portique au-dessus, il chargeait la vue)
+      for (const [p] of M.sauts) { const i = pt(h, p); h.ribbon((i - 4 + N) % N, 4, -W + 0.6, 0.05, W - 0.6, 0.05, chev, 3.5); }
       // les flammes : deux lance-flammes au bout de chaque tremplin (leur lueur éclaire la butte), une rangée sur l'arche et une sur la scène. [x, y, z, rotation, largeur, hauteur]
       const feux = [];
       for (const [p] of M.sauts) { const i = pt(h, p), s = S[i]; h.lum(i, s.x, s.y + 4, s.z, 0xff7a20, 30, 0.45); for (const sd of [-1, 1]) feux.push([...au(s, sd * (s.w - 0.8)), h.across(s), 2.4, 6]); }
@@ -327,15 +326,10 @@
       [[9, -1], [13, 1], [16, 1], [22, 1], [24, -1], [1, 1]].forEach(([p, sd], k) => { const s = S[pt(h, p)]; h.pose('panneauPub', { mat: h.mat('fer'), affiche: pubs[k % pubs.length] }, repere(h, s), [sd * (s.w + 7), 0, 0], sd * 0.5); });
       for (let i = 0; i < N; i += 45) h.lum(i, S[i].x, S[i].y + 20, S[i].z, 0xeef2ff, 55, 0.22);
       const rnd = h.rnd, ext = s => s.k > 0 ? -1 : 1, wrap = a => Math.atan2(Math.sin(a), Math.cos(a)); // ext : côté extérieur d'un virage (sim.js : k > 0 = à droite)
-      // le vomitoire (M.tun) : la tribune ouest enjambe le tunnel, un module tous les 14 m posé sur sa coque, façade au-dessus du bord intérieur, le dos vers le pourtour
-      { const T = h.T, vom = [];
-        for (let i = T.t0 + 3; i < T.t1 - 3; i += 7) { const s = S[i % N], sd = (s.x - cx) * -s.tz + (s.z - cz) * s.tx > 0 ? 1 : -1, [x, z] = bord(s, -sd, W + 1.5);
-          vom.push([x, s.y + 10, z, Math.atan2(-s.tz * sd, s.tx * sd)]); }
-        insts(h, 'tribuneVomitoire', { beton, banderole: h.mat('banderoleStade', LUM, 3), foule }, vom); }
       const peauV = { caisse: h.mat('peinture', { c: 0xffffff }), vitre: h.mat('vitreSombre'), feuRouge: h.mat('feuRouge'), feuBlanc: h.mat('matGris'), chassis: h.mat('matGris'), roue: h.mat('roue'), pneu: h.mat('pneu') };
       const rouilles = [0x8a4a2a, 0x5a6a7a, 0xa89a50, 0x6a2a2a, 0x3a5a3a, 0x9a9a9a];
-      // premier demi-tour (points 4 à 8) : en haut de la paroi extérieure, une banquette de béton chargée d'un mur de pneus qui dépasse la glissière de 1,6 m, et sur les pneus, les carcasses écrasées des soirées précédentes
-      { const i0 = pt(h, 4), n = (pt(h, 8) - i0 + N) % N, sd = ext(S[pt(h, 6)]), pn = [], carc = [];
+      // premier demi-tour (points 4 à 8, à plat, deux angles serrés) : à l'extérieur, une banquette de béton chargée d'un mur de pneus qui dépasse la glissière de 1,6 m, et sur les pneus, les carcasses écrasées des soirées précédentes
+      { const i0 = pt(h, 4), n = (pt(h, 8) - i0 + N) % N, sd = ext(S[pt(h, 5)]), pn = [], carc = [];
         h.ribbon(i0, n, s => sd * s.w, haut, s => sd * (s.w + 2.6), haut, beton, 8); h.ribbon(i0, n, s => sd * (s.w + 2.6), haut, s => sd * (s.w + 2.6), -2, beton, 8);
         for (let k = 0; k < n; k++) { const s = S[(i0 + k) % N], y = s.y + haut(s);
           for (const r of [0.6, 1.6]) for (const l of [-0.5, 0.5]) { const [x, z] = bord(s, sd, s.w + r), nb = r > 1 && k % 5 === 2 ? 6 : 9; for (let e = 0; e < nb; e++) pn.push([x + s.tx * l, y + 0.15 + e * 0.31, z + s.tz * l, rnd() * 3]); }
