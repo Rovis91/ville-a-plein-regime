@@ -441,3 +441,15 @@ console.log(`OK  fantôme des médailles : ${fantTxt}`);
   assert(NET.propre('x') === null && NET.propre(null) === null, 'entrée invalide : le pilote automatique');
   console.log('OK  en ligne : état emballé, posé, interpolé ; entrée bornée');
 }
+
+// ---------- trajectoire qui sèche (MO) : en course, la ligne des voitures sèche, le bord reste mouillé ; même course, même mouillure ; adhérence entre la route mouillée et surfSec ----------
+{
+  const course = () => { const R = newRace(T); while (R.t < 60) stepRace(R, null, H); return R; }, R = course(), mo = R.mo, nb = MO.nb;
+  let ligne = 0, bord = 0; for (let i = 0; i < n; i++) if (!(i >= T.t0 && i <= T.t1)) { let a = 1; for (let j = 0; j < nb; j++) a = Math.min(a, mo[i * nb + j]); ligne += a; bord += Math.max(mo[i * nb], mo[i * nb + nb - 1]); }
+  const k = n - (T.t1 - T.t0 + 1); ligne /= k; bord /= k;
+  assert(ligne < 0.6 && bord > 0.9, `ville : la ligne doit sécher (${ligne.toFixed(2)}), pas le bord (${bord.toFixed(2)})`);
+  assert(course().mo.every((v, i) => v === mo[i]), 'la mouillure doit être la même d\'une course à l\'autre (déterministe)');
+  const s = T.surf[100], q = T.surfSec[100];
+  assert(q.vir < s.vir && q.vir > 0 && newCar(T).mo === undefined, 'sur la ligne sèche, moins glissant mais pas sec ; hors course, aucune mouillure');
+  console.log(`OK  trajectoire qui sèche : ville, après 60 s de course, ligne ${ligne.toFixed(2)}, bord ${bord.toFixed(2)} ; virage perdu ${s.vir.toFixed(3)} mouillé, ${q.vir.toFixed(3)} sur la ligne`);
+}

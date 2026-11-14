@@ -36,7 +36,23 @@
     terre: { vir: 0.05, frein: 0.2, trac: 0.3, colle: 0.6, vaq: 230 / 3.6, aq: 0, aqc: 0, roul: 0.5, gl: 0.5 }, // motricité réduite, glisse facile, la voiture tourne encore bien
   };
   const mele = (a, b, f) => f <= 0 ? a : f >= 1 ? b : Object.fromEntries(Object.keys(a).map(k => [k, lerp(a[k], b[k], f)]));
-  const surf = (T, i) => T.surf ? T.surf[i] : SURF.sec, surfAt = (T, c) => T.surfL && Math.abs(c.d) > T.W ? T.surfL : surf(T, c.idx); // sous la voiture
+  // Trajectoire qui sèche (Course seulement : R.mo, une mouillure par échantillon × MO.nb bandes en travers du bitume, de -W à W ; 1 = mouillée comme la carte le dit, 0 = ligne sèche).
+  //   Les voitures (toutes, IA comprises) sèchent leur bande de pas par passage (étalé sur les deux bandes les plus proches) ; le temps sèche tout de t par seconde ; la pluie forte (force > 1) remouille de pl par seconde et par point de force au-delà de 1.
+  //   Sur la ligne sèche, la pluie ne compte plus que pour sec de sa force (T.surfSec : la route de chaque échantillon à ce niveau) : plus d'adhérence, écart modéré. Le contre-la-montre, les médailles (tourRef) et les fantômes ne la voient pas : route mouillée partout, comme avant.
+  //   Tout dérive des positions des voitures, au pas de la simulation : déterministe ; en ligne, l'invité la recalcule de l'état reçu (game.js), seul l'hôte roule dessus.
+  const MO = { nb: 8, sec: 0.4, pas: 0.15, t: 0.001, pl: 0.0015 };
+  const bande = (T, d) => clamp((d / T.W + 1) / 2 * MO.nb, 0, MO.nb - 1e-6); // position en bandes (réelle), 0 à nb
+  const surf = (T, i) => T.surf ? T.surf[i] : SURF.sec, surfAt = (T, c) => T.surfL && Math.abs(c.d) > T.W ? T.surfL // sous la voiture
+    : c.mo && T.surf && T.surfSec[c.idx] !== T.surf[c.idx] ? mele(T.surfSec[c.idx], T.surf[c.idx], c.mo[c.idx * MO.nb + (bande(T, c.d) | 0)]) : surf(T, c.idx);
+  function seche(R, dt) {
+    const mo = R.mo; if (!mo) return; const T = R.T, nb = MO.nb, pl = T.pluie;
+    for (const c of R.cars) { if (c.air || Math.abs(c.d) > T.W) continue;
+      const u = bande(T, c.d) - 0.5, b = Math.floor(u), f = u - b, a = MO.pas * Math.hypot(c.vx, c.vz) * dt / 2, o = c.idx * nb; // un échantillon = 2 m
+      if (b >= 0) mo[o + b] = Math.max(0, mo[o + b] - a * (1 - f)); if (b + 1 < nb) mo[o + b + 1] = Math.max(0, mo[o + b + 1] - a * f); }
+    if ((R.moT = (R.moT || 0) + dt) < 0.5) return; // le temps et la pluie : deux fois par seconde suffit
+    for (let i = 0; i < T.n; i++) { const k = (MO.pl * Math.max(0, pl[i] - 1) - MO.t) * R.moT; if (pl[i]) for (let j = i * nb; j < i * nb + nb; j++) mo[j] = clamp(mo[j] + k, 0, 1); }
+    R.moT = 0;
+  }
   // Nitro : une jauge par voiture (c.nitro, 0 à 1) que la commande inp.nitro dépense, gaz ouverts et roues au sol. c.boost = 1 pendant qu'elle pousse.
   //   dur = secondes de poussée d'une jauge pleine ; acc = poussée (m/s²) à TOP et au-delà, jusqu'à (1 + rep) fois plus à l'arrêt : elle sert aussi à repartir après une erreur
   //   remplissage, en jauge par seconde : gl = glisse tenue (à TOP, plein débit après 0,6 s de glisse) ; mur = frotter un mur sans le taper ; cam = doubler un camion au ras ; asp = dans l'aspiration d'un rival
@@ -120,10 +136,11 @@
     const pz = Array.isArray(M.th.pluie) ? M.th.pluie.map(([a, b, f]) => [span(at(a), at(b), 60), f]) : null, tz = span(t0, t1, 20);
     const pluie = Float32Array.from(S, (_, i) => pz ? Math.max(0, ...pz.map(([z, f]) => z(i) * f)) : M.th.pluie ? 1 : 0);
     const sf = M.surf || {}, sz = (sf.zones || []).map(([a, b, t, f = 1]) => [span(at(a), at(b), 10), SURF[t], f]);
-    const surf = S.map((_, i) => { let q = mele(SURF[sf.fond || 'sec'], SURF.mouille, (pluie[i] ? clamp(0.3 + (pluie[i] - 1) * 0.35, 0, 1) : 0) * (M.tun ? 1 - tz(i) : 1)); for (const [z, t, f] of sz) q = mele(q, t, z(i) * f); return q; });
+    const route = (i, k) => { let q = mele(SURF[sf.fond || 'sec'], SURF.mouille, (pluie[i] ? clamp(0.3 + (pluie[i] - 1) * 0.35, 0, 1) : 0) * k * (M.tun ? 1 - tz(i) : 1)); for (const [z, t, f] of sz) q = mele(q, t, z(i) * f); return q; };
+    const surf = S.map((_, i) => route(i, 1)), surfSec = surf.map((q, i) => pluie[i] ? route(i, MO.sec) : q); // surfSec : la même route sur la ligne sèche (voir MO)
     // tun : la carte a un tunnel, de t0 à t1 ; h0-h1 : secteur « chaud » pour la musique ; sp : les deux temps intermédiaires (indices d'échantillons)
     KT.w0 *= CARD.grip || 1; KT.w1 *= CARD.grip || 1; // une voiture plus ou moins adhérente tourne plus ou moins fort (toutes à 1 aujourd'hui)
-    return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, surf, surfL: SURF[sf.large], vert, carte: M, car: CARD, kt: KT,
+    return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, surf, surfSec, surfL: SURF[sf.large], vert, carte: M, car: CARD, kt: KT,
       trucks: Array.from({ length: M.trafic || 0 }, (_, i) => ({ lane: [-4.6, 0, 4.6][(i * 2) % 3], v: 25 + (i * 7 % 5) * 1.5, x: 0, y: 0, z: 0, th: 0, idx: 0, d: 0, vx: 0, vz: 0 })) }; // camions : voir trafic()
   }
 
@@ -359,7 +376,8 @@
       const c = newCar(T), k = opt.grille ? opt.grille[i] : i < h ? N - 1 - i : i - h, j = T.n - 8 - 4 * k, s = T.S[j], d = k % 2 ? 3 : -3; // grille en quinconce, 8 m entre deux places
       return Object.assign(c, { x: s.x - s.tz * d, z: s.z + s.tx * d, y: s.y, th: Math.atan2(s.tz, s.tx), idx: j, dist: -8 - 4 * k, d, lvl, pos: k + 1, lap: 1, fin: 0, out: 0, bump: 0 });
     });
-    return { T, cars, laps: opt.elim ? cars.length : laps, el, elim: !!opt.elim, h, delai: opt.delai || 0, tete: 0, t: 0, done: false };
+    const mo = T.pluie.some(p => p) ? new Float32Array(T.n * MO.nb).fill(1) : null; cars.forEach(c => { c.mo = mo; }); // mouillure de la course (voir MO), partagée par ses voitures
+    return { T, cars, mo, laps: opt.elim ? cars.length : laps, el, elim: !!opt.elim, h, delai: opt.delai || 0, tete: 0, t: 0, done: false };
   }
 
   // Tournée : toutes les cartes à la suite, des points à chaque manche. Les voitures sont désignées par leur indice dans R.cars (0 = joueur, 1.. = rivaux de la carte : les points suivent la place sur la liste, pas le nom).
@@ -431,6 +449,7 @@
       c.lap = clamp(Math.floor(c.dist / T.n) + 1, 1, R.laps);
       if (!c.fin && !c.out && c.dist >= R.laps * T.n) { c.fin = R.t; c.pts = R.delai && R.t > R.delai ? 0 : c.score; } // c.pts : le score de Glisse figé à l'arrivée, nul hors délai
     });
+    seche(R, dt);
     if (R.elim) { const o = raceOrder(R).filter(c => !c.out), tete = Math.floor(o[0].dist / T.n); // le meneur passe la ligne : dès la fin du tour 2, la dernière en piste sort
       if (tete > R.tete) { R.tete = tete; if (tete >= 2 && o.length > 1) o[o.length - 1].out = R.t; } }
     raceOrder(R).forEach((c, i) => c.pos = i + 1);
@@ -511,5 +530,5 @@
     return ok && tr.length >= 8 && t > 0 && Math.abs((tr.length / 4 - 1) / 5 - t) < 1.5 ? { carte: m[2], t, trace: etire(tr, 4) } : { err: DEFI_ERR[2] };
   }
 
-  Object.assign(G, { DEFI_V, DEFI_ERR, defiCode, defiLit, etire, tourRef, vAdmise, alerteVirage, sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, piloteGlisse, newRace, stepRace, raceOrder, tournee, BAREME, trafic, hitTrafic, AI_LVL, DIFF, TOP, vturn, omega, SURF, GL });
+  Object.assign(G, { DEFI_V, DEFI_ERR, defiCode, defiLit, etire, tourRef, vAdmise, alerteVirage, sol, paroi, pente, dansPlace, buildTrack, newCar, step, autopilot, piloteGlisse, newRace, stepRace, seche, MO, raceOrder, tournee, BAREME, trafic, hitTrafic, AI_LVL, DIFF, TOP, vturn, omega, SURF, GL });
 })(typeof window !== 'undefined' ? window : globalThis);
