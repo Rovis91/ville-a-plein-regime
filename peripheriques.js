@@ -16,6 +16,16 @@
   const cmd = (k, periph) => ({ code: k.length > 1 ? k : '', key: k.length > 1 ? '' : k, periph });
   const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
   const JOYCON = d => d.productId === 0x2006 || d.productId === 0x2007; // Joy-Con gauche / droit
+  // Vibrations d'une voiture, pour sa manette : [fort, faible] (moteur grave, moteur aigu, 0 à 1). e : ce que la voiture a vécu cette image —
+  // hit, land (m/s : choc mur ou voiture, réception), up (rapport passé : ±1), rub (frotte le bord), air, roul (rugosité du sol, SURF de sim.js : terre 0,5, neige 0,2, pavés 0,15), r (vitesse / pointe), palier (glisse au palier).
+  // s : { fort, faible, t } gardé d'une image à l'autre : les coups (choc, réception, rapport) décroissent en ~150 ms, le reste est continu.
+  const vibration = (e, s, dt) => {
+    const k = Math.exp(-dt * 12), coup = clamp((e.hit - 1) / 12, 0, 1), saut = clamp((e.land - 2) / 8, 0, 1), boite = e.up ? 0.5 : 0; // un choc à 13 m/s (le seuil de la secousse est à 8) donne tout
+    s.t += dt; s.fort = Math.max(s.fort * k, coup, saut, boite * 0.4); s.faible = Math.max(s.faible * k, coup * 0.6, saut * 0.3, boite);
+    const sol = e.air ? 0 : 1, grain = sol * clamp(e.roul * 2, 0, 1) * e.r * 0.45, frotte = sol * (e.rub ? 0.25 + 0.35 * e.r : 0), pulse = e.palier && s.t % 0.25 < 0.12 ? 1 : 0; // palier : 4 battements par seconde
+    const f = clamp(s.fort + frotte * 0.5 + pulse * 0.2, 0, 1), w = clamp(s.faible + grain + frotte + pulse * 0.4, 0, 1);
+    return f + w < 0.03 ? [0, 0] : [f, w];
+  };
 
   // o : { nav (navigator), win (pour les écouteurs), signal (AbortSignal qui les retire), places (['', ''], gardé par l'appelant), dit (message court à l'écran) }
   function Peripheriques(o) {
@@ -100,7 +110,22 @@
         gas: k(2) || b(7) > 0.1 || b(0) || b(12) ? 1 : 0, brake: k(3) || b(6) > 0.1 || b(2) || b(13) ? 1 : 0, hand: !!(k(4) || b(1)), nitro: !!(k(5) || b(3)),
       };
     };
-    return { keys, places: PLACES, clavier, poll, inscrire, oublie, entree, branche, hidDemande, hidAuto, cherche, CLAV };
+    // Vibrations, par image, pour la manette du périphérique id (et elle seule ; '' = la retenue du solo) : e = ce qu'a vécu sa voiture (voir vibration), null = rien (menu, pause, option coupée).
+    // dual-rumble (Chrome, Edge) ou hapticActuators (Firefox) ; sans moteur (clavier, Joy-Con lu en WebHID) : rien. Effets de 100 ms renvoyés toutes les 60 ms, ou dès que l'intensité change.
+    // shortcut: pas de rumble des Joy-Con en WebHID (il faut leur envoyer des rapports de sortie 0x10, ce module ne fait que lire), à ajouter avec sendReport si on y tient.
+    const vib = {}, sur = f => { try { Promise.resolve(f()).catch(() => { }); } catch (e) { } }; // une manette refuse parfois l'effet : jamais d'erreur dans l'image
+    const vibre = (id, e, dt) => {
+      const p = id ? pads.find(p => padId(p) === id) : pad, a = p && (p.vibrationActuator || p.hapticActuators && p.hapticActuators[0]);
+      if (!a) return;
+      const s = vib[id] || (vib[id] = { fort: 0, faible: 0, t: 0, dt: 1, f: 0, w: 0 }), [f, w] = e ? vibration(e, s, dt) : [0, 0];
+      s.dt += dt;
+      if (!f && !w) { if (s.f || s.w) { s.f = s.w = s.fort = s.faible = 0; sur(() => a.reset ? a.reset() : a.pulse(0, 1)); } return; }
+      if (s.dt < 0.06 && Math.abs(f - s.f) < 0.1 && Math.abs(w - s.w) < 0.1) return;
+      s.dt = 0; s.f = f; s.w = w;
+      sur(() => a.playEffect ? a.playEffect('dual-rumble', { duration: 100, strongMagnitude: f, weakMagnitude: w }) : a.pulse(Math.max(f, w), 100));
+    };
+    return { keys, places: PLACES, clavier, poll, inscrire, oublie, entree, branche, hidDemande, hidAuto, cherche, vibre, CLAV };
   }
+  Peripheriques.vibration = vibration; // pour test-peripheriques.js
   if (typeof module === 'object' && module.exports) module.exports = Peripheriques; else window.Peripheriques = Peripheriques;
 })();
