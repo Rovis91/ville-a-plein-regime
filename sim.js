@@ -140,7 +140,13 @@
     const surf = S.map((_, i) => route(i, 1)), surfSec = surf.map((q, i) => pluie[i] ? route(i, MO.sec) : q); // surfSec : la même route sur la ligne sèche (voir MO)
     // tun : la carte a un tunnel, de t0 à t1 ; h0-h1 : secteur « chaud » pour la musique ; sp : les deux temps intermédiaires (indices d'échantillons)
     KT.w0 *= CARD.grip || 1; KT.w1 *= CARD.grip || 1; // une voiture plus ou moins adhérente tourne plus ou moins fort (toutes à 1 aujourd'hui)
+<<<<<<< HEAD
     return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, surf, surfSec, surfL: SURF[sf.large], vert, corde: M.corde && M.corde.map(at), carte: M, car: CARD, kt: KT,
+=======
+    // bouchon [pt a, pt b, f] : entre ces points, les camions roulent à f fois leur vitesse, donc s'y entassent (1/f fois plus serrés). tau[j] = temps cumulé (en échantillons à vitesse 1) jusqu'à j
+    let tau = null; if (M.bouchon) { const [a, b, f] = M.bouchon, z = span(at(a), at(b), 10); tau = new Float64Array(n + 1); for (let j = 0; j < n; j++) tau[j + 1] = tau[j] + 1 / (1 - (1 - f) * z(j)); }
+    return { S, n, W, len, tun: !!M.tun, t0, t1, tau, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, surf, surfSec, surfL: SURF[sf.large], vert, carte: M, car: CARD, kt: KT,
+>>>>>>> refs/heads/claude/carte-wangan-291c7a
       trucks: Array.from({ length: M.trafic || 0 }, (_, i) => ({ lane: [-4.6, 0, 4.6][(i * 2) % 3], v: 25 + (i * 7 % 5) * 1.5, x: 0, y: 0, z: 0, th: 0, idx: 0, d: 0, vx: 0, vz: 0 })) }; // camions : voir trafic()
   }
 
@@ -463,9 +469,12 @@
   // hitTrafic(c, T, t) : choc voiture contre camion. Le camion ne bouge pas ; la voiture est repoussée et le choc est signalé dans c.hit, comme un mur.
   function trafic(T, t) {
     const S = T.S, n = T.n, TRUCKS = T.trucks;
+    const tau = T.tau, tn = tau ? tau[n] : n;
     TRUCKS.forEach((k, i) => {
-      const p = (i / TRUCKS.length * n + 40 + k.v * t / 2) % n, j = p | 0, f = p - j, a = S[j], b = S[(j + 1) % n];
-      k.idx = j; k.d = k.lane; k.th = Math.atan2(a.tz, a.tx); k.vx = a.tx * k.v; k.vz = a.tz * k.v;
+      const q = (i / TRUCKS.length * tn + 40 + k.v * t / 2) % tn; let j = q | 0, f = q - j, v = k.v; // q : position en « temps » le long de la piste (= échantillons sans bouchon)
+      if (tau) { let lo = 0, hi = n - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (tau[m] <= q) lo = m; else hi = m - 1; } j = lo; const dt = tau[j + 1] - tau[j]; f = (q - tau[j]) / dt; v = k.v / dt; }
+      const a = S[j], b = S[(j + 1) % n];
+      k.idx = j; k.d = k.lane; k.th = Math.atan2(a.tz, a.tx); k.vx = a.tx * v; k.vz = a.tz * v;
       k.x = lerp(a.x, b.x, f) - a.tz * k.lane; k.z = lerp(a.z, b.z, f) + a.tx * k.lane; k.y = lerp(a.y, b.y, f);
     });
     return TRUCKS;
@@ -482,7 +491,7 @@
         if (vn > 0) { c.vx += nx * vn * 1.2; c.vz += nz * vn * 1.2; c.hit = Math.max(c.hit, vn); if (vn > 3) { c.driftT = 0; c.nitro = 0; c.stun = 0.8; } }
       }
       // doublé au ras (moins de 1,2 m entre les flancs), sans contact, avec au moins 8 m/s de mieux que lui : la jauge monte
-      const dx = c.x - k.x, dz = c.z - k.z; if (!touche && Math.abs(dx * kx + dz * kz) < 7 && Math.abs(dz * kx - dx * kz) < 3.7 && c.vx * kx + c.vz * kz > k.v + 8) gagne(c, NI.cam * dt);
+      const dx = c.x - k.x, dz = c.z - k.z; if (!touche && Math.abs(dx * kx + dz * kz) < 7 && Math.abs(dz * kx - dx * kz) < 3.7 && c.vx * kx + c.vz * kz > Math.hypot(k.vx, k.vz) + 8) gagne(c, NI.cam * dt);
     }
   }
 
