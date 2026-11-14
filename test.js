@@ -14,6 +14,9 @@ for (let i = 0; i < n; i++) for (let j = i + 40; j < n; j++) {
   assert(Math.hypot(S[i].x - S[j].x, S[i].z - S[j].z) > 2 * W + 8, `la piste se recoupe (${i},${j})`);
 }
 
+// corde du tunnel (M.corde) : à 50 cm de la limite du mur, sans le toucher, la jauge monte ; au milieu de la route, ou hors de la zone, rien
+{ const jauge = (i, dd) => { const s = S[i], c = newCar(T), L = s.w - 1.1; Object.assign(c, { idx: i, x: s.x - s.tz * dd * L, z: s.z + s.tx * dd * L, th: Math.atan2(s.tz, s.tx), vx: s.tx * 40, vz: s.tz * 40, gear: 4 }); step(c, I(0, 0), T, H); return c.nitro; };
+  const i = (T.corde[0] + T.corde[1]) >> 1; assert(jauge(i, 0.95) > 0 && jauge(i, -0.95) > 0 && jauge(i, 0) === 0 && jauge(T.corde[1] + 40, 0.95) === 0, 'corde du tunnel : la nitro ne récompense pas le ras du mur'); }
 // tour complet au pilote auto, sans glisser ni toucher
 let c = newCar(T), t = 0, hits = 0, vmax = 0, slid = 0;
 assert(!T.vert, 'la ville ne déclare ni saut ni mur roulable : le relief ne doit pas y jouer');
@@ -160,8 +163,8 @@ assert(a.vf > 36 && Math.hypot(b.vx, b.vz) > 36, 'le contact latéral ne doit pa
   assert(ia.jmax > 0.01, "l'aspiration doit valoir aussi pour une IA");
 }
 
-// le tour d'une voiture seule ne doit pas bouger quand on touche à la course (records comparables)
-assert(Math.abs(t - 42.54) < 0.01, `le tour solo a changé: ${t} / ${tf}`);
+// le tour d'une voiture seule ne doit pas bouger quand on touche à la course (records comparables) ; 42,66 s depuis la sortie élargie du point 15 de la ville (42,54 avant)
+assert(Math.abs(t - 42.66) < 0.01, `le tour solo a changé: ${t} / ${tf}`);
 // les 3 niveaux d'IA, seuls : du plus rapide au plus lent, tous derrière le tour propre, à moins de 2 s
 const laps = AI_LVL.map(lvl => { const c = newCar(T); let t = 0; while (c.dist < n && t < 180) { step(c, autopilot(c, T, lvl), T, H); t += H; assert(c.hit < 3, 'IA seule dans le mur'); } return t; });
 assert(laps.every((l, i) => l > t && l < t + 2 && (!i || l > laps[i - 1] + 0.2)), 'rythme des IA hors plage: ' + laps);
@@ -319,7 +322,7 @@ let duoTxt;
 {
   const ref = tourRef(T), tr = ref.trace, pts = tr.length / 4, d = (a, i, b, j) => Math.hypot(a[i * 4] - b[j * 4], a[i * 4 + 2] - b[j * 4 + 2]);
   assert(ref.t > 30 && ref.t < 40 && Math.abs((pts - 1) / 20 - ref.t) < 0.06, `tour de référence : ${ref.t} s pour ${pts} points à 20 Hz`);
-  assert(Math.hypot(tr[0] - S[0].x, tr[2] - S[0].z) < 5 && d(tr, 0, tr, pts - 1) < 5, 'la trace de référence ne part pas de la ligne ou n\'y revient pas');
+  assert(Math.abs((tr[0] - S[0].x) * S[0].tx + (tr[2] - S[0].z) * S[0].tz) < 5 && Math.abs((tr[0] - S[0].x) * S[0].tz - (tr[2] - S[0].z) * S[0].tx) < W && d(tr, 0, tr, pts - 1) < 5, 'la trace de référence ne part pas de la ligne ou n\'y revient pas');
   const br = etire(tr, 1.1), nb = br.length / 4;
   assert(Math.abs((nb - 1) / 20 - 1.1 * ref.t) < 0.11, `fantôme bronze : ${(nb - 1) / 20} s au lieu de ${1.1 * ref.t}`);
   assert(d(br, 110, tr, 100) < 1e-6 && d(br, 220, tr, 200) < 1e-6 && d(br, nb - 1, tr, pts - 1) < 5 && d(br, 55, tr, 50) < 1e-6, 'fantôme bronze : pas aux mêmes endroits 10 % plus tard');

@@ -8,7 +8,7 @@
 //   sauts [[point, longueur, hauteur, fosse, profondeur], …] tremplin qui finit net au point, suivi ou non d'une fosse (m) · cuv [[a, b, largeur, rayon], …] murs roulables : un quart de tube de chaque côté du plat entre les points a et b. L'un ou l'autre active le relief (hauteur, gravité, vol : voir sim.js) ; th.paroi = texture des murs roulables
 //   surf : surface (SURF de sim.js) { fond, zones: [[a, b, type, force]], large } : large = hors de la bande de bitume (parties larges, place) ; à accorder avec ce que le décor y pose
 //   anticipe : le pilote automatique calcule sa distance de freinage (indispensable dès qu'il y a une épingle)
-//   rivaux : prénoms des trois adversaires du mode course (sinon ceux de la ville) · med : médailles [bronze, argent, or] en multiples du tour lancé du pilote automatique (défaut 1,1 / 1,03 / 0,97 ; plus bas là où la glisse rapporte beaucoup) · trafic : nombre de camions à doubler · car : la voiture (format CARD de sim.js) · radio : stations (voir RADIO plus bas) · th : thème
+//   rivaux : prénoms des trois adversaires du mode course (sinon ceux de la ville) · med : médailles [bronze, argent, or] en multiples du tour lancé du pilote automatique (défaut 1,1 / 1,03 / 0,97 ; plus bas là où la glisse rapporte beaucoup) · trafic : nombre de camions à doubler · corde [a, b] : entre ces points, frôler le mur sans le toucher remplit la nitro (NI.corde de sim.js) · car : la voiture (format CARD de sim.js) · radio : stations (voir RADIO plus bas) · th : thème
 //   th.hud : l'interface de la carte · y c r couleurs (texte, accent, alerte), fond des panneaux · style des panneaux (cyber, trait, panneau, plaque, bloc, tableau, rallye, givre) · jauge du compte-tours (égaliseur par défaut, aiguille, led) · mph : compteur en miles · jp : étiquettes japonaises · sur, titre : sous-titre et titre du menu
 (function (G) {
   const _ = null;
@@ -239,8 +239,8 @@
   try { const s = JSON.parse(localStorage.getItem('vpr.musique')) || {}; for (const id in RADIO) for (const o of RADIO[id]) if (s[o.name]) { Object.assign(o, s[o.name]); accorder(o); } } catch (e) { }
 
   G.CARTES = [
-    { id: 'ville', nom: 'VILLE A PLEIN REGIME', camH: 3.8, W: 9, kmh: 0.71, vit: [168, 193], grip: 44, sc: 0.85, tun: [6, 12], chaud: [6, 12], sect: [6, 12], amb: [[2, 5], [13, 15]], // pluie et rumeur : la grande courbe d'avant le tunnel, et la sortie
-      pts: [[0, 0, 0], [220, 0, 0], [420, 10, 4], [560, 90, 10], [600, 240, 12], [520, 370, 6], [360, 400, -2], [230, 340, -10], [110, 400, -14], [0, 520, -14], [-150, 560, -10], [-300, 500, -4], [-360, 360, 2], [-300, 240, 8], [-380, 120, 6], [-330, 10, 2], [-180, 0, 0]],
+    { id: 'ville', nom: 'VILLE A PLEIN REGIME', camH: 3.8, W: 9, kmh: 0.71, vit: [168, 193], grip: 44, sc: 0.85, tun: [6, 12], chaud: [6, 12], sect: [6, 12], amb: [[2, 5], [13, 15]], corde: [7, 9], // pluie et rumeur : la grande courbe d'avant le tunnel, et la sortie
+      pts: [[0, 0, 0], [220, 0, 0], [420, 10, 4], [560, 90, 10], [600, 240, 12], [520, 370, 6], [360, 400, -2], [230, 340, -10], [110, 400, -14], [0, 520, -14], [-150, 560, -10], [-300, 500, -4], [-360, 360, 2], [-300, 240, 8], [-380, 120, 6], [-345, 25, 2], [-180, 0, 0]],
       // Nismo Skyline GT-R Z-tune (R34, 6 cylindres en ligne biturbo « Z2 » de 2,8 L, boîte Getrag 6 rapports) : données constructeur
       car: { nom: 'RAIJIN GT-Z', ratios: [3.827, 2.360, 1.685, 1.312, 1.000, 0.793], final: 3.545, // démultiplications
         wheel: 0.326, mass: 1675, eff: 0.85, // rayon de roue (m) ; 1600 kg + pilote ; ~15 % de pertes de transmission (4 roues motrices)

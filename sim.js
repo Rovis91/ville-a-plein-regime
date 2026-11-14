@@ -55,10 +55,10 @@
   }
   // Nitro : une jauge par voiture (c.nitro, 0 à 1) que la commande inp.nitro dépense, gaz ouverts et roues au sol. c.boost = 1 pendant qu'elle pousse.
   //   dur = secondes de poussée d'une jauge pleine ; acc = poussée (m/s²) à TOP et au-delà, jusqu'à (1 + rep) fois plus à l'arrêt : elle sert aussi à repartir après une erreur
-  //   remplissage, en jauge par seconde : gl = glisse tenue (à TOP, plein débit après 0,6 s de glisse) ; mur = frotter un mur sans le taper ; cam = doubler un camion au ras ; asp = dans l'aspiration d'un rival
+  //   remplissage, en jauge par seconde : gl = glisse tenue (à TOP, plein débit après 0,6 s de glisse) ; mur = frotter un mur sans le taper ; corde = rouler à moins d'un mètre du mur sans le toucher, là où la carte le dit (M.corde) ; cam = doubler un camion au ras ; asp = dans l'aspiration d'un rival
   //   un choc franc (mur ou camion) la vide
   // Aspiration (course) : derrière une voiture, de 3 à ad m, dans un cône qui s'ouvre de ac par mètre : jusqu'à acx de traînée en moins, tout près
-  const NI = { dur: 3, acc: 6, rep: 1, gl: 0.3, mur: 0.5, cam: 0.6, asp: 0.12, ad: 30, ac: 0.08, acx: 0.5 };
+  const NI = { dur: 3, acc: 6, rep: 1, gl: 0.3, mur: 0.5, corde: 0.5, cam: 0.6, asp: 0.12, ad: 30, ac: 0.08, acx: 0.5 };
   const gagne = (c, x) => { c.nitro = Math.min(1, c.nitro + x); };
   // Mode Glisse : le score, calculé à part de la physique (points() ne fait que lire la voiture : aucun temps au tour n'en dépend). Tenu pour toute voiture, lu par le mode Glisse.
   //   c.cours = points de la glisse en cours ; c.score = points acquis ; c.mult = multiplicateur d'enchaînement
@@ -140,7 +140,7 @@
     const surf = S.map((_, i) => route(i, 1)), surfSec = surf.map((q, i) => pluie[i] ? route(i, MO.sec) : q); // surfSec : la même route sur la ligne sèche (voir MO)
     // tun : la carte a un tunnel, de t0 à t1 ; h0-h1 : secteur « chaud » pour la musique ; sp : les deux temps intermédiaires (indices d'échantillons)
     KT.w0 *= CARD.grip || 1; KT.w1 *= CARD.grip || 1; // une voiture plus ou moins adhérente tourne plus ou moins fort (toutes à 1 aujourd'hui)
-    return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, surf, surfSec, surfL: SURF[sf.large], vert, carte: M, car: CARD, kt: KT,
+    return { S, n, W, len, tun: !!M.tun, t0, t1, h0: at(M.chaud[0]), h1: at(M.chaud[1]), sp: M.sect.map(at), pluie, surf, surfSec, surfL: SURF[sf.large], vert, corde: M.corde && M.corde.map(at), carte: M, car: CARD, kt: KT,
       trucks: Array.from({ length: M.trafic || 0 }, (_, i) => ({ lane: [-4.6, 0, 4.6][(i * 2) % 3], v: 25 + (i * 7 % 5) * 1.5, x: 0, y: 0, z: 0, th: 0, idx: 0, d: 0, vx: 0, vz: 0 })) }; // camions : voir trafic()
   }
 
@@ -263,6 +263,7 @@
       if (pr < o) { const dx = (c.x - P.c[0]) / (pr + P.r - 1.1), dz = (c.z - P.c[1]) / (pr + P.r - 1.1), t = c.vx * -dz + c.vz * dx > 0 ? 1 : -1; mur(c, dx, dz, pr, -dz * t, dx * t, -t, 1 / P.r, dt); }
       else { const sg = Math.sign(c.d); c.d = sg * L; mur(c, nx * sg, nz * sg, o, s.tx, s.tz, sg, -s.k * sg, dt); }
     }
+    if (T.corde && !c.rub && o > -1 && Math.hypot(c.vx, c.vz) > 15 && (b - T.corde[0] + n) % n < (T.corde[1] - T.corde[0] + n) % n) gagne(c, NI.corde * dt); // la corde au ras du mur, sans le toucher (M.corde)
     // les piles d'un monument posé sur la place (arc de triomphe) : boîtes dans le repère du monument, deux cercles par voiture comme pour les chocs entre voitures
     if (P && P.piles) { const cs = Math.cos(P.a), sn = Math.sin(P.a);
       for (const j of [-CO, CO]) for (const [px, pz, hx, hz] of P.piles) {

@@ -178,7 +178,7 @@
   window.DECORS = {
     // ---------- Ville à plein régime (carte d'origine) : tours éclairées sur la grille des rues, enseignes, mégatours, projecteurs, hologrammes, trafic volant ----------
     ville(h) {
-      const { THREE, scene, S, W, rnd, geo, mat, tx, addMat, habille, box, concrete } = h, LUMI = { lum: 1 }, beacons = [];
+      const { THREE, scene, S, W, rnd, geo, mat, tx, addMat, habille, box, concrete, lum, ribbon } = h, LUMI = { lum: 1 }, beacons = [];
       let signMats, beams, holos, MV, mvP, mvV, mvC, mvGeo, movers, beaconPts;
     { // sol : grille de rues éclairées vue d'en haut
       box(5000, 1, 5000, mat('rues', { lum: 1, rep: [70, 70] }), 0, -60.5, 200);
@@ -243,6 +243,73 @@
       // bouches d'égout au bord de la chaussée : une plaque sombre, d'où game.js fait monter un panache de vapeur teinté par le néon le plus proche (h.vapeur)
       const plaque = mat('peinture', { c: 0x0e0e12 });
       for (let i = 40; i < h.N; i += 140) { if (h.zone(i, 30) > 0) continue; const s = S[i], sd = (i / 140 | 0) & 1 ? 1 : -1, x = s.x - s.tz * sd * (W - 1.6), z = s.z + s.tx * sd * (W - 1.6); box(1.1, 0.05, 1.1, plaque, x, s.y + 0.03, z); h.vapeur(x, s.y + 0.1, z); }
+      // ---------- trois repères du tour (sans tirage de rnd : le reste de la ville ne bouge pas) ----------
+      // la voie rapide est un viaduc : le sol de la ville est à -60 m ; Y0(s) = hauteur de ce sol dans le repère d'un échantillon s
+      const Y0 = s => -60 - s.y, dyn = [], acier = mat('acier'), DS = THREE.DoubleSide;
+      { // le monorail aérien franchit la voie rapide au sommet de la grande courbe (point 4) : poutre en travers, piles hors de la chaussée, station sur la droite, une rame qui fait la navette
+        const iM = pt(h, 4), sM = S[iM], gM = repere(h, sM), YM = 16, L = 340, libre = x => { const [wx, wz] = bord(sM, 1, x); return S.every(s => (s.x - wx) ** 2 + (s.z - wz) ** 2 > (W + 4) ** 2); };
+        box(L, 1.6, 2.2, concrete, 0, YM, 0, gM); box(L, 0.3, 2.4, mat('neonCyan', LUMI), 0, YM - 0.55, 0, gM); // liseré lumineux : la poutre se lit de loin sur le ciel
+        for (let x = -160; x <= 160; x += 40) if (libre(x)) box(2.2, YM - Y0(sM), 2.2, concrete, x, (YM + Y0(sM)) / 2, 0, gM); // piles jusqu'au sol de la ville, aucune sur la route
+        // la station, à droite : quai de chaque côté de la poutre, toit, bandeaux néon, enseigne ; elle porte sur deux piles
+        const X0 = W + 21; // le quai (36 m) commence 3 m après le bord de la chaussée
+        for (const z of [-4.6, 4.6]) { box(36, 0.8, 4.6, concrete, X0, YM - 0.6, z, gM); box(36, 0.12, 0.3, mat('neonCyan', LUMI), X0, YM - 0.15, z * 1.48, gM); box(36, 1.1, 0.12, mat('vitreSombre'), X0, YM + 0.35, z * 1.5, gM); }
+        box(40, 0.5, 15, concrete, X0, YM + 6.5, 0, gM); box(40, 0.3, 15.2, mat('neonMagenta', LUMI), X0, YM + 6.1, 0, gM);
+        for (const x of [-16, 16]) for (const z of [-6.8, 6.8]) box(0.5, 6, 0.5, acier, X0 + x, YM + 3.2, z, gM);
+        for (const z of [-7.62, 7.62]) box(18, 2.2, 0.2, mat('ecrit', LUMI, 128, 16, '#08080c', '#00f0ff', 'モノレール  港北ネオン駅', 11), X0, YM + 5.2, z, gM);
+        for (const x of [X0 - 12, X0 + 12]) box(3, YM - 1 - Y0(sM), 3, concrete, x, (YM - 1 + Y0(sM)) / 2, 0, gM);
+        const [lx, lz] = bord(sM, 1, X0); lum(iM, lx, sM.y + YM + 4, lz, 0x9fe8ff, 30, 0.8); // la station éclaire sa poutre
+        lum(iM, sM.x, sM.y + YM - 2, sM.z, 0xff4fc8, 18, 0.5); // et un néon sous la poutre, au-dessus de la route
+        // la rame : trois voitures, une seule passe de dessin par zone ; elle va et vient d'un bout à l'autre de la poutre (période 30 s) : elle passe deux fois au-dessus de la route par aller-retour
+        const rame = new THREE.Group(); rame.userData.dyn = 1; gM.add(rame); rame.position.y = YM + 0.4;
+        insts(h, 'rameMono', { caisse: mat('peinture', { c: 0xe4e6ee }), vitres: mat('fenetresAllumees', { lum: 1 }, ['#d0f8ff', '#ffe9b0'], 0.9), bande: mat('peinture', { lum: 1, c: 0xff003c }), patin: mat('matGris') },
+          [-11.6, 0, 11.6].map(x => [x, 0, 0])).forEach(m => { scene.remove(m); rame.add(m); });
+        dyn.push(now => { rame.position.x = (L / 2 - 18) * Math.max(-1, Math.min(1, 1.3 * Math.sin(now / 30000 * 2 * Math.PI))); }); // un arrêt à chaque bout
+      }
+      { // le marché de nuit (points 13 à 16) : une dalle de chaque côté de la voie rapide, des étals qui fument, la foule sous des parapluies transparents, des lanternes rouges en travers de la rue
+        const i0 = pt(h, 13), i1 = pt(h, 16) - 10, n = i1 - i0, D0 = W + 1.6, D1 = W + 15;
+        const dalle = mat('peinture', { c: 0x2a2630, side: DS });
+        for (const sd of [-1, 1]) { ribbon(i0, n, sd * D0, -0.15, sd * D1, -0.15, dalle, 8); ribbon(i0, n, sd * D1, -0.15, sd * D1, 1.1, concrete); ribbon(i0, n, sd * D0, -0.15, sd * D0, -2.2, concrete); ribbon(i0, n, sd * D1, -0.15, sd * D1, -2.2, concrete); }
+        let a = 77; const al = () => (a = a * 1664525 + 1013904223 >>> 0) / 4294967296; // hasard propre au marché
+        const etals = [], gens = [], parap = [], lant = [], fils = [], mats = [], cols = [0xd02030, 0xf4f0e0, 0x109a8a, 0xffb020];
+        for (let i = i0 + 3, k = 0; i < i1 - 2; i += 3, k++) for (const sd of [-1, 1]) { const s = S[i];
+          if ((k + (sd > 0 ? 1 : 0)) % 4 === 3) continue; // des trous entre les étals
+          const [x, z] = bord(s, sd, W + 10.5); etals.push([x, s.y - 0.15, z, Math.atan2(-sd * s.tz, sd * s.tx), 1, 1, 1, cols[(k * 3 + (sd > 0 ? 1 : 0)) % 4]]);
+          if (k % 5 === 1) h.vapeur(x, s.y + 1.4, z); // la vapeur des réchauds, quelques-uns
+        }
+        for (let k = 0; k < 70; k++) { const s = S[i0 + 2 + (al() * (n - 4) | 0)], sd = al() < 0.5 ? -1 : 1, [x, z] = bord(s, sd, W + 3.5 + al() * 4.5), ht = 1.55 + al() * 0.3;
+          gens.push([x, s.y - 0.15 + ht / 2, z, al() * 6, 1, ht / 1.7, 1]); if (al() < 0.55) parap.push([x, s.y + ht + 0.2, z, 0, 0.9 + al() * 0.3]); }
+        inst(h, geo('boite', 0.5, 1.7, 0.35), mat('peinture', { c: 0x3a3448 }), gens);
+        insts(h, 'etal', { comptoir: mat('planches', { c: 0x8a6a4a }), rechaud: mat('peinture', { lum: 1, c: 0xff7a20 }), perche: acier, toile: mat('peinture', { side: DS }), ampoules: mat('lanterne', LUMI) }, etals, { teinte: 'toile' });
+        const gp = new THREE.ConeGeometry(0.9, 0.45, 10, 1, true); gp.translate(0, -0.22, 0); // parapluie : un cône ouvert, la pointe en haut
+        inst(h, gp, new THREE.MeshBasicMaterial({ color: 0xcfe8ff, transparent: true, opacity: 0.28, side: DS, depthWrite: false }), parap);
+        inst(h, geo('boite', 0.04, 0.9, 0.04), acier, parap.map(p => [p[0], p[1] - 0.6, p[2]]));
+        // les lanternes : un fil tous les 7 échantillons entre deux mâts, sept lanternes qui pendent avec la flèche du fil ; une ligne sur trois éclaire la rue
+        for (let i = i0 + 2, k = 0; i < i1; i += 7, k++) { const s = S[i];
+          for (const sd of [-1, 1]) { const [x, z] = bord(s, sd, W + 1.9); fils.push([x, s.y + 3.9 - 0.15, z, 0, 1, 1, 1]); }
+          fils.push([s.x, s.y + 7.6, s.z, h.across(s), 2 * W + 3.8, 0.04, 0.04]);
+          for (let j = 0; j < 7; j++) { const o = (j - 3) / 3 * (W - 1), [x, z] = bord(s, 1, o); lant.push([x, s.y + 7.6 - 0.9 * (1 - (o / W) ** 2) - 0.5, z, h.across(s)]); }
+          if (k % 3 === 1) lum(i, s.x, s.y + 6.5, s.z, 0xff2a30, 18, 0.7); }
+        inst(h, geo('boite', 0.2, 7.8, 0.2), acier, fils.filter(f => f[4] === 1));
+        inst(h, geo('boite', 1, 1, 1), mat('matGris'), fils.filter(f => f[4] !== 1));
+        inst(h, geo('lanterne'), mat('peinture', { lum: 1, c: 0xff2a30 }), lant);
+        inst(h, geo('boite', 0.3, 0.12, 0.3), mat('peinture', { lum: 1, c: 0xffd05a }), lant.map(p => [p[0], p[1] - 0.46, p[2], p[3]])); // le gland doré sous chaque lanterne
+        box(18, 3.2, 0.4, mat('ecrit', LUMI, 224, 40, '#2a0408', '#ffd05a', '夜市 MARCHE DE NUIT', 26), ...(s => [s.x, s.y + 9.2, s.z])(S[i0 + 2])).rotation.y = h.across(S[i0 + 2]); // l'enseigne d'entrée, posée sur le premier fil
+      }
+      { // le départ (points 0 à 2) : un portique à écran géant qui fait le compte à rebours, 50 m après la ligne, et une grappe de drones lumineux au-dessus de la ligne droite
+        const iE = 22, sE = S[iE], gE = repere(h, sE);
+        for (const sd of [-1, 1]) { box(1.2, 11, 1.2, acier, sd * (W + 1.6), 5.5, 0, gE); box(1.6, 0.4, 1.6, mat('neonJaune', LUMI), sd * (W + 1.6), 0.2, 0, gE); }
+        box(2 * W + 4.4, 1.4, 1.4, acier, 0, 10.6, 0, gE); box(2 * W + 4.4, 0.2, 1.5, mat('neonCyan', LUMI), 0, 9.85, 0, gE);
+        box(12.4, 5.4, 0.5, mat('matGris'), 0, 7.4, -0.1, gE); // dos de l'écran (Z local vers l'arrière : la face +Z regarde la grille)
+        const ecrans = [['3', '#ff003c'], ['2', '#ff003c'], ['1', '#fcee0a'], ['GO', '#00f0ff'], ['00:00', '#00f0ff']].map(([t, c]) => mat('ecrit', LUMI, 64, 28, '#06060a', c, t, 24));
+        const ecran = box(12, 5, 0.2, ecrans[0], 0, 7.4, 0.2, gE); ecran.userData.dyn = 1;
+        lum(iE, sE.x, sE.y + 6, sE.z, 0xfcee0a, 22, 0.6);
+        dyn.push(now => { const k = Math.floor(now / 1000) % 8; ecran.material = ecrans[Math.min(k, 4)]; }); // 3, 2, 1, GO, puis l'heure de la soirée (minuit) quatre secondes
+        // les drones : 48 petites boîtes lumineuses en couronne qui tourne et ondule, une seule passe de dessin
+        const sD = S[45], ND = 48, dr = new THREE.InstancedMesh(geo('boite', 1.6, 0.4, 1.6), mat('peinture', { lum: 1 }), ND), o3 = new THREE.Object3D(), dc = [0x00f0ff, 0xff2bd6, 0xfcee0a];
+        for (let k = 0; k < ND; k++) dr.setColorAt(k, new THREE.Color(dc[k % 3])); dr.frustumCulled = false; scene.add(dr);
+        dyn.push(now => { for (let k = 0; k < ND; k++) { const a = k / ND * 6.283 + now * 0.0003, r = 9 + 1.5 * Math.sin(now * 0.0009 + k * 0.7);
+          o3.position.set(sD.x + Math.cos(a) * r, sD.y + 15 + 1.5 * Math.sin(a * 3 + now * 0.0012), sD.z + Math.sin(a) * r); o3.updateMatrix(); dr.setMatrixAt(k, o3.matrix); } dr.instanceMatrix.needsUpdate = true; });
+      }
       h.beams.push(...beams); // game.js les tourne vers la caméra de chaque vue
       return (dt, now) => { // enseignes qui clignotent, grésillent ou défilent ; hologrammes, trafic, balises
         signMats.forEach((m, i) => { m.color.setScalar(i % 3 === 0 ? ((now / 400 + i) & 1 ? 1 : 0.25) : i % 3 === 1 && Math.random() < 0.04 ? 0.3 : 1); if (i % 2) m.map.offset.x += dt * 0.12; });
@@ -251,7 +318,7 @@
           let x = mvP[i * 3] + mvV[i * 2] * dt, z = mvP[i * 3 + 2] + mvV[i * 2 + 1] * dt;
           mvP[i * 3] = x < -700 ? x + 1600 : x > 900 ? x - 1600 : x; mvP[i * 3 + 2] = z < -350 ? z + 1200 : z > 850 ? z - 1200 : z;
         }
-        mvGeo.attributes.position.needsUpdate = true; beaconPts.visible = (now / 700 & 1) === 1;
+        mvGeo.attributes.position.needsUpdate = true; beaconPts.visible = (now / 700 & 1) === 1; dyn.forEach(f => f(now)); // monorail, écran du départ, drones
       };
     },
     // ---------- Grand Vacarme : une arène couverte, comble. Sol de terre battue, gradins sur tout le pourtour, charpente et rampes de projecteurs, cube d'affichage au centre.
