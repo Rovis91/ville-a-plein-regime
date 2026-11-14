@@ -1279,7 +1279,10 @@
     { const fx = Math.cos(cm.th), fz = Math.sin(cm.th), veh = race ? race.cars.filter(c => c !== cm && !partie(c)) : M.trafic && state !== 'title' ? trafic(T, tTraf) : []; // les deux autres véhicules les plus proches, qu'on entend
       SE.autres = veh.map(c => [c, Math.hypot(c.x - cm.x, c.z - cm.z)]).filter(a => a[1] < 150).sort((a, b) => a[1] - b[1]).slice(0, 2).map(([c, d]) => {
         const dx = c.x - cm.x, dz = c.z - cm.z, rx = c.vx - cm.vx, rz = c.vz - cm.vz, cam = c.lane !== undefined;
-        return { lat: dz * fx - dx * fz, fwd: dx * fx + dz * fz, dist: d, vr: -(rx * dx + rz * dz) / Math.max(d, 1), vrel: Math.hypot(rx, rz), rpm: cam ? 1500 : c.rpm, camion: cam }; }); }
+        // hors de vue directe (occ 0..1) : la ligne droite jusqu'à lui quitte la route (façades, parois, montagne du virage) ; on mesure de combien elle s'écarte de l'axe, au-delà de la demi-largeur
+        let i = cm.idx, di = (c.idx - i + N) % N, occ = 0; if (di > N / 2) { i = c.idx; di = N - di; }
+        for (let q = 0; q <= di && occ < 1; q += 3) { const s = S[(i + q) % N]; occ = Math.max(occ, clamp((Math.abs((s.x - cm.x) * dz - (s.z - cm.z) * dx) / Math.max(d, 1) - s.w) / 10, 0, 1)); }
+        return { lat: dz * fx - dx * fz, fwd: dx * fx + dz * fz, dist: d, vr: -(rx * dx + rz * dz) / Math.max(d, 1), vrel: Math.hypot(rx, rz), rpm: cam ? 1500 : c.rpm, camion: cam, occ }; }); }
     SON.frame(dt, SE);
     if (state !== 'title') radioT -= dt; // l'annonce de la station clignote 2,5 s (une radio pour toutes les vues)
     for (const vu of VUES) vueFrame(vu, dt, now);
