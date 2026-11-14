@@ -704,10 +704,27 @@
       const plateau = (x, z, y) => { const r = Math.hypot(x - cx, z - cz); if (r > 55) return 0; let d = 1e18; for (let i = ic - 60; i < ic + 60; i++) { const q = S[(i + N) % N]; d = Math.min(d, (q.x - x) ** 2 + (q.z - z) ** 2); }
         return (y - (sc.y - 0.35)) * Math.min(1, (55 - r) / 17, Math.max(0, (Math.sqrt(d) - W - 6) / 10)); }; // jamais sur la chaussée ni à ses bords : la route monte encore à l'approche
       const g = terrain(h, { pas: 7, sous: 6, marge: 320, loin: 60, chute: 1.1, creux: (x, z, y) => ravin(x, z) + plateau(x, z, y), mat: h.mat('bruit', {}, '#0c1a14', ['#12261e', '#081410', '#16302a']) });
+      // ---------- la ligne à haute tension de la crête (entre les pts 10 et 11), placée par calcul ----------
+      // Quatre pylônes alignés en travers de la route, deux de chaque côté, et au-delà de chaque bout un ancrage hors de vue (câbles des deux côtés de chaque pylône).
+      // On essaie plusieurs emplacements et portées et on garde le premier où : chaque pylône est à plus de W + 15 m de toute route et hors du carrefour ; le câble le plus bas,
+      // flèche comprise, passe partout à plus de 9 m du sol et à plus de 13 m au-dessus d'une chaussée. Les arbres sont ensuite écartés de son couloir et rabattus sous lui.
+      const CONS = [[-6.3, 26.7], [6.3, 26.7], [-6.3, 31.7], [6.3, 31.7], [-4.3, 36.7], [4.3, 36.7]], FLECHE = 7, i10 = pt(h, 10), BAS = CONS[0][1];
+      const cable = (A, B, t) => [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t - 4 * FLECHE * t * (1 - t), A[2] + (B[2] - A[2]) * t]; // A, B : points d'attache
+      const ligne = (() => { for (const k of [1, 1.25, 1.5]) for (const f of [0.4, 0.3, 0.5, 0.25, 0.55, 0.2]) { // k : échelle des pylônes
+        const s = S[Math.round(i10 + (ic - i10) * f)], pied = o => { const [x, z] = bord(s, 1, o); return [x, g.hAt(x, z), z]; }, bon = ([x, , z]) => g.dAt(x, z) > W + 15 && Math.hypot(x - cx, z - cz) > 60;
+        // chaque côté pour soi : pylône proche à d du bord de la route, le suivant une portée plus loin (les épingles bornent un côté)
+        const cote = sg => { const l = []; for (const d of [40, 50, 60, 70, 80, 90]) for (const ps of [150, 130, 170, 110, 190, 90]) { const p1 = pied(sg * d), p2 = pied(sg * (d + ps)); if (bon(p1) && bon(p2)) l.push([p1, p2, pied(sg * (d + ps + 700))]); } return l; };
+        for (const [g1, g2, g3] of cote(-1).slice(0, 6)) for (const [d1, d2, d3] of cote(1).slice(0, 6)) {
+          const P = [g3, g2, g1, d1, d2, d3].map(p => p.slice()); P[0][1] = P[1][1]; P[5][1] = P[4][1]; // les ancrages, 700 m au-delà du dernier pylône (dans le brouillard) et à sa hauteur : le câble file vers l'horizon, on n'en voit pas le bout
+          let ok = true; for (let q = 0; q < 5 && ok; q++) { const A = [P[q][0], P[q][1] + BAS * k, P[q][2]], B = [P[q + 1][0], P[q + 1][1] + BAS * k, P[q + 1][2]], n = Math.ceil(Math.hypot(B[0] - A[0], B[2] - A[2]) / 4);
+            for (let j = 0; j <= n && ok; j++) { const [x, y, z] = cable(A, B, j / n); ok = y - g.hAt(x, z) > (g.dAt(x, z) < W + 4 ? 13 : 9); } }
+          if (ok) return { s, P, k }; } } return null; })();
+      const sousLigne = (x, z) => { if (!ligne) return null; let b = null; for (let k = 0; k < 5; k++) { const A = ligne.P[k], B = ligne.P[k + 1], ux = B[0] - A[0], uz = B[2] - A[2], l2 = ux * ux + uz * uz,
+        t = Math.max(0, Math.min(1, ((x - A[0]) * ux + (z - A[2]) * uz) / l2)), d = Math.hypot(A[0] + ux * t - x, A[2] + uz * t - z); if (!b || d < b.d) b = { d, y: cable([A[0], A[1] + BAS * ligne.k, A[2]], [B[0], B[1] + BAS * ligne.k, B[2]], t)[1] }; } return b; }; // distance au couloir, hauteur du câble bas
       // une route de traverse part du carrefour, barrée
       // cèdres : une rangée serrée le long de la route (le tunnel d'arbres), puis la forêt ; rien sur le carrefour.
       // Dans les lacets, rien côté vallée (ouest) et des cèdres plus petits côté amont, dont la cime reste sous le regard du lacet du dessus ; de jeunes plants sur la pente en contrebas : on voit la ville par-dessus
-      const arbres = [], lacets = (x, z) => x > 372 && x < 552 && z > 300 && z < 576, plants = (x, z) => x > 100 && x < 552 && z > 260 && z < 640, libre0 = (x, z) => (x - cx) ** 2 + (z - cz) ** 2 > 72 * 72 && ravin(x, z) < 1;
+      const arbres = [], lacets = (x, z) => x > 372 && x < 552 && z > 300 && z < 576, plants = (x, z) => x > 100 && x < 552 && z > 260 && z < 640, libre0 = (x, z) => (x - cx) ** 2 + (z - cz) ** 2 > 72 * 72 && ravin(x, z) < 1 && !(sousLigne(x, z)?.d < 14);
       // la trouée côté vallée (droite) entre les pts 7 et 9 : aucun arbre là où cette portion est la route la plus proche, la ville et la lune apparaissent
       const i7 = pt(h, 7), i9 = pt(h, 9), trouee = (x, z) => { let b = null, bd = 1e18; for (let i = i7; i <= i9; i += 3) { const d = (S[i].x - x) ** 2 + (S[i].z - z) ** 2; if (d < bd) { bd = d; b = S[i]; } }
         return bd < 160 * 160 && Math.sqrt(bd) < g.dAt(x, z) + 4 && (z - b.z) * b.tx - (x - b.x) * b.tz > 0; }, libre = (x, z) => libre0(x, z) && !trouee(x, z);
@@ -719,6 +736,10 @@
         const x = g.box[0] + rnd() * (g.box[2] - g.box[0]), z = g.box[1] + rnd() * (g.box[3] - g.box[1]), d = g.dAt(x, z);
         if (d > W + 6 && d < 230 && libre(x, z) && (!lacets(x, z) || (d < 17 && g.dAt(x - 2, z) < d))) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, (0.9 + rnd() * 0.9) * (lacets(x, z) ? 0.75 : plants(x, z) || (x > -100 && x < 552 && z > 200 && z < 700) ? 0.4 : 1)]);
       }
+      // derrière la supérette, un rideau de cèdres : on ne voit plus le vide. Rien côté approche (ils sont au-delà de l'esplanade, X > W + 48), ni sur la route de traverse (Z ≈ -12)
+      for (let k = 0; k < 70; k++) { const X = W + 48 + rnd() * 45, Z = -45 + rnd() * 80, x = sc.x - sc.tz * sd * X - sc.tx * Z, z = sc.z + sc.tx * sd * X - sc.tz * Z;
+        if (Math.abs(Z + 12) > 9 && !(sousLigne(x, z)?.d < 14)) arbres.push([x, g.hAt(x, z) + 6, z, rnd() * 6, 1.1 + rnd() * 0.6]); }
+      for (let k = arbres.length - 1; k >= 0; k--) { const p = arbres[k], c = sousLigne(p[0], p[2]); if (c && c.d < 3.6 * p[4] + 10 && p[1] - 6 + 18.5 * p[4] > c.y - 3) arbres.splice(k, 1); } // cime (houppier de 15 m sur fût de 11 m) à 3 m au moins sous le câble
       const fûts = arbres.map(p => { const y0 = p[1] - 6; p[1] = y0 + 11 * p[4]; return [p[0], y0 + 2.6 * p[4], p[2], 0, p[4]]; }); // le houppier monte sur un fût nu, comme un vrai cèdre du Japon
       inst(h, h.geo('cedre'), h.mat('cedre'), arbres); inst(h, h.geo('tronc'), h.mat('tronc'), fûts);
       // catadioptres orange sur les glissières : le seul balisage, comme sur une vraie route de col
@@ -760,7 +781,7 @@
       // un groupe posé au sol à côté de la route, X local = en s'éloignant d'elle ; jamais plus de `bas` m sous la chaussée (les socles descendent dans la pente)
       const site = (i, cote, off, bas = 9) => { const s = S[i], [x, z] = bord(s, cote, off), p = new THREE.Group(); p.position.set(x, Math.max(g.hAt(x, z), s.y - bas), z); p.rotation.y = h.across(s) + (cote > 0 ? 0 : Math.PI); h.scene.add(p); return p; };
       const at = (i0, i1, f) => Math.round(i0 + (i1 - i0) * f), allume = (p, i, lx, ly, col, d, f) => { p.updateMatrixWorld(); const q = p.localToWorld(new THREE.Vector3(lx, ly, 0)); h.lum(i, q.x, q.y, q.z, col, d, f); };
-      const pierre = h.mat('pierreMousse'), gris = h.mat('matGris'), roue = h.mat('roue'), blanc = h.mat('laque', { c: 0xe8ecf0 }), pneu = h.mat('pneu'), feuDoux = h.mat('lanterne', LUM), beton = h.mat('beton'), bois = h.mat('tronc'), [i1, i3, i4, i5, i10] = [1, 3, 4, 5, 10].map(k => pt(h, k));
+      const pierre = h.mat('pierreMousse'), gris = h.mat('matGris'), roue = h.mat('roue'), blanc = h.mat('laque', { c: 0xe8ecf0 }), pneu = h.mat('pneu'), feuDoux = h.mat('lanterne', LUM), beton = h.mat('beton'), bois = h.mat('tronc'), [i1, i3, i4, i5] = [1, 3, 4, 5].map(k => pt(h, k));
       // pts 1-3 : pont de pierre sur le torrent, brume basse qui monte du ravin et traîne sur la route, panneau « 13 % »
       h.pose('pontPierre', { pierre }, repere(h, sp), [0, 0, 0], W);
       const eau = h.mat('eauVive', { lum: 1, c: 0x2a5058 }), flots = [], nappes = [], brumeG = new THREE.PlaneGeometry(1, 1); brumeG.rotateX(-Math.PI / 2);
@@ -793,9 +814,7 @@
         q.updateMatrixWorld();
         (insts(h, 'passant', { ombre: vitre }, [[W + 8.6, -7, 1], [W + 8.9, -6.2, 0.92], [W + 9, 3, 1.04], [W + 3, 4.5, 0.98]].map(([px, pz, t]) => { const p = V(px, pz); return [p.x, p.y, p.z, q.rotation.y, t]; })));
         allume(q, i, W + 11, 1, 0xfff0d0, 16, 2); }
-      // pts 10-12 : deux pylônes à haute tension de part et d'autre de la crête, feux rouges clignotants (sans câbles : ils traversaient talus et arbres ; un troisième tombait sur les épingles)
       const feuPylone = h.mat('feuRouge', LUM);
-      { const i = at(i10, ic, 0.4), s = S[i]; (insts(h, 'pyloneHT', { acier: gris, feu: feuPylone }, (sd > 0 ? [-70, 75] : [-75, 70]).map(o => { const p = site(i, Math.sign(o), Math.abs(o), 60); h.scene.remove(p); return [p.position.x, p.position.y, p.position.z, h.across(s) + Math.PI / 2]; }))); }
       // le retour (pts 41-48) : des jizō à bavoir rouge et leur bougie, puis une cabine téléphonique allumée
       { const i = pt(h, 43), p = site(i, ext(i), W + 2.6, 0.4); h.pose('jizos', { socle: beton, pierre, bavoir: h.mat('laque', { c: 0xc8102e }), bois, toit: gris, feu: feuDoux }, p); allume(p, i, -0.6, 0.4, 0xffa040, 6, 1.2); }
       { const i = pt(h, 46), p = site(i, ext(i), W + 2.8, 0.4); h.pose('cabine', { socle: beton, verre: h.mat('vitrine', { lum: 1, c: 0xd8ffe0 }), cadre: blanc }, p); allume(p, i, 0, 2, 0xe0ffe8, 12, 2); }
@@ -810,6 +829,11 @@
         for (const [mt, ...l] of par.values()) { const ge = new THREE.BufferGeometry();
           for (const [k, sz] of [['position', 3], ['normal', 3], ['uv', 2]]) { const A = new Float32Array(l.reduce((n, e) => n + e.attributes.position.count, 0) * sz); let o = 0; for (const e of l) { A.set(e.attributes[k].array, o); o += e.attributes.position.count * sz; } ge.setAttribute(k, new THREE.BufferAttribute(A, sz)); }
           const m = new THREE.Mesh(ge, mt); ge.computeBoundingSphere(); proches.push(m); h.scene.add(m); } }
+      if (ligne) { // pylônes (consoles perpendiculaires à la ligne) et six conducteurs par portée, ancrages compris
+        const ry = h.across(ligne.s) + Math.PI / 2, o = new THREE.Object3D(), fils = [], at6 = P => { o.position.set(...P); o.rotation.y = ry; o.updateMatrixWorld(); o.scale.setScalar(ligne.k); o.updateMatrixWorld(); return CONS.map(([lx, ly]) => o.localToWorld(new THREE.Vector3(lx, ly, 0)).toArray()); };
+        insts(h, 'pyloneHT', { acier: h.mat('matGris'), feu: feuPylone }, ligne.P.slice(1, 5).map(([x, y, z]) => [x, y, z, ry, ligne.k]));
+        const att = ligne.P.map(at6); for (let k = 0; k < 5; k++) for (let c = 0; c < 6; c++) for (let j = 0; j < 16; j++) fils.push(...cable(att[k][c], att[k + 1][c], j / 16), ...cable(att[k][c], att[k + 1][c], (j + 1) / 16));
+        const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(fils, 3)); const lg = new THREE.LineSegments(fg, new THREE.LineBasicMaterial({ color: 0x5a6068 })); lg.userData.cables = 1; h.scene.add(lg); }
       const rouge = ville(h, g); // la mégapole en contrebas, à l'ouest des lacets
       return (dt, now) => { cligno.color.setHex((now / 450 & 1) ? 0xff8c1a : 0x3a2008); const r = now % 1500 < 700 ? 0xff2018 : 0x300404; rouge.color.setHex(r); feuPylone.color.setHex(r); eau.map.offset.x += dt * 0.3;
         if (vues.length) { for (const m of proches) { const b = m.geometry.boundingSphere, d = 180 + b.radius; m.visible = vues.some(p => p.distanceToSquared(b.center) < d * d); } vues.length = 0; } };
