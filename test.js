@@ -419,8 +419,12 @@ console.log(`OK  fantôme des médailles : ${fantTxt}`);
   assert(n >= 1 && n <= 3, `alerte de virage : ${n} alertes sur un tour de la ville (attendu 1 à 3)`);
   assert(alerteVirage(T, 0, 0) === 0, "alerte de virage à l'arrêt");
   const i = T.S.reduce((b, s, j) => Math.abs(s.k) > Math.abs(T.S[b].k) ? j : b, 0), a = alerteVirage(T, (i - 80 + T.n) % T.n, 80); // à 288 km/h, 160 m avant le virage le plus serré (43 m/s)
-  assert(a === Math.sign(T.S[i].k), "alerte de virage : du côté du virage le plus serré");
-  console.log(`OK  alerte de virage : ${n} sur un tour de la ville`); }
+  assert(Math.sign(a) === Math.sign(T.S[i].k) && Math.abs(a) <= 160, "alerte de virage : du côté du virage le plus serré, au plus 160 m devant");
+  // la distance décompte à l'approche, 2 m par échantillon, jusqu'à l'entrée (sous 10 m), puis se tait une fois dedans
+  let p = Math.abs(a), j = (i - 80 + T.n) % T.n;
+  for (let d; (d = alerteVirage(T, j = (j + 1) % T.n, 80)); p = Math.abs(d)) assert(Math.sign(d) === Math.sign(a) && Math.abs(d) === p - 2, `alerte de virage : ${Math.abs(d)} m après ${p} m`);
+  assert(p <= 10, `alerte de virage : muette dès ${p} m du virage`);
+  console.log(`OK  alerte de virage : ${n} sur un tour de la ville ; à 288 km/h, décompte de ${Math.abs(a)} m à ${p} m`); }
 
 // ---------- traduction anglaise de l'interface (langue.js) : ordinaux, expressions entières, jamais au milieu d'un mot ----------
 {

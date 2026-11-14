@@ -1279,6 +1279,7 @@
       txt('GAUCHE / DROITE : CHOISIR   ENTREE : VALIDER', cx, 226, 8, C, 'center');
     }
   }
+  const PALIERS = [300, 250, 200, 150, 100, 50, 30, 10]; // paliers de distance des alertes (m) : on affiche celui qu'on a déjà franchi, jamais plus loin que la vérité
   function drawHUD(vu, dt, sp, warn) { // le HUD d'une vue : sa voiture, sa caméra (étiquettes des adversaires), ses bandeaux, sur son canvas
     const { car, cam, cth, rpm, load, peak, result, splitMsg, hudT, w: HW } = vu, seul = !COM, fini = ses.raceEnd || vu.fini, manu = vu.n ? car.manual : manual, moi = vu.moi; hg = vu.hg; // fini : ce joueur est arrivé (à deux, l'autre peut rouler encore) ; manu : sa boîte ; moi : sa voiture (car est celle que la vue regarde : une autre une fois éliminé, à deux)
     hg.clearRect(0, 0, HW, HH);
@@ -1344,7 +1345,10 @@
       for (let i = 0; i < 10; i++) R(hg, i >= n ? '#30303c' : car.boost > 0 ? C : plein ? '#ffffff' : Y, HW - 108 + i * 10, HH - 17, 8, 7);
     }
     if (splitMsg && (splitMsg.T -= dt) > 0) tag('S' + (splitMsg.i + 1) + ' ' + (splitMsg.d == null ? fmt(splitMsg.t) : (splitMsg.d <= 0 ? '-' : '+') + Math.abs(splitMsg.d).toFixed(2)), cx, 102, splitMsg.d == null ? Y : splitMsg.d <= 0 ? C : RD); // écart au record à chaque secteur
-    if (warn && blink) tag(warn === 2 ? '! GLACE !' : warn > 0 ? '! VIRAGE DROITE >>' : '<< VIRAGE GAUCHE !', cx, 62, warn === 2 ? C : Y); // warn : 1 droite, -1 gauche, 2 plaque de glace devant
+    if (warn) { // warn : distance signée au virage (> 0 droite, < 0 gauche, en m, alerteVirage) ou { glace: distance } ; arrondie au palier déjà franchi
+      const d = warn.glace || Math.abs(warn), m = ' ' + (PALIERS.find(p => p <= d) || 10) + ' M ';
+      if (blink || d < 30) tag(warn.glace ? '! GLACE' + m + '!' : warn > 0 ? '! VIRAGE DROITE' + m + '>>' : '<<' + m + 'VIRAGE GAUCHE !', cx, 62, warn.glace ? C : Y); // à moins de 30 m il ne clignote plus : c'est maintenant
+    }
     if (race && race.elim && !fini && state === 'race') { // élimination : qui vient de sortir (3 s), et l'alerte tant que le joueur est dernier (le premier tour du meneur est protégé)
       const v = vivantes(), o = race.cars.find(c => c.out && race.t - c.out < 3);
       if (o) tag(pil(o)[0] + ' SORT' + (v.length === 2 ? ' · DUEL FINAL' : ''), cx, 118, C);
@@ -1623,8 +1627,8 @@
     splGeo.attributes.position.needsUpdate = splGeo.attributes.color.needsUpdate = true;
 
     // alerte de virage : seulement un virage serré pour la vitesse du moment (alerteVirage, sim.js)
-    // et la glace vive (T.surf, vir > 0,4) qui arrive entre 1,2 et 3,6 s devant, quand on n'y est pas encore : sans elle, une plaque était une surprise
-    const glace = j => !!T.surf && T.surf[(car.idx + j) % N].vir > 0.4, D = Math.round(sp * 0.6); let surGlace = false; if (state === 'race' && sp > 15 && !glace(0)) for (let j = D; j < 3 * D && !surGlace; j++) surGlace = glace(j);
+    // et la glace vive (T.surf, vir > 0,4) qui arrive dans les 3,6 s devant, quand on n'y est pas encore : sans elle, une plaque était une surprise. Les deux disent la distance qui reste (2 m par échantillon)
+    const glace = j => !!T.surf && T.surf[(car.idx + j) % N].vir > 0.4, D = Math.round(sp * 0.6); let surGlace = 0; if (state === 'race' && sp > 15 && !glace(0)) for (let j = 1; j < 3 * D && !surGlace; j++) if (glace(j)) surGlace = 2 * j;
     if (!ST) { // rayons de lumière : l'astre, les phares du véhicule le plus proche s'ils nous font face ; plus forts sous la pluie, dans la brume et en tunnel
       cam.updateMatrixWorld(); const RY = post.uniforms.ray.value, RC = post.uniforms.rayC.value, brume = RAYS * Math.min(1, Math.max(0.5 * Math.min(1, pl), 600 / TH.fogD[1], 0.3 * lm)), th = Math.tan(cam.fov * Math.PI / 360); let n = 0;
       const src = (x, y, z, col, k, rw) => { // rw : rayon du halo autour de la source, en m (0 : l'astre, à l'infini)
@@ -1636,7 +1640,7 @@
       const c = veh[0]; if (c && Math.cos(c.th) * (cam.position.x - c.x) + Math.sin(c.th) * (cam.position.z - c.z) > 0) { const av = c.lane === undefined ? 6.5 : 10; src(c.x + Math.cos(c.th) * av, c.y + 0.8, c.z + Math.sin(c.th) * av, PHARE, brume * NUIT, 2); }
       for (; n < 4; n++) RC[n].setScalar(0);
     }
-    drawHUD(vu, dt, sp, state === 'race' ? alerteVirage(T, car.idx, sp) || (surGlace ? 2 : 0) : 0);
+    drawHUD(vu, dt, sp, state === 'race' ? alerteVirage(T, car.idx, sp) || (surGlace && { glace: surGlace }) : 0);
     const U = post.uniforms; U.t.value = (vu.rs || vu.rt).texture; U.h.value = vu.hudT; if (U.dz) U.dz.value = vu.rt.depthTexture; U.px.value.set(AA / vu.rw, AA / RH); post.uniforms.vig.value = 0.6 * nitE + 1.3 * rv * rv; // vignette resserrée par la vitesse et la nitro ; la passe finale est commune : ses entrées sont celles de la vue
     // flou de vitesse : rien sous 130 km/h, il monte ensuite jusqu'à la pointe ; l'aberration chromatique suit
     post.uniforms.amt.value = 1.1 * rv * rv; post.uniforms.ab.value = 0.002 + 0.016 * rv * rv + (stun > 0 ? stun * 0.04 : 0);

@@ -326,13 +326,15 @@
     }
     return va;
   }
-  // alerte de virage du HUD, à la vitesse sp (m/s) depuis l'échantillon idx : seulement un virage qui, entre 1,2 s et 3,6 s devant, oblige à perdre plus d'un tiers de cette vitesse (surface comprise).
-  // Rend +1 (droite), -1 (gauche) ou 0. (L'ancienne règle, toute courbe de moins de 90 m de rayon au-dessus de 108 km/h, sonnait jusqu'à dix fois par tour.)
+  // alerte de virage du HUD, à la vitesse sp (m/s) depuis l'échantillon idx : seulement un virage qui, dans les 3,6 s devant, oblige à perdre plus d'un tiers de cette vitesse (surface comprise).
+  // Rend la distance signée jusqu'au premier échantillon trop serré, en m (> 0 virage à droite, < 0 à gauche), ou 0 : le HUD la décompte jusqu'à l'entrée (une fois dedans, ou assez freiné, elle se tait).
+  // (L'ancienne règle, toute courbe de moins de 90 m de rayon au-dessus de 108 km/h, sonnait jusqu'à dix fois par tour ; la suivante ne disait que le côté, pas quand.)
   function alerteVirage(T, idx, sp, f = 0.65) {
     if (sp < 15) return 0;
-    const S = T.S, n = T.n, D = Math.round(sp * 0.6); let vmin = 1e9, sg = 0;
-    for (let j = D; j < 3 * D; j++) { const i = (idx + j) % n, Q = surf(T, i), g = 1.2 * (1 - Q.vir) * (1 - 0.8 * Math.max(0, Q.colle - 0.5)), v = vturn(g, Math.abs(S[i].kl) + 1e-4, T.kt); if (v < vmin) { vmin = v; sg = Math.sign(S[i].k); } }
-    return vmin < sp * f ? sg : 0;
+    const S = T.S, n = T.n, D = Math.round(sp * 0.6), serre = i => { const Q = surf(T, i), g = 1.2 * (1 - Q.vir) * (1 - 0.8 * Math.max(0, Q.colle - 0.5)); return vturn(g, Math.abs(S[i].kl) + 1e-4, T.kt) < sp * f; };
+    if (serre(idx)) return 0; // déjà dedans
+    for (let j = 1; j < 3 * D; j++) { const i = (idx + j) % n; if (serre(i)) return (Math.sign(S[i].k) || 1) * j * 2; } // 2 m par échantillon
+    return 0;
   }
   // le camion en double file vu par la voiture c : échantillon et écart à l'axe (signé) ; il change de côté à chaque tour de c (objet réutilisé, à l'arrêt : sert d'obstacle au pilote automatique)
   const CAM = { idx: 0, d: 0, vx: 0, vz: 0 }, camion = (T, c) => Object.assign(CAM, { idx: T.cam.i, d: (Math.floor(c.dist / T.n) & 1 ? 1 : -1) * T.cam.d });
