@@ -27,15 +27,19 @@
   await new Promise(r => setTimeout(r, 1000));
   const g = w.__g; if (!g) { log('ERREUR : le jeu ne démarre pas — ' + erreurs.join(' | ')); document.title = 'FINI (erreur)'; return; }
   if (q.get('vue')) g.vue = q.get('vue').split(',').map(Number);
+  // sanshud : la scène sans HUD · angles=a,d,h;a,d,h;… : une caméra d'inspection par capture, à tour de rôle (vide = la caméra de course). Pour les aperçus du menu : outils/apercus.sh
+  if (q.has('sanshud')) g.sansHud = 1;
+  const angles = (q.get('angles') || '').split(';').map(s => s ? s.split(',').map(Number) : null);
+  const angle = () => { if (q.get('angles')) g.vue = angles[vues.length % angles.length]; };
   const gl = g.renderer.getContext(), T = g.T, vues = [], post = (nom, corps) => fetch('/captures/' + nom, { method: 'POST', body: corps });
   const prise = async () => {
     const n = String(vues.length).padStart(2, '0'), c = g.car;
     await post(carte + '-' + n + '.jpg', await (await fetch(g.renderer.domElement.toDataURL('image/jpeg', 0.8))).blob());
     vues.push({ n, t: +g.t.toFixed(1), idx: c.idx, kmh: Math.round(Math.hypot(c.vx, c.vz) * 3.6), tunnel: T.tun && ((c.idx - T.t0 + T.n) % T.n) < T.t1 - T.t0 });
-    log(carte + '-' + n + '  t=' + g.t.toFixed(1) + ' s  échantillon ' + c.idx + '/' + T.n);
+    angle(); log(carte + '-' + n + '  t=' + g.t.toFixed(1) + ' s  échantillon ' + c.idx + '/' + T.n);
   };
   let forcer = ''; const ap = w.autopilot; w.autopilot = (...a) => { const r = ap(...a); if (forcer === 'nitro') r.nitro = r.gas = 1; if (forcer === 'mur') r.steer = 0.4; forcer = ''; return r; }; // par la commande : sim.js remet c.boost à chaque pas, et le pilote ramène la voiture au milieu
-  g.start();
+  g.start(); angle();
   let k = 0, dernier = -1;
   for (; k < 9000 && g.car.dist < T.n * tours - 3; k++) {
     const force = q.get('force'), c = g.car; if (force && cibles.some(i => ((i - c.idx + T.n + 8) % T.n) < 48)) { if (force === 'mur') { const s = T.S[c.idx], e = s.w - (c.d || 0); c.x -= s.tz * e; c.z += s.tx * e; } else c.nitro = 1; forcer = force; }

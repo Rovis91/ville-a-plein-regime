@@ -71,7 +71,11 @@
       const out = [], tenu = {}, ax = pad ? pad.axes : [0, 0];
       if (pad) pad.buttons.forEach((b, i) => { if (b.pressed && PADK[i]) tenu[PADK[i]] = 1; });
       if (c.accueil && pad && pad.buttons.some(b => b.pressed)) tenu.Enter = 1;
-      if (c.menu) { if (ax[1] < -0.6) tenu.ArrowUp = 1; if (ax[1] > 0.6) tenu.ArrowDown = 1; if (ax[0] < -0.6) tenu.ArrowLeft = 1; if (ax[0] > 0.6) tenu.ArrowRight = 1; } // en course le stick est lu en analogique, pas en flèches
+      // en course le stick est lu en analogique, pas en flèches. Menus : gauche / droite change une option, donc plus dur à déclencher (0,85, et nettement plus de côté que vers le bas) ;
+      // une direction tenue ne se relâche que sous 0,4 (sinon un stick qui tremble autour du seuil répète). Haut / bas reste à 0,6, s'il domine.
+      if (c.menu) { const [x, y] = ax, h = Math.abs(x) > 2 * Math.abs(y), seuil = k => padWas[k] ? 0.4 : k === 'ArrowLeft' || k === 'ArrowRight' ? 0.85 : 0.6;
+        if (-y > seuil('ArrowUp') && !h) tenu.ArrowUp = 1; if (y > seuil('ArrowDown') && !h) tenu.ArrowDown = 1;
+        if (-x > seuil('ArrowLeft') && (h || padWas.ArrowLeft)) tenu.ArrowLeft = 1; if (x > seuil('ArrowRight') && (h || padWas.ArrowRight)) tenu.ArrowRight = 1; }
       for (const k in tenu) if (!padWas[k]) out.push(cmd(k, retenu));
       for (const k in padWas) if (!tenu[k]) delete padWas[k]; Object.assign(padWas, tenu);
       // À deux : les boutons d'une manette inscrite qui n'est pas la retenue valent aussi une commande chacun, à son nom : l'un ou l'autre met en pause et navigue

@@ -164,54 +164,54 @@
   });
   const postScene = new THREE.Scene(), postCam = new THREE.Camera(), quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), post);
   quad.frustumCulled = false; postScene.add(quad);
-  // reflets de la route mouillée calculés à l'écran : entre la scène et la passe finale. La route écrit dans l'alpha de la cible combien elle est mouillée
-  // (1 = sèche, 0,5 = détrempée, voir eclaire) ; de chacun de ses pixels on suit le rayon réfléchi dans la profondeur de la vue, et on ajoute la couleur qu'il rencontre :
-  // voitures, néons, feux arrière. Ce que le rayon ne trouve pas à l'écran (le ciel, ce qui est hors champ) reste aux rubans et aux reflets étirés de la lumière dynamique.
-  const ssr = new THREE.ShaderMaterial({
-    uniforms: { t: { value: null }, dz: { value: null }, P: { value: new THREE.Matrix4() }, Pi: { value: new THREE.Matrix4() }, up: { value: new V3() }, px: { value: new THREE.Vector2() } },
-    vertexShader: post.vertexShader,
-    fragmentShader: `uniform sampler2D t, dz; uniform mat4 P, Pi; uniform vec3 up; uniform vec2 px; varying vec2 v;
-      vec3 vpos(vec2 u){ vec4 p = Pi * vec4(u * 2. - 1., texture2D(dz, u).x * 2. - 1., 1.); return p.xyz / p.w; } // position dans le repère de la caméra
-      vec2 ecran(vec3 q){ vec4 c = P * vec4(q, 1.); return c.xy / c.w * .5 + .5; }
-      void main(){
-        vec4 c = texture2D(t, v); float w = c.a > ${(0.95 - EAU).toFixed(2)} && c.a < .99 ? (1. - c.a) / ${EAU.toFixed(2)} : 0., trouve = 0.;
-        if (w > 0.) {
-          vec3 p = vpos(v), e = normalize(p), r = reflect(e, up), q = p; float s = .4, a = 0., b = 0.; vec2 h = vec2(-1.);
-          for (int i = 0; i < 22; i++) { // pas qui s'allongent : 0,4 m au départ, plus de 300 m au bout
-            b = a; a += s; s *= 1.28; q = p + r * a; vec2 u = ecran(q);
-            if (q.z > -.5 || u.x < 0. || u.x > 1. || u.y < 0. || u.y > 1.) break;
-            float z = vpos(u).z;
-            if (q.z < z && q.z > z - max(1.2, s * 2.)) { // le rayon vient de passer derrière une surface, à moins d'une épaisseur : on resserre entre les deux derniers pas
-              for (int j = 0; j < 5; j++) { float m = (a + b) * .5; vec2 um = ecran(p + r * m); if (p.z + r.z * m < vpos(um).z) a = m; else b = m; }
-              h = ecran(p + r * a); break;
-            }
-          }
-          if (h.x >= 0.) {
-            vec3 f = vec3(0.); for (int k = -2; k < 2; k++) f += texture2D(t, h + vec2(0., (float(k) + .5) * 2. * px.y)).rgb; // étiré à la verticale, comme un reflet sur l'eau
-            vec2 bd = min(h, 1. - h); trouve = smoothstep(0., .08, min(bd.x, bd.y)) * (1. - smoothstep(60., 320., a)); // s'éteint au bord de l'image et au loin
-            float fr = .25 + .75 * pow(1. - max(dot(-e, up), 0.), 3.); // Fresnel : vu en rasant, la route est un miroir
-            c.rgb += f * .12 * w * fr * trouve;
-          }
-        }
-        gl_FragColor = vec4(c.rgb, 1. - trouve); // alpha : 0 là où le reflet est trouvé, les rubans de repli n'y ajoutent rien (voir repli)
-      }`,
-  });
-  // rubans de repli : dessinés après ssr dans la même cible, pondérés par son alpha, cachés par ce qui est devant eux dans la profondeur de la scène
-  const REPLI = { rDz: { value: null }, rRes: { value: new THREE.Vector2() } }, repliScene = new THREE.Scene();
+  // reflets de la route mouillée calculés à l'écran : entre la scène et la passe finale. La route écrit dans l'alpha de la cible combien elle est mouillée
+  // (1 = sèche, 0,5 = détrempée, voir eclaire) ; de chacun de ses pixels on suit le rayon réfléchi dans la profondeur de la vue, et on ajoute la couleur qu'il rencontre :
+  // voitures, néons, feux arrière. Ce que le rayon ne trouve pas à l'écran (le ciel, ce qui est hors champ) reste aux rubans et aux reflets étirés de la lumière dynamique.
+  const ssr = new THREE.ShaderMaterial({
+    uniforms: { t: { value: null }, dz: { value: null }, P: { value: new THREE.Matrix4() }, Pi: { value: new THREE.Matrix4() }, up: { value: new V3() }, px: { value: new THREE.Vector2() } },
+    vertexShader: post.vertexShader,
+    fragmentShader: `uniform sampler2D t, dz; uniform mat4 P, Pi; uniform vec3 up; uniform vec2 px; varying vec2 v;
+      vec3 vpos(vec2 u){ vec4 p = Pi * vec4(u * 2. - 1., texture2D(dz, u).x * 2. - 1., 1.); return p.xyz / p.w; } // position dans le repère de la caméra
+      vec2 ecran(vec3 q){ vec4 c = P * vec4(q, 1.); return c.xy / c.w * .5 + .5; }
+      void main(){
+        vec4 c = texture2D(t, v); float w = c.a > ${(0.95 - EAU).toFixed(2)} && c.a < .99 ? (1. - c.a) / ${EAU.toFixed(2)} : 0., trouve = 0.;
+        if (w > 0.) {
+          vec3 p = vpos(v), e = normalize(p), r = reflect(e, up), q = p; float s = .4, a = 0., b = 0.; vec2 h = vec2(-1.);
+          for (int i = 0; i < 22; i++) { // pas qui s'allongent : 0,4 m au départ, plus de 300 m au bout
+            b = a; a += s; s *= 1.28; q = p + r * a; vec2 u = ecran(q);
+            if (q.z > -.5 || u.x < 0. || u.x > 1. || u.y < 0. || u.y > 1.) break;
+            float z = vpos(u).z;
+            if (q.z < z && q.z > z - max(1.2, s * 2.)) { // le rayon vient de passer derrière une surface, à moins d'une épaisseur : on resserre entre les deux derniers pas
+              for (int j = 0; j < 5; j++) { float m = (a + b) * .5; vec2 um = ecran(p + r * m); if (p.z + r.z * m < vpos(um).z) a = m; else b = m; }
+              h = ecran(p + r * a); break;
+            }
+          }
+          if (h.x >= 0.) {
+            vec3 f = vec3(0.); for (int k = -2; k < 2; k++) f += texture2D(t, h + vec2(0., (float(k) + .5) * 2. * px.y)).rgb; // étiré à la verticale, comme un reflet sur l'eau
+            vec2 bd = min(h, 1. - h); trouve = smoothstep(0., .08, min(bd.x, bd.y)) * (1. - smoothstep(60., 320., a)); // s'éteint au bord de l'image et au loin
+            float fr = .25 + .75 * pow(1. - max(dot(-e, up), 0.), 3.); // Fresnel : vu en rasant, la route est un miroir
+            c.rgb += f * .12 * w * fr * trouve;
+          }
+        }
+        gl_FragColor = vec4(c.rgb, 1. - trouve); // alpha : 0 là où le reflet est trouvé, les rubans de repli n'y ajoutent rien (voir repli)
+      }`,
+  });
+  // rubans de repli : dessinés après ssr dans la même cible, pondérés par son alpha, cachés par ce qui est devant eux dans la profondeur de la scène
+  const REPLI = { rDz: { value: null }, rRes: { value: new THREE.Vector2() } }, repliScene = new THREE.Scene();
   const ssrScene = new THREE.Scene(), ssrQuad = new THREE.Mesh(quad.geometry, ssr); ssrQuad.frustumCulled = false; ssrScene.add(ssrQuad);
-  // adaptation de l'œil (sans style) : 96 points de la scène, moyenne des log de luminosité, rapprochée de la valeur de l'image d'avant ; tout reste sur le GPU, rien n'est relu
-  // Les tunnels sont peints aussi clairs que le dehors, comme vus par un œil déjà fait au noir : la lumière « vraie » y est TUN fois plus faible (ld = son log). Une fois l'œil adapté, l'image est celle d'avant ;
-  // à l'entrée il fait d'abord sombre puis la rétine s'habitue, à la sortie le dehors éblouit puis l'œil se referme.
-  const TUN = 0.4;
-  const OEIL = new THREE.ShaderMaterial({ uniforms: { t: { value: null }, prev: { value: null }, ld: { value: 0 }, kc: { value: 0 }, kn: { value: 0 }, kd: { value: 0 } }, depthTest: false, depthWrite: false,
-    vertexShader: post.vertexShader,
-    fragmentShader: `uniform sampler2D t, prev; uniform float ld, kc, kn, kd;
-      void main(){
-        float s = 0.; for (int i = 0; i < 12; i++) for (int j = 0; j < 8; j++) s += log(dot(texture2D(t, (vec2(i, j) + .5) / vec2(12., 8.)).rgb, vec3(.3, .59, .11)) + .002);
-        float L = s / 96., A = L + ld; vec4 p = texture2D(prev, vec2(.5));
-        if (p.a < .5) p = vec4(A, L, 0., 1.); // première image : l'œil est déjà fait à la scène
-        gl_FragColor = vec4(mix(p.r, A, A > p.r ? kc : kn), mix(p.g, L, kd), 0., 1.); // r : l'œil, vite vers le clair, lentement vers le noir ; g : la référence du dehors, suivie plus lentement encore, figée en tunnel
-      }` });
+  // adaptation de l'œil (sans style) : 96 points de la scène, moyenne des log de luminosité, rapprochée de la valeur de l'image d'avant ; tout reste sur le GPU, rien n'est relu
+  // Les tunnels sont peints aussi clairs que le dehors, comme vus par un œil déjà fait au noir : la lumière « vraie » y est TUN fois plus faible (ld = son log). Une fois l'œil adapté, l'image est celle d'avant ;
+  // à l'entrée il fait d'abord sombre puis la rétine s'habitue, à la sortie le dehors éblouit puis l'œil se referme.
+  const TUN = 0.4;
+  const OEIL = new THREE.ShaderMaterial({ uniforms: { t: { value: null }, prev: { value: null }, ld: { value: 0 }, kc: { value: 0 }, kn: { value: 0 }, kd: { value: 0 } }, depthTest: false, depthWrite: false,
+    vertexShader: post.vertexShader,
+    fragmentShader: `uniform sampler2D t, prev; uniform float ld, kc, kn, kd;
+      void main(){
+        float s = 0.; for (int i = 0; i < 12; i++) for (int j = 0; j < 8; j++) s += log(dot(texture2D(t, (vec2(i, j) + .5) / vec2(12., 8.)).rgb, vec3(.3, .59, .11)) + .002);
+        float L = s / 96., A = L + ld; vec4 p = texture2D(prev, vec2(.5));
+        if (p.a < .5) p = vec4(A, L, 0., 1.); // première image : l'œil est déjà fait à la scène
+        gl_FragColor = vec4(mix(p.r, A, A > p.r ? kc : kn), mix(p.g, L, kd), 0., 1.); // r : l'œil, vite vers le clair, lentement vers le noir ; g : la référence du dehors, suivie plus lentement encore, figée en tunnel
+      }` });
   const oeilScene = new THREE.Scene(), oeilQ = new THREE.Mesh(quad.geometry, OEIL); oeilQ.frustumCulled = false; oeilScene.add(oeilQ);
   if (ST) { // passe finale des styles : la scène telle quelle, l'effet du style, le HUD (toujours sur sa grille de 270 lignes), une vignette légère
     Object.assign(post.uniforms, { dz: { value: null }, ecr: { value: new THREE.Vector2(1, 1) }, pal: { value: PAL.map(c => new THREE.Color(c)) } });
@@ -1035,20 +1035,24 @@
     ['RADIO : ' + nomRadio(), zap], ['QUITTER', toMenu]];
   function toMenu() { if (NET.role === 'hote') NET.stop(); if (invite()) attente(); ses.toMenu(); state = 'title'; ins = false; race = null; const c = newCar(T); for (const vu of VUES) suit(vu, c); msel = 4; }
   // menu principal : 0 carte, 1 joueurs, 2 mode, 3 boîte, 4 démarrer ; d = -1 / +1 (gauche / droite ; Entrée vaut +1)
-  let cible = null, cibleT = 0; // carte demandée au menu, pas encore construite
+  let cible = null, charge = false, apT0 = 0; // carte demandée au menu, pas encore construite · sa construction est lancée (le menu affiche CHARGEMENT) · début de son diaporama
+  // 4 vues par carte (480 × 270, ~20 Ko), chargées une fois pour toutes : la page n'est pas rechargée d'une carte à l'autre
+  const APERCUS = window.__apercus || (window.__apercus = Object.fromEntries(CARTES.map(c => [c.id, [0, 1, 2, 3].map(i => Object.assign(new Image(), { src: 'apercus/' + c.id + '-' + i + '.jpg' }))])));
   function changeCarte() {
     if (cible === M) { cible = null; return; }
+    if (charge) return; charge = true;
     setPref('vpr.carte', cible.id); try { sessionStorage.setItem('vpr.menu', 1); history.replaceState(null, '', location.pathname + '?carte=' + cible.id + (Q.has('joueurs') ? '&joueurs=' + VUES.length : '')); } catch (e) { } // le nombre de joueurs suit la préférence ; forcé par l'adresse (?joueurs=), il y reste d'une carte à l'autre
     window.CARTE = cible; SON.carte(cible);
     // ce fichier (décor, jeu) puis rythme.js s'il est là sont rejoués sur la nouvelle carte, sans recharger de script ; le renderer, ses shaders et le son restent.
     // Après la pile en cours (comme l'ancien rechargement de balises) : l'instance qui appelle finit son image avant d'être arrêtée.
-    setTimeout(() => { lanceJeu(); if (window.lanceRythme) lanceRythme(); });
+    // rAF puis setTimeout : l'image en cours (avec CHARGEMENT) est affichée avant que la construction ne bloque
+    requestAnimationFrame(() => setTimeout(() => { lanceJeu(); if (window.lanceRythme) lanceRythme(); }));
   }
   function menuAct(d) {
-    if (cible && msel === 4) return; // une carte est en route : on ne démarre pas sur l'ancienne
-    if (msel === 0) { // changer de carte : le nom change tout de suite ; le décor suit dès qu'on cesse de faire défiler (0,15 s), sans recharger la page
-      cible = CARTES[(CARTES.indexOf(cible || M) + d + CARTES.length) % CARTES.length];
-      clearTimeout(cibleT); cibleT = setTimeout(changeCarte, 150);
+    if (cible && msel === 4) { try { sessionStorage.setItem('vpr.go', 2); } catch (e) { } changeCarte(); return; } // DEMARRER sur une carte pas encore construite : elle se construit et la course part à l'arrivée
+    if (msel === 0) { // changer de carte : seuls le nom et le tracé changent (rien à construire, instantané) ; le décor n'est construit qu'en quittant la ligne, en validant ou au départ
+      if (!charge) { cible = CARTES[(CARTES.indexOf(cible || M) + d + CARTES.length) % CARTES.length]; apT0 = performance.now(); }
+      if (cible === M) cible = null;
     } else if (msel === 1) { // écran partagé seulement (la ligne n'existe pas en solo) : 2, 3 ou 4 joueurs, gardé dans les préférences
       joueurs(2 + (VUES.length - 2 + d + 3) % 3); setPref('vpr7.joueurs', VUES.length); setPref('vpr7.ecran', VUES.length); }
     else if (msel === 2) { // les modes sans adversaire, puis la course et l'élimination à chaque difficulté ; à deux : Course, Élimination, Glisse en duel
@@ -1098,11 +1102,12 @@
     if (state === 'title') {
       const dx = (e.code === 'ArrowRight' || e.code === 'KeyD' ? 1 : 0) - (e.code === 'ArrowLeft' || e.code === 'KeyA' ? 1 : 0);
       const pas = s => { msel = (msel + s + 5) % 5; if (msel === 1 && !deux()) msel = (msel + s + 5) % 5; }; // en solo, la ligne JOUEURS n'existe pas
-      if (e.code === 'ArrowUp' || e.code === 'KeyW') pas(-1);
-      else if (e.code === 'ArrowDown' || e.code === 'KeyS') pas(1);
-      else if (e.code === 'Enter' || e.code === 'Space') menuAct(1);
+      if (charge) return; // la carte se construit : plus rien à choisir sur l'ancienne
+      if (e.code === 'ArrowUp' || e.code === 'KeyW') { if (msel === 0 && cible) changeCarte(); else pas(-1); } // quitter la ligne CARTE construit la carte choisie (on y revient sur la nouvelle carte)
+      else if (e.code === 'ArrowDown' || e.code === 'KeyS') { if (msel === 0 && cible) changeCarte(); else pas(1); }
+      else if (e.code === 'Enter' || e.code === 'Space') { if (msel === 0 && cible) changeCarte(); else menuAct(1); }
       else if (dx && msel < 4) menuAct(dx);
-      else if (e.code === 'Escape') { choix = true; csel = deux() ? 1 : 0; if (enLigne()) { csel = 2; enl = { sel: 0, saisie: '' }; } }
+      else if (e.code === 'Escape') { cible = null; choix = true; csel = deux() ? 1 : 0; if (enLigne()) { csel = 2; enl = { sel: 0, saisie: '' }; } }
       else if (key === 'i' && deux()) inscrit(); // à deux : rouvrir l'inscription pour changer de périphérique (les places prises ne sont plus redemandées au départ)
       return;
     }
@@ -1237,9 +1242,16 @@
       return;
     }
     if (state === 'title') { // menu principal : la carte tourne derrière, on choisit carte, mode et boîte
+      if (cible) { // carte choisie, pas encore construite : diaporama de ses vues (apercus/, faites par outils/apercus.py), en fondu, avec un lent zoom
+        const t = (performance.now() - apT0) / 2400, n = t | 0, f = Math.min(1, (t - n) * 6), im = i => APERCUS[cible.id][i % 4];
+        for (const [i, a] of [[n - 1, 1], [n, f]]) { const m = im(Math.max(0, i)), z = Math.max(HW / 480, HH / 270) * (1.02 + 0.05 * (t - i) / 2); if (!m.complete || !m.naturalWidth) continue;
+          hg.globalAlpha = a; hg.drawImage(m, cx - 240 * z, HH / 2 - 135 * z, 480 * z, 270 * z); }
+        hg.globalAlpha = 1;
+      }
+      const hu = cible ? cible.th.hud : HU; // titre et sous-titre de la carte choisie
       R(hg, 'rgba(8,8,12,.45)', 0, 0, HW, HH); const d2 = deux(); // à deux, le menu dit ce qui est vrai à deux
-      if (HU.sur[0]) txt(HU.sur[0], cx, 6, 16, C, 'center', 0, JP); txt(mode === 'tournee' ? 'TOURNEE · ' + SOIREE[0].heure + ' > ' + SOIREE[SOIREE.length - 1].heure : mode === 'course' ? 'COURSE · 3 TOURS' : mode === 'elim' ? 'ELIMINATION · 4 TOURS' : mode === 'glisse' ? (d2 ? 'GLISSE EN DUEL' : 'GLISSE') + ' · 2 TOURS' : HU.sur[1], cx, 27, 8, C, 'center');
-      const ti = titreCarte(M.id, HU.titre, langue); txt(ti[0], cx, 44, 24, Y, 'center', 2); txt(ti[1], cx, 70, 24, Y, 'center', 2);
+      if (hu.sur[0]) txt(hu.sur[0], cx, 6, 16, C, 'center', 0, JP); txt(mode === 'tournee' ? 'TOURNEE · ' + SOIREE[0].heure + ' > ' + SOIREE[SOIREE.length - 1].heure : mode === 'course' ? 'COURSE · 3 TOURS' : mode === 'elim' ? 'ELIMINATION · 4 TOURS' : mode === 'glisse' ? (d2 ? 'GLISSE EN DUEL' : 'GLISSE') + ' · 2 TOURS' : hu.sur[1], cx, 27, 8, C, 'center');
+      const ti = titreCarte((cible || M).id, hu.titre, langue); txt(ti[0], cx, 44, 24, Y, 'center', 2); txt(ti[1], cx, 70, 24, Y, 'center', 2);
       if (tFlash && performance.now() - tFlash < 400) R(hg, 'rgba(255,255,255,' + (1 - (performance.now() - tFlash) / 400).toFixed(2) + ')', 0, 0, HW, HH); // éclair blanc au sortir de l'accueil
       panel(cx - 160, 100, 320, 140);
       [['CARTE', (cible || M).nom + '  ' + (CARTES.indexOf(cible || M) + 1) + '/' + CARTES.length], ['JOUEURS', d2 ? VUES.length + ' : ECRAN PARTAGE' : 'SOLO'], ['MODE', mode === 'tournee' ? 'TOURNEE : ' + DIFF[diff].nom : mode === 'course' ? 'COURSE : ' + DIFF[diff].nom : mode === 'elim' ? 'ELIMINATION : ' + DIFF[diff].nom : mode === 'glisse' ? d2 ? 'GLISSE EN DUEL' : 'GLISSE' : 'CONTRE-LA-MONTRE'], [d2 ? 'BOITE J1' : 'BOITE', manuel1() ? 'MANUELLE' : 'AUTO']].forEach(([l, v], i) => {
@@ -1254,6 +1266,11 @@
       if (d2) txt("RIEN N'EST ENREGISTRE", cx - 58, 218, 8, '#e8e8e4'); // ni record, ni médaille, ni fantôme : rien à montrer non plus
       else if (!enCourse()) { const gl = mode === 'glisse', m = gl ? medG(ses.bestG) : medal(ses.best); if (m) txt(MEDN[m - 1], cx + 152, 196, 8, MEDC[m - 1], 'right'); if (m < 3) txt('VISE ' + MEDN[m] + ' ' + (gl ? GLM[m] + ' PTS' : fmt(REF * MED[m])), cx - 58, 218, 8, MEDC[m]); } // médaille acquise, et la prochaine à aller chercher
       txt('HAUT/BAS : CHOISIR  GAUCHE/DROITE : CHANGER', cx, 245, 8, '#e8e8e4', 'center'); txt(d2 ? 'I : INSCRIPTION (MANETTES, JOY-CON, CLAVIER)' : 'FLECHES / ZQSD   ESPACE : GLISSE   X : NITRO', cx, 257, 8, '#e8e8e4', 'center');
+      if (cible) { // carte choisie, pas encore construite : sa fiche est remplacée par son tracé (points de contrôle de cartes.js, rien à construire) et la touche pour la charger
+        R(hg, '#08080c', cx - 156, 166, 312, 70); const P = cible.pts, xs = P.map(p => p[0]), zs = P.map(p => p[1]), x0 = Math.min(...xs), z0 = Math.min(...zs), k = Math.min(80 / (Math.max(...xs) - x0 || 1), 52 / (Math.max(...zs) - z0 || 1));
+        hg.strokeStyle = '#e8e8e4'; hg.lineWidth = 1; hg.beginPath(); P.forEach(p => hg.lineTo(cx - 150 + (p[0] - x0) * k, 172 + (p[1] - z0) * k)); hg.closePath(); hg.stroke();
+        txt(cible.nom, cx - 58, 174, 8, C); txt(charge ? 'CHARGEMENT...' : 'ENTREE : CHOISIR CETTE CARTE', cx - 58, 196, 8, charge || blink ? Y : '#e8e8e4');
+      }
       if (enLigne()) tag('SALON ' + NET.code + ' · ' + NET.n + ' JOUEURS', cx, 25, Y); else if (defiErr) tag(defiErr, cx, 25, RD); else if (d2) { } else if (DEFI) tag('DEFI : ' + fmt(DEFI.t) + ' A BATTRE', cx, 25, FANTC[5]);; // à la place du sous-titre : plus bas, le bandeau mordait sur le titre
       return;
     }
@@ -1284,6 +1301,7 @@
   function drawHUD(vu, dt, sp, warn) { // le HUD d'une vue : sa voiture, sa caméra (étiquettes des adversaires), ses bandeaux, sur son canvas
     const { car, cam, cth, rpm, load, peak, result, splitMsg, hudT, w: HW } = vu, seul = !COM, fini = ses.raceEnd || vu.fini, manu = vu.n ? car.manual : manual, moi = vu.moi; hg = vu.hg; // fini : ce joueur est arrivé (à deux, l'autre peut rouler encore) ; manu : sa boîte ; moi : sa voiture (car est celle que la vue regarde : une autre une fois éliminé, à deux)
     hg.clearRect(0, 0, HW, HH);
+    if (window.__g.sansHud) { hudT.needsUpdate = true; return; } // images d'aperçu du menu (outils/captures.html?sanshud) : la scène seule
     const cx = HW / 2, blink = (performance.now() / 160 | 0) % 3 > 0;
     if (state === 'title') { if (seul) ecrans(HW); hudT.needsUpdate = true; return; } // accueil et menu : dans le HUD de la vue en solo, sur la couche commune à deux
     // chrono
@@ -1680,7 +1698,7 @@
     for (const sc of [scene, repliScene]) sc.traverse(o => { if (o.geometry) o.geometry.dispose(); for (const m of [].concat(o.material || [])) { for (const k of ['map', 'emissiveMap', 'alphaMap', 'specularMap']) if (m[k]) m[k].dispose(); m.dispose(); } });
     VUES.forEach(rendVue); CUBE.dispose(); post.dispose(); ssr.dispose(); OEIL.dispose(); quad.geometry.dispose(); if (sun.shadow.map) sun.shadow.map.dispose();
   };
-  try { if (sessionStorage.getItem('vpr.go')) { sessionStorage.removeItem('vpr.go'); if (mode === 'tournee') start(); } } catch (e) { } // arrivée sur la carte d'une manche de Tournée : la course part tout de suite
+  try { if (sessionStorage.getItem('vpr.go')) { const g = sessionStorage.getItem('vpr.go'); sessionStorage.removeItem('vpr.go'); if (mode === 'tournee' || g === '2') start(); } } catch (e) { } // arrivée sur la carte d'une manche de Tournée, ou par DEMARRER au menu : la course part tout de suite
   try { const d = sessionStorage.getItem('vpr.demo'), f = sessionStorage.getItem('vpr.demoFin'); sessionStorage.removeItem('vpr.demo'); sessionStorage.removeItem('vpr.demoFin');
     if (d) demoLance(JSON.parse(d)); else if (f === 'a') accueil = true; } catch (e) { } // démo : carte suivante de la nuit, ou retour sur la carte d'origine (à l'accueil si l'on en venait)
   if (NET.role) { NET.ev = onNet; let g = null; try { g = sessionStorage.getItem('vpr.netgo'); sessionStorage.removeItem('vpr.netgo'); } catch (e) { } // carte changée en ligne : ce fichier vient d'être rejoué, le salon (reseau.js) est resté
