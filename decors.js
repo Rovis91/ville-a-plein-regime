@@ -713,23 +713,28 @@
         return { i, s, sd, x, z, plat, degage, colline }; };
       const haut = lieu(pt(h, 11), 26), bas = lieu(pt(h, 47) + 6, 22), ic = haut.i, sc = haut.s, sd = haut.sd, cx = haut.x, cz = haut.z;
       const g = terrain(h, { pas: 7, sous: 6, marge: 320, loin: 60, chute: 1.1, creux: (x, z, y) => ravin(x, z) + haut.plat(x, z, y) + haut.colline(x, z, y) + bas.plat(x, z, y), mat: h.mat('bruit', {}, '#0c1a14', ['#12261e', '#081410', '#16302a']) });
-      // ---------- la ligne à haute tension de la crête (entre les pts 10 et 11), placée par calcul ----------
-      // Quatre pylônes alignés en travers de la route, deux de chaque côté, et au-delà de chaque bout un ancrage hors de vue (câbles des deux côtés de chaque pylône).
-      // On essaie plusieurs emplacements et portées et on garde le premier où : chaque pylône est à plus de W + 15 m de toute route et hors du carrefour ; le câble le plus bas,
-      // flèche comprise, passe partout à plus de 9 m du sol et à plus de 13 m au-dessus d'une chaussée. Les arbres sont ensuite écartés de son couloir et rabattus sous lui.
-      const CONS = [[-6.3, 26.7], [6.3, 26.7], [-6.3, 31.7], [6.3, 31.7], [-4.3, 36.7], [4.3, 36.7]], FLECHE = 7, i10 = pt(h, 10), BAS = CONS[0][1];
-      const cable = (A, B, t) => [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t - 4 * FLECHE * t * (1 - t), A[2] + (B[2] - A[2]) * t]; // A, B : points d'attache
-      const ligne = (() => { for (const k of [1, 1.25, 1.5]) for (const f of [0.4, 0.3, 0.5, 0.25, 0.55, 0.2]) { // k : échelle des pylônes
-        const s = S[Math.round(i10 + (ic - i10) * f)], pied = o => { const [x, z] = bord(s, 1, o); return [x, g.hAt(x, z), z]; }, bon = ([x, , z]) => g.dAt(x, z) > W + 15 && Math.hypot(x - cx, z - cz) > 60;
-        // chaque côté pour soi : pylône proche à d du bord de la route, le suivant une portée plus loin (les épingles bornent un côté)
-        const cote = sg => { const l = []; for (const d of [40, 50, 60, 70, 80, 90]) for (const ps of [150, 130, 170, 110, 190, 90]) { const p1 = pied(sg * d), p2 = pied(sg * (d + ps)); if (bon(p1) && bon(p2)) l.push([p1, p2, pied(sg * (d + ps + 700))]); } return l; };
-        for (const [g1, g2, g3] of cote(-1).slice(0, 6)) for (const [d1, d2, d3] of cote(1).slice(0, 6)) {
-          const P = [g3, g2, g1, d1, d2, d3].map(p => p.slice()); P[0][1] = P[1][1]; P[5][1] = P[4][1]; // les ancrages, 700 m au-delà du dernier pylône (dans le brouillard) et à sa hauteur : le câble file vers l'horizon, on n'en voit pas le bout
-          let ok = true; for (let q = 0; q < 5 && ok; q++) { const A = [P[q][0], P[q][1] + BAS * k, P[q][2]], B = [P[q + 1][0], P[q + 1][1] + BAS * k, P[q + 1][2]], n = Math.ceil(Math.hypot(B[0] - A[0], B[2] - A[2]) / 4);
-            for (let j = 0; j <= n && ok; j++) { const [x, y, z] = cable(A, B, j / n); ok = y - g.hAt(x, z) > (g.dAt(x, z) < W + 4 ? 13 : 9); } }
-          if (ok) return { s, P, k }; } } return null; })();
-      const sousLigne = (x, z) => { if (!ligne) return null; let b = null; for (let k = 0; k < 5; k++) { const A = ligne.P[k], B = ligne.P[k + 1], ux = B[0] - A[0], uz = B[2] - A[2], l2 = ux * ux + uz * uz,
-        t = Math.max(0, Math.min(1, ((x - A[0]) * ux + (z - A[2]) * uz) / l2)), d = Math.hypot(A[0] + ux * t - x, A[2] + uz * t - z); if (!b || d < b.d) b = { d, y: cable([A[0], A[1] + BAS * ligne.k, A[2]], [B[0], B[1] + BAS * ligne.k, B[2]], t)[1] }; } return b; }; // distance au couloir, hauteur du câble bas
+      // ---------- la ligne à haute tension : elle part d'un poste électrique à côté du temple, franchit la route en hauteur et descend la pente vers la ville de la vallée ----------
+      // Le poste (portique d'arrivée, transformateurs, local) est posé du côté du temple, au-delà de la route de traverse ; trois pylônes s'éloignent en ligne droite,
+      // chacun plus bas que le précédent, puis le câble file 700 m plus loin, dans le brouillard, vers la ville. Direction, portées et échelle des pylônes sont cherchées par calcul :
+      // pylônes à plus de W + 15 m de toute route, hors du temple et de la supérette ; câble bas, flèche comprise (4,5 % de la portée), à plus de 9 m du sol et 13 m au-dessus d'une chaussée.
+      // Les arbres sont ensuite écartés du couloir et du poste, et rabattus sous le câble.
+      const CONS = [[-6.3, 26.7], [6.3, 26.7], [-6.3, 31.7], [6.3, 31.7], [-4.3, 36.7], [4.3, 36.7]], GANT = [[-6.3, 16], [6.3, 16], [-6.3, 18.5], [6.3, 18.5], [-4.3, 21], [4.3, 21]], BAS = CONS[0][1], i10 = pt(h, 10);
+      const cable = (A, B, t) => { const f = 0.045 * Math.hypot(B[0] - A[0], B[2] - A[2]); return [A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t - 4 * f * t * (1 - t), A[2] + (B[2] - A[2]) * t]; }; // A, B : points d'attache
+      const ligne = (() => { const n = [-sc.tz * sd, sc.tx * sd]; // n : vers l'extérieur, côté temple
+        for (const [PX, PZ] of [[W + 22, -48], [W + 22, -56], [W + 30, -50], [W + 22, 48]]) { const x0 = sc.x + n[0] * PX - sc.tx * PZ, z0 = sc.z + n[1] * PX - sc.tz * PZ, P0 = [x0, g.hAt(x0, z0), z0];
+          for (const k of [1, 1.25, 1.5]) for (const a of [0, 0.25, -0.25, 0.5, -0.5, 0.75, -0.75]) { const u = [-n[0] * Math.cos(a) + n[1] * Math.sin(a), -n[0] * Math.sin(a) - n[1] * Math.cos(a)];
+            for (const D1 of [90, 110, 130, 150, 170]) for (const ps of [140, 160, 120]) {
+              const pts = [P0]; for (let j = 0; j < 3; j++) { const d = D1 + j * ps, x = x0 + u[0] * d, z = z0 + u[1] * d; pts.push([x, g.hAt(x, z), z]); }
+              if (pts.slice(1).some(([x, , z]) => g.dAt(x, z) < W + 15 || Math.hypot(x - cx, z - cz) < 45 || Math.hypot(x - bas.x, z - bas.z) < 60) || pts[3][1] > pts[1][1] - 15) continue; // la ligne descend
+              const d3 = D1 + 2 * ps + 700; pts.push([x0 + u[0] * d3, pts[3][1], z0 + u[1] * d3]); // l'ancrage, dans le brouillard, à la hauteur du dernier pylône
+              const hA = i => [pts[i][0], pts[i][1] + (i ? BAS * k : GANT[0][1]), pts[i][2]]; let ok = true;
+              for (let q = 0; q < 4 && ok; q++) { const A = hA(q), B = hA(q + 1), m = Math.ceil(Math.hypot(B[0] - A[0], B[2] - A[2]) / 4);
+                for (let j = 0; j <= m && ok; j++) { const [x, y, z] = cable(A, B, j / m); ok = y - g.hAt(x, z) > (g.dAt(x, z) < W + 4 ? 13 : 9); } }
+              if (ok) return { pts, u, k, ry: Math.atan2(u[0], u[1]), hA }; } } }
+        return null; })();
+      const sousLigne = (x, z) => { if (!ligne) return null; let b = null; for (let q = 0; q < 4; q++) { const A = ligne.hA(q), B = ligne.hA(q + 1), ux = B[0] - A[0], uz = B[2] - A[2], l2 = ux * ux + uz * uz,
+        t = Math.max(0, Math.min(1, ((x - A[0]) * ux + (z - A[2]) * uz) / l2)), d = Math.hypot(A[0] + ux * t - x, A[2] + uz * t - z); if (!b || d < b.d) b = { d, y: cable(A, B, t)[1] }; } // distance au couloir, hauteur du câble bas
+        if (Math.hypot(x - ligne.pts[0][0], z - ligne.pts[0][2]) < 18) b.d = 0; return b; }; // le poste : pas d'arbre dessus
       // une route de traverse part du carrefour, barrée
       // cèdres : une rangée serrée le long de la route (le tunnel d'arbres), puis la forêt ; rien sur le temple ni sur la supérette, ni devant eux à l'approche.
       // Dans les lacets, rien côté vallée (ouest) et des cèdres plus petits côté amont, dont la cime reste sous le regard du lacet du dessus ; de jeunes plants sur la pente en contrebas : on voit la ville par-dessus
@@ -760,14 +765,14 @@
       const bitume = h.mat('bitume'), acier = h.mat('acier'), vitre = h.mat('vitreSombre'), feuRouge = h.mat('feuRouge', LUM), feuBlanc = h.mat('lampe', LUM);
       const gr = repere(h, sc), X = v => sd * (W + v), gT = new THREE.Group(), [tx0, tz0] = bord(sc, sd, W + 1); gT.position.set(tx0, sc.y, tz0); gT.rotation.y = h.across(sc) + (sd > 0 ? 0 : Math.PI); h.scene.add(gT);
       const lanterne = h.mat('lanterne', LUM);
-      h.pose('temple', { gravier: h.mat('gravier'), vermillon: h.mat('vermillon'), noir: vitre, pierre: h.mat('pierreMousse'), feu: lanterne, bois: h.mat('boisTemple'), shoji: h.mat('shoji', LUM),
-        chochin: h.mat('peinture', { lum: 1, c: 0xff4a28 }), corde: h.mat('laque', { c: 0xd8c88a }), toit: h.mat('tuileTemple') }, gT);
+      h.pose('temple', { gravier: h.mat('gravier'), vermillon: h.mat('vermillon'), noir: vitre, pierre: h.mat('pierreMousse'), feu: lanterne, bois: h.mat('boisTemple', { emissive: 0x120a06 }), shoji: h.mat('shoji', LUM), eau: h.mat('eauVive', { lum: 1, c: 0x2a5058 }), crepi: h.mat('crepi'),
+        chochin: h.mat('peinture', { lum: 1, c: 0xff4a28 }), corde: h.mat('laque', { c: 0xe8d8a0, emissive: 0x3a3018 }), toit: h.mat('tuileTemple', { emissive: 0x222c38 }), rive: h.mat('laque', { c: 0xd8c49a, emissive: 0x3a2e1c }) }, gT); // emissive : les toits restent lisibles sur le ciel de nuit
       h.pose('traverse', { bitume }, gr, [X(70), 0, -22]); // la route de traverse s'enfonce dans la forêt, à côté du temple
       const rayures = h.mat('rayures', LUM), cligno = h.mat('clignotant', LUM), cone = h.mat('cone', LUM); // barrée : barrières rayées, cônes, feux orange qui clignotent
       for (const dz of [-25, -22, -19]) h.pose('barriere', { rayures, clignotant: cligno }, gr, [X(43), 0, dz]);
       for (const dz of [-26.5, -23.5, -20.5, -17.5]) h.pose('cone', cone, gr, [X(41.5), 0.5, dz]);
       gT.updateMatrixWorld(); // lanternes du torii et de l'allée, façade du pavillon : lumière chaude
-      for (const [lx, ly, d, f] of [[4, 5, 18, 1.4], [13.5, 2, 16, 1.6], [33, 6.5, 30, 2.4]]) { const p = gT.localToWorld(new THREE.Vector3(lx, ly, 0)); h.lum(ic, p.x, p.y, p.z, 0xffb060, d, f); }
+      for (const [lx, ly, lz, d, f] of [[4, 5, 0, 18, 1.4], [14, 2, 0, 16, 1.6], [33, 7.5, -5.4, 16, 1.8], [33, 7.5, 5.4, 16, 1.8], [36, 5, 0, 20, 1.6]]) { const p = gT.localToWorld(new THREE.Vector3(lx, ly, lz)); h.lum(ic, p.x, p.y, p.z, 0xffb060, d, f); } // les lanternes éclairent l'avant-toit
       // --- la supérette, la station-service et leur esplanade : dans le dernier virage, face à qui arrive (repère de la route, X vers l'extérieur) ---
       { const gb = repere(h, bas.s), XB = v => bas.sd * (W + v);
         h.pose('esplanade', { bitume }, gb, [XB(21), 0, 0]); h.pose('boite', h.mat('beton'), gb, [XB(21), -1.3, 0], 39.6, 1.9, 51.6); // jupe sous la dalle : près de la route le sol est plus bas
@@ -843,10 +848,13 @@
         for (const [mt, ...l] of par.values()) { const ge = new THREE.BufferGeometry();
           for (const [k, sz] of [['position', 3], ['normal', 3], ['uv', 2]]) { const A = new Float32Array(l.reduce((n, e) => n + e.attributes.position.count, 0) * sz); let o = 0; for (const e of l) { A.set(e.attributes[k].array, o); o += e.attributes.position.count * sz; } ge.setAttribute(k, new THREE.BufferAttribute(A, sz)); }
           const m = new THREE.Mesh(ge, mt); ge.computeBoundingSphere(); proches.push(m); h.scene.add(m); } }
-      if (ligne) { // pylônes (consoles perpendiculaires à la ligne) et six conducteurs par portée, ancrages compris
-        const ry = h.across(ligne.s) + Math.PI / 2, o = new THREE.Object3D(), fils = [], at6 = P => { o.position.set(...P); o.rotation.y = ry; o.updateMatrixWorld(); o.scale.setScalar(ligne.k); o.updateMatrixWorld(); return CONS.map(([lx, ly]) => o.localToWorld(new THREE.Vector3(lx, ly, 0)).toArray()); };
-        insts(h, 'pyloneHT', { acier: h.mat('matGris'), feu: feuPylone }, ligne.P.slice(1, 5).map(([x, y, z]) => [x, y, z, ry, ligne.k]));
-        const att = ligne.P.map(at6); for (let k = 0; k < 5; k++) for (let c = 0; c < 6; c++) for (let j = 0; j < 16; j++) fils.push(...cable(att[k][c], att[k + 1][c], j / 16), ...cable(att[k][c], att[k + 1][c], (j + 1) / 16));
+      if (ligne) { // le poste, les pylônes (consoles perpendiculaires à la ligne), six conducteurs par portée : du portique du poste jusqu'à l'ancrage
+        const o = new THREE.Object3D(), fils = [], at6 = (P, i) => { o.position.set(...P); o.rotation.y = ligne.ry; o.scale.setScalar(i ? ligne.k : 1); o.updateMatrixWorld(); return (i ? CONS : GANT).map(([lx, ly]) => o.localToWorld(new THREE.Vector3(lx, ly, 0)).toArray()); };
+        const gp = new THREE.Group(); gp.position.set(...ligne.pts[0]); gp.rotation.y = ligne.ry; h.scene.add(gp);
+        h.pose('poste', { dalle: h.mat('gravier'), beton: h.mat('beton'), acier: h.mat('matGris'), isolant: h.mat('laque', { c: 0xd8dce0 }), lampe: h.mat('lampe', LUM) }, gp);
+        gp.updateMatrixWorld(); for (const [lx, lz] of [[-6, -16], [6, -2]]) { const p = gp.localToWorld(new THREE.Vector3(lx, 6, lz)); h.lum(ic, p.x, p.y, p.z, 0xdfe8ff, 24, 2.2); } // les lampadaires du poste : il se lit de nuit
+        insts(h, 'pyloneHT', { acier: h.mat('matGris'), feu: feuPylone }, ligne.pts.slice(1, 4).map(([x, y, z]) => [x, y, z, ligne.ry, ligne.k]));
+        const att = ligne.pts.map(at6); for (let q = 0; q < 4; q++) for (let c = 0; c < 6; c++) for (let j = 0; j < 16; j++) fils.push(...cable(att[q][c], att[q + 1][c], j / 16), ...cable(att[q][c], att[q + 1][c], (j + 1) / 16));
         const fg = new THREE.BufferGeometry(); fg.setAttribute('position', new THREE.Float32BufferAttribute(fils, 3)); const lg = new THREE.LineSegments(fg, new THREE.LineBasicMaterial({ color: 0x5a6068 })); lg.userData.cables = 1; h.scene.add(lg); }
       const rouge = ville(h, g); // la mégapole en contrebas, à l'ouest des lacets
       return (dt, now) => { cligno.color.setHex((now / 450 & 1) ? 0xff8c1a : 0x3a2008); const r = now % 1500 < 700 ? 0xff2018 : 0x300404; rouge.color.setHex(r); feuPylone.color.setHex(r); eau.map.offset.x += dt * 0.3;

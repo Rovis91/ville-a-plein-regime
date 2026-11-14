@@ -36,7 +36,7 @@
     // bois sombre des pavillons : planches verticales, veines
     boisTemple: () => [64, 64, (g, o) => { const { R, alea, voile } = o; R(g, '#3a2418', 0, 0, 64, 64); for (let x = 0; x < 64; x += 8) R(g, '#22140c', x, 0, 1, 64);
       voile(g, 0.25, () => { for (let i = 0; i < 90; i++) R(g, alea() < 0.6 ? '#000' : '#6a4a32', alea() * 64 | 0, alea() * 64 | 0, 1, 4 + alea() * 12 | 0); }); }, 4],
-    // gravier ratissé de la cour : gris pâle, sillons du râteau
-    gravier: () => [64, 64, (g, o) => { const { R, alea } = o; R(g, '#6a6c68', 0, 0, 64, 64); for (let i = 0; i < 500; i++) R(g, alea() < 0.5 ? '#585a56' : '#7e807a', alea() * 64 | 0, alea() * 64 | 0, 1, 1); for (let y = 2; y < 64; y += 4) R(g, '#50524e', 0, y, 64, 1); }, 4],
+    // gravier ratissé de la cour : gris pâle, sillons du râteau (crête claire, creux sombre) qui ondulent un peu
+    gravier: () => [64, 64, (g, o) => { const { R, alea } = o; R(g, '#4a4c48', 0, 0, 64, 64); for (let i = 0; i < 300; i++) R(g, alea() < 0.5 ? '#444642' : '#52544e', alea() * 64 | 0, alea() * 64 | 0, 2, 2); for (let y = 0; y < 64; y += 8) for (let x = 0; x < 64; x++) { const d = Math.round(Math.sin(x / 10.2) * 1.5); R(g, '#5c5e58', x, (y + d + 64) % 64, 1, 2); R(g, '#3a3c38', x, (y + d + 3 + 64) % 64, 1, 2); } }, 4], // sillons tous les 0,5 m, peu contrastés : pas de moiré vu de loin
   });
 })();
