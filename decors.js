@@ -1089,10 +1089,10 @@
     paris(h) {
       const { THREE, S, N, W, rnd, M } = h, quai = (x, z) => z > 250 && x > -170 && x < 1060; // côté fleuve des quais
       const PL = M.place, C = PL.c, RT = PL.r + 6, horsPlace = (x, z) => (x - C[0]) ** 2 + (z - C[1]) ** 2 > (PL.r + 1) ** 2; // la place : centre, pied des façades
-      const IY = 1.5, WY = -8, rive = x => x > 180 && x < 820 ? 262 : 248; // niveau de la Seine ; sa rive : au ras des voies sur berge, en retrait du tunnel qui passe dessous
+      const IY = 1.5, WY = -8, rive = x => x > 180 && x < 820 ? 280 : 248; // niveau de la Seine ; sa rive : au ras des voies sur berge, en retrait du tunnel qui passe dessous (il va jusqu'à z 272 au point 29)
       const g = terrain(h, { pas: 16, marge: 320, mat: h.mat('bruit', {}, '#6e6a66', ['#7a7672', '#625e5a']), creux: (x, z) => quai(x, z) ? Math.max(0, Math.min(9, (z - rive(x)) * 0.6)) : 0 });
       const eau = h.mat('bruit', { lum: 1, rep: [40, 20] }, '#1e3a3a', ['#2a4a48', '#c08a7a', '#16302e']); // la Seine, qui prend le rose du ciel
-      boite(h, eau, 1710, 1, 728, 595, WY - 0.5, 626); for (const [x0, x1] of [[-260, 180], [820, 1060]]) boite(h, eau, x1 - x0, 1, 18, (x0 + x1) / 2, WY - 0.5, 255);
+      boite(h, eau, 1710, 1, 710, 595, WY - 0.5, 635); for (const [x0, x1] of [[-260, 180], [820, 1060]]) boite(h, eau, x1 - x0, 1, 18, (x0 + x1) / 2, WY - 0.5, 255);
       let graine = 1; const al = () => (graine = graine * 16807 % 2147483647) / 2147483647; // hasard propre aux nouveaux placements : ne décale pas rnd
       // ruban le long de la piste dont les bords suivent la largeur locale : fa(s), fb(s) = écarts à l'axe ; à plat, la texture est plaquée en plan (une tuile tous les `tuile` m)
       // ya, yb = hauteurs, nombres ou fonctions (s, k) de l'échantillon et du rang dans le ruban
@@ -1150,10 +1150,9 @@
       const large = S.map((s, i) => i).filter(i => S[i].w > W + 0.05), paves = h.mat('paves', { side: THREE.DoubleSide });
       ruban(large[0], large[large.length - 1] - large[0], s => -s.w, 0.02, s => s.w, 0.02, paves);
       // le choix de la place : la chaussée du tour (bitume, sim.js : sec) en fait le grand tour ; couper par l'arche, entre les piles, c'est plus court mais sur les pavés (surf.large).
-      // La bande de bitume et ses lignes de rive blanches se lisent par-dessus les pavés
-      { const ofs = { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }, i0 = large[0] - 20, l = large[large.length - 1] - large[0] + 40;
-        ruban(i0, l, () => -W, 0.02, () => W, 0.02, h.mat('bruit', ofs, '#4a4a52', ['#56565e', '#424248']));
-        for (const sd of [-1, 1]) ruban(i0, l, () => sd * (W - 0.15), 0.02, () => sd * (W - 0.45), 0.02, h.mat('bruit', ofs, '#e8e4d8', ['#f4f0e4', '#d8d4c8'])); }
+      // La chaussée du jeu (même texture, mêmes marquages, en phase avec ses tirets de 32 m) est reposée par-dessus les pavés, de l'avenue d'arrivée à celle de départ : aucun raccord visible
+      { const dans = S.map((s, i) => i).filter(i => S[i].w > W + 0.05 || (S[i].x - C[0]) ** 2 + (S[i].z - C[1]) ** 2 < (RT + 20) ** 2), a = dans[0] - ((dans[0] - h.T.t1 + 16 * N) % 16);
+        h.ribbon(a, dans[dans.length - 1] - a + 16, -W, 0.02, W, 0.02, h.mat('chaussee', { side: THREE.DoubleSide, gloss: 0.08, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }, ...M.th.route), 32); }
       // le sol de la place en cases de 2 m : pavés partout dans le cercle où l'on roule, trottoir étroit au pied des façades, sauf où partent les avenues
       { const pres = S.filter(s => (s.x - C[0]) ** 2 + (s.z - C[1]) ** 2 < 260 ** 2), loin = (x, z) => { let m = 1e9; for (const s of pres) m = Math.min(m, Math.hypot(s.x - x, s.z - z) - s.w); return m; }; // distance au bord de la chaussée
         const roule = [[], [], []], pied = [[], [], []];
@@ -1163,13 +1162,6 @@
           const L = r < PL.r || e < 0.3 ? roule : pied; P.forEach(([x, z]) => { L[0].push(x, 0, z); L[1].push(x / 4, z / 4); }); const v = L[0].length / 3 - 4; L[2].push(v, v + 2, v + 1, v, v + 3, v + 2); } }
         roule[0].forEach((v, i) => { if (i % 3 === 1) roule[0][i] = 0.02; }); pied[0].forEach((v, i) => { if (i % 3 === 1) pied[0][i] = 0.22; });
         nappe(...roule, paves); nappe(...pied, dalle); }
-      // ---- la sortie de la place vers l'avenue (point 7 vers 8) : on la voyait mal et l'on tapait le coin du trottoir à gauche. Des chevrons blancs peints sur les pavés le long de la trajectoire,
-      // puis deux lignes de rive qui dessinent l'entonnoir jusque dans l'avenue (M.large l'élargit aussi : 22 m au lieu de 14 au débouché)
-      { const peinture = h.mat('bruit', { side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }, '#f2eee2', ['#ffffff', '#dcd8cc']);
-        const iS = pt(h, 7), rang = new Map(S.map((s, i) => [s, i])), K = 4, L = 4.5, e = 1.8; // un chevron : deux bras qui partent à 4,5 m de la trajectoire et se rejoignent 8 m plus loin, la pointe vers la sortie
-        for (let c = -7; c <= 0; c++) { const i0 = (iS + c * 10 + N) % N, dl = S[(i0 + K) % N].dl, f = s => 1 - ((rang.get(s) - i0 + N) % N) / K;
-          ruban(i0, K, s => dl + L * f(s), 0.05, s => dl + L * f(s) - e, 0.05, peinture); ruban(i0, K, s => dl - L * f(s) + e, 0.05, s => dl - L * f(s), 0.05, peinture); }
-        for (const sd of [-1, 1]) ruban(iS, 70, s => sd * (s.w - 0.4), 0.05, s => sd * (s.w - 1.2), 0.05, peinture); }
       // l'arc au milieu, grande arche dans l'axe de la traversée ; ses piles sont des obstacles (sim.js). Sa pierre est mise en lumière, dorée, comme à l'aube : on le voit du bout des avenues,
       // c'est le repère de la place (gris comme les façades, il s'y perdait)
       const dore = m => { m.emissive.setHex(0xffb860); m.emissiveMap = m.map; m.emissiveIntensity = 0.5; return m; };
@@ -1279,9 +1271,7 @@
       h.pose('basilique', { craie }, h.scene, [935, yb, -598]);
       h.pose('dome', craie, h.scene, [935, yb + 24, -596], 13, 8, 5).scale.y = 1.5;
       for (const sx of [-15, 15]) h.pose('dome', craie, h.scene, [935 + sx, yb + 24, -588], 5, 6, 4).scale.y = 1.5;
-      // ---- repères de la butte. Feux tricolores en haut (point 19), des deux côtés, l'un en potence au-dessus de la voie : là où l'on freine avant la descente
-      const allume = c => h.mat('peinture', { lum: 1, c }), feu = { vert: allume(0x30ff70), orange: allume(0xffa020), rouge: allume(0xff2a1a) }, FEUX = [[0x30ff70, 0x063a14], [0xffa020, 0x3a2406], [0xff2a1a, 0x3a0806]];
-      { const s = S[iD0 - 6], gf = repere(h, s); for (const sd of [-1, 1]) h.pose('feuTricolore', { fer: h.mat('fonte'), boitier: h.mat('peinture', { c: 0x1e2a22 }), ...feu }, gf, [sd * (s.w + 0.8), 0.22, 0], -sd * 4.5); }
+      // ---- repères de la butte (descente, points 19 à 23)
       // l'escalier de la butte qui monte entre deux immeubles, un réverbère en bas et un en haut
       { const s = S[iE], ox = -s.tz * sdE, oz = s.tx * sdE, [x, z] = bord(s, sdE, s.w + 3.7), rv = [], ln = [];
         h.pose('escalierButte', { marche: h.mat('pierre', {}, '#b8b0a0'), muret: h.mat('pierre'), fer: h.mat('fonte') }, h.scene, [x, s.y + 0.22, z]).forEach(m => m.rotation.y = Math.atan2(-ox, -oz));
@@ -1296,7 +1286,7 @@
       const velo = new THREE.Group(); h.scene.add(velo); let uV = iD0;
       h.pose('livreur', { pneu: h.mat('pneu'), cadre: h.mat('peinture', { c: 0x1a4a8a }), tenue: h.mat('peinture', { c: 0x3a3a44 }), peau: h.mat('peinture', { c: 0xd8a888 }), journaux: h.mat('peinture', { c: 0xe8e0c8 }) }, velo, [0, 0, 0]);
       // ---- le quai : des pigeons posés sur la chaussée qui s'envolent quand on arrive, avant le souterrain (points 26-27) et à sa sortie (30-31)
-      const vols = [pt(h, 26) + 30, pt(h, 26) + 80, h.T.t1 + 30, h.T.t1 + 75].map(i0 => ({ i0, en: 0, t: 0, p: Array.from({ length: 12 }, () => { const s = S[i0 + (al() * 8 | 0)], d = al() * 10 - 5;
+      const vols = [pt(h, 26) + 55, h.T.t1 + 30, h.T.t1 + 75].map(i0 => ({ i0, en: 0, t: 0, p: Array.from({ length: 12 }, () => { const s = S[i0 + (al() * 8 | 0)], d = al() * 10 - 5;
         return { x: s.x - s.tz * d, y: s.y, z: s.z + s.tx * d, r: al() * 6.28, vx: al() * 6 - 3, vy: 3 + al() * 3, vz: al() * 6 - 3 }; }) }));
       const pig = insts(h, 'pigeon', { plume: h.mat('peinture', { c: 0x7a7c84 }), tete: h.mat('peinture', { c: 0x4a5058 }) }, vols.flatMap(v => v.p.map(q => [q.x, q.y, q.z, q.r])));
       const dp = new THREE.Object3D(), posePig = (k, x, y, z, r, e) => { dp.position.set(x, y, z); dp.rotation.set(0, r, 0); dp.scale.setScalar(e); dp.updateMatrix(); for (const m of pig) m.setMatrixAt(k, dp.matrix); };
@@ -1308,7 +1298,6 @@
         if (!car) return;
         const [cx, cz] = bord(sCam, Math.floor(car.dist / N) & 1 ? 1 : -1, cam.d); gc.position.x = cx; gc.position.z = cz; // même règle que camion() de sim.js, pour la voiture suivie
         detresse.color.setHex(now % 800 < 400 ? 0xffa020 : 0x3a2008);
-        const ph = now / 1000 % 12, on = [ph < 7, ph >= 7 && ph < 9, ph >= 9]; ['vert', 'orange', 'rouge'].forEach((f, k) => feu[f].color.setHex(FEUX[k][on[k] ? 0 : 1])); // vert 7 s, orange 2 s, rouge 3 s
         const a = (iB - car.idx + N) % N; rideau.scale.y = a < 80 ? Math.max(0.06, a / 80) : a > N - 200 ? 0.06 : 1; // il remonte à l'approche, reste levé après le passage
         uV += dt * 3; if (uV > iD1) uV = iD0; const s = S[uV | 0], [vx, vz] = bord(s, 1, s.w + 1.6); velo.position.set(vx, s.y + 0.22, vz); velo.rotation.y = Math.atan2(-s.tz, s.tx);
         let k = 0, bouge = 0; for (const v of vols) { const e = (v.i0 - car.idx + N) % N;
