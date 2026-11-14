@@ -794,7 +794,8 @@
   }
   // menu de pause : [ligne, action]. À deux, pas de boîte (chacun a la sienne, sur son périphérique)
   const pauseItems = () => [['REPRENDRE', () => { state = prev; }], ['RECOMMENCER', start], ...(deux() ? [] : [['BOITE : ' + (manual ? 'MANUELLE' : 'AUTO'), () => { manual = !manual; VUES[0].moi.manual = manual; }]]),
-    ['RADIO : ' + SON.nom, zap], ['MUSIQUE : ' + (SON.musicOn ? 'OUI' : 'NON'), () => SON.toggleMusic()], ['QUITTER', toMenu]];
+    ['RADIO : ' + SON.nom, zap], ['MUSIQUE : ' + (SON.musicOn ? 'OUI' : 'NON'), () => SON.toggleMusic()], ['VIBRATIONS : ' + (vibreOn ? 'OUI' : 'NON'), () => { vibreOn = !vibreOn; setPref('vpr.vibre', vibreOn ? '1' : '0'); }], ['QUITTER', toMenu]];
+  let vibreOn = !/[?&]vibre=0\b/.test(location.search) && pref('vpr.vibre', '1') === '1'; // vibrations des manettes : préférence du menu de pause, ?vibre=0 les coupe
   function toMenu() { if (NET.role === 'hote') NET.stop(); if (invite()) attente(); ses.toMenu(); state = 'title'; ins = false; race = null; const c = newCar(T); for (const vu of VUES) suit(vu, c); msel = 4; }
   // menu principal : 0 carte, 1 joueurs, 2 mode, 3 boîte, 4 démarrer ; d = -1 / +1 (gauche / droite ; Entrée vaut +1)
   let cible = null, cibleT = 0; // carte demandée au menu, pas encore construite
@@ -1272,6 +1273,7 @@
     // son : moteur, boîte et pneus par joueur (SE.cars, une entrée par vue ; muette si la vue regarde une autre voiture que celle de son joueur, ou la voiture que la première vue fait déjà entendre : après une élimination, au menu à deux) ; la radio, le tunnel, la pluie et l'ambiance suivent l'humain le mieux placé encore en course (seul, hors course ou tous arrivés : le joueur 1). Les objets restent accrochés aux vues : rien n'est alloué par image
     const SE = J.son || (J.son = { cars: [] }); let Jm = J; if (race) for (const vu of VUES) if (!vu.fini && (Jm.fini || vu.car.pos < Jm.car.pos)) Jm = vu;
     SE.cars.length = 0; for (const vu of VUES) { const c = vu.car, o = vu.sj || (vu.sj = {}); o.muet = vu.spec || (vu !== J && !J.spec && J.car === c); o.car = c; o.sp = Math.hypot(c.vx, c.vz); o.r = Math.min(1, o.sp / TOP); o.gas = vu.gas; o.hit = vu.hit; o.bump = vu.bump; o.land = vu.land; o.up = vu.up > 0; o.down = vu.up < 0; o.rpm = vu.rpm; o.load = vu.load; o.spool = vu.spool; SE.cars.push(o); }
+    for (const vu of VUES) { const c = vu.car; PER.vibre(vu.periph, vibreOn && state === 'race' && !vu.spec && !vu.fini && !demo && !AUTO ? { hit: vu.hit, land: vu.land, up: vu.up, rub: c.rub, air: c.air, roul: c.sol ? c.sol.roul : 0, r: vu.sj.r, palier: c.dd && c.driftT > 0.6 } : null, dt); } // chaque manette ne sent que sa voiture
     const cm = Jm.car, jm = Jm.sj; SE.state = state; SE.car = cm; SE.T = T; SE.tour = race ? Math.min(race.laps - 1, Math.max(0, Math.floor(cm.dist / N))) : 0; SE.tours = race ? race.laps : 0; SE.hot = hot(cm.idx, 50); SE.tun = Jm.lm; SE.amb = ambAt(cm.idx); SE.r = jm.r; SE.sp = jm.sp; SE.hit = jm.hit; SE.bump = jm.bump; SE.fini = ses.raceEnd; // fini : la radio s'efface derrière le tableau d'arrivée
     { const s = S[cm.idx], L = s.w - 1.1; SE.mur = Math.sign(cm.d) * clamp(1 - (L - Math.abs(cm.d)) / 5, 0, 1); } // le bord qu'on serre (+ à droite) : son écho répond plus fort
     { const fx = Math.cos(cm.th), fz = Math.sin(cm.th), veh = race ? race.cars.filter(c => c !== cm && !partie(c)) : M.trafic && state !== 'title' ? trafic(T, tTraf) : []; // les deux autres véhicules les plus proches, qu'on entend
